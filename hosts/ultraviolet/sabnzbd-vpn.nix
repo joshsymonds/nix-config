@@ -38,6 +38,10 @@
           # Mullvad doesn't support port forwarding anymore
           VPN_PORT_FORWARDING = "off";
 
+          # HTTP proxy for LAN devices / testing
+          HTTPPROXY = "on";
+          FIREWALL_OUTBOUND_SUBNETS = "172.31.0.0/24";
+
           # Health check
           HEALTH_VPN_DURATION_INITIAL = "30s";
           HEALTH_VPN_DURATION_ADDITION = "10s";

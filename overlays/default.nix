@@ -6,7 +6,9 @@
 in {
   default = final: prev: let
     shimmerPkg = inputs.shimmer.packages.${final.stdenv.hostPlatform.system}.default;
+    devenvPkg = inputs.devenv.packages.${final.stdenv.hostPlatform.system}.devenv;
   in {
+    devenv = devenvPkg;
     shimmer = shimmerPkg;
     myCaddy = final.callPackage ../pkgs/caddy {};
     starlark-lsp = final.callPackage ../pkgs/starlark-lsp {};

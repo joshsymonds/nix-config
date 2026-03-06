@@ -29,6 +29,17 @@
           }
         ]
       }
+    ],
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/ntfy-notifier.sh"
+          }
+        ]
+      }
     ]
   },
   "extraKnownMarketplaces": {

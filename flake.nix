@@ -52,10 +52,9 @@
     };
 
     # Devenv for development environments
-    devenv = {
-      url = "github:cachix/devenv";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    # No nixpkgs.follows — devenv 2.0 bundles a nix fork (cachix/nix) that
+    # requires its own pinned nixpkgs to build correctly.
+    devenv.url = "github:cachix/devenv";
 
     # Determinate Nix - consistent Nix with parallel eval, flake stability
     # No nixpkgs.follows — keeps FlakeHub Cache hits

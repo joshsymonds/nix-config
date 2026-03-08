@@ -906,11 +906,11 @@
         "nixpkgs": "nixpkgs_7"
       },
       "locked": {
-        "lastModified": 1772051069,
-        "narHash": "sha256-oiBnR1EJ7DqgZw/3Tqjf3+RNLP+Cd4VuKDzqgFdhpfE=",
+        "lastModified": 1772671260,
+        "narHash": "sha256-KNhbQQBi0VHdQ2FAfNUzaa5+XAhiVxmjGTvy+xjpJCI=",
         "ref": "refs/heads/main",
-        "rev": "6984c70c3e2ab947676f62b0a1f4dc2648d23d6b",
-        "revCount": 18,
+        "rev": "aa4bc014aba25fe524b40e1fcf50e2944d9c77a7",
+        "revCount": 19,
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/shimmer.git"
       },

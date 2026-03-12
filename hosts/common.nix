@@ -110,6 +110,10 @@ in {
       device = "${nas.ip}:${nas.shares.books}";
       fsType = "nfs";
     };
+    "/mnt/creative" = {
+      device = "${nas.ip}:${nas.shares.creative}";
+      fsType = "nfs";
+    };
   };
 
   services.eternal-terminal = {

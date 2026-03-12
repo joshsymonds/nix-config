@@ -35,6 +35,7 @@
         music = "/volume1/music";
         books = "/volume1/books";
         backup = "/volume1/backup";
+        creative = "/volume1/creative";
       };
     };
     sonos-move = {

@@ -5,7 +5,7 @@
   hostname ? null,
   ...
 }: let
-  isDarwin = hostname == "cloudbank" || hostname == "ninuan";
+  isDarwin = pkgs.stdenv.isDarwin;
   autoAttachRemoteTmux = hostname != null && !isDarwin;
 in {
   home.sessionVariables =

@@ -299,7 +299,6 @@
           ];
         };
     in {
-      cloudbank = mkDarwinHost "cloudbank";
       ninuan = mkDarwinHost "ninuan";
     };
 
@@ -324,7 +323,7 @@
         };
 
       linuxHosts = builtins.attrNames (lib.filterAttrs (_: cfg: cfg ? homeModule) nixosHostDefinitions);
-      darwinHosts = ["cloudbank" "ninuan"];
+      darwinHosts = ["ninuan"];
     in
       (
         lib.genAttrs
@@ -346,7 +345,7 @@
         in
           mkHome {
             system = "aarch64-darwin";
-            module = ./home-manager/aarch64-darwin.nix;
+            module = ./home-manager/hosts/${hostname}.nix;
             inherit hostname;
           })
       );

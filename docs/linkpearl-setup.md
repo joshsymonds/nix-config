@@ -6,7 +6,7 @@ Linkpearl provides secure, peer-to-peer clipboard synchronization between your d
 
 Linkpearl is configured to:
 - Run as a server on `ultraviolet` listening on port 9437
-- Run as a client on `cloudbank` (macOS) connecting to ultraviolet
+- Run as a client on `ninuan` (macOS) connecting to ultraviolet
 
 ## Secret Setup
 
@@ -19,7 +19,7 @@ echo "your-secure-shared-secret" > ~/.config/linkpearl/secret
 chmod 600 ~/.config/linkpearl/secret
 ```
 
-### On cloudbank (client):
+### On ninuan (client):
 ```bash
 mkdir -p ~/.config/linkpearl
 echo "your-secure-shared-secret" > ~/.config/linkpearl/secret
@@ -37,9 +37,9 @@ After creating the secret files:
 sudo nixos-rebuild switch --flake ".#ultraviolet" --option warn-dirty false
 ```
 
-### On cloudbank:
+### On ninuan:
 ```bash
-darwin-rebuild switch --flake ".#cloudbank" --option warn-dirty false
+darwin-rebuild switch --flake ".#ninuan" --option warn-dirty false
 ```
 
 ## Verification
@@ -49,7 +49,7 @@ darwin-rebuild switch --flake ".#cloudbank" --option warn-dirty false
 systemctl --user status linkpearl
 ```
 
-### Check service status on cloudbank:
+### Check service status on ninuan:
 ```bash
 launchctl list | grep linkpearl
 ```
@@ -68,7 +68,7 @@ Edit the configuration and set `verbose = true`, then rebuild.
 journalctl --user -u linkpearl -f
 ```
 
-### Check logs on cloudbank:
+### Check logs on ninuan:
 ```bash
 log show --predicate 'process == "linkpearl"' --last 1h
 ```
@@ -83,5 +83,5 @@ log show --predicate 'process == "linkpearl"' --last 1h
 To add more machines to the clipboard sync network:
 
 1. For servers (accept connections): Configure like ultraviolet with a `listen` address
-2. For clients (only connect out): Configure like cloudbank with `join` addresses
+2. For clients (only connect out): Configure like ninuan with `join` addresses
 3. All machines must use the same secret

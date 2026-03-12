@@ -1,7 +1,5 @@
-final: prev: let
-  inherit (prev.stdenv.hostPlatform) isDarwin;
-in
-  if isDarwin
+final: prev:
+  if (prev ? stdenv) && prev.stdenv.hostPlatform.isDarwin
   then {
     aerospace = final.callPackage ../pkgs/aerospace {};
   }

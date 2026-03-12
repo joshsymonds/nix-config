@@ -7,7 +7,7 @@
 }: let
   # Determine if this host should run as a server or client
   isServer = hostname == "ultraviolet" || hostname == "vermissian";
-  isDarwin = hostname == "cloudbank" || hostname == "ninuan";
+  isDarwin = pkgs.stdenv.isDarwin;
 in {
   imports = [inputs.linkpearl.homeManagerModules.default];
 

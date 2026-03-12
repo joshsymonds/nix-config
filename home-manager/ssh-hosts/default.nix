@@ -15,9 +15,6 @@ _: {
     HOST_IPS[echelon]="192.168.1.200"  # Different subnet
     HOST_TAILSCALE[echelon]="echelon"
 
-    HOST_IPS[cloudbank]="127.0.0.1"  # Local machine
-    HOST_TAILSCALE[cloudbank]=""  # Not on Tailscale
-
     HOST_IPS[ninuan]="127.0.0.1"  # Local machine
     HOST_TAILSCALE[ninuan]=""  # Not on Tailscale
 
@@ -172,10 +169,6 @@ _: {
 
     echelon() {
       _smart_connect echelon "$@"
-    }
-
-    cloudbank() {
-      _smart_connect cloudbank "$@"
     }
 
     ninuan() {

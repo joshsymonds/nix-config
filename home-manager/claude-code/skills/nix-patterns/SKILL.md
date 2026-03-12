@@ -95,7 +95,7 @@ agenix -e secrets/hosts/<host>/<name>.age
 
 | Host | Platform | Notes |
 |------|----------|-------|
-| cloudbank | macOS | Primary dev, Aerospace WM |
+| ninuan | macOS | Primary dev, Aerospace WM |
 | ultraviolet | NixOS | Headless server |
 | bluedesert | NixOS | Headless server |
 | echelon | NixOS | Headless server |

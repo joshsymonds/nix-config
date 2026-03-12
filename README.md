@@ -5,7 +5,7 @@ This repository contains my personal Nix configuration for managing my Mac lapto
 ## Overview
 
 This configuration manages:
-- **macOS laptop** (cloudbank) - M-series Mac with nix-darwin
+- **macOS laptop** (ninuan) - M-series Mac with nix-darwin
 - **Linux servers** - Multiple headless NixOS home servers:
   - ultraviolet, bluedesert, echelon
 

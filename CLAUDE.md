@@ -6,7 +6,7 @@ Flake-based Nix configuration managing multiple systems.
 
 | Host | Platform | Description |
 |------|----------|-------------|
-| cloudbank | macOS (aarch64-darwin) | Primary dev machine, Aerospace WM |
+| ninuan | macOS (aarch64-darwin) | Primary dev machine, Aerospace WM |
 | ultraviolet | NixOS (x86_64-linux) | Headless server |
 | bluedesert | NixOS (x86_64-linux) | Headless server |
 | echelon | NixOS (x86_64-linux) | Headless server |

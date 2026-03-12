@@ -21,6 +21,7 @@ let
     vermissian = "age1gk07t276expcprxg4el8rsmap4ry3vq9ungmhs9ap3rtwljge9qsqdvnkw";
     # TODO: audit and add
     # cloudbank — macOS, check /etc/ssh/
+    # ninuan — macOS, check /etc/ssh/
     # bluedesert = "...";
     # echelon = "...";
   };
@@ -31,6 +32,7 @@ let
     "joshsymonds@cloudbank" = "age18pgprsxnz72add3jxdxzhcl6ruwg9l8xaaq0d20mpyhwscmwkuyq3vj9ex";
     "joshsymonds@vermissian" = "age10kwzaeajuyvfuyuh03tk6ywand899699rdxlrskh2f6x6ru9t56s02d6pg";
     # TODO: audit and add
+    # "joshsymonds@ninuan" = "...";
     # "joshsymonds@bluedesert" = "...";
     # "joshsymonds@echelon" = "...";
   };

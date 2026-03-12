@@ -7,6 +7,7 @@
 }: let
   # Determine if this host should run as a server or client
   isServer = hostname == "ultraviolet" || hostname == "vermissian";
+  isDarwin = hostname == "cloudbank" || hostname == "ninuan";
 in {
   imports = [inputs.linkpearl.homeManagerModules.default];
 
@@ -26,7 +27,7 @@ in {
       then ["ultraviolet:9437"] # vermissian is server but also joins ultraviolet
       else if isServer
       then [] # ultraviolet doesn't join anyone
-      else if hostname == "cloudbank"
+      else if isDarwin
       then ["ultraviolet:9437" "vermissian:9437"]
       else ["ultraviolet:9437"];
 

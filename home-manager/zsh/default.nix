@@ -5,8 +5,8 @@
   hostname ? null,
   ...
 }: let
-  isCloudbank = hostname == "cloudbank";
-  autoAttachRemoteTmux = hostname != null && !isCloudbank;
+  isDarwin = hostname == "cloudbank" || hostname == "ninuan";
+  autoAttachRemoteTmux = hostname != null && !isDarwin;
 in {
   home.sessionVariables =
     {

@@ -18,6 +18,9 @@ _: {
     HOST_IPS[cloudbank]="127.0.0.1"  # Local machine
     HOST_TAILSCALE[cloudbank]=""  # Not on Tailscale
 
+    HOST_IPS[ninuan]="127.0.0.1"  # Local machine
+    HOST_TAILSCALE[ninuan]=""  # Not on Tailscale
+
     # Cache for Tailscale status (5 minute TTL)
     TAILSCALE_STATUS_CACHE=""
     TAILSCALE_STATUS_TIME=0
@@ -89,7 +92,7 @@ _: {
       local target_host=""
 
       # Special case for localhost
-      if [ "$hostname" = "cloudbank" ] || [ "$local_ip" = "127.0.0.1" ]; then
+      if [ "$local_ip" = "127.0.0.1" ]; then
         echo "🏠 This is the local machine!"
         return 0
       fi
@@ -175,6 +178,10 @@ _: {
       _smart_connect cloudbank "$@"
     }
 
+    ninuan() {
+      _smart_connect ninuan "$@"
+    }
+
     # Legacy aliases for compatibility
     ultraviolet-ssh() {
       ultraviolet "$@"
@@ -214,7 +221,7 @@ _: {
         local via=""
 
         # Check connectivity
-        if [ "$host" = "cloudbank" ] || [ "$ip" = "127.0.0.1" ]; then
+        if [ "$ip" = "127.0.0.1" ]; then
           status="🏠"
           via="local"
         elif [ -n "$ts_name" ] && echo "$tailscale_hosts" | grep -q "^$ts_name$"; then

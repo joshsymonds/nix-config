@@ -274,29 +274,33 @@
       lib.mapAttrs mkNixosHost nixosHostDefinitions;
 
     # Darwin configuration - inlined for clarity
-    darwinConfigurations = {
-      cloudbank = darwin.lib.darwinSystem {
-        system = "aarch64-darwin";
-        specialArgs = mkSpecialArgs "aarch64-darwin";
-        modules = [
-          ./hosts/cloudbank
-          home-manager.darwinModules.home-manager
-          {
-            home-manager = {
-              useGlobalPkgs = true;
-              useUserPackages = true;
-              backupFileExtension = "backup";
-              users.joshsymonds = import ./home-manager/aarch64-darwin.nix;
-              extraSpecialArgs =
-                mkSpecialArgs "aarch64-darwin"
-                // {
-                  hostname = "cloudbank";
-                };
-              sharedModules = [inputs.agenix.homeManagerModules.default];
-            };
-          }
-        ];
-      };
+    darwinConfigurations = let
+      mkDarwinHost = name:
+        darwin.lib.darwinSystem {
+          system = "aarch64-darwin";
+          specialArgs = mkSpecialArgs "aarch64-darwin";
+          modules = [
+            ./hosts/${name}
+            home-manager.darwinModules.home-manager
+            {
+              home-manager = {
+                useGlobalPkgs = true;
+                useUserPackages = true;
+                backupFileExtension = "backup";
+                users.joshsymonds = import ./home-manager/aarch64-darwin.nix;
+                extraSpecialArgs =
+                  mkSpecialArgs "aarch64-darwin"
+                  // {
+                    hostname = name;
+                  };
+                sharedModules = [inputs.agenix.homeManagerModules.default];
+              };
+            }
+          ];
+        };
+    in {
+      cloudbank = mkDarwinHost "cloudbank";
+      ninuan = mkDarwinHost "ninuan";
     };
 
     # Simplified home configurations - generated programmatically
@@ -320,7 +324,7 @@
         };
 
       linuxHosts = builtins.attrNames (lib.filterAttrs (_: cfg: cfg ? homeModule) nixosHostDefinitions);
-      darwinHosts = ["cloudbank"];
+      darwinHosts = ["cloudbank" "ninuan"];
     in
       (
         lib.genAttrs

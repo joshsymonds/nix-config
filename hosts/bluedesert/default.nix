@@ -83,11 +83,6 @@ in
     # Environment
     environment = {
       systemPackages = with pkgs; [
-        polkit
-        pciutils
-        hwdata
-        cachix
-        unar
       ];
 
 };

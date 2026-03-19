@@ -92,9 +92,44 @@ in {
   # Common packages for all headless Linux hosts
   environment.pathsToLink = ["/share/zsh"];
   environment.systemPackages = with pkgs; [
-    yamllint # YAML linter, useful for Home Assistant configurations
+    # Secrets management
     inputs.agenix.packages.${pkgs.stdenv.hostPlatform.system}.agenix
     ssh-to-age
+
+    # Hardware & system info
+    cachix
+    hwdata
+    lshw
+    pciutils
+    polkit
+    unar
+
+    # DNS & network diagnostics
+    dnsutils # dig, nslookup, host
+    ethtool
+    iperf3
+    mtr
+    nmap
+    tcpdump
+    traceroute
+    whois
+
+    # System inspection & debugging
+    iotop
+    lsof
+    strace
+    sysstat # iostat, sar, mpstat
+
+    # General utilities
+    bc
+    man-pages
+    psmisc # pstree, fuser
+    rsync
+    tree
+    xxd
+    yamllint
+    zip
+    p7zip
   ];
 
   fileSystems = lib.mkIf (!builtins.elem config.networking.hostName ["stygianlibrary" "bluedesert" "echelon"]) {

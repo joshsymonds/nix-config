@@ -296,12 +296,7 @@ in
     # Environment
     environment = {
       systemPackages = with pkgs; [
-        polkit
-        pciutils
-        hwdata
-        cachix
         tailscale
-        unar
         podman-tui
         jellyfin-ffmpeg
         chromium

@@ -52,9 +52,7 @@
     };
 
     # Savecraft — game save parser + MCP server
-    # Local git ref until flake.nix is pushed to GitHub, then switch to:
-    # savecraft.url = "github:joshsymonds/savecraft.gg";
-    savecraft.url = "git+file:/home/joshsymonds/Personal/savecraft.gg";
+    savecraft.url = "github:joshsymonds/savecraft.gg";
 
     # Devenv for development environments
     # No nixpkgs.follows — devenv 2.0 bundles a nix fork (cachix/nix) that

@@ -302,7 +302,6 @@ in
         tokenFile = config.age.secrets."cloudflared-token".path;
       };
 
-      savecraftDataRefresh.enable = true;
     };
 
     systemd.timers.cleanup-old-clusters = {

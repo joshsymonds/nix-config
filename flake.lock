@@ -1821,17 +1821,17 @@
         "nixpkgs": "nixpkgs_11"
       },
       "locked": {
-        "lastModified": 1774589138,
-        "narHash": "sha256-wsyuc0lhYwCmfX98XPwWB0x1MuaK+k98JBtIPmU9aCE=",
-        "ref": "refs/heads/main",
-        "rev": "aad5d0046160dd752ea1106dd3673dfc0b6035e2",
-        "revCount": 843,
-        "type": "git",
-        "url": "file:/home/joshsymonds/Personal/savecraft.gg"
+        "lastModified": 1774637662,
+        "narHash": "sha256-htZs6A3GYDhTARsRC7a1g9XndW/r3bfHGhWaatkwYwY=",
+        "owner": "joshsymonds",
+        "repo": "savecraft.gg",
+        "rev": "9fbc66cb6a2c8bfdacc3ef8a686e1d54804882f4",
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "file:/home/joshsymonds/Personal/savecraft.gg"
+        "owner": "joshsymonds",
+        "repo": "savecraft.gg",
+        "type": "github"
       }
     },
     "shimmer": {

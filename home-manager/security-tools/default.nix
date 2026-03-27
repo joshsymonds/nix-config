@@ -15,7 +15,5 @@
     # Vulnerability scanner
     nuclei
 
-    # Infrastructure as code security scanner
-    checkov
   ];
 }

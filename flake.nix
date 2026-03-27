@@ -51,6 +51,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Savecraft — game save parser + MCP server
+    # Local git ref until flake.nix is pushed to GitHub, then switch to:
+    # savecraft.url = "github:joshsymonds/savecraft.gg";
+    savecraft.url = "git+file:/home/joshsymonds/Personal/savecraft.gg";
+
     # Devenv for development environments
     # No nixpkgs.follows — devenv 2.0 bundles a nix fork (cachix/nix) that
     # requires its own pinned nixpkgs to build correctly.
@@ -174,6 +179,7 @@
           ./hosts/vermissian
           ./hosts/common.nix
           inputs.agenix.nixosModules.default
+          inputs.savecraft.nixosModules.mtga-data-refresh
         ];
         homeModule = ./home-manager/hosts/vermissian.nix;
       };

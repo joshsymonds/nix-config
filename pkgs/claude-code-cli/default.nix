@@ -6,25 +6,25 @@
   glibc,
 }:
 let
-  version = "2.1.83";
+  version = "2.1.85";
   gcsBase = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/${version}";
 
   sources = {
     "aarch64-darwin" = fetchurl {
       url = "${gcsBase}/darwin-arm64/claude";
-      hash = "sha256-QyRqn/Id4nxRf0ivUsnVEMnm5wvZCxFdgLnGkMUVrg0=";
+      hash = "sha256-utWILF/Nl+OfjC8rmkw/o4kNGjnuyqlKFv111nAa17M=";
     };
     "x86_64-darwin" = fetchurl {
       url = "${gcsBase}/darwin-x64/claude";
-      hash = "sha256-vRbu/F97o9G3keMR9NWySsMXRYgRCjjbHIjBtR3IghQ=";
+      hash = "sha256-q0yiO8occKPgu/2M3hzo4PdoZlmIvh3bfsu2qfO5/Hg=";
     };
     "x86_64-linux" = fetchurl {
       url = "${gcsBase}/linux-x64/claude";
-      hash = "sha256-/3nNXRUgFzJvZhMJu/++/JVPAqGV+yMq2hUtgS5HbmY=";
+      hash = "sha256-/wsj26Ecl6UzhsYevkfUbXaKitM/mMfSIYbJpj8Xn00=";
     };
     "aarch64-linux" = fetchurl {
       url = "${gcsBase}/linux-arm64/claude";
-      hash = "sha256-ZgvduCwGppvvjkaP+43SNUISu3beEi/l1nOTVkuTLek=";
+      hash = "sha256-sjcJo5TR49l3+fMCW9qhsShXFdEKSJV+WHlS2O86J/Q=";
     };
   };
 in

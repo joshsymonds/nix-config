@@ -17,4 +17,5 @@ hosts/secrets/
 # Vendor directories
 vendor/
 reference/
+.reference/
 .terraform/

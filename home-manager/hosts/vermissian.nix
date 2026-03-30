@@ -26,6 +26,7 @@
     nodePackages.prisma
     rustup
     glab
+    slack-cli
   ];
 
   programs.go.enable = true;

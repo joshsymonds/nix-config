@@ -27,6 +27,7 @@
     rustup
     glab
     slack-cli
+    newrelic-cli
   ];
 
   programs.go.enable = true;

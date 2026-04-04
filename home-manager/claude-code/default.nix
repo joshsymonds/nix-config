@@ -37,6 +37,7 @@ in {
       CC_TOOLS_SOCKET = "/run/user/\${UID}/cc-tools.sock";
       CLAUDE_CODE_ENABLE_TASKS = "true";
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
+      CLAUDE_CODE_NO_FLICKER = "1";
       CLAUDE_HOOKS_NTFY_URL_FILE = config.age.secrets."ntfy-url".path;
       # The only reliable way to disable auto-updates for native installs.
       # settings.json autoUpdater.disabled is cosmetic; ~/.claude.json autoUpdates

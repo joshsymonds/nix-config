@@ -21,6 +21,7 @@ in {
     heretic = final.callPackage ../pkgs/heretic {python3Packages = final.python312Packages;};
     coder = final.callPackage ../pkgs/coder-cli {inherit (final) unzip;};
     invidious-companion = final.callPackage ../pkgs/invidious-companion {};
+    newrelic-cli = final.callPackage ../pkgs/newrelic-cli {};
     redlib-veraticus = final.callPackage ../pkgs/redlib-veraticus {
       inherit (inputs) crane;
       redlibSrc = inputs.redlib-fork.sourceInfo.outPath;

@@ -19,5 +19,6 @@ in
     golangciLintBin = pkgs.callPackage ./golangci-lint-bin {};
     coder = pkgs.callPackage ./coder-cli {inherit (pkgs) unzip;};
     invidious-companion = pkgs.callPackage ./invidious-companion {};
+    newrelic-cli = pkgs.callPackage ./newrelic-cli {};
   }
   // darwinOnly

@@ -132,7 +132,7 @@ in {
     p7zip
   ];
 
-  fileSystems = lib.mkIf (!builtins.elem config.networking.hostName ["stygianlibrary" "bluedesert" "echelon"]) {
+  fileSystems = lib.mkIf (!builtins.elem config.networking.hostName ["bluedesert" "echelon"]) {
     "/mnt/video" = {
       device = "${nas.ip}:${nas.shares.video}";
       fsType = "nfs";

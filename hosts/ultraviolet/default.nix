@@ -284,6 +284,7 @@ in
 
     services.savecraftPobServer = {
       enable = true;
+      package = inputs.savecraft.packages.x86_64-linux.pob-server;
       apiKeyFile = config.age.secrets."pob-server-api-key".path;
     };
 

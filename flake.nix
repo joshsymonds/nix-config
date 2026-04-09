@@ -147,6 +147,7 @@
           ./hosts/ultraviolet
           ./hosts/common.nix
           inputs.agenix.nixosModules.default
+          inputs.savecraft.nixosModules.pob-server
         ];
         homeModule = ./home-manager/hosts/ultraviolet.nix;
       };

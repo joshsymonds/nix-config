@@ -273,6 +273,18 @@ in
         group = "users";
         mode = "0400";
       };
+
+      "pob-server-api-key" = {
+        file = ../../secrets/hosts/ultraviolet/pob-server-api-key.age;
+        owner = "pob-server";
+        group = "pob-server";
+        mode = "0400";
+      };
+    };
+
+    services.savecraftPobServer = {
+      enable = true;
+      apiKeyFile = config.age.secrets."pob-server-api-key".path;
     };
 
     # Podman for media containers

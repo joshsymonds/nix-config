@@ -26,6 +26,7 @@ in {
   "secrets/hosts/ultraviolet/mullvad-privatekey.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/mullvad-addresses.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/nextdns-linkip-url.age".publicKeys = keys.ultraviolet;
+  "secrets/hosts/ultraviolet/pob-server-api-key.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/vermissian/cloudflared-token.age".publicKeys = keys.vermissian;
   "secrets/hosts/vermissian/coder-ghcr-cache-auth.age".publicKeys = keys.vermissian;
 }

@@ -8,6 +8,7 @@
     imports = [
       inputs.hardware.nixosModules.common-pc
       ./hardware-configuration.nix
+      ../../modules/services/delyric-worker.nix
     ];
 
     # Performance tuning
@@ -162,6 +163,17 @@
     systemd.services.caddy.serviceConfig = {
       ProtectHome = lib.mkForce "tmpfs";
       BindReadOnlyPaths = ["/home/joshsymonds/creative-lab/ai-toolkit/output"];
+    };
+
+    # Delyric vocal separation worker (FastAPI on :9001). Reads/writes songs
+    # under /mnt/music/sound-stage; dispatched to by the sound-stage Go server
+    # on vermissian. The bindHost must be bindable locally or the unit exits
+    # cleanly (by design for dual-boot — absent on Windows = orchestrator 503).
+    services.delyric-worker = {
+      enable = true;
+      package = inputs.sound-stage.packages.${pkgs.stdenv.hostPlatform.system}.delyric-worker;
+      bindHost = "172.31.0.98";
+      openFirewall = true;
     };
 
     services.udev.extraRules = ''

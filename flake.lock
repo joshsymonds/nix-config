@@ -1748,6 +1748,7 @@
         "rust-overlay": "rust-overlay_2",
         "savecraft": "savecraft",
         "shimmer": "shimmer",
+        "sound-stage": "sound-stage",
         "targetprocess-mcp": "targetprocess-mcp"
       }
     },
@@ -1851,6 +1852,26 @@
       "original": {
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/shimmer.git"
+      }
+    },
+    "sound-stage": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1776057310,
+        "narHash": "sha256-2D/gt98AC8c4LMo2jdj9P+MNKrgZU9mezD8fwKHV60o=",
+        "owner": "joshsymonds",
+        "repo": "sound-stage",
+        "rev": "ef3deb5279cf9056497548254d3cd0167e4fffd1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "joshsymonds",
+        "repo": "sound-stage",
+        "type": "github"
       }
     },
     "systems": {

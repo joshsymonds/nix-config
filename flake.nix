@@ -32,6 +32,12 @@
     # CC-Tools - Claude Code smart hooks
     cc-tools.url = "github:joshsymonds/cc-tools";
 
+    # sound-stage — karaoke downloader + delyric vocal separation worker.
+    sound-stage = {
+      url = "github:joshsymonds/sound-stage";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Target Process MCP - Target Process API integration
     targetprocess-mcp.url = "github:joshsymonds/targetprocess-mcp";
 

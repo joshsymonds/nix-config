@@ -11,7 +11,12 @@ in {
 
     package = lib.mkOption {
       type = lib.types.package;
-      description = "The delyric-worker package (from the sound-stage flake).";
+      example = lib.literalExpression "inputs.sound-stage.packages.\${pkgs.stdenv.hostPlatform.system}.delyric-worker";
+      description = ''
+        The delyric-worker package to run. Typically consumed from the
+        sound-stage flake input — it provides meta.mainProgram so
+        lib.getExe resolves correctly.
+      '';
     };
 
     port = lib.mkOption {
@@ -76,8 +81,12 @@ in {
       description = "Delyric vocal separation worker";
       after = ["network-online.target" "remote-fs.target"];
       wants = ["network-online.target"];
-      requires = ["remote-fs.target"];
       wantedBy = ["multi-user.target"];
+
+      # Scope the mount dependency to the specific NFS path rather than
+      # the umbrella remote-fs.target. If /mnt/music drops, systemd stops
+      # this unit; unrelated NFS mounts on this host won't drag it down.
+      unitConfig.RequiresMountsFor = [cfg.libraryDir];
 
       environment = {
         DELYRIC_LIBRARY = cfg.libraryDir;
@@ -85,6 +94,12 @@ in {
         DELYRIC_BIND_HOST = cfg.bindHost;
         DELYRIC_STATE_DIR = "/var/lib/delyric-worker";
         AUDIO_SEPARATOR_MODEL_DIR = "/var/lib/delyric-worker/models";
+        # The packaged wrapper bootstraps a pip venv for audio-separator[gpu]
+        # + torch at first run (see sound-stage nix/wrapper.sh). This is an
+        # explicit design choice over pure-Nix packaging because CUDA wheels
+        # are painful to rebuild through Nix. Redirect pip's cache into the
+        # StateDirectory so it persists across restarts and respects
+        # ProtectHome.
         PIP_CACHE_DIR = "/var/lib/delyric-worker/pip-cache";
       };
 
@@ -96,6 +111,13 @@ in {
         Restart = "on-failure";
         RestartSec = 10;
 
+        # First start after a fresh deploy pip-installs audio-separator[gpu]
+        # + torch + CUDA wheels (hundreds of MB) before the FastAPI process
+        # bind()s the port. Type=exec does NOT bypass TimeoutStartSec — the
+        # default 90s would SIGTERM mid-install and flap restart. 30 min
+        # gives headroom; subsequent starts short-circuit via the
+        # requirements.txt hash check.
+        TimeoutStartSec = 1800;
         # A single separation job can run up to ~10 min (delyric.py
         # SEPARATOR_TIMEOUT = 600). TimeoutStopSec must exceed that or
         # systemd will SIGKILL mid-job on stop/restart, leaving partial
@@ -106,14 +128,45 @@ in {
         StateDirectoryMode = "0750";
         WorkingDirectory = "/var/lib/delyric-worker";
 
-        # Hardening — loose enough to allow GPU + NFS writes.
+        # --- Hardening ---
+        # Filesystem isolation
         NoNewPrivileges = true;
         PrivateTmp = true;
         ProtectSystem = "strict";
         ProtectHome = true;
         ReadWritePaths = ["/var/lib/delyric-worker" cfg.libraryDir];
+        UMask = "0027";
 
-        # NVIDIA device nodes for CUDA.
+        # Kernel / process isolation
+        ProtectKernelTunables = true;
+        ProtectKernelModules = true;
+        ProtectKernelLogs = true;
+        ProtectControlGroups = true;
+        ProtectClock = true;
+        ProtectHostname = true;
+        ProtectProc = "invisible";
+        ProcSubset = "pid";
+        LockPersonality = true;
+        RestrictNamespaces = true;
+        RestrictRealtime = true;
+        RestrictSUIDSGID = true;
+        SystemCallArchitectures = "native";
+        # @system-service is systemd's curated allowlist for service workloads;
+        # denying @privileged blocks uncommon admin syscalls. @resources is
+        # NOT denied here because CUDA/PyTorch may schedule with sched_*/nice.
+        SystemCallFilter = ["@system-service" "~@privileged"];
+
+        # No capabilities needed — the worker binds a TCP port >1024 and
+        # talks to NVIDIA device nodes via DeviceAllow, not via CAP_SYS_*.
+        CapabilityBoundingSet = [];
+        AmbientCapabilities = [];
+        RestrictAddressFamilies = ["AF_UNIX" "AF_INET" "AF_INET6"];
+
+        # NVIDIA device nodes for CUDA. DeviceAllow requires PrivateDevices=false
+        # (the default) — we set it explicitly so a future edit can't silently
+        # toggle it true and break the GPU path. Single GPU assumed — add
+        # /dev/nvidia1 etc. if stygianlibrary ever grows a second card.
+        PrivateDevices = false;
         DeviceAllow = [
           "/dev/nvidia0 rw"
           "/dev/nvidiactl rw"

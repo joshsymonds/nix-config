@@ -1,5 +1,6 @@
 {
   "companyAnnouncements": [],
+  "viewMode": "default",
   "permissions": {
     "defaultMode": "bypassPermissions"
   },

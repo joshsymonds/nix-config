@@ -1,6 +1,7 @@
 {
   "companyAnnouncements": [],
   "viewMode": "default",
+  "effortLevel": "high",
   "permissions": {
     "defaultMode": "bypassPermissions"
   },

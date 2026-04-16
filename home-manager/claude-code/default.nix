@@ -38,6 +38,9 @@ in {
       CLAUDE_CODE_ENABLE_TASKS = "true";
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
       CLAUDE_CODE_NO_FLICKER = "1";
+      CLAUDE_CODE_REPL = "true";
+      CLAUDE_CODE_TMUX_TRUECOLOR = "1";
+      CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR = "1";
       CLAUDE_HOOKS_NTFY_URL_FILE = config.age.secrets."ntfy-url".path;
       # The only reliable way to disable auto-updates for native installs.
       # settings.json autoUpdater.disabled is cosmetic; ~/.claude.json autoUpdates

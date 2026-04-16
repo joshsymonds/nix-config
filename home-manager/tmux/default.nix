@@ -45,6 +45,13 @@ with lib; let
   '';
   tmuxDevspaceHelper =
     pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ./scripts/tmux-devspace.sh);
+  netSpeedPatched = pkgs.tmuxPlugins.net-speed.overrideAttrs (old: {
+    postPatch = (old.postPatch or "") + ''
+      for f in scripts/*.sh *.sh; do
+        [ -f "$f" ] && substituteInPlace "$f" --replace-quiet '#!/bin/bash' '#!${pkgs.bash}/bin/bash'
+      done
+    '';
+  });
 in {
   config = {
     programs.tmux = {
@@ -60,7 +67,7 @@ in {
         sensible
         yank
         cpu
-        net-speed
+        netSpeedPatched
         {
           plugin = catppuccin;
           extraConfig = ''
@@ -98,10 +105,10 @@ in {
         set -ga terminal-overrides ",screen-256color:Tc"
         set -ga terminal-overrides ",screen:Tc"
         set -as terminal-features ",tmux-256color:RGB:sync"
-        set -as terminal-features ",xterm-256color:RGB:sync"
+        set -as terminal-features ",xterm-256color:RGB"
         set -as terminal-features ",xterm-kitty:RGB:sync"
-        set -as terminal-features ",screen-256color:RGB:sync"
-        set -as terminal-features ",screen:RGB:sync"
+        set -as terminal-features ",screen-256color:RGB"
+        set -as terminal-features ",screen:RGB"
 
         # Ensure proper color rendering
         set -g default-terminal "tmux-256color"
@@ -141,7 +148,7 @@ in {
 
         # Right side status with system monitoring
         set -g status-right \
-          "#[fg=#94e2d5]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#94e2d5]󰈀  #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${pkgs.tmuxPlugins.net-speed}/share/tmux-plugins/net-speed/scripts/net_speed.sh)#[fg=#313244]#{E:@catppuccin_status_right_separator}"
+          "#[fg=#94e2d5]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#94e2d5]󰈀  #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${netSpeedPatched}/share/tmux-plugins/net-speed/scripts/net_speed.sh)#[fg=#313244]#{E:@catppuccin_status_right_separator}"
 
         set -ag status-right \
           "#[fg=#f9e2af]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#f9e2af]#{E:@catppuccin_cpu_icon} #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${pkgs.tmuxPlugins.cpu}/share/tmux-plugins/cpu/scripts/cpu_percentage.sh)#[fg=#313244]#{E:@catppuccin_status_right_separator}"

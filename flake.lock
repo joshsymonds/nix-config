@@ -161,11 +161,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1769041035,
-        "narHash": "sha256-ibZcxKaOrM4m3Lkxh1gweADY55t0JMmU24nefRIO4gI=",
+        "lastModified": 1776347137,
+        "narHash": "sha256-AwgI+q4nSw8vdgfTtoRJ8uWEplBU+Tvp7keMuZpn2hQ=",
         "owner": "joshsymonds",
         "repo": "cc-tools",
-        "rev": "4c5de7c97e90738d41535d4fd653cb768aeaede4",
+        "rev": "03188317187720ff273a082e4151e939e2e60e42",
         "type": "github"
       },
       "original": {

@@ -184,7 +184,7 @@
           ./hosts/vermissian
           ./hosts/common.nix
           inputs.agenix.nixosModules.default
-          inputs.savecraft.nixosModules.mtga-data-refresh
+          inputs.savecraft.nixosModules.magic-data-refresh
         ];
         homeModule = ./home-manager/hosts/vermissian.nix;
       };

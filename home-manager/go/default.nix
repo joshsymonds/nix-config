@@ -8,7 +8,7 @@
 in {
   config = lib.mkIf cfg {
     programs.go = {
-      package = pkgs.go_1_24;
+      package = pkgs.go_1_26;
       env = {
         GOPATH = "${config.home.homeDirectory}/go";
         GOBIN = "${config.home.homeDirectory}/go/bin";

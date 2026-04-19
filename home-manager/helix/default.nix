@@ -3,16 +3,15 @@
   pkgs,
   ...
 }: let
-  nodePackages = pkgs.nodePackages_latest;
   lspPackages = [
     pkgs.lua-language-server
     pkgs.gopls
     pkgs.pyright
     pkgs.nil
-    nodePackages.typescript-language-server
-    nodePackages.typescript
-    nodePackages.vscode-langservers-extracted
-    nodePackages.yaml-language-server
+    pkgs.typescript-language-server
+    pkgs.typescript
+    pkgs.vscode-langservers-extracted
+    pkgs.yaml-language-server
     pkgs.terraform-ls
     pkgs.terraform
     pkgs.alejandra
@@ -206,19 +205,19 @@ in {
           command = "${pkgs.nil}/bin/nil";
         };
         "typescript-language-server" = {
-          command = "${nodePackages.typescript-language-server}/bin/typescript-language-server";
+          command = "${pkgs.typescript-language-server}/bin/typescript-language-server";
           args = ["--stdio"];
         };
         "html-ls" = {
-          command = "${nodePackages.vscode-langservers-extracted}/bin/vscode-html-language-server";
+          command = "${pkgs.vscode-langservers-extracted}/bin/vscode-html-language-server";
           args = ["--stdio"];
         };
         "css-ls" = {
-          command = "${nodePackages.vscode-langservers-extracted}/bin/vscode-css-language-server";
+          command = "${pkgs.vscode-langservers-extracted}/bin/vscode-css-language-server";
           args = ["--stdio"];
         };
         "json-ls" = {
-          command = "${nodePackages.vscode-langservers-extracted}/bin/vscode-json-language-server";
+          command = "${pkgs.vscode-langservers-extracted}/bin/vscode-json-language-server";
           args = ["--stdio"];
         };
         "terraform-ls" = {
@@ -226,7 +225,7 @@ in {
           args = ["serve"];
         };
         "yaml-language-server" = {
-          command = "${nodePackages.yaml-language-server}/bin/yaml-language-server";
+          command = "${pkgs.yaml-language-server}/bin/yaml-language-server";
           args = ["--stdio"];
           config = {
             yaml = {

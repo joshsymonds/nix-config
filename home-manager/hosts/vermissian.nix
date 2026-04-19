@@ -23,7 +23,6 @@
     ginkgo
     prisma
     prisma-engines
-    nodePackages.prisma
     rustup
     glab
     slack-cli

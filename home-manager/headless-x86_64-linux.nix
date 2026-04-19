@@ -5,7 +5,6 @@
   imports = [
     ./common.nix
     ./devspaces-host
-    ./linkpearl
     ./security-tools
     ./gmailctl
   ];

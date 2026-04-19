@@ -180,7 +180,6 @@ in
         .local/bin \
         .local/share/atuin \
         .claude/debug \
-        .codex \
         .rbenv/shims \
         .rbenv/versions \
         .ssh \

@@ -37,12 +37,6 @@ in {
         buildGoModule = final.buildGo123Module;
       };
 
-    # Package modifications
-    waybar = prev.waybar.overrideAttrs (oldAttrs: {
-      mesonFlags = oldAttrs.mesonFlags ++ ["-Dexperimental=true"];
-      version = "0.9.21";
-    });
-
     moor = prev.moor.overrideAttrs (_: {
       version = moarVersion;
       src = final.fetchFromGitHub {

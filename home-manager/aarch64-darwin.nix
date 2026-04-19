@@ -6,7 +6,6 @@
     ./go
     ./ssh-hosts
     ./ssh-config
-    ./linkpearl
   ];
 
   home.homeDirectory = "/Users/joshsymonds";

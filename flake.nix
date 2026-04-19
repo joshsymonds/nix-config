@@ -26,9 +26,6 @@
     # Hardware-specific optimizations
     hardware.url = "github:nixos/nixos-hardware/master";
 
-    # Linkpearl - clipboard sync
-    linkpearl.url = "github:joshsymonds/linkpearl";
-
     # CC-Tools - Claude Code smart hooks
     cc-tools.url = "github:joshsymonds/cc-tools";
 

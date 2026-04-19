@@ -50,38 +50,43 @@
           allowDiscards = true;
         };
         kernelModules = ["thunderbolt" "vmd" "xhci_pci"];
-        preDeviceCommands = ''
-          echo "Activating Thunderbolt..."
+        systemd.services.thunderbolt-authorize = {
+          description = "Authorize Thunderbolt devices before LUKS unlock";
+          wantedBy = ["cryptsetup.target"];
+          before = ["cryptsetup.target" "systemd-cryptsetup@stygianlibrary.service"];
+          unitConfig.DefaultDependencies = false;
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+          };
+          script = ''
+            echo "Activating Thunderbolt..."
 
-          # Poll for devices for up to 15 seconds
-          for i in $(seq 1 15); do
-            echo "Thunderbolt scan attempt $i..."
+            for i in $(seq 1 15); do
+              echo "Thunderbolt scan attempt $i..."
 
-            # Check for the bus
-            if [ -d /sys/bus/thunderbolt/devices ]; then
-              # Authorize everything we see
-              for dev in /sys/bus/thunderbolt/devices/*; do
-                if [ -f "$dev/authorized" ]; then
-                  current=$(cat "$dev/authorized" 2>/dev/null)
-                  if [ "$current" != "1" ]; then
-                    echo "Authorizing $dev..."
-                    echo 1 > "$dev/authorized" 2>/dev/null || echo "Failed to authorize $dev"
+              if [ -d /sys/bus/thunderbolt/devices ]; then
+                for dev in /sys/bus/thunderbolt/devices/*; do
+                  if [ -f "$dev/authorized" ]; then
+                    current=$(cat "$dev/authorized" 2>/dev/null || echo)
+                    if [ "$current" != "1" ]; then
+                      echo "Authorizing $dev..."
+                      echo 1 > "$dev/authorized" 2>/dev/null || echo "Failed to authorize $dev"
+                    fi
                   fi
-                fi
-              done
-            fi
+                done
+              fi
 
-            # Force udev to process events (critical for the next device in chain to appear)
-            udevadm trigger --subsystem-match=thunderbolt
-            udevadm settle --timeout=1
+              udevadm trigger --subsystem-match=thunderbolt
+              udevadm settle --timeout=1
 
-            sleep 1
-          done
+              sleep 1
+            done
 
-          # Final broad trigger
-          udevadm trigger
-          udevadm settle
-        '';
+            udevadm trigger
+            udevadm settle
+          '';
+        };
       };
       loader = {
         systemd-boot = {

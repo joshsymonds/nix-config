@@ -105,7 +105,7 @@ sudo eject /dev/sdX
 | `powerOff` | bool | true | Power off vs reboot after install |
 | `extraInitrdKernelModules` | [str] | [] | Extra initrd modules |
 | `extraPackages` | [pkg] | [] | Extra packages in ISO |
-| `extraBootCommands` | lines | "" | initrd postDeviceCommands |
+| `extraBootCommands` | lines | "" | initrd stage-1 systemd service script |
 
 ## Prebuilt vs Non-Prebuilt
 

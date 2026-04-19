@@ -448,7 +448,18 @@ in {
 
     boot.initrd = {
       kernelModules = cfg.extraInitrdKernelModules;
-      postDeviceCommands = lib.mkIf (cfg.extraBootCommands != "") cfg.extraBootCommands;
+      systemd.services.installer-extra-boot = lib.mkIf (cfg.extraBootCommands != "") {
+        description = "Installer extra boot commands";
+        wantedBy = ["initrd.target"];
+        after = ["systemd-udev-settle.service"];
+        before = ["initrd-fs.target"];
+        unitConfig.DefaultDependencies = false;
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+        };
+        script = cfg.extraBootCommands;
+      };
     };
 
     services.openssh.enable = true;

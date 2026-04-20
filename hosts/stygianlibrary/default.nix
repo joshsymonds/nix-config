@@ -44,6 +44,7 @@
       supportedFilesystems = ["ntfs" "vfat"];
       kernelModules = ["coretemp" "kvm-intel"];
       kernelParams = ["kernel.unprivileged_userns_clone=1"];
+      kernelPackages = pkgs.linuxPackages_latest;
       initrd = {
         luks.devices.stygianlibrary = {
           device = "/dev/disk/by-partlabel/STYGIAN-LUKS";

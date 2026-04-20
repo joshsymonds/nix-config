@@ -50,43 +50,14 @@
           allowDiscards = true;
         };
         kernelModules = ["thunderbolt" "vmd" "xhci_pci"];
-        systemd.services.thunderbolt-authorize = {
-          description = "Authorize Thunderbolt devices before LUKS unlock";
-          wantedBy = ["cryptsetup.target"];
-          before = ["cryptsetup.target" "systemd-cryptsetup@stygianlibrary.service"];
-          unitConfig.DefaultDependencies = false;
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-          };
-          script = ''
-            echo "Activating Thunderbolt..."
-
-            for i in $(seq 1 15); do
-              echo "Thunderbolt scan attempt $i..."
-
-              if [ -d /sys/bus/thunderbolt/devices ]; then
-                for dev in /sys/bus/thunderbolt/devices/*; do
-                  if [ -f "$dev/authorized" ]; then
-                    current=$(cat "$dev/authorized" 2>/dev/null || echo)
-                    if [ "$current" != "1" ]; then
-                      echo "Authorizing $dev..."
-                      echo 1 > "$dev/authorized" 2>/dev/null || echo "Failed to authorize $dev"
-                    fi
-                  fi
-                done
-              fi
-
-              udevadm trigger --subsystem-match=thunderbolt
-              udevadm settle --timeout=1
-
-              sleep 1
-            done
-
-            udevadm trigger
-            udevadm settle
-          '';
-        };
+        # Auto-authorize Thunderbolt devices as they appear. The LUKS
+        # partition (STYGIAN-LUKS) is on a TB-attached NVMe, so the TB
+        # controller must be authorized before cryptsetup can see the
+        # device. A udev rule reacts to every `add` uevent, which handles
+        # chained TB enumeration without the races of a polling loop.
+        services.udev.rules = ''
+          ACTION=="add", SUBSYSTEM=="thunderbolt", ATTR{authorized}=="0", ATTR{authorized}="1"
+        '';
       };
       loader = {
         systemd-boot = {

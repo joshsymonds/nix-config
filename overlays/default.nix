@@ -18,7 +18,6 @@ in {
     geminiCli = final.callPackage ../pkgs/gemini-cli {};
     deadcode = final.callPackage ../pkgs/deadcode {};
     golangciLintBin = final.callPackage ../pkgs/golangci-lint-bin {};
-    heretic = final.callPackage ../pkgs/heretic {python3Packages = final.python312Packages;};
     coder = final.callPackage ../pkgs/coder-cli {inherit (final) unzip;};
     invidious-companion = final.callPackage ../pkgs/invidious-companion {};
     newrelic-cli = final.callPackage ../pkgs/newrelic-cli {};

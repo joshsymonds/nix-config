@@ -212,8 +212,8 @@
         hwdata
         nvtopPackages.full
         ollama
-        python312
-        python312Packages.pip
+        python313
+        python313Packages.pip
         tmux
         vulkan-tools
       ];

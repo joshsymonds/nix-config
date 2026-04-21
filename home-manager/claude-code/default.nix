@@ -46,76 +46,95 @@ in {
       DISABLE_AUTOUPDATER = "1";
     };
 
-    # Create and manage ~/.claude directory
+    # Create and manage Claude Code config directories.
+    # Both ~/.claude (personal, default) and ~/.claude-work (Enterprise) receive
+    # identical Nix-managed static content; runtime state (.credentials.json,
+    # .claude.json, projects/, todos/, history.jsonl, plugins/installed_plugins.json)
+    # is owned by claude per-dir and selected at invocation time via CLAUDE_CONFIG_DIR.
     file = let
-      # Dynamically read command files
       commandFiles = builtins.readDir ./commands;
       commandEntries =
         lib.filterAttrs (
           name: type: type == "regular" && lib.hasSuffix ".md" name
         )
         commandFiles;
-      commandFileAttrs =
-        lib.mapAttrs' (
-          name: _: lib.nameValuePair ".claude/commands/${name}" {source = ./commands/${name};}
-        )
-        commandEntries;
+      mkClaudeFiles = dir: let
+        commandFileAttrs =
+          lib.mapAttrs' (
+            name: _: lib.nameValuePair "${dir}/commands/${name}" {source = ./commands/${name};}
+          )
+          commandEntries;
+      in
+        lib.mkMerge [
+          commandFileAttrs
+          {
+            "${dir}/settings.json".source = ./settings.json;
+            "${dir}/CLAUDE.md".source = ./CLAUDE.md;
+            "${dir}/agents".source = ./agents;
+            "${dir}/skills".source = ./skills;
+            "${dir}/bin/cc-tools-statusline".source = "${cc-tools}/bin/cc-tools-statusline";
+            "${dir}/hooks/ntfy-notifier.sh" = {
+              source = ./hooks/ntfy-notifier.sh;
+              executable = true;
+            };
+            "${dir}/.keep".text = "";
+            "${dir}/projects/.keep".text = "";
+            "${dir}/todos/.keep".text = "";
+            "${dir}/statsig/.keep".text = "";
+            "${dir}/commands/.keep".text = "";
+          }
+        ];
     in
       lib.mkMerge [
-        commandFileAttrs
-        {
-          ".claude/settings.json".source = ./settings.json;
-          ".claude/CLAUDE.md".source = ./CLAUDE.md;
-          ".claude/agents".source = ./agents;
-          ".claude/skills".source = ./skills;
-          ".claude/bin/cc-tools-statusline".source = "${cc-tools}/bin/cc-tools-statusline";
-          ".claude/hooks/ntfy-notifier.sh" = {
-            source = ./hooks/ntfy-notifier.sh;
-            executable = true;
-          };
-          ".claude/.keep".text = "";
-          ".claude/projects/.keep".text = "";
-          ".claude/todos/.keep".text = "";
-          ".claude/statsig/.keep".text = "";
-          ".claude/commands/.keep".text = "";
-        }
+        (mkClaudeFiles ".claude")
+        (mkClaudeFiles ".claude-work")
       ];
 
     activation.claudeDirectoryPermissions = lib.hm.dag.entryAfter ["writeBoundary"] ''
       set -euo pipefail
-      for dir in ".claude" ".claude/bin" ".claude/commands" ".claude/hooks" ".claude/projects" ".claude/statsig" ".claude/todos"; do
-        if [ -d "$HOME/$dir" ]; then
-          chmod 755 "$HOME/$dir"
+      for base in ".claude" ".claude-work"; do
+        for dir in "$base" "$base/bin" "$base/commands" "$base/hooks" "$base/projects" "$base/statsig" "$base/todos"; do
+          if [ -d "$HOME/$dir" ]; then
+            chmod 755 "$HOME/$dir"
+          fi
+        done
+        if [ ! -d "$HOME/$base/debug" ]; then
+          mkdir -p "$HOME/$base/debug"
+          chmod 755 "$HOME/$base/debug"
         fi
       done
-      if [ ! -d "$HOME/.claude/debug" ]; then
-        mkdir -p "$HOME/.claude/debug"
-        chmod 755 "$HOME/.claude/debug"
-      fi
 
-      # Remove vim mode if previously set in Claude Code preferences
-      CLAUDE_PREFS="$HOME/.claude.json"
-      if [ -f "$CLAUDE_PREFS" ] && ${pkgs.jq}/bin/jq -e '.editorMode == "vim"' "$CLAUDE_PREFS" >/dev/null 2>&1; then
-        ${pkgs.jq}/bin/jq 'del(.editorMode)' "$CLAUDE_PREFS" > "$CLAUDE_PREFS.tmp" && mv "$CLAUDE_PREFS.tmp" "$CLAUDE_PREFS"
-      fi
+      # Remove vim mode if previously set in Claude Code preferences.
+      # Personal prefs live at ~/.claude.json (default when CLAUDE_CONFIG_DIR unset);
+      # work prefs live at ~/.claude-work/.claude.json.
+      for prefs in "$HOME/.claude.json" "$HOME/.claude-work/.claude.json"; do
+        if [ -f "$prefs" ] && ${pkgs.jq}/bin/jq -e '.editorMode == "vim"' "$prefs" >/dev/null 2>&1; then
+          ${pkgs.jq}/bin/jq 'del(.editorMode)' "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
+        fi
+      done
     '';
 
-    # Install declared plugins if not already installed
-    # Nix declares intent (settings.json), Claude manages state (installed_plugins.json)
+    # Install declared plugins if not already installed, for each profile dir.
+    # Nix declares intent (settings.json), Claude manages state (installed_plugins.json).
+    # Work-profile install may fail on first rebuild if the Enterprise account isn't
+    # logged in yet; the || fallback tolerates it and a subsequent `update` will retry.
     activation.claudePluginInstall = lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
       set -euo pipefail
-      INSTALLED_PLUGINS="$HOME/.claude/plugins/installed_plugins.json"
 
-      # Declared plugins: plugin@marketplace
       DECLARED_PLUGINS=(
         "gambit@gambit"
       )
 
-      for plugin in "''${DECLARED_PLUGINS[@]}"; do
-        if [ ! -f "$INSTALLED_PLUGINS" ] || ! ${pkgs.jq}/bin/jq -e ".plugins[\"$plugin\"]" "$INSTALLED_PLUGINS" >/dev/null 2>&1; then
-          echo "Installing missing Claude plugin: $plugin"
-          ${pkgs.claudeCodeCli}/bin/claude plugin install "$plugin" || echo "Warning: Failed to install $plugin (may need manual install)"
-        fi
+      for base in ".claude" ".claude-work"; do
+        INSTALLED_PLUGINS="$HOME/$base/plugins/installed_plugins.json"
+        mkdir -p "$HOME/$base/plugins"
+
+        for plugin in "''${DECLARED_PLUGINS[@]}"; do
+          if [ ! -f "$INSTALLED_PLUGINS" ] || ! ${pkgs.jq}/bin/jq -e ".plugins[\"$plugin\"]" "$INSTALLED_PLUGINS" >/dev/null 2>&1; then
+            echo "Installing missing Claude plugin into $base: $plugin"
+            CLAUDE_CONFIG_DIR="$HOME/$base" ${pkgs.claudeCodeCli}/bin/claude plugin install "$plugin" || echo "Warning: Failed to install $plugin in $base (may need manual install)"
+          fi
+        done
       done
     '';
 

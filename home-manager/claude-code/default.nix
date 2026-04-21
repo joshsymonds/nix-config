@@ -7,6 +7,32 @@
 }: let
   # Get cc-tools binaries from the flake
   cc-tools = inputs.cc-tools.packages.${pkgs.stdenv.hostPlatform.system}.default;
+
+  # Gambit skills marketplace as a directory-source. Pinned via flake.lock;
+  # updates with `nix flake update gambit`.
+  gambitSrc = inputs.gambit.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  gambitRev = inputs.gambit.rev or "unknown";
+
+  # Generate settings.json with gambit's marketplace entry injected at build
+  # time, pointing at the Nix store path. Keeps a single source of truth
+  # between settings.json's extraKnownMarketplaces and the runtime
+  # known_marketplaces.json populated by activation.
+  settingsJsonBase = builtins.fromJSON (builtins.readFile ./settings.json);
+  settingsJson = pkgs.writeText "claude-settings.json" (builtins.toJSON (
+    settingsJsonBase
+    // {
+      extraKnownMarketplaces =
+        (settingsJsonBase.extraKnownMarketplaces or {})
+        // {
+          gambit = {
+            source = {
+              source = "directory";
+              path = toString gambitSrc;
+            };
+          };
+        };
+    }
+  ));
 in {
   age.secrets."ntfy-url" = {
     file = ../../secrets/user/ntfy-url.age;
@@ -68,7 +94,7 @@ in {
         lib.mkMerge [
           commandFileAttrs
           {
-            "${dir}/settings.json".source = ./settings.json;
+            "${dir}/settings.json".source = settingsJson;
             "${dir}/CLAUDE.md".source = ./CLAUDE.md;
             "${dir}/agents".source = ./agents;
             "${dir}/skills".source = ./skills;
@@ -114,27 +140,69 @@ in {
       done
     '';
 
-    # Install declared plugins if not already installed, for each profile dir.
-    # Nix declares intent (settings.json), Claude manages state (installed_plugins.json).
-    # Work-profile install may fail on first rebuild if the Enterprise account isn't
-    # logged in yet; the || fallback tolerates it and a subsequent `update` will retry.
+    # Declaratively install gambit into both profile dirs. Rather than shell
+    # out to `claude plugin install` (which wants to modify settings.json —
+    # not possible when it's a read-only Nix store symlink), we populate the
+    # runtime state by hand:
+    #   - known_marketplaces.json: gambit → directory source at ${gambitSrc}
+    #   - plugins/cache/gambit/gambit/<version>: symlink to ${gambitSrc}
+    #   - installed_plugins.json: gambit@gambit entry pointing at the cache
+    # Claude reads these on session start and sees gambit as an installed,
+    # enabled plugin (enablement is declared in settings.json). Idempotent:
+    # re-running activation after a flake update rewrites the marketplace
+    # path and the cache symlink to the new store path.
     activation.claudePluginInstall = lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
       set -euo pipefail
 
-      DECLARED_PLUGINS=(
-        "gambit@gambit"
-      )
+      GAMBIT_SRC="${gambitSrc}"
+      GAMBIT_REV="${gambitRev}"
+      GAMBIT_VERSION=$(${pkgs.jq}/bin/jq -r .version "$GAMBIT_SRC/.claude-plugin/plugin.json")
+      NOW="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 
       for base in ".claude" ".claude-work"; do
-        INSTALLED_PLUGINS="$HOME/$base/plugins/installed_plugins.json"
         mkdir -p "$HOME/$base/plugins"
+        KM="$HOME/$base/plugins/known_marketplaces.json"
+        INSTALLED="$HOME/$base/plugins/installed_plugins.json"
+        CACHE_PARENT="$HOME/$base/plugins/cache/gambit/gambit"
+        CACHE_DIR="$CACHE_PARENT/$GAMBIT_VERSION"
 
-        for plugin in "''${DECLARED_PLUGINS[@]}"; do
-          if [ ! -f "$INSTALLED_PLUGINS" ] || ! ${pkgs.jq}/bin/jq -e ".plugins[\"$plugin\"]" "$INSTALLED_PLUGINS" >/dev/null 2>&1; then
-            echo "Installing missing Claude plugin into $base: $plugin"
-            CLAUDE_CONFIG_DIR="$HOME/$base" ${pkgs.claudeCodeCli}/bin/claude plugin install "$plugin" || echo "Warning: Failed to install $plugin in $base (may need manual install)"
-          fi
-        done
+        # 1. known_marketplaces.json
+        [ -f "$KM" ] || echo '{}' > "$KM"
+        ${pkgs.jq}/bin/jq \
+          --arg path "$GAMBIT_SRC" \
+          --arg now "$NOW" \
+          '.gambit = {
+            source: {source: "directory", path: $path},
+            installLocation: $path,
+            lastUpdated: $now
+          }' "$KM" > "$KM.tmp" && mv "$KM.tmp" "$KM"
+
+        # 2. plugin cache — symlink to the Nix store path. Replace any
+        # existing dir or mismatched symlink so the cache always reflects
+        # the current flake pin.
+        mkdir -p "$CACHE_PARENT"
+        if [ -L "$CACHE_DIR" ] || [ -e "$CACHE_DIR" ]; then
+          rm -rf "$CACHE_DIR"
+        fi
+        ln -s "$GAMBIT_SRC" "$CACHE_DIR"
+
+        # 3. installed_plugins.json — record gambit@gambit pointing at the
+        # cache symlink. Preserve installedAt if a prior entry exists;
+        # always refresh lastUpdated and gitCommitSha.
+        [ -f "$INSTALLED" ] || echo '{"version":2,"plugins":{}}' > "$INSTALLED"
+        ${pkgs.jq}/bin/jq \
+          --arg version "$GAMBIT_VERSION" \
+          --arg installPath "$CACHE_DIR" \
+          --arg rev "$GAMBIT_REV" \
+          --arg now "$NOW" \
+          '.plugins["gambit@gambit"] = [{
+            scope: "user",
+            installPath: $installPath,
+            version: $version,
+            installedAt: (.plugins["gambit@gambit"][0].installedAt // $now),
+            lastUpdated: $now,
+            gitCommitSha: $rev
+          }]' "$INSTALLED" > "$INSTALLED.tmp" && mv "$INSTALLED.tmp" "$INSTALLED"
       done
     '';
 

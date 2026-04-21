@@ -29,6 +29,10 @@
     # CC-Tools - Claude Code smart hooks
     cc-tools.url = "github:joshsymonds/cc-tools";
 
+    # Gambit — Claude Code skills marketplace (consumed as a directory
+    # source; deployed into both ~/.claude and ~/.claude-work).
+    gambit.url = "github:joshsymonds/gambit";
+
     # sound-stage — karaoke downloader + delyric vocal separation worker.
     sound-stage = {
       url = "github:joshsymonds/sound-stage";

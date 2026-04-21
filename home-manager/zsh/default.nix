@@ -72,6 +72,30 @@ in {
     };
 
     initContent = ''
+      # Claude Code profile selection. Walks $PWD upward looking for a
+      # .claude-work marker file; if found, invokes claude with
+      # CLAUDE_CONFIG_DIR pointing at ~/.claude-work. Otherwise passes
+      # through untouched, letting claude use its default (~/.claude).
+      claude() {
+        emulate -L zsh
+        local dir=$PWD
+        while [[ $dir != / ]]; do
+          if [[ -f $dir/.claude-work ]]; then
+            CLAUDE_CONFIG_DIR="$HOME/.claude-work" command claude "$@"
+            return
+          fi
+          dir=''${dir:h}
+        done
+        command claude "$@"
+      }
+
+      # Explicit profile overrides. Both bypass claude() via `command`.
+      # `cm` uses a subshell to scope the unset — personal prefs live at
+      # ~/.claude.json (at $HOME), not ~/.claude/.claude.json, so the
+      # default (CLAUDE_CONFIG_DIR unset) is what we need.
+      cw() { CLAUDE_CONFIG_DIR="$HOME/.claude-work" command claude "$@" }
+      cm() { ( unset CLAUDE_CONFIG_DIR && command claude "$@" ) }
+
       t() {
         if [[ $# -eq 0 ]]; then
           tmux-devspace new

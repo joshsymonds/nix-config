@@ -1807,11 +1807,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1776057310,
-        "narHash": "sha256-2D/gt98AC8c4LMo2jdj9P+MNKrgZU9mezD8fwKHV60o=",
+        "lastModified": 1776824768,
+        "narHash": "sha256-CJo0oX17IDYs6yFmeGVqltm5HNaL6ZJ8IYYSufERba4=",
         "owner": "joshsymonds",
         "repo": "sound-stage",
-        "rev": "ef3deb5279cf9056497548254d3cd0167e4fffd1",
+        "rev": "eaaf2fba98470e812cf797894f86f2ec2ac2acba",
         "type": "github"
       },
       "original": {

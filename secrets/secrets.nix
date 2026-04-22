@@ -20,9 +20,6 @@ in {
   "secrets/hosts/ultraviolet/shimmer-env.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/invidious-companion-key.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/x11vnc-password.age".publicKeys = keys.ultraviolet;
-  "secrets/hosts/ultraviolet/n8n-anthropic-api-key.age".publicKeys = keys.ultraviolet;
-  "secrets/hosts/ultraviolet/n8n-ntfy-url.age".publicKeys = keys.ultraviolet;
-  "secrets/hosts/ultraviolet/n8n-user-bio.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/mullvad-privatekey.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/mullvad-addresses.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/nextdns-linkip-url.age".publicKeys = keys.ultraviolet;

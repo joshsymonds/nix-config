@@ -60,24 +60,6 @@ in {
     });
     moar = final.moor;
 
-    # n8n - pinned to latest version
-    n8n = prev.n8n.overrideAttrs (old: rec {
-      version = "2.6.3";
-      src = final.fetchFromGitHub {
-        owner = "n8n-io";
-        repo = "n8n";
-        tag = "n8n@${version}";
-        hash = "sha256-nViKshhkBL8odVDqKGTJTMjVpYtI0Qp3z59VI+DNsms=";
-      };
-      pnpmDeps = final.fetchPnpmDeps {
-        inherit (old) pname;
-        inherit version src;
-        pnpm = final.pnpm_10;
-        fetcherVersion = 3;
-        hash = "sha256-vjgteuMd+lkEL9vT1Ngndk8G3Ad1esa1NBPpEHBFmDg=";
-      };
-    });
-
     # XIVLauncher customizations
     xivlauncher =
       prev.xivlauncher.override {

@@ -40,7 +40,6 @@ in
       ./services/shimmer.nix
       ./services/download-proxies.nix
       ./services/flaresolverr.nix
-      ./services/n8n.nix
       ./services/obsidian.nix
       ./services/nextdns-linkip.nix
       ./services/sound-stage.nix

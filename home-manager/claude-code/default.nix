@@ -104,8 +104,6 @@ in {
               executable = true;
             };
             "${dir}/.keep".text = "";
-            "${dir}/projects/.keep".text = "";
-            "${dir}/todos/.keep".text = "";
             "${dir}/statsig/.keep".text = "";
             "${dir}/commands/.keep".text = "";
           }
@@ -116,7 +114,41 @@ in {
         (mkClaudeFiles ".claude-work")
       ];
 
-    activation.claudeDirectoryPermissions = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    # Unify stateful dirs (transcripts, memories, task lists, file history, etc.)
+    # across personal and work profiles. Both profiles see the same session
+    # history and auto-memory state — only billing / OAuth / MCP servers stay
+    # per-profile. Runs before claudeDirectoryPermissions so chmod targets the
+    # symlinked shared dir rather than racing with real-dir creation.
+    #
+    # Defensive: if a profile dir already exists as a real directory with
+    # content, the symlink is skipped and a warning is logged. The one-time
+    # migration from real dirs → shared + symlinks is done by hand; this
+    # activation maintains the structure on fresh machines and after rebuilds.
+    activation.claudeUnifiedState = lib.hm.dag.entryBefore ["claudeDirectoryPermissions"] ''
+      set -euo pipefail
+      SHARED="$HOME/.claude-shared"
+      mkdir -p "$SHARED"
+      for d in projects todos tasks sessions file-history shell-snapshots; do
+        mkdir -p "$SHARED/$d"
+        for base in ".claude" ".claude-work"; do
+          target="$HOME/$base/$d"
+          if [ -L "$target" ]; then
+            cur="$(readlink "$target")"
+            if [ "$cur" != "$SHARED/$d" ]; then
+              rm "$target"
+              ln -s "$SHARED/$d" "$target"
+            fi
+          elif [ ! -e "$target" ]; then
+            mkdir -p "$HOME/$base"
+            ln -s "$SHARED/$d" "$target"
+          elif [ -d "$target" ]; then
+            echo "claudeUnifiedState: $target is a real dir with data; skipping. Move to $SHARED/$d manually." >&2
+          fi
+        done
+      done
+    '';
+
+    activation.claudeDirectoryPermissions = lib.hm.dag.entryAfter ["writeBoundary" "claudeUnifiedState"] ''
       set -euo pipefail
       for base in ".claude" ".claude-work"; do
         for dir in "$base" "$base/bin" "$base/commands" "$base/hooks" "$base/projects" "$base/statsig" "$base/todos"; do

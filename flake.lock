@@ -1803,11 +1803,11 @@
         "nixpkgs": "nixpkgs_11"
       },
       "locked": {
-        "lastModified": 1777300121,
-        "narHash": "sha256-OjrUOB3VamcZ5omAze8Z4oFO5l4CQIwHuFF5x31Rghk=",
+        "lastModified": 1777313648,
+        "narHash": "sha256-a9Iawnr4dlIU28vptiPMB9wP8M0XVvcJAd35g8akHWA=",
         "owner": "joshsymonds",
         "repo": "savecraft.gg",
-        "rev": "91b1b23af34e3fca23d15b1bfebbc9566276b605",
+        "rev": "bb6fc9e9b77795888032ef54340176fc13d6eced",
         "type": "github"
       },
       "original": {

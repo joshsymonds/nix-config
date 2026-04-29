@@ -92,6 +92,9 @@
     # Without this, a reimage hits Let's Encrypt rate limits and all HTTPS is down
     backup_dir "caddy" "/var/lib/caddy"
 
+    # inbox-zero Redis (BullMQ queues + cache, AOF-persisted)
+    backup_dir "inbox-zero-redis" "/var/lib/inbox-zero/redis"
+
     # PostgreSQL - dump databases (used by Invidious)
     pg_dest="$BACKUP_ROOT/postgresql"
     ${pkgs.coreutils}/bin/mkdir -p "$pg_dest"

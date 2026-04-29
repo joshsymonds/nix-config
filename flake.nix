@@ -276,6 +276,7 @@
             deadnix
             shellcheck
             git
+            google-cloud-sdk
           ];
         };
       }

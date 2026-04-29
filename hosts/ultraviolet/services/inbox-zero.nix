@@ -18,7 +18,47 @@
   pkgs,
   config,
   ...
-}: {
+}: let
+  # Six scheduled jobs replacing the upstream Alpine cron sidecar.
+  # Cadences and paths verified verbatim against
+  # https://github.com/elie222/inbox-zero/blob/main/docker-compose.yml
+  mkCronService = name: path: {
+    description = "inbox-zero cron: ${name}";
+    after = ["podman-inbox-zero-web.service"];
+    requires = ["podman-inbox-zero-web.service"];
+    restartTriggers = [config.age.secrets."inbox-zero-env".file];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+      ExecStart = pkgs.writeShellScript "inbox-zero-cron-${name}" ''
+        #!${pkgs.bash}/bin/bash
+        set -euo pipefail
+        CRON_SECRET=$(${pkgs.gnugrep}/bin/grep -E '^CRON_SECRET=' ${config.age.secrets."inbox-zero-env".path} | ${pkgs.coreutils}/bin/cut -d= -f2-)
+        if [ -z "$CRON_SECRET" ]; then
+          echo "CRON_SECRET missing from inbox-zero-env" >&2
+          exit 1
+        fi
+        ${pkgs.curl}/bin/curl --fail --silent --show-error \
+          --max-time 30 \
+          -H "Authorization: Bearer $CRON_SECRET" \
+          "http://127.0.0.1:3000${path}"
+        echo ""
+        echo "[cron] ${name} -> ok"
+      '';
+    };
+  };
+
+  mkCronTimer = period: {
+    description = "inbox-zero cron timer (every ${toString period}s)";
+    wantedBy = ["timers.target"];
+    timerConfig = {
+      OnBootSec = "60s";
+      OnUnitActiveSec = "${toString period}s";
+      Persistent = true;
+      RandomizedDelaySec = "30s";
+    };
+  };
+in {
   age.secrets."inbox-zero-env" = {
     file = ../../../secrets/hosts/ultraviolet/inbox-zero-env.age;
     owner = "root";
@@ -349,4 +389,18 @@
       "podman-inbox-zero-redis-http.service"
     ];
   };
+
+  systemd.services."inbox-zero-cron-scheduled-actions" = mkCronService "scheduled-actions" "/api/cron/scheduled-actions";
+  systemd.services."inbox-zero-cron-automation-jobs" = mkCronService "automation-jobs" "/api/cron/automation-jobs";
+  systemd.services."inbox-zero-cron-follow-up-reminders" = mkCronService "follow-up-reminders" "/api/follow-up-reminders";
+  systemd.services."inbox-zero-cron-resend-digest" = mkCronService "resend-digest" "/api/resend/digest/all";
+  systemd.services."inbox-zero-cron-meeting-briefs" = mkCronService "meeting-briefs" "/api/meeting-briefs";
+  systemd.services."inbox-zero-cron-watch-all" = mkCronService "watch-all" "/api/watch/all";
+
+  systemd.timers."inbox-zero-cron-scheduled-actions" = mkCronTimer 900;
+  systemd.timers."inbox-zero-cron-automation-jobs" = mkCronTimer 900;
+  systemd.timers."inbox-zero-cron-follow-up-reminders" = mkCronTimer 3600;
+  systemd.timers."inbox-zero-cron-resend-digest" = mkCronTimer 1800;
+  systemd.timers."inbox-zero-cron-meeting-briefs" = mkCronTimer 900;
+  systemd.timers."inbox-zero-cron-watch-all" = mkCronTimer 21600;
 }

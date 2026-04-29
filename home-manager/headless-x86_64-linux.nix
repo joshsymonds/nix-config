@@ -6,7 +6,6 @@
     ./common.nix
     ./devspaces-host
     ./security-tools
-    ./gmailctl
   ];
 
   home = {

@@ -27,7 +27,6 @@ in {
   "secrets/hosts/ultraviolet/sound-stage-env.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/inbox-zero-env.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/inbox-zero-db-password.age".publicKeys = keys.ultraviolet;
-  "secrets/hosts/ultraviolet/inbox-zero-pubsub-key.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/vermissian/cloudflared-token.age".publicKeys = keys.vermissian;
   "secrets/hosts/vermissian/coder-ghcr-cache-auth.age".publicKeys = keys.vermissian;
 }

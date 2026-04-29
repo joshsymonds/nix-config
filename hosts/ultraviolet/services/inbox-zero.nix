@@ -1,7 +1,7 @@
 # Inbox Zero (https://github.com/elie222/inbox-zero) — self-hosted on ultraviolet.
 #
 # Tiers built so far:
-#   - three agenix secrets (env, db-password, pubsub-key)
+#   - two agenix secrets (env, db-password)
 #   - a dedicated Podman network "inbox-zero" so containers reach each other by name
 #   - a containerized Postgres (scram-sha-256 enforced)
 #   - Redis with AOF persistence
@@ -68,13 +68,6 @@ in {
 
   age.secrets."inbox-zero-db-password" = {
     file = ../../../secrets/hosts/ultraviolet/inbox-zero-db-password.age;
-    owner = "root";
-    group = "root";
-    mode = "0400";
-  };
-
-  age.secrets."inbox-zero-pubsub-key" = {
-    file = ../../../secrets/hosts/ultraviolet/inbox-zero-pubsub-key.age;
     owner = "root";
     group = "root";
     mode = "0400";

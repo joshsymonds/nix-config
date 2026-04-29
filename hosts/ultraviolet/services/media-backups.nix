@@ -112,6 +112,31 @@
       FAILURES=$((FAILURES + 1))
     fi
 
+    # inbox-zero (containerized postgres on its own podman network)
+    iz_pg_dest="$BACKUP_ROOT/inbox-zero-postgres"
+    ${pkgs.coreutils}/bin/mkdir -p "$iz_pg_dest"
+    if ${pkgs.systemd}/bin/systemctl is-active --quiet podman-inbox-zero-postgres.service; then
+      echo "inbox-zero-postgres: dumping inbox_zero database"
+      if ${pkgs.podman}/bin/podman exec inbox-zero-postgres \
+           pg_dump -U inbox_zero -d inbox_zero -Fc \
+           | ${pkgs.gzip}/bin/gzip > "$iz_pg_dest/inbox-zero-$DATE.sql.gz"; then
+        size=$(${pkgs.coreutils}/bin/stat -c%s "$iz_pg_dest/inbox-zero-$DATE.sql.gz")
+        if [ "$size" -lt 100 ]; then
+          echo "inbox-zero-postgres: ERROR - dump is only $size bytes, removing"
+          ${pkgs.coreutils}/bin/rm -f "$iz_pg_dest/inbox-zero-$DATE.sql.gz"
+          FAILURES=$((FAILURES + 1))
+        else
+          echo "inbox-zero-postgres: done ($(${pkgs.coreutils}/bin/numfmt --to=iec "$size"))"
+        fi
+      else
+        echo "inbox-zero-postgres: ERROR - pg_dump failed"
+        ${pkgs.coreutils}/bin/rm -f "$iz_pg_dest/inbox-zero-$DATE.sql.gz"
+        FAILURES=$((FAILURES + 1))
+      fi
+    else
+      echo "inbox-zero-postgres: skipped (container not running)"
+    fi
+
     # Only prune old backups if all current backups succeeded
     if [ "$FAILURES" -eq 0 ]; then
       echo "Pruning backups older than $KEEP_DAYS days..."

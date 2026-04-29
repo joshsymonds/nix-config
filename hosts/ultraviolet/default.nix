@@ -38,6 +38,7 @@ in
       ./services/invidious.nix
       ./services/redlib.nix
       ./services/shimmer.nix
+      ./services/inbox-zero.nix
       ./services/download-proxies.nix
       ./services/flaresolverr.nix
       ./services/obsidian.nix

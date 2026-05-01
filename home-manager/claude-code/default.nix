@@ -33,6 +33,29 @@
         };
     }
   ));
+
+  # Skills dir as a linkFarm derivation: nix-managed skills + the
+  # team-status skill at an out-of-store writable path so iteration
+  # on team-status does not require a rebuild. New skills added under
+  # ./skills/ are picked up automatically.
+  skillsDir = let
+    nixSkills = lib.attrNames (
+      lib.filterAttrs (_: t: t == "directory") (builtins.readDir ./skills)
+    );
+  in
+    pkgs.linkFarm "claude-skills" (
+      (map (n: {
+          name = n;
+          path = ./skills + "/${n}";
+        })
+        nixSkills)
+      ++ [
+        {
+          name = "team-status";
+          path = "/home/joshsymonds/.claude-work/team-status";
+        }
+      ]
+    );
 in {
   age.secrets."ntfy-url" = {
     file = ../../secrets/user/ntfy-url.age;
@@ -97,7 +120,7 @@ in {
             "${dir}/settings.json".source = settingsJson;
             "${dir}/CLAUDE.md".source = ./CLAUDE.md;
             "${dir}/agents".source = ./agents;
-            "${dir}/skills".source = ./skills;
+            "${dir}/skills".source = skillsDir;
             "${dir}/bin/cc-tools-statusline".source = "${cc-tools}/bin/cc-tools-statusline";
             "${dir}/hooks/ntfy-notifier.sh" = {
               source = ./hooks/ntfy-notifier.sh;

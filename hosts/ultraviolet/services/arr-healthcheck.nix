@@ -124,8 +124,9 @@
 
     # Run all checks
     ${builtins.concatStringsSep "\n" (map (svc: ''
-      check_arr "${svc.name}" "${toString svc.port}" "${svc.configXml}" "${svc.apiVersion}"
-    '') arrServices)}
+        check_arr "${svc.name}" "${toString svc.port}" "${svc.configXml}" "${svc.apiVersion}"
+      '')
+      arrServices)}
     check_jellyfin
     check_jellyseerr
   '';

@@ -1,4 +1,8 @@
-{pkgs, config, ...}: {
+{
+  pkgs,
+  config,
+  ...
+}: {
   # Shared group so both invidious and companion can read the secret
   users.groups.invidious-shared = {};
 

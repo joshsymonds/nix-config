@@ -406,8 +406,7 @@ in
         OPENSSL_LIB_DIR = "${pkgs.openssl.out}/lib";
         OPENSSL_INCLUDE_DIR = "${pkgs.openssl.dev}/include";
       };
-
-};
+    };
 
     # https://nixos.wiki/wiki/FAQ/When_do_I_update_stateVersion
     system.stateVersion = "25.05";

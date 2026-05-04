@@ -14,6 +14,5 @@
 
     # Vulnerability scanner
     nuclei
-
   ];
 }

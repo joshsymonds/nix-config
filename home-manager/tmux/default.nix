@@ -46,11 +46,13 @@ with lib; let
   tmuxDevspaceHelper =
     pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ./scripts/tmux-devspace.sh);
   netSpeedPatched = pkgs.tmuxPlugins.net-speed.overrideAttrs (old: {
-    postPatch = (old.postPatch or "") + ''
-      for f in scripts/*.sh *.sh; do
-        [ -f "$f" ] && substituteInPlace "$f" --replace-quiet '#!/bin/bash' '#!${pkgs.bash}/bin/bash'
-      done
-    '';
+    postPatch =
+      (old.postPatch or "")
+      + ''
+        for f in scripts/*.sh *.sh; do
+          [ -f "$f" ] && substituteInPlace "$f" --replace-quiet '#!/bin/bash' '#!${pkgs.bash}/bin/bash'
+        done
+      '';
   });
 in {
   config = {

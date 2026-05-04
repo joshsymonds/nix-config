@@ -5,191 +5,191 @@
   pkgs,
   ...
 }: {
-    imports = [
-      inputs.hardware.nixosModules.common-pc
-      ./hardware-configuration.nix
-      ../../modules/services/delyric-worker.nix
+  imports = [
+    inputs.hardware.nixosModules.common-pc
+    ./hardware-configuration.nix
+    ../../modules/services/delyric-worker.nix
+  ];
+
+  # Performance tuning
+  performance.profile = "workstation";
+  performance.cpuVendor = "intel";
+
+  # Host-specific: use all cores and add CUDA binary cache (common.nix provides defaults)
+  nix.settings = {
+    cores = 0;
+    max-jobs = "auto";
+    extra-substituters = [
+      "https://cache.nixos-cuda.org"
     ];
+    extra-trusted-public-keys = [
+      "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
+    ];
+  };
 
-    # Performance tuning
-    performance.profile = "workstation";
-    performance.cpuVendor = "intel";
-
-    # Host-specific: use all cores and add CUDA binary cache (common.nix provides defaults)
-    nix.settings = {
-      cores = 0;
-      max-jobs = "auto";
-      extra-substituters = [
-        "https://cache.nixos-cuda.org"
-      ];
-      extra-trusted-public-keys = [
-        "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
-      ];
-    };
-
-    networking = {
-      hostName = "stygianlibrary";
-      useDHCP = false;
-      networkmanager.enable = true;
-      firewall = {
-        enable = true;
-        checkReversePath = "loose";
-        trustedInterfaces = ["tailscale0"];
-        allowedTCPPorts = [22 2022 8080 8188 8888 9090 11434];
-        allowedUDPPorts = [config.services.tailscale.port];
-      };
-    };
-
-    boot = {
-      supportedFilesystems = ["ntfs" "vfat"];
-      kernelModules = ["coretemp" "kvm-intel"];
-      kernelParams = ["kernel.unprivileged_userns_clone=1"];
-      kernelPackages = pkgs.linuxPackages_latest;
-      initrd = {
-        luks.devices.stygianlibrary = {
-          device = "/dev/disk/by-partlabel/STYGIAN-LUKS";
-          allowDiscards = true;
-        };
-        kernelModules = ["thunderbolt" "vmd" "xhci_pci"];
-        # Auto-authorize Thunderbolt devices as they appear. The LUKS
-        # partition (STYGIAN-LUKS) is on a TB-attached NVMe, so the TB
-        # controller must be authorized before cryptsetup can see the
-        # device. A udev rule reacts to every `add` uevent, which handles
-        # chained TB enumeration without the races of a polling loop.
-        services.udev.rules = ''
-          ACTION=="add", SUBSYSTEM=="thunderbolt", ATTR{authorized}=="0", ATTR{authorized}="1"
-        '';
-      };
-      loader = {
-        systemd-boot = {
-          enable = true;
-          configurationLimit = 8;
-        };
-        efi = {
-          canTouchEfiVariables = true;
-          efiSysMountPoint = "/boot";
-        };
-      };
-    };
-
-    hardware = {
-      cpu = {
-        intel.updateMicrocode = lib.mkDefault true;
-        amd.updateMicrocode = lib.mkDefault true;
-      };
-      enableAllFirmware = true;
-      graphics = {
-        enable = true;
-        enable32Bit = true;
-        extraPackages = with pkgs; [
-          libvdpau-va-gl
-          libva-vdpau-driver
-        ];
-      };
-      nvidia = {
-        open = true;
-        nvidiaSettings = true;
-        powerManagement.enable = lib.mkDefault true;
-        package = config.boot.kernelPackages.nvidiaPackages.production;
-        modesetting.enable = true;
-      };
-    };
-
-    hardware.nvidia-container-toolkit.enable = true;
-
-    virtualisation.docker.enable = true;
-
-    # ComfyUI is managed by creative-lab/devenv.nix (devenv up)
-
-    services = {
-      xserver.videoDrivers = ["nvidia"];
-      ollama = {
-        enable = true;
-        package = pkgs.ollama-cuda;
-        host = "0.0.0.0";
-        user = "ollama";
-        group = "ollama";
-      };
-      open-webui = {
-        enable = true;
-        host = "0.0.0.0";
-        port = 8080;
-        environment = {
-          OLLAMA_API_BASE_URL = "http://127.0.0.1:11434";
-        };
-      };
-      hardware.bolt.enable = true;
-      caddy = {
-        enable = true;
-        virtualHosts.":8888".extraConfig = ''
-          handle /output/* {
-            root * /var/lib/comfyui/storage
-            file_server browse
-          }
-          handle {
-            reverse_proxy localhost:8188
-          }
-        '';
-        virtualHosts.":9090".extraConfig = ''
-          root * /home/joshsymonds/creative-lab/ai-toolkit/output
-          file_server browse
-        '';
-      };
-    };
-
-    systemd.services.caddy.serviceConfig = {
-      ProtectHome = lib.mkForce "tmpfs";
-      BindReadOnlyPaths = ["/home/joshsymonds/creative-lab/ai-toolkit/output"];
-    };
-
-    # Delyric vocal separation worker (FastAPI on :9001). Reads/writes songs
-    # under /mnt/music/sound-stage; dispatched to by the sound-stage Go server
-    # on vermissian. The bindHost must be bindable locally or the unit exits
-    # cleanly (by design for dual-boot — absent on Windows = orchestrator 503).
-    services.delyric-worker = {
+  networking = {
+    hostName = "stygianlibrary";
+    useDHCP = false;
+    networkmanager.enable = true;
+    firewall = {
       enable = true;
-      package = inputs.sound-stage.packages.${pkgs.stdenv.hostPlatform.system}.delyric-worker;
-      bindHost = "172.31.0.98";
-      openFirewall = true;
+      checkReversePath = "loose";
+      trustedInterfaces = ["tailscale0"];
+      allowedTCPPorts = [22 2022 8080 8188 8888 9090 11434];
+      allowedUDPPorts = [config.services.tailscale.port];
     };
+  };
 
-    services.udev.extraRules = ''
-      ACTION=="add", SUBSYSTEM=="thunderbolt", ATTR{authorized}=="0", ATTR{authorized}="1"
-    '';
-
-    systemd.services.open-webui.serviceConfig = {
-      DynamicUser = lib.mkForce false;
-      User = "open-webui";
-      Group = "open-webui";
+  boot = {
+    supportedFilesystems = ["ntfs" "vfat"];
+    kernelModules = ["coretemp" "kvm-intel"];
+    kernelParams = ["kernel.unprivileged_userns_clone=1"];
+    kernelPackages = pkgs.linuxPackages_latest;
+    initrd = {
+      luks.devices.stygianlibrary = {
+        device = "/dev/disk/by-partlabel/STYGIAN-LUKS";
+        allowDiscards = true;
+      };
+      kernelModules = ["thunderbolt" "vmd" "xhci_pci"];
+      # Auto-authorize Thunderbolt devices as they appear. The LUKS
+      # partition (STYGIAN-LUKS) is on a TB-attached NVMe, so the TB
+      # controller must be authorized before cryptsetup can see the
+      # device. A udev rule reacts to every `add` uevent, which handles
+      # chained TB enumeration without the races of a polling loop.
+      services.udev.rules = ''
+        ACTION=="add", SUBSYSTEM=="thunderbolt", ATTR{authorized}=="0", ATTR{authorized}="1"
+      '';
     };
-
-    programs.nm-applet.enable = true;
-
-    users.users.joshsymonds.extraGroups = ["video" "render" "docker"];
-
-    users.users.open-webui = {
-      isSystemUser = true;
-      group = "open-webui";
-      home = "/var/lib/open-webui";
+    loader = {
+      systemd-boot = {
+        enable = true;
+        configurationLimit = 8;
+      };
+      efi = {
+        canTouchEfiVariables = true;
+        efiSysMountPoint = "/boot";
+      };
     };
+  };
 
-    users.groups.open-webui = {};
-
-    programs.nix-ld.enable = true;
-
-    environment = {
-      systemPackages = with pkgs; [
-        cachix
-        git
-        hwdata
-        nvtopPackages.full
-        ollama
-        python313
-        python313Packages.pip
-        tmux
-        vulkan-tools
+  hardware = {
+    cpu = {
+      intel.updateMicrocode = lib.mkDefault true;
+      amd.updateMicrocode = lib.mkDefault true;
+    };
+    enableAllFirmware = true;
+    graphics = {
+      enable = true;
+      enable32Bit = true;
+      extraPackages = with pkgs; [
+        libvdpau-va-gl
+        libva-vdpau-driver
       ];
     };
+    nvidia = {
+      open = true;
+      nvidiaSettings = true;
+      powerManagement.enable = lib.mkDefault true;
+      package = config.boot.kernelPackages.nvidiaPackages.production;
+      modesetting.enable = true;
+    };
+  };
 
-    system.stateVersion = "25.05";
-  }
+  hardware.nvidia-container-toolkit.enable = true;
+
+  virtualisation.docker.enable = true;
+
+  # ComfyUI is managed by creative-lab/devenv.nix (devenv up)
+
+  services = {
+    xserver.videoDrivers = ["nvidia"];
+    ollama = {
+      enable = true;
+      package = pkgs.ollama-cuda;
+      host = "0.0.0.0";
+      user = "ollama";
+      group = "ollama";
+    };
+    open-webui = {
+      enable = true;
+      host = "0.0.0.0";
+      port = 8080;
+      environment = {
+        OLLAMA_API_BASE_URL = "http://127.0.0.1:11434";
+      };
+    };
+    hardware.bolt.enable = true;
+    caddy = {
+      enable = true;
+      virtualHosts.":8888".extraConfig = ''
+        handle /output/* {
+          root * /var/lib/comfyui/storage
+          file_server browse
+        }
+        handle {
+          reverse_proxy localhost:8188
+        }
+      '';
+      virtualHosts.":9090".extraConfig = ''
+        root * /home/joshsymonds/creative-lab/ai-toolkit/output
+        file_server browse
+      '';
+    };
+  };
+
+  systemd.services.caddy.serviceConfig = {
+    ProtectHome = lib.mkForce "tmpfs";
+    BindReadOnlyPaths = ["/home/joshsymonds/creative-lab/ai-toolkit/output"];
+  };
+
+  # Delyric vocal separation worker (FastAPI on :9001). Reads/writes songs
+  # under /mnt/music/sound-stage; dispatched to by the sound-stage Go server
+  # on vermissian. The bindHost must be bindable locally or the unit exits
+  # cleanly (by design for dual-boot — absent on Windows = orchestrator 503).
+  services.delyric-worker = {
+    enable = true;
+    package = inputs.sound-stage.packages.${pkgs.stdenv.hostPlatform.system}.delyric-worker;
+    bindHost = "172.31.0.98";
+    openFirewall = true;
+  };
+
+  services.udev.extraRules = ''
+    ACTION=="add", SUBSYSTEM=="thunderbolt", ATTR{authorized}=="0", ATTR{authorized}="1"
+  '';
+
+  systemd.services.open-webui.serviceConfig = {
+    DynamicUser = lib.mkForce false;
+    User = "open-webui";
+    Group = "open-webui";
+  };
+
+  programs.nm-applet.enable = true;
+
+  users.users.joshsymonds.extraGroups = ["video" "render" "docker"];
+
+  users.users.open-webui = {
+    isSystemUser = true;
+    group = "open-webui";
+    home = "/var/lib/open-webui";
+  };
+
+  users.groups.open-webui = {};
+
+  programs.nix-ld.enable = true;
+
+  environment = {
+    systemPackages = with pkgs; [
+      cachix
+      git
+      hwdata
+      nvtopPackages.full
+      ollama
+      python313
+      python313Packages.pip
+      tmux
+      vulkan-tools
+    ];
+  };
+
+  system.stateVersion = "25.05";
+}

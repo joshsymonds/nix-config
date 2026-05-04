@@ -1,4 +1,8 @@
-{pkgs, config, ...}: {
+{
+  pkgs,
+  config,
+  ...
+}: {
   # Declare the secrets
   age.secrets."shimmer-access-client-id" = {
     file = ../../../secrets/hosts/ultraviolet/shimmer-access-client-id.age;

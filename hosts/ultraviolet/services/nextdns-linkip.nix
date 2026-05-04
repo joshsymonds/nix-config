@@ -2,7 +2,11 @@
 # NextDNS identifies this network by public IP. When the ISP rotates it,
 # queries arrive with "no profile". This timer pings the linked-IP endpoint
 # every 5 minutes so NextDNS always knows our current address.
-{pkgs, config, ...}: {
+{
+  pkgs,
+  config,
+  ...
+}: {
   age.secrets."nextdns-linkip-url" = {
     file = ../../../secrets/hosts/ultraviolet/nextdns-linkip-url.age;
     owner = "root";

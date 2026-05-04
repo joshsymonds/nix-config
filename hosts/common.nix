@@ -156,7 +156,7 @@ in {
     port = 2022;
   };
 
-  services.openssh.settings.AcceptEnv = lib.mkBefore [ "TERM" "COLORTERM" "TERM_PROGRAM" "TERM_PROGRAM_VERSION" ];
+  services.openssh.settings.AcceptEnv = lib.mkBefore ["TERM" "COLORTERM" "TERM_PROGRAM" "TERM_PROGRAM_VERSION"];
 
   # Open firewall for ET
   networking.firewall.allowedTCPPorts = [2022];

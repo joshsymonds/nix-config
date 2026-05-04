@@ -1,4 +1,8 @@
-{pkgs, config, ...}: {
+{
+  pkgs,
+  config,
+  ...
+}: {
   age.secrets."mullvad-privatekey" = {
     file = ../../secrets/hosts/ultraviolet/mullvad-privatekey.age;
     owner = "root";

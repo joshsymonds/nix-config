@@ -1,4 +1,8 @@
-{pkgs, config, ...}: {
+{
+  pkgs,
+  config,
+  ...
+}: {
   systemd.services.caddy.serviceConfig.EnvironmentFile = config.age.secrets."cloudflare-api-token".path;
 
   services.caddy = {

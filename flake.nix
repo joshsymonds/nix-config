@@ -6,6 +6,18 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.11"; # Keep stable available if needed
 
+    # Flake-parts - modular flake outputs
+    flake-parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
+
+    # treefmt-nix - declarative formatter (alejandra, shellcheck, etc.)
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Darwin
     darwin = {
       url = "github:nix-darwin/nix-darwin";
@@ -94,23 +106,19 @@
     ];
   };
 
-  outputs = {
+  outputs = inputs @ {
+    self,
+    flake-parts,
     nixpkgs,
     darwin,
     home-manager,
-    self,
     ...
-  } @ inputs: let
-    inherit (self) outputs;
+  }: let
     inherit (nixpkgs) lib;
 
-    # Only the systems we actually use
-    systems = ["x86_64-linux" "aarch64-darwin"];
-    forAllSystems = f: lib.genAttrs systems f;
-
-    # Common special arguments for all configurations
-    mkSpecialArgs = _: {
-      inherit inputs outputs;
+    mkSpecialArgs = _system: {
+      inherit inputs;
+      outputs = self.outputs;
     };
 
     mkHomeManagerModules = {
@@ -204,87 +212,85 @@
 
       stygianlibrary-installer = {
         system = "x86_64-linux";
-        modules = [
-          ./hosts/stygianlibrary/installer.nix
-        ];
+        modules = [./hosts/stygianlibrary/installer.nix];
       };
 
       ultraviolet-installer = {
         system = "x86_64-linux";
-        modules = [
-          ./hosts/ultraviolet/installer.nix
-        ];
+        modules = [./hosts/ultraviolet/installer.nix];
       };
 
       vermissian-installer = {
         system = "x86_64-linux";
-        modules = [
-          ./hosts/vermissian/installer.nix
-        ];
+        modules = [./hosts/vermissian/installer.nix];
       };
     };
-  in {
-    packages = let
-      base = forAllSystems (
-        system: let
-          pkgs = import nixpkgs {
-            inherit system;
-            config.allowUnfree = true;
-            overlays = [];
-          };
-        in
-          import ./pkgs {
-            inherit pkgs;
-          }
-      );
-    in
-      base
-      // {
-        x86_64-linux =
-          base.x86_64-linux
-          // {
+
+    mkHome = {
+      system,
+      module,
+      hostname,
+    }:
+      home-manager.lib.homeManagerConfiguration {
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [
+            self.outputs.overlays.default
+            self.outputs.overlays.darwin
+          ];
+          config.allowUnfree = true;
+        };
+        extraSpecialArgs = mkSpecialArgs system // {inherit hostname;};
+        modules = [inputs.agenix.homeManagerModules.default module];
+      };
+  in
+    flake-parts.lib.mkFlake {inherit inputs;} {
+      systems = ["x86_64-linux" "aarch64-darwin"];
+
+      imports = [inputs.treefmt-nix.flakeModule];
+
+      perSystem = {
+        pkgs,
+        system,
+        ...
+      }: {
+        packages =
+          (import ./pkgs {inherit pkgs;})
+          // lib.optionalAttrs (system == "x86_64-linux") {
             stygianlibraryInstallerIso = self.nixosConfigurations.stygianlibrary-installer.config.system.build.isoImage;
             ultravioletInstallerIso = self.nixosConfigurations.ultraviolet-installer.config.system.build.isoImage;
             vermissianInstallerIso = self.nixosConfigurations.vermissian-installer.config.system.build.isoImage;
           };
-      };
 
-    overlays = import ./overlays {inherit inputs outputs;};
-
-    devShells = forAllSystems (
-      system: let
-        pkgs = import nixpkgs {
-          inherit system;
-          config.allowUnfree = true;
-        };
-      in {
-        default = pkgs.mkShell {
+        devShells.default = pkgs.mkShell {
           name = "nix-config-dev";
           packages = with pkgs; [
-            alejandra
-            nixpkgs-fmt
             statix
             deadnix
-            shellcheck
             git
             google-cloud-sdk
           ];
         };
-      }
-    );
 
-    # NixOS configurations - inlined for clarity
-    nixosConfigurations =
-      lib.mapAttrs mkNixosHost nixosHostDefinitions;
+        treefmt = {
+          projectRootFile = "flake.nix";
+          programs.alejandra.enable = true;
+        };
+      };
 
-    # Darwin configuration - inlined for clarity
-    darwinConfigurations = let
-      mkDarwinHost = name:
-        darwin.lib.darwinSystem {
+      flake = {
+        overlays = import ./overlays {
+          inherit inputs;
+          outputs = self.outputs;
+        };
+
+        nixosConfigurations = lib.mapAttrs mkNixosHost nixosHostDefinitions;
+
+        darwinConfigurations.ninuan = darwin.lib.darwinSystem {
           system = "aarch64-darwin";
           specialArgs = mkSpecialArgs "aarch64-darwin";
           modules = [
-            ./hosts/${name}
+            ./hosts/ninuan
             home-manager.darwinModules.home-manager
             {
               home-manager = {
@@ -295,63 +301,42 @@
                 extraSpecialArgs =
                   mkSpecialArgs "aarch64-darwin"
                   // {
-                    hostname = name;
+                    hostname = "ninuan";
                   };
                 sharedModules = [inputs.agenix.homeManagerModules.default];
               };
             }
           ];
         };
-    in {
-      ninuan = mkDarwinHost "ninuan";
+
+        homeConfigurations = let
+          linuxHosts = builtins.attrNames (lib.filterAttrs (_: cfg: cfg ? homeModule) nixosHostDefinitions);
+          darwinHosts = ["ninuan"];
+        in
+          (
+            lib.genAttrs
+            (map (h: "joshsymonds@${h}") linuxHosts)
+            (h: let
+              hostname = lib.removePrefix "joshsymonds@" h;
+            in
+              mkHome {
+                system = "x86_64-linux";
+                module = ./home-manager/hosts/${hostname}.nix;
+                inherit hostname;
+              })
+          )
+          // (
+            lib.genAttrs
+            (map (h: "joshsymonds@${h}") darwinHosts)
+            (h: let
+              hostname = lib.removePrefix "joshsymonds@" h;
+            in
+              mkHome {
+                system = "aarch64-darwin";
+                module = ./home-manager/hosts/${hostname}.nix;
+                inherit hostname;
+              })
+          );
+      };
     };
-
-    # Simplified home configurations - generated programmatically
-    homeConfigurations = let
-      mkHome = {
-        system,
-        module,
-        hostname,
-      }:
-        home-manager.lib.homeManagerConfiguration {
-          pkgs = import nixpkgs {
-            inherit system;
-            overlays = [
-              outputs.overlays.default
-              outputs.overlays.darwin
-            ];
-            config.allowUnfree = true;
-          };
-          extraSpecialArgs = mkSpecialArgs system // {inherit hostname;};
-          modules = [inputs.agenix.homeManagerModules.default module];
-        };
-
-      linuxHosts = builtins.attrNames (lib.filterAttrs (_: cfg: cfg ? homeModule) nixosHostDefinitions);
-      darwinHosts = ["ninuan"];
-    in
-      (
-        lib.genAttrs
-        (map (h: "joshsymonds@${h}") linuxHosts)
-        (h: let
-          hostname = lib.removePrefix "joshsymonds@" h;
-        in
-          mkHome {
-            system = "x86_64-linux";
-            module = ./home-manager/hosts/${hostname}.nix;
-            inherit hostname;
-          })
-      )
-      // (
-        lib.genAttrs
-        (map (h: "joshsymonds@${h}") darwinHosts)
-        (h: let
-          hostname = lib.removePrefix "joshsymonds@" h;
-        in
-          mkHome {
-            system = "aarch64-darwin";
-            module = ./home-manager/hosts/${hostname}.nix;
-            inherit hostname;
-          })
-      );
-  };
 }

@@ -28,7 +28,6 @@ let
   # User keys (from ~/.ssh/<key>.pub, converted via ssh-to-age)
   users = {
     "joshsymonds@ultraviolet" = "age1yyrhr0zpg3xnxtstq6g3u0zrxglfhnur6387f5znwmehg36rh4cs39apxy";
-    # cloudbank — deprecated, replaced by ninuan
     "joshsymonds@vermissian" = "age10kwzaeajuyvfuyuh03tk6ywand899699rdxlrskh2f6x6ru9t56s02d6pg";
     "joshsymonds@ninuan" = "age1fx2ktlav7rraljux7ypkngd2my64lnr0c8w4hs8jfztgc2dxdqns38264l";
     # TODO: audit and add

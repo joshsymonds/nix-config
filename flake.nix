@@ -200,21 +200,6 @@
         homeModule = ./home-manager/hosts/vermissian.nix;
       };
 
-      stygianlibrary = {
-        system = "x86_64-linux";
-        modules = [
-          ./hosts/stygianlibrary
-          ./hosts/common.nix
-          inputs.agenix.nixosModules.default
-        ];
-        homeModule = ./home-manager/hosts/stygianlibrary.nix;
-      };
-
-      stygianlibrary-installer = {
-        system = "x86_64-linux";
-        modules = [./hosts/stygianlibrary/installer.nix];
-      };
-
       ultraviolet-installer = {
         system = "x86_64-linux";
         modules = [./hosts/ultraviolet/installer.nix];
@@ -257,7 +242,6 @@
         packages =
           (import ./pkgs {inherit pkgs;})
           // lib.optionalAttrs (system == "x86_64-linux") {
-            stygianlibraryInstallerIso = self.nixosConfigurations.stygianlibrary-installer.config.system.build.isoImage;
             ultravioletInstallerIso = self.nixosConfigurations.ultraviolet-installer.config.system.build.isoImage;
             vermissianInstallerIso = self.nixosConfigurations.vermissian-installer.config.system.build.isoImage;
           };

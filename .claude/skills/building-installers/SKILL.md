@@ -61,7 +61,7 @@ sudo eject /dev/sdX
    ```
    This decrypts all secrets with your SSH-derived age key and re-encrypts them with the updated recipient lists.
 
-4. Create `hosts/<name>/installer.nix` — use `ultraviolet` (non-LUKS, swap) or `stygianlibrary` (LUKS) as templates.
+4. Create `hosts/<name>/installer.nix` — use `ultraviolet` (non-LUKS, swap) or `vermissian` as templates.
 
 5. Add to `flake.nix` in `nixosHostDefinitions`:
    ```nix
@@ -110,7 +110,7 @@ sudo eject /dev/sdX
 ## Prebuilt vs Non-Prebuilt
 
 - **`prebuilt = false`** (default): ISO is ~1.3GB, builds in seconds. Target machine builds its own system from the flake. Requires network. Good for powerful machines.
-- **`prebuilt = true`**: ISO is multi-GB, takes a long time to build (embeds entire system closure). Target installs offline in minutes. Use for machines without reliable network (e.g. stygianlibrary via Thunderbolt).
+- **`prebuilt = true`**: ISO is multi-GB, takes a long time to build (embeds entire system closure). Target installs offline in minutes. Use for machines without reliable network.
 
 ## Existing Host: Switching to Labels
 

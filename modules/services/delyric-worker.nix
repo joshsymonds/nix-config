@@ -164,8 +164,7 @@ in {
 
         # NVIDIA device nodes for CUDA. DeviceAllow requires PrivateDevices=false
         # (the default) — we set it explicitly so a future edit can't silently
-        # toggle it true and break the GPU path. Single GPU assumed — add
-        # /dev/nvidia1 etc. if stygianlibrary ever grows a second card.
+        # toggle it true and break the GPU path.
         PrivateDevices = false;
         DeviceAllow = [
           "/dev/nvidia0 rw"

@@ -65,6 +65,5 @@
       interface = "enp2s0";
       subnet = "remote";
     };
-    # stygianlibrary uses NetworkManager (DHCP) - no static IP
   };
 }

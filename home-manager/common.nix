@@ -30,6 +30,7 @@ in {
 
       sessionVariables = {
         COLORTERM = lib.mkDefault "truecolor";
+        NH_FLAKE = "${config.home.homeDirectory}/nix-config";
       };
 
       packages = with pkgs; (
@@ -64,6 +65,9 @@ in {
           manix
           moar
           ncdu
+          nh
+          nix-output-monitor
+          nvd
           parallel
         ]
         ++ lib.optionals (!stdenv.isDarwin) [parted]

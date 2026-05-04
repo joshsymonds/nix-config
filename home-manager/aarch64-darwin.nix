@@ -16,6 +16,6 @@
   ];
 
   programs.go.enable = true;
-  programs.zsh.shellAliases.update = "sudo darwin-rebuild switch --flake \".#$(hostname -s)\" --option warn-dirty false";
+  programs.zsh.shellAliases.update = "nh darwin switch";
   programs.kitty.font.size = 13;
 }

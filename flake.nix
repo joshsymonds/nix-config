@@ -4,7 +4,7 @@
   inputs = {
     # Nixpkgs - using unstable as primary
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-24.11"; # Keep stable available if needed
+    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.11"; # Keep stable available if needed
 
     # Darwin
     darwin = {

@@ -13,10 +13,13 @@ in
   }: {
     # You can import other NixOS modules here
     imports = [
+      ../../modules/services/atticd-cache.nix
       ../../modules/services/cleanup-services.nix
       ../../modules/services/cloudflare-tunnel.nix
       ./hardware-configuration.nix
     ];
+
+    services.atticd-cache.consumer.enable = true;
 
     services.cleanup-services = {
       enable = true;

@@ -9,11 +9,13 @@
     inputs.hardware.nixosModules.common-pc
     ./hardware-configuration.nix
     ../../modules/hardware/gpu-nvidia.nix
+    ../../modules/services/atticd-cache.nix
     ../../modules/services/delyric-worker.nix
     ../../modules/services/inference-stack.nix
   ];
 
   hardware.gpu-nvidia.enable = true;
+  services.atticd-cache.consumer.enable = true;
   services.inference-stack.enable = true;
 
   # Performance tuning

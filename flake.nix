@@ -26,6 +26,15 @@
     # Hardware-specific optimizations
     hardware.url = "github:nixos/nixos-hardware/master";
 
+    # Declarative disk partitioning (used by btrfs-impermanence module)
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Ephemeral root + selective persistence (paired with disko)
+    impermanence.url = "github:nix-community/impermanence";
+
     # CC-Tools - Claude Code smart hooks
     cc-tools.url = "github:joshsymonds/cc-tools";
 

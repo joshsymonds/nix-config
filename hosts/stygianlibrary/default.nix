@@ -10,24 +10,20 @@
     ./hardware-configuration.nix
     ../../modules/hardware/gpu-nvidia.nix
     ../../modules/services/delyric-worker.nix
+    ../../modules/services/inference-stack.nix
   ];
 
   hardware.gpu-nvidia.enable = true;
+  services.inference-stack.enable = true;
 
   # Performance tuning
   performance.profile = "workstation";
   performance.cpuVendor = "intel";
 
-  # Host-specific: use all cores and add CUDA binary cache (common.nix provides defaults)
+  # Host-specific: use all cores (common.nix provides defaults; CUDA cache via inference-stack)
   nix.settings = {
     cores = 0;
     max-jobs = "auto";
-    extra-substituters = [
-      "https://cache.nixos-cuda.org"
-    ];
-    extra-trusted-public-keys = [
-      "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
-    ];
   };
 
   networking = {
@@ -38,7 +34,7 @@
       enable = true;
       checkReversePath = "loose";
       trustedInterfaces = ["tailscale0"];
-      allowedTCPPorts = [22 2022 8080 8188 8888 9090 11434];
+      allowedTCPPorts = [22 2022 8188 8888 9090];
       allowedUDPPorts = [config.services.tailscale.port];
     };
   };
@@ -88,21 +84,6 @@
   # ComfyUI is managed by creative-lab/devenv.nix (devenv up)
 
   services = {
-    ollama = {
-      enable = true;
-      package = pkgs.ollama-cuda;
-      host = "0.0.0.0";
-      user = "ollama";
-      group = "ollama";
-    };
-    open-webui = {
-      enable = true;
-      host = "0.0.0.0";
-      port = 8080;
-      environment = {
-        OLLAMA_API_BASE_URL = "http://127.0.0.1:11434";
-      };
-    };
     hardware.bolt.enable = true;
     caddy = {
       enable = true;
@@ -142,23 +123,9 @@
     ACTION=="add", SUBSYSTEM=="thunderbolt", ATTR{authorized}=="0", ATTR{authorized}="1"
   '';
 
-  systemd.services.open-webui.serviceConfig = {
-    DynamicUser = lib.mkForce false;
-    User = "open-webui";
-    Group = "open-webui";
-  };
-
   programs.nm-applet.enable = true;
 
   users.users.joshsymonds.extraGroups = ["docker"];
-
-  users.users.open-webui = {
-    isSystemUser = true;
-    group = "open-webui";
-    home = "/var/lib/open-webui";
-  };
-
-  users.groups.open-webui = {};
 
   programs.nix-ld.enable = true;
 

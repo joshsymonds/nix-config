@@ -18,7 +18,7 @@
   nix = {
     optimise.automatic = lib.mkDefault true;
     settings = {
-      experimental-features = lib.mkDefault "nix-command flakes";
+      experimental-features = lib.mkDefault "nix-command flakes pipe-operators";
       extra-substituters = lib.mkDefault [
         "https://nix-community.cachix.org"
         "https://joshsymonds.cachix.org"

@@ -72,6 +72,7 @@
   };
 
   nixConfig = {
+    extra-experimental-features = ["pipe-operators"];
     extra-substituters = [
       "https://nix-community.cachix.org"
       "https://joshsymonds.cachix.org"

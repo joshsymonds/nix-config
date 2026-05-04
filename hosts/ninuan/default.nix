@@ -31,6 +31,7 @@ in
           "joshsymonds.cachix.org-1:DajO7Bjk/Q8eQVZQZC/AWOzdUst2TGp8fHS/B1pua2c="
           "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="
         ];
+        extra-experimental-features = ["pipe-operators"];
         accept-flake-config = true;
       };
     };

@@ -94,7 +94,9 @@ in {
       rbenv = {
         enable = true;
         enableBashIntegration = true;
-        enableZshIntegration = true;
+        # Disabled: zsh uses lazy-load stubs that defer rbenv init until first
+        # ruby/rbenv/gem/bundle command. See home-manager/zsh/default.nix.
+        enableZshIntegration = false;
         plugins = [
           {
             name = "ruby-build";
@@ -111,6 +113,9 @@ in {
       direnv = {
         enable = true;
         nix-direnv.enable = true;
+        # Disabled: hook script is pre-rendered at build time and sourced from
+        # home-manager/zsh/default.nix. See preRender helper there.
+        enableZshIntegration = false;
       };
 
       htop = {

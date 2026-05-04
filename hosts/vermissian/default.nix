@@ -13,9 +13,15 @@ in
   }: {
     # You can import other NixOS modules here
     imports = [
+      ../../modules/services/cleanup-services.nix
       ../../modules/services/cloudflare-tunnel.nix
       ./hardware-configuration.nix
     ];
+
+    services.cleanup-services = {
+      enable = true;
+      kindClusters.enable = true;
+    };
 
     # Performance tuning
     performance.profile = "dev";
@@ -176,83 +182,6 @@ in
             ExecStart = "${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/test -d /mnt/video'";
           };
         };
-
-        cleanup-old-clusters = {
-          description = "Clean up kind and ctlptl clusters older than configured timeout";
-          after = ["docker.service"];
-          path = [
-            pkgs.kind
-            pkgs.ctlptl
-          ];
-          environment = {
-            CLUSTER_MAX_AGE_SECONDS = "3600";
-          };
-          serviceConfig = {
-            Type = "oneshot";
-            User = user;
-            Group = "docker";
-            ExecStart = pkgs.writeShellScript "cleanup-old-clusters" ''
-              #!${pkgs.bash}/bin/bash
-              set -euo pipefail
-
-              # Get timeout from environment or use default (1 hour)
-              MAX_AGE_SECONDS=''${CLUSTER_MAX_AGE_SECONDS:-3600}
-              echo "Using cluster max age: $MAX_AGE_SECONDS seconds"
-
-              # Function to get cluster age in seconds
-              get_cluster_age() {
-                local cluster=$1
-                local created_time=$(${pkgs.docker}/bin/docker inspect "$cluster-control-plane" 2>/dev/null | ${pkgs.jq}/bin/jq -r '.[0].Created // empty')
-
-                if [ -z "$created_time" ]; then
-                  echo "0"
-                  return
-                fi
-
-                local created_epoch=$(${pkgs.coreutils}/bin/date -d "$created_time" +%s 2>/dev/null || echo "0")
-                local current_epoch=$(${pkgs.coreutils}/bin/date +%s)
-                echo $((current_epoch - created_epoch))
-              }
-
-              # Clean up kind clusters older than configured timeout
-              if ${pkgs.kind}/bin/kind version &> /dev/null; then
-                echo "Checking kind clusters..."
-                for cluster in $(${pkgs.kind}/bin/kind get clusters 2>/dev/null); do
-                  age=$(get_cluster_age "$cluster")
-                  if [ "$age" -gt "$MAX_AGE_SECONDS" ]; then
-                    echo "Deleting old kind cluster: $cluster (age: $((age/60)) minutes, max: $((MAX_AGE_SECONDS/60)) minutes)"
-                    ${pkgs.kind}/bin/kind delete cluster --name "$cluster" || true
-                  else
-                    echo "Keeping kind cluster: $cluster (age: $((age/60)) minutes, max: $((MAX_AGE_SECONDS/60)) minutes)"
-                  fi
-                done
-              else
-                echo "Kind not available, skipping kind cluster cleanup"
-              fi
-
-              # Clean up ctlptl registries
-              if ${pkgs.ctlptl}/bin/ctlptl version &> /dev/null; then
-                echo "Checking ctlptl registries..."
-                # Get all ctlptl registries and delete those associated with deleted clusters
-                for registry in $(${pkgs.ctlptl}/bin/ctlptl get registries -o json 2>/dev/null | ${pkgs.jq}/bin/jq -r '.items[].metadata.name // empty'); do
-                  # Check if registry starts with "kind-" (associated with a kind cluster)
-                  if [[ "$registry" == kind-* ]]; then
-                    cluster_name=''${registry#kind-}
-                    # Check if the associated cluster still exists
-                    if ! ${pkgs.kind}/bin/kind get clusters 2>/dev/null | grep -q "^$cluster_name$"; then
-                      echo "Removing orphaned ctlptl registry: $registry"
-                      ${pkgs.ctlptl}/bin/ctlptl delete registry "$registry" || true
-                    fi
-                  fi
-                done
-              else
-                echo "Ctlptl not available, skipping registry cleanup"
-              fi
-
-              echo "Cluster cleanup completed"
-            '';
-          };
-        };
       };
     };
 
@@ -303,68 +232,6 @@ in
       };
 
       savecraftDataRefresh.enable = true;
-    };
-
-    systemd.timers.cleanup-old-clusters = {
-      description = "Run cluster cleanup every hour";
-      wantedBy = ["timers.target"];
-      timerConfig = {
-        OnBootSec = "1h";
-        OnUnitActiveSec = "1h";
-        Persistent = true;
-      };
-    };
-
-    # Clean up Docker and Nix store regularly
-    systemd.services.cleanup-docker-and-nix = {
-      description = "Clean up Docker and Nix store";
-      after = ["docker.service"];
-      serviceConfig = {
-        Type = "oneshot";
-        ExecStart = pkgs.writeShellScript "cleanup-docker-and-nix" ''
-          #!${pkgs.bash}/bin/bash
-          set -euo pipefail
-
-          echo "=== Starting cleanup at $(date) ==="
-
-          # Clean Docker if it's running
-          if systemctl is-active --quiet docker; then
-            echo "Cleaning Docker system..."
-            ${pkgs.docker}/bin/docker system prune -a --volumes -f || true
-            echo "Docker cleanup completed"
-          else
-            echo "Docker is not running, skipping Docker cleanup"
-          fi
-
-          # Clean Podman
-          if command -v podman &> /dev/null; then
-            echo "Cleaning Podman system..."
-            ${pkgs.podman}/bin/podman system prune -a --volumes -f || true
-            echo "Podman cleanup completed"
-          fi
-
-          # Clean old Nix generations (keep last 5)
-          echo "Cleaning old Nix generations..."
-          ${pkgs.nix}/bin/nix-env --delete-generations +5 || true
-          ${pkgs.nix}/bin/nix-collect-garbage || true
-
-          # Clean Nix store of unreferenced packages
-          echo "Running Nix garbage collection..."
-          ${pkgs.nix}/bin/nix-store --gc || true
-
-          echo "=== Cleanup completed at $(date) ==="
-        '';
-      };
-    };
-
-    systemd.timers.cleanup-docker-and-nix = {
-      description = "Run Docker and Nix cleanup every hour";
-      wantedBy = ["timers.target"];
-      timerConfig = {
-        OnBootSec = "1h";
-        OnUnitActiveSec = "1h";
-        Persistent = true;
-      };
     };
 
     # Host-specific SSH settings

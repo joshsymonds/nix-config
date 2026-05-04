@@ -8,8 +8,11 @@
   imports = [
     inputs.hardware.nixosModules.common-pc
     ./hardware-configuration.nix
+    ../../modules/hardware/gpu-nvidia.nix
     ../../modules/services/delyric-worker.nix
   ];
+
+  hardware.gpu-nvidia.enable = true;
 
   # Performance tuning
   performance.profile = "workstation";
@@ -78,31 +81,13 @@
       amd.updateMicrocode = lib.mkDefault true;
     };
     enableAllFirmware = true;
-    graphics = {
-      enable = true;
-      enable32Bit = true;
-      extraPackages = with pkgs; [
-        libvdpau-va-gl
-        libva-vdpau-driver
-      ];
-    };
-    nvidia = {
-      open = true;
-      nvidiaSettings = true;
-      powerManagement.enable = lib.mkDefault true;
-      package = config.boot.kernelPackages.nvidiaPackages.production;
-      modesetting.enable = true;
-    };
   };
-
-  hardware.nvidia-container-toolkit.enable = true;
 
   virtualisation.docker.enable = true;
 
   # ComfyUI is managed by creative-lab/devenv.nix (devenv up)
 
   services = {
-    xserver.videoDrivers = ["nvidia"];
     ollama = {
       enable = true;
       package = pkgs.ollama-cuda;
@@ -165,7 +150,7 @@
 
   programs.nm-applet.enable = true;
 
-  users.users.joshsymonds.extraGroups = ["video" "render" "docker"];
+  users.users.joshsymonds.extraGroups = ["docker"];
 
   users.users.open-webui = {
     isSystemUser = true;

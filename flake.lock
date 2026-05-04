@@ -1803,11 +1803,11 @@
         "nixpkgs": "nixpkgs_11"
       },
       "locked": {
-        "lastModified": 1777322160,
-        "narHash": "sha256-e+RmL3xzxLsLAYCVt9VPGiRs3V9ZrPxc7LbVYPZHzzU=",
+        "lastModified": 1777593350,
+        "narHash": "sha256-YoKAAvPPZC1pLXtB454Y1e99ve/FVmitA4RvdbCfTUA=",
         "owner": "joshsymonds",
         "repo": "savecraft.gg",
-        "rev": "99735197ccdb62fa2d70f4bbf5230a9032f55087",
+        "rev": "63389a2087c3b6854fb2cf3181a96daa27c97cc6",
         "type": "github"
       },
       "original": {
@@ -1842,11 +1842,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1776826904,
-        "narHash": "sha256-HHr/x5aKtv9G6YAVusy289VtrOw8LaisJeDFDJjWgt4=",
+        "lastModified": 1777760165,
+        "narHash": "sha256-scoCnBMccgg7HVUruRcNVEWsrrR/z1l+XCitgjXIZso=",
         "owner": "joshsymonds",
         "repo": "sound-stage",
-        "rev": "e9c83c67de4687dab25e4200593b89768e4b1332",
+        "rev": "f810a76926684a04e20319daf1a6410057cbdffe",
         "type": "github"
       },
       "original": {

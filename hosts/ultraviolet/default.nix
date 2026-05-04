@@ -12,6 +12,9 @@ in
   }: {
     # You can import other NixOS modules here
     imports = [
+      # Household atticd binary cache
+      ../../modules/services/atticd-cache.nix
+
       # SABnzbd with Mullvad VPN (migrated from bluedesert)
       ./sabnzbd-vpn.nix
 
@@ -281,6 +284,19 @@ in
         group = "pob-server";
         mode = "0400";
       };
+
+      "atticd-env" = {
+        file = ../../secrets/hosts/ultraviolet/atticd-env.age;
+        owner = "atticd";
+        group = "atticd";
+        mode = "0400";
+      };
+    };
+
+    services.atticd-cache = {
+      enable = true;
+      environmentFile = config.age.secrets."atticd-env".path;
+      apiEndpoint = "http://ultraviolet:8081/";
     };
 
     services.savecraftPobServer = {

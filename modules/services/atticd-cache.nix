@@ -50,6 +50,12 @@ in {
       description = "Allowed Host header values. Empty = allow all (suitable for trusted-LAN).";
     };
 
+    openFirewall = mkOption {
+      type = types.bool;
+      default = true;
+      description = "Open the atticd listen port (8081) in the firewall.";
+    };
+
     consumer = {
       enable = mkEnableOption "use the household atticd as a substituter (pull-only)";
 
@@ -90,6 +96,8 @@ in {
           };
         };
       };
+
+      networking.firewall.allowedTCPPorts = mkIf cfg.openFirewall [8081];
     })
 
     (mkIf cfg.consumer.enable {

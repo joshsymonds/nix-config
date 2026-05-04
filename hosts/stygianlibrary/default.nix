@@ -13,17 +13,17 @@
 
     # Performance tuning
     performance.profile = "workstation";
-    performance.cpuVendor = "amd";
+    performance.cpuVendor = "intel";
 
     # Host-specific: use all cores and add CUDA binary cache (common.nix provides defaults)
     nix.settings = {
       cores = 0;
       max-jobs = "auto";
       extra-substituters = [
-        "https://cuda-maintainers.cachix.org"
+        "https://cache.nixos-cuda.org"
       ];
       extra-trusted-public-keys = [
-        "cuda-maintainers.cachix.org-1:0dq3bujKpuEPMCX6U4WylrUDZ9JyUG0VpVZa7CNfq5E="
+        "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
       ];
     };
 

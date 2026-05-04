@@ -14,7 +14,6 @@ in
     nuclei = pkgs.callPackage ./nuclei {};
     mcp-atlassian = pkgs.callPackage ./mcp-atlassian {};
     claudeCodeCli = pkgs.callPackage ./claude-code-cli {};
-    geminiCli = pkgs.callPackage ./gemini-cli {};
     deadcode = pkgs.callPackage ./deadcode {};
     golangciLintBin = pkgs.callPackage ./golangci-lint-bin {};
     coder = pkgs.callPackage ./coder-cli {inherit (pkgs) unzip;};

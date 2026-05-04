@@ -62,16 +62,6 @@ starts with the source on disk. After booting from the stick, you're already
 running the production configuration; use your usual credentials or SSH keys the
 same way you would on the deployed machine.
 
-### Build the egoengine Base Image
-
-```bash
-nix build .#egoengine
-docker load < result
-```
-
-The image loads into Docker as `egoengine:<nix-hash>`. Tag and push it to
-`ghcr.io/joshsymonds/nix-config/egoengine` or run it locally for validation.
-
 ## Structure
 
 - `flake.nix` - Main entry point and flake configuration

@@ -60,17 +60,11 @@
       interface = "enp0s31f6";
       subnet = "home";
     };
-    vermissian-old = {
-      ip = "172.31.0.203";
-      interface = "enp0s31f6";
-      subnet = "home";
-    };
     echelon = {
       ip = "192.168.1.200";
       interface = "enp2s0";
       subnet = "remote";
     };
     # stygianlibrary uses NetworkManager (DHCP) - no static IP
-    # egoengine is a Docker build target - no network config
   };
 }

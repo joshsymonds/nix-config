@@ -11,9 +11,7 @@ in {
   imports = [
     ./atuin
     ./claude-code
-    # ./gemini-cli  # Disabled - overrides don't work properly
     ./mcp
-    ./egoengine
     ./helix
     ./kitty
     ./tmux

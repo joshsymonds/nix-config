@@ -140,14 +140,6 @@
       };
 
     nixosHostDefinitions = {
-      egoengine = {
-        system = "x86_64-linux";
-        modules = [
-          ./hosts/egoengine
-          inputs.agenix.nixosModules.default
-        ];
-      };
-
       ultraviolet = {
         system = "x86_64-linux";
         modules = [
@@ -214,16 +206,6 @@
         ];
       };
 
-      vermissian-old = {
-        system = "x86_64-linux";
-        modules = [
-          ./hosts/vermissian-old
-          ./hosts/common.nix
-          inputs.agenix.nixosModules.default
-        ];
-        homeModule = ./home-manager/hosts/vermissian-old.nix;
-      };
-
       vermissian-installer = {
         system = "x86_64-linux";
         modules = [
@@ -251,7 +233,6 @@
         x86_64-linux =
           base.x86_64-linux
           // {
-            egoengine = self.nixosConfigurations.egoengine.config.system.build.egoengineDockerImage;
             stygianlibraryInstallerIso = self.nixosConfigurations.stygianlibrary-installer.config.system.build.isoImage;
             ultravioletInstallerIso = self.nixosConfigurations.ultraviolet-installer.config.system.build.isoImage;
             vermissianInstallerIso = self.nixosConfigurations.vermissian-installer.config.system.build.isoImage;
@@ -362,7 +343,5 @@
             inherit hostname;
           })
       );
-
-    inherit (self.packages.x86_64-linux) egoengine;
   };
 }

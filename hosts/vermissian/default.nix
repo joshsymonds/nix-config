@@ -95,16 +95,6 @@ in
         # amd_pstate=active is provided by performance module
       ];
       kernelPackages = pkgs.linuxPackages_latest;
-      loader = {
-        systemd-boot = {
-          enable = true;
-          configurationLimit = 8;
-        };
-        efi = {
-          canTouchEfiVariables = true;
-          efiSysMountPoint = "/boot";
-        };
-      };
     };
 
     users.users.joshsymonds.extraGroups = ["podman" "docker"];

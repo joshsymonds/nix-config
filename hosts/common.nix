@@ -9,6 +9,7 @@
   nas = network.infra.nas;
 in {
   imports = [
+    ../modules/linux-base
     ../modules/nix/defaults.nix
     ../modules/services/age-identity.nix
     ../modules/services/cleanup-stale-processes.nix

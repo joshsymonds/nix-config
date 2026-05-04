@@ -76,16 +76,6 @@ in
       kernelModules = ["coretemp" "kvm-intel"];
       supportedFilesystems = ["ntfs"];
       kernelParams = [];
-      loader = {
-        systemd-boot = {
-          enable = true;
-          configurationLimit = 8;
-        };
-        efi = {
-          canTouchEfiVariables = true;
-          efiSysMountPoint = "/boot";
-        };
-      };
     };
 
     # Services

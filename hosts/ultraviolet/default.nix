@@ -287,8 +287,11 @@ in
 
       "atticd-env" = {
         file = ../../secrets/hosts/ultraviolet/atticd-env.age;
-        owner = "atticd";
-        group = "atticd";
+        # atticd uses systemd DynamicUser=true, so atticd:atticd doesn't
+        # exist at activation time. Root reads EnvironmentFile as PID 1
+        # before dropping into the dynamic user.
+        owner = "root";
+        group = "root";
         mode = "0400";
       };
     };

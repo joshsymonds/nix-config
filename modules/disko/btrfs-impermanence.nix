@@ -3,8 +3,7 @@
   inputs,
   lib,
   ...
-}:
-with lib; let
+}: let
   cfg = config.btrfs-impermanence;
 
   # btrfs subvolumes: @root is ephemeral (rolled back to @root-blank each boot).
@@ -32,7 +31,7 @@ with lib; let
         mountOptions = ["compress=zstd:3" "noatime"];
       };
     }
-    // optionalAttrs (cfg.swapSizeGiB > 0) {
+    // lib.optionalAttrs (cfg.swapSizeGiB > 0) {
       "@swap" = {
         mountpoint = "/.swapvol";
         swap.swapfile.size = "${toString cfg.swapSizeGiB}G";
@@ -51,40 +50,40 @@ in {
   ];
 
   options.btrfs-impermanence = {
-    enable = mkEnableOption "btrfs subvolume layout + impermanence rollback";
+    enable = lib.mkEnableOption "btrfs subvolume layout + impermanence rollback";
 
-    device = mkOption {
-      type = types.str;
+    device = lib.mkOption {
+      type = lib.types.str;
       example = "/dev/disk/by-id/nvme-...";
       description = "Block device path. Use a /dev/disk/by-id/... path for stability.";
     };
 
     luks = {
-      enable = mkOption {
-        type = types.bool;
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = true;
         description = "LUKS-encrypt the btrfs partition.";
       };
-      name = mkOption {
-        type = types.str;
+      name = lib.mkOption {
+        type = lib.types.str;
         default = "cryptroot";
         description = "Mapper name for the LUKS device.";
       };
-      passwordFile = mkOption {
-        type = types.str;
+      passwordFile = lib.mkOption {
+        type = lib.types.str;
         default = "/tmp/secret.key";
         description = "Path to file containing LUKS password (only read during disko install).";
       };
     };
 
-    swapSizeGiB = mkOption {
-      type = types.int;
+    swapSizeGiB = lib.mkOption {
+      type = lib.types.int;
       default = 32;
       description = "Swap subvolume size in GiB. Set to 0 to disable swap.";
     };
 
-    persistDirectories = mkOption {
-      type = types.listOf types.str;
+    persistDirectories = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
       default = [
         "/etc/ssh"
         "/etc/age"
@@ -94,8 +93,8 @@ in {
       description = "Directories bind-mounted from /persist into the ephemeral root every boot.";
     };
 
-    persistFiles = mkOption {
-      type = types.listOf types.str;
+    persistFiles = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
       default = [
         "/etc/machine-id"
         "/etc/adjtime"
@@ -104,7 +103,7 @@ in {
     };
   };
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     disko.devices.disk.main = {
       type = "disk";
       device = cfg.device;
@@ -139,9 +138,8 @@ in {
     };
 
     # Rollback @root to @root-blank in initrd, before sysroot.mount.
-    # Requires a one-time @root-blank snapshot, taken at install via the
-    # postInstall hook below (or manually: `btrfs subvolume snapshot -r
-    # /mnt/@root /mnt/@root-blank`).
+    # Requires a one-time @root-blank snapshot taken manually at install:
+    # `btrfs subvolume snapshot -r /mnt/@root /mnt/@root-blank`.
     boot.initrd.systemd.enable = true;
     boot.initrd.systemd.services.rollback-root = {
       description = "Roll @root back to @root-blank";

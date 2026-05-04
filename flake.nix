@@ -92,6 +92,8 @@
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
   };
 
+  # NB: nixConfig must be a literal attrset (no `let ... in`); Nix CLI parses it
+  # before expression evaluation. Keep these strings in sync with lib/caches.nix.
   nixConfig = {
     extra-experimental-features = ["pipe-operators"];
     extra-substituters = [

@@ -7,6 +7,7 @@
   ...
 }: let
   cfg = config.autoInstaller;
+  caches = import ../lib/caches.nix;
   inherit (pkgs) util-linux jq gptfdisk e2fsprogs dosfstools;
 
   prebuiltSystem =
@@ -432,16 +433,16 @@ in {
     nix.settings = {
       experimental-features = "nix-command flakes";
       extra-substituters = [
-        "https://nix-community.cachix.org"
-        "https://joshsymonds.cachix.org"
+        caches.nixCommunity.url
+        caches.joshsymonds.url
         "https://devenv.cachix.org"
-        "https://cache.nixos-cuda.org"
+        caches.cuda.url
       ];
       extra-trusted-public-keys = [
-        "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
-        "joshsymonds.cachix.org-1:DajO7Bjk/Q8eQVZQZC/AWOzdUst2TGp8fHS/B1pua2c="
+        caches.nixCommunity.publicKey
+        caches.joshsymonds.publicKey
         "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="
-        "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
+        caches.cuda.publicKey
       ];
       trusted-users = ["root"];
     };

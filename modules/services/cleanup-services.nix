@@ -3,50 +3,49 @@
   lib,
   pkgs,
   ...
-}:
-with lib; let
+}: let
   cfg = config.services.cleanup-services;
   user = "joshsymonds";
 in {
   options.services.cleanup-services = {
-    enable = mkEnableOption "periodic Docker/Podman/Nix-store cleanup and (optionally) kind cluster cleanup";
+    enable = lib.mkEnableOption "periodic Docker/Podman/Nix-store cleanup and (optionally) kind cluster cleanup";
 
-    interval = mkOption {
-      type = types.str;
-      default = "1h";
+    interval = lib.mkOption {
+      type = lib.types.str;
+      default = "1d";
       description = "Timer cadence (OnBootSec / OnUnitActiveSec).";
     };
 
     kindClusters = {
-      enable = mkEnableOption "cleanup of stale kind/ctlptl clusters";
-      olderThanSeconds = mkOption {
-        type = types.int;
+      enable = lib.mkEnableOption "cleanup of stale kind/ctlptl clusters";
+      olderThanSeconds = lib.mkOption {
+        type = lib.types.int;
         default = 3600;
         description = "Delete kind clusters older than this many seconds.";
       };
     };
 
-    dockerPrune = mkOption {
-      type = types.bool;
+    dockerPrune = lib.mkOption {
+      type = lib.types.bool;
       default = config.virtualisation.docker.enable;
       description = "Run 'docker system prune -a --volumes' in the cleanup pass.";
     };
 
-    podmanPrune = mkOption {
-      type = types.bool;
+    podmanPrune = lib.mkOption {
+      type = lib.types.bool;
       default = config.virtualisation.podman.enable;
       description = "Run 'podman system prune -a --volumes' in the cleanup pass.";
     };
 
-    nixGC = mkOption {
-      type = types.bool;
+    nixGC = lib.mkOption {
+      type = lib.types.bool;
       default = true;
-      description = "Run 'nix-store --gc' in the cleanup pass.";
+      description = "Run 'nix-collect-garbage --delete-older-than 3d' + 'nix-store --gc' in the cleanup pass.";
     };
   };
 
-  config = mkIf cfg.enable {
-    systemd.services.cleanup-old-clusters = mkIf cfg.kindClusters.enable {
+  config = lib.mkIf cfg.enable {
+    systemd.services.cleanup-old-clusters = lib.mkIf cfg.kindClusters.enable {
       description = "Clean up kind and ctlptl clusters older than configured timeout";
       after = ["docker.service"];
       path = [pkgs.kind pkgs.ctlptl];
@@ -111,7 +110,7 @@ in {
       };
     };
 
-    systemd.timers.cleanup-old-clusters = mkIf cfg.kindClusters.enable {
+    systemd.timers.cleanup-old-clusters = lib.mkIf cfg.kindClusters.enable {
       description = "Run cluster cleanup every ${cfg.interval}";
       wantedBy = ["timers.target"];
       timerConfig = {
@@ -132,7 +131,7 @@ in {
 
           echo "=== Starting cleanup at $(date) ==="
 
-          ${optionalString cfg.dockerPrune ''
+          ${lib.optionalString cfg.dockerPrune ''
             if systemctl is-active --quiet docker; then
               echo "Cleaning Docker system..."
               ${pkgs.docker}/bin/docker system prune -a --volumes -f || true
@@ -142,7 +141,7 @@ in {
             fi
           ''}
 
-          ${optionalString cfg.podmanPrune ''
+          ${lib.optionalString cfg.podmanPrune ''
             if command -v podman &> /dev/null; then
               echo "Cleaning Podman system..."
               ${pkgs.podman}/bin/podman system prune -a --volumes -f || true
@@ -150,10 +149,10 @@ in {
             fi
           ''}
 
-          ${optionalString cfg.nixGC ''
+          ${lib.optionalString cfg.nixGC ''
             echo "Cleaning old Nix generations..."
             ${pkgs.nix}/bin/nix-env --delete-generations +5 || true
-            ${pkgs.nix}/bin/nix-collect-garbage || true
+            ${pkgs.nix}/bin/nix-collect-garbage --delete-older-than 3d || true
 
             echo "Running Nix garbage collection..."
             ${pkgs.nix}/bin/nix-store --gc || true

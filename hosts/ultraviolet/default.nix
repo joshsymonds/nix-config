@@ -15,6 +15,9 @@ in
       # Household atticd binary cache
       ../../modules/services/atticd-cache.nix
 
+      # Periodic Podman + Nix store cleanup
+      ../../modules/services/cleanup-services.nix
+
       # SABnzbd with Mullvad VPN (migrated from bluedesert)
       ./sabnzbd-vpn.nix
 
@@ -174,68 +177,23 @@ in
       gcc-unwrapped.lib
     ];
 
-    # Configure Radarr with optimal quality settings after it starts
-    systemd = {
-      services = {
-        remote-mounts = {
-          description = "Check if remote mounts are available";
-          after = [
-            "network.target"
-            "remote-fs.target"
-          ];
-          before = ["podman-bazarr.service"];
-          wantedBy = [
-            "multi-user.target"
-            "podman-bazarr.service"
-          ];
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-            ExecStart = "${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/test -d /mnt/video'";
-          };
-        };
+    services.cleanup-services.enable = true;
 
-        # Clean up Podman and Nix store regularly
-        cleanup-podman-and-nix = {
-          description = "Clean up Podman and Nix store";
-          serviceConfig = {
-            Type = "oneshot";
-            ExecStart = pkgs.writeShellScript "cleanup-podman-and-nix" ''
-              #!${pkgs.bash}/bin/bash
-              set -euo pipefail
-
-              echo "=== Starting cleanup at $(date) ==="
-
-              # Clean Podman
-              if command -v podman &> /dev/null; then
-                echo "Cleaning Podman system..."
-                ${pkgs.podman}/bin/podman system prune -a --volumes -f || true
-                echo "Podman cleanup completed"
-              fi
-
-              # Clean old Nix generations (keep last 5)
-              echo "Cleaning old Nix generations..."
-              ${pkgs.nix}/bin/nix-env --delete-generations +5 || true
-              ${pkgs.nix}/bin/nix-collect-garbage || true
-
-              # Clean Nix store of unreferenced packages
-              echo "Running Nix garbage collection..."
-              ${pkgs.nix}/bin/nix-store --gc || true
-
-              echo "=== Cleanup completed at $(date) ==="
-            '';
-          };
-        };
-      };
-
-      timers.cleanup-podman-and-nix = {
-        description = "Run Podman and Nix cleanup every hour";
-        wantedBy = ["timers.target"];
-        timerConfig = {
-          OnBootSec = "1h";
-          OnUnitActiveSec = "1h";
-          Persistent = true;
-        };
+    systemd.services.remote-mounts = {
+      description = "Check if remote mounts are available";
+      after = [
+        "network.target"
+        "remote-fs.target"
+      ];
+      before = ["podman-bazarr.service"];
+      wantedBy = [
+        "multi-user.target"
+        "podman-bazarr.service"
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/test -d /mnt/video'";
       };
     };
 

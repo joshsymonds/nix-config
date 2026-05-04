@@ -3,64 +3,64 @@
   lib,
   pkgs,
   ...
-}:
-with lib; let
+}: let
   cfg = config.services.inference-stack;
+  caches = import ../../lib/caches.nix;
 in {
   options.services.inference-stack = {
-    enable = mkEnableOption "Ollama + Open-WebUI inference stack with CUDA binary cache";
+    enable = lib.mkEnableOption "Ollama + Open-WebUI inference stack with CUDA binary cache";
 
     ollama = {
-      package = mkOption {
-        type = types.package;
+      package = lib.mkOption {
+        type = lib.types.package;
         default = pkgs.ollama-cuda;
-        defaultText = literalExpression "pkgs.ollama-cuda";
+        defaultText = lib.literalExpression "pkgs.ollama-cuda";
         description = "Ollama package. Default is the CUDA build.";
       };
-      host = mkOption {
-        type = types.str;
-        default = "0.0.0.0";
-        description = "Host/interface Ollama listens on.";
+      host = lib.mkOption {
+        type = lib.types.str;
+        default = "127.0.0.1";
+        description = "Host/interface Ollama listens on. Default is localhost; widen to 0.0.0.0 for LAN access.";
       };
-      port = mkOption {
-        type = types.port;
+      port = lib.mkOption {
+        type = lib.types.port;
         default = 11434;
         description = "Port Ollama listens on.";
       };
     };
 
     openWebUI = {
-      enable = mkOption {
-        type = types.bool;
+      enable = lib.mkOption {
+        type = lib.types.bool;
         default = true;
         description = "Run the Open-WebUI frontend pointed at Ollama.";
       };
-      host = mkOption {
-        type = types.str;
-        default = "0.0.0.0";
-        description = "Host/interface Open-WebUI listens on.";
+      host = lib.mkOption {
+        type = lib.types.str;
+        default = "127.0.0.1";
+        description = "Host/interface Open-WebUI listens on. Default is localhost; widen to 0.0.0.0 for LAN access.";
       };
-      port = mkOption {
-        type = types.port;
+      port = lib.mkOption {
+        type = lib.types.port;
         default = 8080;
         description = "Port Open-WebUI listens on.";
       };
     };
 
-    cudaCache = mkOption {
-      type = types.bool;
+    cudaCache = lib.mkOption {
+      type = lib.types.bool;
       default = true;
       description = "Add cache.nixos-cuda.org as an extra-substituter (saves CUDA closure build time).";
     };
 
-    openFirewall = mkOption {
-      type = types.bool;
-      default = true;
-      description = "Open firewall ports for Ollama and (if enabled) Open-WebUI.";
+    openFirewall = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Open firewall ports for Ollama and (if enabled) Open-WebUI. Default off; opt in for LAN exposure.";
     };
   };
 
-  config = mkIf cfg.enable (mkMerge [
+  config = lib.mkIf cfg.enable (lib.mkMerge [
     {
       services.ollama = {
         enable = true;
@@ -76,12 +76,12 @@ in {
         ++ lib.optionals (cfg.openFirewall && cfg.openWebUI.enable) [cfg.openWebUI.port];
     }
 
-    (mkIf cfg.cudaCache {
-      nix.settings.extra-substituters = ["https://cache.nixos-cuda.org"];
-      nix.settings.extra-trusted-public-keys = ["cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="];
+    (lib.mkIf cfg.cudaCache {
+      nix.settings.extra-substituters = [caches.cuda.url];
+      nix.settings.extra-trusted-public-keys = [caches.cuda.publicKey];
     })
 
-    (mkIf cfg.openWebUI.enable {
+    (lib.mkIf cfg.openWebUI.enable {
       services.open-webui = {
         enable = true;
         host = cfg.openWebUI.host;
@@ -89,6 +89,8 @@ in {
         environment.OLLAMA_API_BASE_URL = "http://127.0.0.1:${toString cfg.ollama.port}";
       };
 
+      # Open-WebUI persists chat history + uploaded models in /var/lib/open-webui;
+      # DynamicUser would rotate the UID and break ownership of that state.
       systemd.services.open-webui.serviceConfig = {
         DynamicUser = lib.mkForce false;
         User = "open-webui";

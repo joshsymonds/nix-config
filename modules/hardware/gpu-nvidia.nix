@@ -3,33 +3,39 @@
   lib,
   pkgs,
   ...
-}:
-with lib; let
+}: let
   cfg = config.hardware.gpu-nvidia;
 in {
   options.hardware.gpu-nvidia = {
-    enable = mkEnableOption "NVIDIA GPU (open driver, Blackwell-ready)";
+    enable = lib.mkEnableOption "NVIDIA GPU (open driver, Blackwell-ready)";
 
-    package = mkOption {
-      type = types.nullOr types.package;
+    package = lib.mkOption {
+      type = lib.types.nullOr lib.types.package;
       default = null;
       description = "NVIDIA driver package. Defaults to nvidiaPackages.production from boot.kernelPackages.";
     };
 
-    containerToolkit = mkOption {
-      type = types.bool;
+    containerToolkit = lib.mkOption {
+      type = lib.types.bool;
       default = true;
       description = "Enable nvidia-container-toolkit for Docker/Podman GPU passthrough.";
     };
 
-    enable32Bit = mkOption {
-      type = types.bool;
+    enable32Bit = lib.mkOption {
+      type = lib.types.bool;
       default = false;
       description = "Enable 32-bit graphics support (Steam/Proton on gaming systems).";
     };
+
+    cudaArches = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = ["12.0"];
+      example = ["8.9" "12.0"];
+      description = "CUDA compute capabilities to build for. \"12.0\" = sm_120 (Blackwell, RTX 50 series).";
+    };
   };
 
-  config = mkIf cfg.enable {
+  config = lib.mkIf cfg.enable {
     hardware.graphics = {
       enable = true;
       enable32Bit = cfg.enable32Bit;
@@ -51,6 +57,8 @@ in {
     };
 
     hardware.nvidia-container-toolkit.enable = cfg.containerToolkit;
+
+    nixpkgs.config.cudaCapabilities = cfg.cudaArches;
 
     services.xserver.videoDrivers = ["nvidia"];
 

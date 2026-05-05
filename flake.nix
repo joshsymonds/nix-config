@@ -56,8 +56,17 @@
     # DankMaterialShell — Quickshell-based desktop shell for niri (and others).
     # Provides notifications, launcher, lockscreen, polkit agent, idle, login greeter
     # as cohesive Quickshell modules, replacing the typical mako/fuzzel/swaylock stitchwork.
+    # Tracking master (edge) per user directive.
     dms = {
-      url = "github:AvengeMedia/DankMaterialShell/stable";
+      url = "github:AvengeMedia/DankMaterialShell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # niri-flake — declaratively-typed niri config + module that supersedes nixpkgs'
+    # programs/wayland/niri.nix (auto-disabled). DMS's home-manager niri module
+    # integrates with this via its `includes` mechanism (config-file merging).
+    niri-flake = {
+      url = "github:sodiboo/niri-flake";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

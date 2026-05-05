@@ -13,6 +13,8 @@
 # Or:       nix-shell -p bats age openssh ssh-to-age --run \
 #             "bats scripts/tests/test-prepare-host-kit.bats"
 
+bats_require_minimum_version 1.5.0
+
 SCRIPT_PATH="${BATS_TEST_DIRNAME}/../prepare-host-kit.sh"
 
 # Generate a fresh age private key in $1, echo the corresponding public key.
@@ -197,9 +199,8 @@ teardown() {
 @test "missing required command: refuses to run with non-zero exit" {
   # Drop everything from PATH; the script's dep checks should catch a
   # missing tool. (clean-tree check uses git, which is also gone — same
-  # outcome: refuse to run.)
-  PATH="$HOME/no-such-dir" run "$SCRIPT_PATH" keys host-b
-  [ "$status" -ne 0 ]
+  # outcome: refuse to run.) Expect exit 127 (command not found).
+  PATH="$HOME/no-such-dir" run -127 "$SCRIPT_PATH" keys host-b
   [ ! -e "$STASH_BASE/host-b" ]
 }
 

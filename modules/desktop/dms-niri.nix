@@ -41,26 +41,26 @@ in {
       # Compositor support layer (xdg portals, pipewire, dconf, fonts, CLI tools)
       desktop.niri.enable = true;
 
-      # niri itself — niri-flake provides programs.niri.{enable, package, settings}.
-      # Pinning to niri-unstable for parity with DMS's edge tracking; switch to
-      # niri-stable if you want a slower-moving target.
+      # niri itself — niri-flake provides programs.niri.{enable, package}.
+      # Pin to niri-unstable for parity with DMS's edge tracking; switch to
+      # niri-flake.packages.${pkgs.system}.niri-stable if you want a
+      # slower-moving target. niri-flake doesn't add niri-unstable to the
+      # top-level pkgs by default — reference it through the flake input.
       programs.niri.enable = true;
-      programs.niri.package = pkgs.niri-unstable;
+      programs.niri.package = inputs.niri-flake.packages.${pkgs.system}.niri-unstable;
 
-      # DMS shell layer. Use everything it provides — feature toggles default-on
-      # are explicit here so the contract is visible.
+      # DMS shell layer. The DMS edge release made several feature toggles
+      # built-in (no longer effective; produces hard assertion failures if
+      # set): enableBrightnessControl, enableClipboard, enableColorPicker,
+      # enableSystemSound. Only setting toggles that still take effect.
       programs.dank-material-shell = {
         enable = true;
         systemd.enable = true;
         enableAudioWavelength = true;
-        enableBrightnessControl = true;
         enableCalendarEvents = true;
-        enableClipboard = true;
         enableClipboardPaste = true;
-        enableColorPicker = true;
         enableDynamicTheming = true;
         enableSystemMonitoring = true;
-        enableSystemSound = true;
         enableVPN = true;
       };
     }
@@ -70,7 +70,7 @@ in {
     (lib.mkIf cfg.greeter.enable {
       programs.dank-material-shell.greeter = {
         enable = true;
-        compositor = "niri";
+        compositor.name = "niri";
       };
     })
   ]);

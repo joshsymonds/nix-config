@@ -45,6 +45,12 @@ in {
     security.rtkit.enable = true;
     programs.dconf.enable = true;
 
+    # The desktop stack (likely via xdg.portal or dconf) pulls in
+    # services.gnome.gcr-ssh-agent which conflicts with common.nix's
+    # programs.ssh.startAgent. We use the standard ssh-agent across the
+    # whole fleet — disable the GNOME variant explicitly.
+    services.gnome.gcr-ssh-agent.enable = false;
+
     fonts.packages = with pkgs; [
       noto-fonts
       noto-fonts-color-emoji

@@ -6,7 +6,10 @@
 }: {
   imports = [
     ./common.nix
-    inputs.niri-flake.homeModules.niri
+    # niri-flake's HM module is auto-loaded by its NixOS module when
+    # home-manager is detected (conditional import based on options ?
+    # home-manager). Explicitly importing it here creates a duplicate-
+    # declaration error for programs.niri.finalConfig. Don't.
     inputs.dms.homeModules.dank-material-shell
     inputs.dms.homeModules.niri
   ];

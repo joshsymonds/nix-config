@@ -220,6 +220,16 @@
         homeModule = ./home-manager/hosts/echelon.nix;
       };
 
+      gnomon = {
+        system = "x86_64-linux";
+        modules = [
+          ./hosts/gnomon
+          ./hosts/common.nix
+          inputs.agenix.nixosModules.default
+        ];
+        homeModule = ./home-manager/hosts/gnomon.nix;
+      };
+
       vermissian = {
         system = "x86_64-linux";
         modules = [

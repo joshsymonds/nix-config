@@ -37,14 +37,11 @@ let
 
   allUserKeys = builtins.attrValues users;
 in {
-  # Per-host: host key (for boot-time agenix decryption) + EVERY user key
-  # (so any of josh's machines can edit any host's secrets). When a new
-  # user key is added (e.g., joshsymonds@gnomon), every host's recipient
-  # list expands automatically — but the .age files still need re-keying
-  # to actually accept the new recipient.
-  ultraviolet = [hosts.ultraviolet] ++ allUserKeys;
-  vermissian = [hosts.vermissian] ++ allUserKeys;
+  # Per-host: host key + user key (system-level agenix needs host key to decrypt at boot)
+  ultraviolet = [hosts.ultraviolet users."joshsymonds@ultraviolet"];
 
-  # User-context secrets (home-manager agenix) — all user keys, no host keys.
+  # All user keys across machines (home-manager agenix)
   joshsymonds = allUserKeys;
+
+  vermissian = [hosts.vermissian users."joshsymonds@vermissian"];
 }

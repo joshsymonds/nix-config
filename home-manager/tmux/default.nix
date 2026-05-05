@@ -45,6 +45,21 @@ with lib; let
   '';
   tmuxDevspaceHelper =
     pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ./scripts/tmux-devspace.sh);
+  # Pane wrapper: launches each pane's shell inside a transient systemd scope
+  # under tmux-pane.slice. Shell EXIT trap stops the scope on pane close,
+  # SIGKILLing all descendants via KillMode=mixed. Linux-only (uses systemd-run).
+  tmuxPaneWrap = pkgs.writeShellScriptBin "tmux-pane-wrap" (
+    builtins.replaceStrings ["@DEFAULT_SHELL@"] [defaultShell]
+    (builtins.readFile ./scripts/tmux-pane-wrap.sh)
+  );
+  # Orphan reaper: systemd user timer (10 min). Kills sessions whose
+  # session_activity > 48h, then reaps orphan procs inside live scopes
+  # (PPID=1 / not in pane_pid descendant tree, etime ≥ 10 min). Linux-only.
+  tmuxOrphanReaper = pkgs.writeShellApplication {
+    name = "tmux-orphan-reaper";
+    runtimeInputs = with pkgs; [tmux psmisc procps systemd bash gnugrep coreutils];
+    text = builtins.readFile ./scripts/tmux-orphan-reaper.sh;
+  };
   netSpeedPatched = pkgs.tmuxPlugins.net-speed.overrideAttrs (old: {
     postPatch =
       (old.postPatch or "")
@@ -115,7 +130,13 @@ in {
         # Ensure proper color rendering
         set -g default-terminal "tmux-256color"
         set -g default-shell "${defaultShell}"
-        set -g default-command "${defaultShell} -l"
+        # Linux: wrap each pane in a systemd scope so closing the pane atomically
+        # reaps all descendants. macOS: plain login shell (no systemd-run).
+        set -g default-command "${
+          if pkgs.stdenv.isLinux
+          then "${tmuxPaneWrap}/bin/tmux-pane-wrap"
+          else "${defaultShell} -l"
+        }"
         set -ag terminal-overrides ",xterm*:RGB"
         set -ag terminal-overrides ",screen*:RGB"
 
@@ -221,6 +242,32 @@ in {
       };
       Install = {
         WantedBy = ["default.target"];
+      };
+    };
+
+    # Orphan reaper: kills stale sessions (>48h idle) and orphans inside live
+    # scopes. Two-pass design — see scripts/tmux-orphan-reaper.sh. Linux only.
+    systemd.user.services.tmux-orphan-reaper = mkIf pkgs.stdenv.isLinux {
+      Unit = {
+        Description = "Reap orphans in tmux pane scopes; kill stale sessions";
+      };
+      Service = {
+        Type = "oneshot";
+        ExecStart = "${tmuxOrphanReaper}/bin/tmux-orphan-reaper";
+      };
+    };
+
+    systemd.user.timers.tmux-orphan-reaper = mkIf pkgs.stdenv.isLinux {
+      Unit = {
+        Description = "Run tmux orphan reaper every 10 minutes";
+      };
+      Timer = {
+        OnBootSec = "5min";
+        OnUnitActiveSec = "10min";
+        Unit = "tmux-orphan-reaper.service";
+      };
+      Install = {
+        WantedBy = ["timers.target"];
       };
     };
   };

@@ -82,6 +82,12 @@
     # Savecraft — game save parser + MCP server
     savecraft.url = "github:joshsymonds/savecraft.gg";
 
+    # Google Workspace CLI — official `gws` from Google
+    googleworkspace-cli = {
+      url = "github:googleworkspace/cli";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Devenv for development environments
     # No nixpkgs.follows — devenv 2.0 bundles a nix fork (cachix/nix) that
     # requires its own pinned nixpkgs to build correctly.

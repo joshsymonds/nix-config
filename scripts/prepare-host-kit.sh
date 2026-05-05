@@ -12,9 +12,10 @@
 #        Prints the user SSH pubkey for you to paste into GitHub.
 #
 #   2. ./scripts/prepare-host-kit.sh kit <hostname> <usb-path>
-#        Verifies the GitHub paste happened, the keys.nix change is pushed,
-#        then writes the bootable kit (identity + flake tarball + bootstrap
-#        script) to the USB. (Not yet implemented.)
+#        Verifies the GitHub paste happened and the keys.nix change is
+#        committed + pushed, then writes the bootable kit (identity +
+#        flake tarball + bootstrap script + manifest + README) to
+#        <usb-path>/<hostname>-kit/.
 #
 # Run from a trusted machine that has ~/.config/agenix/keys.txt set up.
 
@@ -24,12 +25,16 @@ set -euo pipefail
 # in scripts/tests/ can redirect them at the fixture without copying the script.
 REPO_ROOT="${REPO_ROOT:-$(git -C "$(dirname "$(readlink -f "$0")")" rev-parse --show-toplevel)}"
 STASH_BASE="${STASH_BASE:-${HOME}/.local/share/host-kits}"
+GITHUB_USER="${GITHUB_USER:-joshsymonds}"
+GIT_REMOTE="${GIT_REMOTE:-origin}"
+GIT_BRANCH="${GIT_BRANCH:-main}"
+FLAKE_REF="${FLAKE_REF:-github:joshsymonds/nix-config}"
 
 usage() {
   cat <<EOF
 Usage:
   $0 keys <hostname>            Generate keys, edit keys.nix, re-key secrets
-  $0 kit  <hostname> <usb>      Write USB kit (NOT YET IMPLEMENTED)
+  $0 kit  <hostname> <usb>      Write USB kit at <usb>/<hostname>-kit/
 
 The 'keys' subcommand:
   - Generates SSH host keypair (ed25519) for <hostname>
@@ -59,7 +64,7 @@ require_clean_tree() {
 
 require_dependencies() {
   local missing=()
-  for cmd in ssh-keygen ssh-to-age agenix sed git find nix-shell; do
+  for cmd in ssh-keygen ssh-to-age agenix sed git find nix-shell curl install awk; do
     command -v "$cmd" >/dev/null || missing+=("$cmd")
   done
   if [ ${#missing[@]} -gt 0 ]; then
@@ -234,10 +239,157 @@ Next:
 EOF
 }
 
+verify_github_key() {
+  local pubkey_file="$1"
+  local pubkey_part
+  pubkey_part="$(awk '{print $2}' "$pubkey_file")"
+  if [ "${KIT_SKIP_GITHUB_CHECK:-0}" = "1" ]; then
+    echo "→ KIT_SKIP_GITHUB_CHECK=1 — skipping GitHub key verification" >&2
+    return 0
+  fi
+  curl -fsS "https://github.com/${GITHUB_USER}.keys" 2>/dev/null \
+    | grep -qF "$pubkey_part"
+}
+
+write_readme() {
+  local file="$1"
+  local hostname="$2"
+  cat >"$file" <<EOF
+# ${hostname} install kit
+
+This USB contains everything needed to install NixOS on ${hostname}.
+
+## Layout
+
+- \`manifest.env\` — sourced by bootstrap.sh; HOSTNAME, FLAKE_REF, build
+  timestamp, and HEAD commit hash
+- \`bootstrap.sh\` — install-time script (run on the target as root)
+- \`nix-config.tar.gz\` — frozen flake snapshot from KIT_HEAD
+- \`identity/\` — host SSH keypair, host agekey, user SSH keypair
+
+## Use
+
+On the target machine:
+
+1. Boot the stock NixOS minimal ISO.
+2. Plug this USB.
+3. Mount it (NixOS minimal usually auto-mounts to \`/run/media/...\`).
+4. Run as root:
+       sudo /run/media/.../<hostname>-kit/bootstrap.sh
+5. Pick the target disk from the menu, type the hostname literally to
+   confirm the wipe, set the LUKS passphrase when disko prompts.
+6. Wait. nixos-install pulls the closure from binary cache.
+7. Reboot, remove the install ISO USB.
+
+## Recovery
+
+The host SSH keys + agekey are private. Don't lose this USB until first
+boot succeeds. After install, ${hostname}'s keys live at \`/persist/etc/\`.
+EOF
+}
+
+build_kit() {
+  local hostname="$1"
+  local stash="$2"
+  local kit_dir="$3"
+
+  echo "→ Building kit at $kit_dir..." >&2
+
+  rm -rf "$kit_dir"
+  mkdir -p "$kit_dir/identity"
+
+  # manifest.env
+  cat >"$kit_dir/manifest.env" <<EOF
+HOSTNAME=$hostname
+FLAKE_REF=$FLAKE_REF
+KIT_BUILT_AT=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+KIT_HEAD=$(git -C "$REPO_ROOT" rev-parse HEAD)
+EOF
+
+  # bootstrap.sh
+  cp "$REPO_ROOT/scripts/templates/bootstrap.sh" "$kit_dir/bootstrap.sh"
+  chmod 755 "$kit_dir/bootstrap.sh"
+
+  # identity files
+  install -m 600 "$stash/ssh_host_ed25519_key"     "$kit_dir/identity/"
+  install -m 644 "$stash/ssh_host_ed25519_key.pub" "$kit_dir/identity/"
+  install -m 600 "$stash/$hostname.agekey"         "$kit_dir/identity/"
+  install -m 600 "$stash/id_ed25519"               "$kit_dir/identity/"
+  install -m 644 "$stash/id_ed25519.pub"           "$kit_dir/identity/"
+
+  # nix-config.tar.gz from HEAD's tree (not working tree — clean state only)
+  git -C "$REPO_ROOT" archive --format=tar.gz --prefix=nix-config/ HEAD \
+    >"$kit_dir/nix-config.tar.gz"
+
+  # README
+  write_readme "$kit_dir/README.md" "$hostname"
+}
+
 cmd_kit() {
-  echo "ERROR: 'kit' subcommand not yet implemented." >&2
-  echo "       Will be added in a follow-up task once scripts/templates/bootstrap.sh exists." >&2
-  exit 1
+  local hostname="${1:-}"
+  local usb_path="${2:-}"
+  if [ -z "$hostname" ] || [ -z "$usb_path" ]; then
+    echo "ERROR: 'kit' subcommand requires <hostname> <usb-path>." >&2
+    usage >&2
+    exit 1
+  fi
+
+  local stash="${STASH_BASE}/${hostname}"
+  local kit_dir="${usb_path}/${hostname}-kit"
+
+  # 1. Stash exists (keys subcommand was run)
+  [ -d "$stash" ] || {
+    echo "ERROR: no stash at $stash" >&2
+    echo "       Run '$0 keys $hostname' first." >&2
+    exit 1
+  }
+
+  # 2. USB path is a writable directory
+  [ -d "$usb_path" ] || { echo "ERROR: $usb_path not a directory" >&2; exit 1; }
+  [ -w "$usb_path" ] || { echo "ERROR: $usb_path not writable" >&2; exit 1; }
+
+  require_dependencies
+  require_clean_tree
+
+  # 3. Local HEAD pushed
+  echo "→ Verifying $GIT_REMOTE/$GIT_BRANCH is in sync with HEAD..."
+  git -C "$REPO_ROOT" fetch -q "$GIT_REMOTE" "$GIT_BRANCH" \
+    || { echo "ERROR: could not fetch $GIT_REMOTE/$GIT_BRANCH" >&2; exit 1; }
+  local head remote
+  head="$(git -C "$REPO_ROOT" rev-parse HEAD)"
+  remote="$(git -C "$REPO_ROOT" rev-parse "$GIT_REMOTE/$GIT_BRANCH")"
+  [ "$head" = "$remote" ] || {
+    echo "ERROR: HEAD ($head) != $GIT_REMOTE/$GIT_BRANCH ($remote)" >&2
+    echo "       Push your commits before building the kit." >&2
+    exit 1
+  }
+
+  # 4. GitHub has the user pubkey
+  echo "→ Verifying $GITHUB_USER's GitHub SSH keys include the new user pubkey..."
+  verify_github_key "$stash/id_ed25519.pub" || {
+    echo "ERROR: user pubkey not found on https://github.com/${GITHUB_USER}.keys" >&2
+    echo "       Paste it via Settings → SSH and GPG keys → New SSH key." >&2
+    echo "       Or set KIT_SKIP_GITHUB_CHECK=1 to skip this check." >&2
+    exit 1
+  }
+
+  # 5. Build
+  build_kit "$hostname" "$stash" "$kit_dir"
+
+  cat <<EOF
+
+═══════════════════════════════════════════════════════════════════════
+  USB kit ready at: $kit_dir
+═══════════════════════════════════════════════════════════════════════
+
+On the target machine:
+  1. Boot the stock NixOS minimal ISO
+  2. Plug this USB
+  3. sudo $kit_dir/bootstrap.sh
+  4. Pick the target disk, type "$hostname" to confirm the wipe
+  5. Set the LUKS passphrase when disko prompts
+  6. Wait. Reboot when nixos-install completes.
+EOF
 }
 
 main() {

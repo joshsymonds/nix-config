@@ -88,6 +88,12 @@ EOF
 import ./secrets/secrets.nix
 EOF
 
+  # Minimal flake.nix so the kit subcommand's `git archive` produces a
+  # tarball with the expected top-level structure.
+  cat >"$REPO_ROOT/flake.nix" <<'EOF'
+{ outputs = _: { dummy = "fixture flake"; }; }
+EOF
+
   # Encrypt mock plaintext into mock .age files with the SAME recipients
   # as keys.nix declares — i.e., what a real `agenix -e` would produce
   # for the original schema (host key + all 2 user keys = 3 recipients).
@@ -237,4 +243,175 @@ teardown() {
 
   decrypted="$(age --decrypt -i "$HOME/.config/agenix/keys.txt" "$REPO_ROOT/secrets/user/usersecret.age")"
   [ "$decrypted" = "$USER_PLAINTEXT" ]
+}
+
+# ─── kit subcommand ────────────────────────────────────────────────────
+
+# Helper: takes the fixture from "post-keys" → "ready-for-kit" by committing
+# the keys subcommand's changes, setting up a bare local remote, pushing,
+# installing a fake curl that returns the new user pubkey for github.com.
+prepare_kit_state() {
+  "$SCRIPT_PATH" keys host-b
+
+  cd "$REPO_ROOT"
+  git -c user.email=t@t -c user.name=t add -A
+  git -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q -m "add host-b"
+
+  # Bare remote, hooked up as origin
+  export GIT_REMOTE="origin"
+  export GIT_BRANCH="main"
+  git init --bare -q "$FIXTURE/origin.git"
+  git remote add origin "$FIXTURE/origin.git"
+  git push -q origin main
+
+  # Fake curl that responds to github.com URLs with the user pubkey
+  FAKE_BIN="$FIXTURE/bin"
+  mkdir -p "$FAKE_BIN"
+  cp "$STASH_BASE/host-b/id_ed25519.pub" "$FIXTURE/fake-gh-keys"
+  cat >"$FAKE_BIN/curl" <<CURLEOF
+#!/usr/bin/env bash
+if [[ "\$*" == *"github.com"* ]]; then
+  cat "$FIXTURE/fake-gh-keys"
+  exit 0
+fi
+# Fall back to real curl for anything else
+exec /run/current-system/sw/bin/curl "\$@"
+CURLEOF
+  chmod +x "$FAKE_BIN/curl"
+  PATH="$FAKE_BIN:$PATH"
+  export PATH
+
+  # Bootstrap template — copy from real repo into fixture so build_kit can find it
+  mkdir -p "$REPO_ROOT/scripts/templates"
+  cp "${BATS_TEST_DIRNAME}/../templates/bootstrap.sh" "$REPO_ROOT/scripts/templates/bootstrap.sh"
+  chmod +x "$REPO_ROOT/scripts/templates/bootstrap.sh"
+  # The fixture's HEAD won't have this; commit it.
+  git add scripts/templates/bootstrap.sh
+  git -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q -m "add bootstrap template"
+  git push -q origin main
+
+  # USB target
+  USB_PATH="$FIXTURE/usb"
+  mkdir -p "$USB_PATH"
+  export USB_PATH
+}
+
+@test "kit: errors when stash directory is missing" {
+  USB_PATH="$FIXTURE/usb"
+  mkdir -p "$USB_PATH"
+  run "$SCRIPT_PATH" kit nonexistent-host "$USB_PATH"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no stash"* ]]
+}
+
+@test "kit: errors when working tree is dirty" {
+  prepare_kit_state
+  echo "dirt" >>"$REPO_ROOT/secrets/keys.nix"
+  run "$SCRIPT_PATH" kit host-b "$USB_PATH"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"uncommitted"* ]]
+}
+
+@test "kit: errors when HEAD is ahead of origin/main" {
+  prepare_kit_state
+  # Make a commit that isn't pushed
+  echo "extra" >>"$REPO_ROOT/secrets/keys.nix"
+  cd "$REPO_ROOT"
+  git -c user.email=t@t -c user.name=t add secrets/keys.nix
+  git -c user.email=t@t -c user.name=t -c commit.gpgsign=false commit -q -m "extra"
+
+  run "$SCRIPT_PATH" kit host-b "$USB_PATH"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"$GIT_REMOTE/$GIT_BRANCH"* ]] || [[ "$output" == *"Push"* ]]
+}
+
+@test "kit: errors when GitHub doesn't have the user pubkey" {
+  prepare_kit_state
+  # Empty out the fake GitHub keys response
+  : >"$FIXTURE/fake-gh-keys"
+  run "$SCRIPT_PATH" kit host-b "$USB_PATH"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"GitHub"* ]] || [[ "$output" == *"github"* ]] || [[ "$output" == *"pubkey"* ]]
+}
+
+@test "kit: KIT_SKIP_GITHUB_CHECK=1 bypasses the GitHub check" {
+  prepare_kit_state
+  : >"$FIXTURE/fake-gh-keys"  # empty response — would normally fail
+  KIT_SKIP_GITHUB_CHECK=1 run "$SCRIPT_PATH" kit host-b "$USB_PATH"
+  [ "$status" -eq 0 ]
+}
+
+@test "kit: errors when USB path doesn't exist" {
+  prepare_kit_state
+  run "$SCRIPT_PATH" kit host-b "$FIXTURE/no-such-dir"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not a directory"* ]]
+}
+
+@test "kit: happy path produces a USB kit with all expected files" {
+  prepare_kit_state
+  run "$SCRIPT_PATH" kit host-b "$USB_PATH"
+  [ "$status" -eq 0 ]
+
+  local kit="$USB_PATH/host-b-kit"
+  [ -d "$kit" ]
+  [ -f "$kit/manifest.env" ]
+  [ -f "$kit/bootstrap.sh" ]
+  [ -x "$kit/bootstrap.sh" ]
+  [ -f "$kit/README.md" ]
+  [ -f "$kit/nix-config.tar.gz" ]
+  [ -d "$kit/identity" ]
+  [ -f "$kit/identity/ssh_host_ed25519_key" ]
+  [ -f "$kit/identity/ssh_host_ed25519_key.pub" ]
+  [ -f "$kit/identity/host-b.agekey" ]
+  [ -f "$kit/identity/id_ed25519" ]
+  [ -f "$kit/identity/id_ed25519.pub" ]
+}
+
+@test "kit: manifest.env contains HOSTNAME, FLAKE_REF, KIT_HEAD, KIT_BUILT_AT" {
+  prepare_kit_state
+  "$SCRIPT_PATH" kit host-b "$USB_PATH"
+
+  local manifest="$USB_PATH/host-b-kit/manifest.env"
+  grep -q '^HOSTNAME=host-b$' "$manifest"
+  grep -q '^FLAKE_REF=' "$manifest"
+  grep -q '^KIT_HEAD=[0-9a-f]\{40\}$' "$manifest"
+  grep -q '^KIT_BUILT_AT=' "$manifest"
+}
+
+@test "kit: nix-config.tar.gz contains flake.nix at the top level" {
+  prepare_kit_state
+  "$SCRIPT_PATH" kit host-b "$USB_PATH"
+
+  local tarball="$USB_PATH/host-b-kit/nix-config.tar.gz"
+  tar -tzf "$tarball" | grep -q '^nix-config/flake.nix$'
+  tar -tzf "$tarball" | grep -q '^nix-config/secrets/keys.nix$'
+}
+
+@test "kit: identity files have correct permissions (privates 600)" {
+  prepare_kit_state
+  "$SCRIPT_PATH" kit host-b "$USB_PATH"
+
+  local id="$USB_PATH/host-b-kit/identity"
+  [ "$(stat -c %a "$id/ssh_host_ed25519_key")" = "600" ]
+  [ "$(stat -c %a "$id/host-b.agekey")" = "600" ]
+  [ "$(stat -c %a "$id/id_ed25519")" = "600" ]
+  [ "$(stat -c %a "$id/ssh_host_ed25519_key.pub")" = "644" ]
+  [ "$(stat -c %a "$id/id_ed25519.pub")" = "644" ]
+}
+
+@test "kit: README.md mentions the hostname" {
+  prepare_kit_state
+  "$SCRIPT_PATH" kit host-b "$USB_PATH"
+
+  grep -q 'host-b' "$USB_PATH/host-b-kit/README.md"
+}
+
+@test "kit: re-running clobbers a stale kit at the same path" {
+  prepare_kit_state
+  "$SCRIPT_PATH" kit host-b "$USB_PATH"
+  # Drop a junk file that shouldn't survive
+  echo junk >"$USB_PATH/host-b-kit/junk"
+  "$SCRIPT_PATH" kit host-b "$USB_PATH"
+  [ ! -f "$USB_PATH/host-b-kit/junk" ]
 }

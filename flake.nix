@@ -53,6 +53,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # DankMaterialShell — Quickshell-based desktop shell for niri (and others).
+    # Provides notifications, launcher, lockscreen, polkit agent, idle, login greeter
+    # as cohesive Quickshell modules, replacing the typical mako/fuzzel/swaylock stitchwork.
+    dms = {
+      url = "github:AvengeMedia/DankMaterialShell/stable";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # CC-Tools - Claude Code smart hooks
     cc-tools.url = "github:joshsymonds/cc-tools";
 

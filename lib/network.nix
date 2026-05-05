@@ -60,6 +60,13 @@
       interface = "enp0s31f6";
       subnet = "home";
     };
+    gnomon = {
+      ip = "172.31.0.203";
+      # Best guess for X870 EAGLE WIFI7 onboard 2.5GbE; verify on hardware day
+      # via `ip link` and adjust here if different.
+      interface = "enp4s0";
+      subnet = "home";
+    };
     echelon = {
       ip = "192.168.1.200";
       interface = "enp2s0";

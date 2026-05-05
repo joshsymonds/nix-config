@@ -20,8 +20,10 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(git -C "$(dirname "$(readlink -f "$0")")" rev-parse --show-toplevel)"
-STASH_BASE="${HOME}/.local/share/host-kits"
+# REPO_ROOT and STASH_BASE are overridable via env vars so the bats harness
+# in scripts/tests/ can redirect them at the fixture without copying the script.
+REPO_ROOT="${REPO_ROOT:-$(git -C "$(dirname "$(readlink -f "$0")")" rev-parse --show-toplevel)}"
+STASH_BASE="${STASH_BASE:-${HOME}/.local/share/host-kits}"
 
 usage() {
   cat <<EOF

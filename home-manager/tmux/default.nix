@@ -57,7 +57,7 @@ with lib; let
   # (PPID=1 / not in pane_pid descendant tree, etime ≥ 10 min). Linux-only.
   tmuxOrphanReaper = pkgs.writeShellApplication {
     name = "tmux-orphan-reaper";
-    runtimeInputs = with pkgs; [tmux psmisc procps systemd bash gnugrep coreutils];
+    runtimeInputs = with pkgs; [tmux psmisc procps systemd bash gnugrep coreutils iproute2 gawk];
     text = builtins.readFile ./scripts/tmux-orphan-reaper.sh;
   };
   netSpeedPatched = pkgs.tmuxPlugins.net-speed.overrideAttrs (old: {
@@ -228,13 +228,19 @@ in {
       DEFAULT_BROWSER = "remote-link-open";
     };
 
-    # systemd user service to keep tmux server running (Linux only)
+    # systemd user service to keep tmux server running (Linux only).
+    # TMUX_TMPDIR=%t (= $XDG_RUNTIME_DIR) aligns the systemd-launched server's
+    # socket path with the interactive shell's (home-manager exports the same
+    # value via hm-session-vars.sh). Without this, the systemd server lands in
+    # /tmp/tmux-UID/ and the shell server lands in /run/user/UID/tmux-UID/,
+    # producing two parallel servers and an asymmetric view for the reaper.
     systemd.user.services.tmux = mkIf pkgs.stdenv.isLinux {
       Unit = {
         Description = "tmux server";
       };
       Service = {
         Type = "forking";
+        Environment = "TMUX_TMPDIR=%t";
         ExecStart = "${pkgs.tmux}/bin/tmux new-session -d -s main";
         ExecStop = "${pkgs.tmux}/bin/tmux kill-server";
         Restart = "on-failure";

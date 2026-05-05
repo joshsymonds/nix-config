@@ -1,4 +1,8 @@
-{pkgs, ...}: {
+{
+  config,
+  pkgs,
+  ...
+}: {
   imports = [
     ./common.nix
     ./aerospace
@@ -16,6 +20,8 @@
   ];
 
   programs.go.enable = true;
-  programs.zsh.shellAliases.update = "nh darwin switch";
+  # Explicit flake path — works from any cwd and bootstraps before NH_FLAKE
+  # is exported by a home-manager activation.
+  programs.zsh.shellAliases.update = "nh darwin switch ${config.home.homeDirectory}/nix-config";
   programs.kitty.font.size = 13;
 }

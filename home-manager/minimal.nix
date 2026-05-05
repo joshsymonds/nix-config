@@ -1,6 +1,10 @@
 # Minimal configuration for resource-constrained bridge devices
 # Only includes essentials for remote management and basic operations
-{pkgs, ...}: {
+{
+  config,
+  pkgs,
+  ...
+}: {
   imports = [
     ./git
     ./ssh-config # SSH configuration
@@ -37,7 +41,7 @@
       syntaxHighlighting.enable = false; # Save resources
 
       shellAliases = {
-        update = "nh os switch";
+        update = "nh os switch ${config.home.homeDirectory}/nix-config";
         ll = "ls -la";
         l = "ls -l";
         # Monitoring aliases for this box

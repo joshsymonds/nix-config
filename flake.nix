@@ -47,6 +47,12 @@
     # Ephemeral root + selective persistence (paired with disko)
     impermanence.url = "github:nix-community/impermanence";
 
+    # Lanzaboote — Secure Boot for NixOS (signed UKI; PCR 7 binding for TPM-sealed LUKS)
+    lanzaboote = {
+      url = "github:nix-community/lanzaboote/v1.0.0";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # CC-Tools - Claude Code smart hooks
     cc-tools.url = "github:joshsymonds/cc-tools";
 

@@ -71,15 +71,69 @@ with lib; let
   # systemd's bin dir). Wrapping the plugin scripts here baked-in PATH means
   # the widgets work regardless of how the server got started or what its env
   # looks like.
-  statusBinPath = lib.makeBinPath (with pkgs; [bash coreutils gawk gnugrep gnused procps iproute2 tmux]);
-  wrapStatusScript = name: target:
+  # sysstat provides iostat (cpu plugin's preferred sampler — accurate 1s
+  # delta vs. the ps-aux fallback's lifetime average). systemd provides
+  # systemctl for the failed-units widget.
+  statusBinPath = lib.makeBinPath (with pkgs; [bash coreutils gawk gnugrep gnused procps iproute2 sysstat systemd tmux util-linux]);
+  # Wrap a script with (a) baked-in PATH, (b) a TTL cache + flock, so that
+  # multiple tmux clients (each renders status independently) don't all run
+  # the underlying script in parallel — one process computes per TTL window,
+  # the rest serve cached output. Critical for net-speed, whose state file
+  # would otherwise be raced by N clients and produce nonsense velocities.
+  wrapStatusScript = name: ttl: target:
     pkgs.writeShellScript name ''
       export PATH="${statusBinPath}:$PATH"
-      exec ${target}
+      cache=/tmp/tmux-status-${name}.cache
+      lock=/tmp/tmux-status-${name}.lock
+
+      serve_if_fresh() {
+        if [ -f "$cache" ]; then
+          age=$(( $(date +%s) - $(stat -c %Y "$cache") ))
+          if [ "$age" -lt ${toString ttl} ]; then
+            cat "$cache"
+            return 0
+          fi
+        fi
+        return 1
+      }
+
+      serve_if_fresh && exit 0
+
+      # Race for the right to recompute; losers serve stale cache rather than
+      # piling on the underlying script.
+      exec 9>"$lock"
+      if ! flock -n 9; then
+        [ -f "$cache" ] && cat "$cache"
+        exit 0
+      fi
+
+      # We hold the lock — a peer may have refreshed while we waited.
+      serve_if_fresh && exit 0
+
+      ${target} > "$cache.tmp" && mv "$cache.tmp" "$cache"
+      cat "$cache"
     '';
-  netSpeedScript = wrapStatusScript "tmux-net-speed" "${netSpeedPatched}/share/tmux-plugins/net-speed/scripts/net_speed.sh";
-  cpuPercentageScript = wrapStatusScript "tmux-cpu-percentage" "${pkgs.tmuxPlugins.cpu}/share/tmux-plugins/cpu/scripts/cpu_percentage.sh";
-  ramPercentageScript = wrapStatusScript "tmux-ram-percentage" "${pkgs.tmuxPlugins.cpu}/share/tmux-plugins/cpu/scripts/ram_percentage.sh";
+  mkInlineStatusScript = name: ttl: text:
+    wrapStatusScript name ttl (pkgs.writeShellScript "${name}-impl" text);
+  # TTL of 4s with status-interval=5s ensures exactly one recompute per tick:
+  # the cache stays fresh through any in-tick re-render bursts (multi-client,
+  # focus events, etc.) and goes stale just before the next scheduled tick.
+  statusTtl = 4;
+  netSpeedScript = wrapStatusScript "tmux-net-speed" statusTtl "${netSpeedPatched}/share/tmux-plugins/net-speed/scripts/net_speed.sh";
+  cpuPercentageScript = wrapStatusScript "tmux-cpu-percentage" statusTtl "${pkgs.tmuxPlugins.cpu}/share/tmux-plugins/cpu/scripts/cpu_percentage.sh";
+  ramPercentageScript = wrapStatusScript "tmux-ram-percentage" statusTtl "${pkgs.tmuxPlugins.cpu}/share/tmux-plugins/cpu/scripts/ram_percentage.sh";
+  diskUsageScript = mkInlineStatusScript "tmux-disk-usage" statusTtl ''
+    df --output=pcent / | tail -n 1 | tr -d ' '
+  '';
+  # When count > 0, emit the full catppuccin pill markup so tmux renders it;
+  # when 0, output nothing so the pill disappears entirely.
+  # `` is U+E0B6 (catppuccin "rounded" left separator), `󰀦` is the alert glyph.
+  failedUnitsScript = mkInlineStatusScript "tmux-failed-units" statusTtl ''
+    count=$(systemctl --failed --no-legend --plain --state=failed | wc -l)
+    if [ "$count" -gt 0 ]; then
+      printf '#[fg=#fab387]#[fg=#11111b,bg=#fab387]󰀦 #[fg=#cdd6f4,bg=#313244] %s#[fg=#313244] ' "$count"
+    fi
+  '';
 in {
   config = {
     programs.tmux = {
@@ -169,8 +223,8 @@ in {
         set -g set-titles-string '#{?@dev_context,#{@dev_context},#H}*#{pane_current_command}*#(${tmuxDevspaceHelper}/bin/tmux-devspace title-path #{q:pane_current_path})'
 
         # Status line configuration
-        set -g status-interval 30
-        set -g status-right-length 100
+        set -g status-interval 5
+        set -g status-right-length 200
         set -g status-left-length 100
         set -g status-left ""
 
@@ -185,6 +239,15 @@ in {
 
         set -ag status-right \
           "#[fg=#cba6f7]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#cba6f7]  #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${ramPercentageScript})#[fg=#313244]#{E:@catppuccin_status_right_separator}"
+
+        # Disk usage on / — blue pill, harddisk
+        set -ag status-right \
+          "#[fg=#89b4fa]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#89b4fa]󰋊 #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${diskUsageScript})#[fg=#313244]#{E:@catppuccin_status_right_separator}"
+
+        # Failed systemd units — peach pill, alert. Script emits full pill
+        # markup when count > 0 and nothing otherwise, so the pill disappears
+        # entirely when there are no failures.
+        set -ag status-right "#(${failedUnitsScript})"
 
         # Pane borders - Catppuccin Mocha colors
         set -g pane-border-style "fg=#313244"

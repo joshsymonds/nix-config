@@ -64,6 +64,22 @@ with lib; let
         done
       '';
   });
+  # Status-bar widgets are rendered by tmux's `run-shell` (`#(...)`), which
+  # inherits the tmux server process's PATH. Setting PATH on tmux.service only
+  # works for *fresh* server starts; X-RestartIfChanged=false means an existing
+  # server keeps whatever PATH it was originally launched with (often just
+  # systemd's bin dir). Wrapping the plugin scripts here baked-in PATH means
+  # the widgets work regardless of how the server got started or what its env
+  # looks like.
+  statusBinPath = lib.makeBinPath (with pkgs; [bash coreutils gawk gnugrep gnused procps iproute2 tmux]);
+  wrapStatusScript = name: target:
+    pkgs.writeShellScript name ''
+      export PATH="${statusBinPath}:$PATH"
+      exec ${target}
+    '';
+  netSpeedScript = wrapStatusScript "tmux-net-speed" "${netSpeedPatched}/share/tmux-plugins/net-speed/scripts/net_speed.sh";
+  cpuPercentageScript = wrapStatusScript "tmux-cpu-percentage" "${pkgs.tmuxPlugins.cpu}/share/tmux-plugins/cpu/scripts/cpu_percentage.sh";
+  ramPercentageScript = wrapStatusScript "tmux-ram-percentage" "${pkgs.tmuxPlugins.cpu}/share/tmux-plugins/cpu/scripts/ram_percentage.sh";
 in {
   config = {
     programs.tmux = {
@@ -160,15 +176,15 @@ in {
 
         # Right side status with system monitoring
         set -g status-right \
-          "#[fg=#94e2d5]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#94e2d5]󰈀  #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${netSpeedPatched}/share/tmux-plugins/net-speed/scripts/net_speed.sh)#[fg=#313244]#{E:@catppuccin_status_right_separator}"
+          "#[fg=#94e2d5]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#94e2d5]󰈀  #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${netSpeedScript})#[fg=#313244]#{E:@catppuccin_status_right_separator}"
 
         set -ag status-right \
-          "#[fg=#f9e2af]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#f9e2af]#{E:@catppuccin_cpu_icon} #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${pkgs.tmuxPlugins.cpu}/share/tmux-plugins/cpu/scripts/cpu_percentage.sh)#[fg=#313244]#{E:@catppuccin_status_right_separator}"
+          "#[fg=#f9e2af]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#f9e2af]#{E:@catppuccin_cpu_icon} #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${cpuPercentageScript})#[fg=#313244]#{E:@catppuccin_status_right_separator}"
 
         set -g @catppuccin_ram_icon " "
 
         set -ag status-right \
-          "#[fg=#cba6f7]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#cba6f7]  #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${pkgs.tmuxPlugins.cpu}/share/tmux-plugins/cpu/scripts/ram_percentage.sh)#[fg=#313244]#{E:@catppuccin_status_right_separator}"
+          "#[fg=#cba6f7]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#cba6f7]  #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${ramPercentageScript})#[fg=#313244]#{E:@catppuccin_status_right_separator}"
 
         # Pane borders - Catppuccin Mocha colors
         set -g pane-border-style "fg=#313244"

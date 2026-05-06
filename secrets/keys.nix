@@ -20,6 +20,7 @@ let
     ultraviolet = "age1duy8tj492tfyqwcrzwfksh7v2jv2gxyzjnyjs02576qf4r4lce2q6de39d";
     vermissian = "age1gk07t276expcprxg4el8rsmap4ry3vq9ungmhs9ap3rtwljge9qsqdvnkw";
     ninuan = "age1kyf60tq3yg9msawwtjrvxzqlhspsje3qedtqj2f4aexj7th7juwsg938nu";
+    gnomon = "age1m0fk0lmddud0k6k6mpql73egwysadfvxuqv0kga24d4pls9fff4suaevff";
     # TODO: audit and add
     # bluedesert = "...";
     # echelon = "...";
@@ -30,6 +31,7 @@ let
     "joshsymonds@ultraviolet" = "age1yyrhr0zpg3xnxtstq6g3u0zrxglfhnur6387f5znwmehg36rh4cs39apxy";
     "joshsymonds@vermissian" = "age10kwzaeajuyvfuyuh03tk6ywand899699rdxlrskh2f6x6ru9t56s02d6pg";
     "joshsymonds@ninuan" = "age1fx2ktlav7rraljux7ypkngd2my64lnr0c8w4hs8jfztgc2dxdqns38264l";
+    "joshsymonds@gnomon" = "age1qq3pkjjeljfn9tzy5fhfrzu92ppsyr8msrpn0l2plufdhakpgg2qhtsnx9";
     # TODO: audit and add
     # "joshsymonds@bluedesert" = "...";
     # "joshsymonds@echelon" = "...";
@@ -46,5 +48,6 @@ in {
   vermissian = [hosts.vermissian] ++ allUserKeys;
 
   # User-context secrets (home-manager agenix) — all user keys, no host keys.
+  gnomon = [hosts.gnomon] ++ allUserKeys;
   joshsymonds = allUserKeys;
 }

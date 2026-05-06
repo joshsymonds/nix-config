@@ -45,16 +45,11 @@ with lib; let
   '';
   tmuxDevspaceHelper =
     pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ./scripts/tmux-devspace.sh);
-  # Pane wrapper: launches each pane's shell inside a transient systemd scope
-  # under tmux-pane.slice. Shell EXIT trap stops the scope on pane close,
-  # SIGKILLing all descendants via KillMode=mixed. Linux-only (uses systemd-run).
-  tmuxPaneWrap = pkgs.writeShellScriptBin "tmux-pane-wrap" (
-    builtins.replaceStrings ["@DEFAULT_SHELL@"] [defaultShell]
-    (builtins.readFile ./scripts/tmux-pane-wrap.sh)
-  );
-  # Orphan reaper: systemd user timer (10 min). Kills sessions whose
-  # session_activity > 48h, then reaps orphan procs inside live scopes
-  # (PPID=1 / not in pane_pid descendant tree, etime ≥ 10 min). Linux-only.
+  # Orphan reaper: systemd user timer (10 min). PASS A kills sessions whose
+  # session_activity > 48h. PASS B SIGKILLs processes that have TMUX= in env
+  # but whose session leader (pane_pid) is gone — catches SIGHUP/SIGTERM-
+  # ignoring children (wrangler, esbuild, …) that survived a closed pane.
+  # Linux-only.
   tmuxOrphanReaper = pkgs.writeShellApplication {
     name = "tmux-orphan-reaper";
     runtimeInputs = with pkgs; [tmux psmisc procps systemd bash gnugrep coreutils iproute2 gawk];
@@ -130,13 +125,7 @@ in {
         # Ensure proper color rendering
         set -g default-terminal "tmux-256color"
         set -g default-shell "${defaultShell}"
-        # Linux: wrap each pane in a systemd scope so closing the pane atomically
-        # reaps all descendants. macOS: plain login shell (no systemd-run).
-        set -g default-command "${
-          if pkgs.stdenv.isLinux
-          then "${tmuxPaneWrap}/bin/tmux-pane-wrap"
-          else "${defaultShell} -l"
-        }"
+        set -g default-command "${defaultShell} -l"
         set -ag terminal-overrides ",xterm*:RGB"
         set -ag terminal-overrides ",screen*:RGB"
 

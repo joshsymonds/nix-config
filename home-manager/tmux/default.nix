@@ -236,7 +236,16 @@ in {
       };
       Service = {
         Type = "forking";
-        Environment = "TMUX_TMPDIR=%t";
+        # PATH must include bash + standard utilities so plugin run-shell
+        # scripts (e.g. catppuccin's `#!/usr/bin/env bash`) can find their
+        # interpreter. systemd's default user PATH is just systemd's bin
+        # dir, which broke the status bar render — `run-shell` returned 127
+        # and the catppuccin plugin never sourced its theme files
+        # (incident 2026-05-05: status bar reverted to default green).
+        Environment = [
+          "TMUX_TMPDIR=%t"
+          "PATH=%h/.nix-profile/bin:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin:/run/wrappers/bin"
+        ];
         ExecStart = "${pkgs.tmux}/bin/tmux new-session -d -s main";
         ExecStop = "${pkgs.tmux}/bin/tmux kill-server";
         Restart = "on-failure";

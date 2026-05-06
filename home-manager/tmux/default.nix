@@ -237,6 +237,13 @@ in {
     systemd.user.services.tmux = mkIf pkgs.stdenv.isLinux {
       Unit = {
         Description = "tmux server";
+        # Never tear down a running tmux server during home-manager activation.
+        # ExecStop runs `kill-server`, which terminates every session — so a
+        # benign unit-definition change would kill the user's live work
+        # (incident 2026-05-05: lost mars+mercury during `update`).
+        X-RestartIfChanged = "false";
+        X-StopIfChanged = "false";
+        X-StopOnRemoval = "false";
       };
       Service = {
         Type = "forking";

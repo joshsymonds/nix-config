@@ -255,6 +255,15 @@
         ];
       };
 
+      # installer — the generic installer ISO. Built as a package (via
+      # config.system.build.isoImage), not deployed as a host. Pairs with
+      # a per-host kit on a partition labeled INSTALL-KIT on the same USB.
+      # See modules/installer-iso/default.nix for the design.
+      installer = {
+        system = "x86_64-linux";
+        modules = [./modules/installer-iso];
+      };
+
       ultraviolet-installer = {
         system = "x86_64-linux";
         modules = [./hosts/ultraviolet/installer.nix];
@@ -297,6 +306,7 @@
         packages =
           (import ./pkgs {inherit pkgs;})
           // lib.optionalAttrs (system == "x86_64-linux") {
+            installerIso = self.nixosConfigurations.installer.config.system.build.isoImage;
             ultravioletInstallerIso = self.nixosConfigurations.ultraviolet-installer.config.system.build.isoImage;
             vermissianInstallerIso = self.nixosConfigurations.vermissian-installer.config.system.build.isoImage;
           };

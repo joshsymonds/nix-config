@@ -244,6 +244,17 @@
         homeModule = ./home-manager/hosts/vermissian.nix;
       };
 
+      # testhost — fixture for the installer VM test. Minimal consumer of
+      # modules/disko/btrfs-impermanence.nix. Deliberately does NOT include
+      # hosts/common.nix, agenix, or privatePackages — must work with no
+      # GitHub credentials. See hosts/testhost/default.nix for details.
+      testhost = {
+        system = "x86_64-linux";
+        modules = [
+          ./hosts/testhost
+        ];
+      };
+
       ultraviolet-installer = {
         system = "x86_64-linux";
         modules = [./hosts/ultraviolet/installer.nix];

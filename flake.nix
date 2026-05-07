@@ -261,7 +261,14 @@
       # See modules/installer-iso/default.nix for the design.
       installer = {
         system = "x86_64-linux";
-        modules = [./modules/installer-iso];
+        modules = [
+          ./modules/installer-iso
+          # Production-only: allowUnfree is required for hardware.enableAllFirmware
+          # (firmware blobs are unfree). Set here, NOT in installer-iso itself, so
+          # the nixosTest can inherit the framework's read-only nixpkgs.config
+          # without a merge conflict.
+          {nixpkgs.config.allowUnfree = true;}
+        ];
       };
 
       ultraviolet-installer = {
@@ -316,6 +323,10 @@
         checks = lib.optionalAttrs (system == "x86_64-linux") {
           installer-kit-fixture = import ./tests/installer-kit-fixture.nix {
             inherit pkgs;
+            flakeSource = self.outPath;
+          };
+          installer = import ./tests/installer-test.nix {
+            inherit pkgs inputs self;
             flakeSource = self.outPath;
           };
         };

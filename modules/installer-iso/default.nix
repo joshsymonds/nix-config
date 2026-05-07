@@ -17,6 +17,7 @@
 #      snapshot → copy identity → nixos-install → poweroff
 {
   inputs,
+  lib,
   pkgs,
   modulesPath,
   ...
@@ -48,8 +49,12 @@ in {
     "${modulesPath}/installer/cd-dvd/installation-cd-minimal.nix"
   ];
 
-  nixpkgs.config.allowUnfree = true;
-  hardware.enableAllFirmware = true;
+  # nixpkgs.config.allowUnfree is set by the production install path (see
+  # flake.nix's nixosHostDefinitions.installer) so the test machine can
+  # inherit the framework's locked-down nixpkgs.config without a merge
+  # conflict. enableAllFirmware is mkDefault so the test can override
+  # to false (qemu virtual hw doesn't need real firmware).
+  hardware.enableAllFirmware = lib.mkDefault true;
 
   # Cachix substituters baked in so nixos-install can pull from binary
   # cache without per-install configuration. Same set as the legacy
@@ -100,6 +105,7 @@ in {
     wants = ["network-online.target"];
     path =
       (with pkgs; [
+        bash # install.sh's shebang `/usr/bin/env bash` needs bash in PATH
         util-linux # mount, umount, lsblk
         gptfdisk
         e2fsprogs
@@ -115,6 +121,7 @@ in {
         systemd
         gitMinimal
         openssh
+        nix # nixos-install internally invokes nix-env / nix
         nixos-install-tools
       ])
       ++ [diskoPkg]; # so install.sh's run_disko sees `disko` in $PATH

@@ -215,6 +215,48 @@ EOF
   [[ "$output" != *"fetching from github"* ]]
 }
 
+@test "run_disko: BOOTSTRAP_DISKO_SCRIPT short-circuits to a pre-built script" {
+  source "$KIT_DIR/manifest.env"
+  unset BOOTSTRAP_MOCK_DISKO
+
+  cat >"$FIXTURE/prebuilt-disko" <<'EOF'
+#!/usr/bin/env bash
+echo "fake-prebuilt-disko: ran"
+EOF
+  chmod +x "$FIXTURE/prebuilt-disko"
+
+  cat >"$FAKE_BIN/disko" <<'EOF'
+#!/usr/bin/env bash
+echo "ASSERT FAIL: disko CLI should not be invoked when prebuilt is set" >&2
+exit 99
+EOF
+  chmod +x "$FAKE_BIN/disko"
+
+  export BOOTSTRAP_DISKO_SCRIPT="$FIXTURE/prebuilt-disko"
+  run run_disko
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Using pre-built disko script"* ]]
+  [[ "$output" == *"fake-prebuilt-disko: ran"* ]]
+}
+
+@test "run_install: BOOTSTRAP_NIXOS_INSTALL_SYSTEM uses --system instead of --flake" {
+  source "$KIT_DIR/manifest.env"
+  unset BOOTSTRAP_MOCK_NIXOS_INSTALL
+
+  cat >"$FAKE_BIN/nixos-install" <<'EOF'
+#!/usr/bin/env bash
+echo "fake-nixos-install: $*"
+EOF
+  chmod +x "$FAKE_BIN/nixos-install"
+
+  export BOOTSTRAP_NIXOS_INSTALL_SYSTEM="/nix/store/fake-system"
+  run run_install
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Using pre-built system"* ]]
+  [[ "$output" == *"fake-nixos-install: --system /nix/store/fake-system"* ]]
+  [[ "$output" != *"--flake"* ]]
+}
+
 @test "run_disko: falls back to nix run github: when no local disko" {
   source "$KIT_DIR/manifest.env"
   unset BOOTSTRAP_MOCK_DISKO

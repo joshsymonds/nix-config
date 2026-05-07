@@ -166,11 +166,20 @@ run_disko() {
     log "BOOTSTRAP_MOCK_DISKO=1: pretending disko ran"
     return 0
   fi
-  # Prefer a locally-installed disko binary: faster, works offline (the
-  # nixosTest VM has no internet), and stays pinned to whatever version
-  # the installer ISO bundles. Fall back to `nix run github:` only if no
-  # local binary is present — keeps the script usable in a stripped-down
-  # environment (e.g., a stock NixOS minimal ISO without the bundle).
+  # Pre-built script path — used by the nixosTest, which can't evaluate
+  # flakes inside its VM (no internet). The fixture pre-builds
+  # testhost.config.system.build.diskoScript and points this env var at
+  # it; install.sh runs it directly without any flake evaluation.
+  if [ -n "${BOOTSTRAP_DISKO_SCRIPT:-}" ]; then
+    log "Using pre-built disko script: $BOOTSTRAP_DISKO_SCRIPT"
+    "$BOOTSTRAP_DISKO_SCRIPT"
+    return 0
+  fi
+  # Prefer a locally-installed disko binary: faster, works offline, and
+  # stays pinned to whatever version the installer ISO bundles. Fall
+  # back to `nix run github:` only if no local binary is present — keeps
+  # the script usable in a stripped-down environment (e.g., a stock
+  # NixOS minimal ISO without the bundle).
   if command -v disko >/dev/null 2>&1; then
     log "Using local disko: $(command -v disko)"
     disko --mode disko --flake "${FLAKE_TMP}#${HOSTNAME}"
@@ -220,6 +229,19 @@ run_install() {
   log "Running nixos-install (binary cache will pull the closure)..."
   if [ "${BOOTSTRAP_MOCK_NIXOS_INSTALL:-0}" = "1" ]; then
     log "BOOTSTRAP_MOCK_NIXOS_INSTALL=1: pretending nixos-install ran"
+    return 0
+  fi
+  # Pre-built system path — used by the nixosTest, which can't evaluate
+  # flakes inside its VM (no internet). The fixture pre-builds
+  # testhost.config.system.build.toplevel and points this env var at it;
+  # nixos-install then has the full closure already in the store.
+  if [ -n "${BOOTSTRAP_NIXOS_INSTALL_SYSTEM:-}" ]; then
+    log "Using pre-built system: $BOOTSTRAP_NIXOS_INSTALL_SYSTEM"
+    nixos-install \
+      --system "$BOOTSTRAP_NIXOS_INSTALL_SYSTEM" \
+      --root "$MNT" \
+      --no-root-passwd \
+      --no-channel-copy
     return 0
   fi
   nixos-install \

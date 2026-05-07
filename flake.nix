@@ -311,6 +311,15 @@
             vermissianInstallerIso = self.nixosConfigurations.vermissian-installer.config.system.build.isoImage;
           };
 
+        # checks: things that nix flake check (and CI) should validate.
+        # treefmt-nix's flakeModule already adds checks.formatting; we merge.
+        checks = lib.optionalAttrs (system == "x86_64-linux") {
+          installer-kit-fixture = import ./tests/installer-kit-fixture.nix {
+            inherit pkgs;
+            flakeSource = self.outPath;
+          };
+        };
+
         devShells.default = pkgs.mkShell {
           name = "nix-config-dev";
           packages = with pkgs; [

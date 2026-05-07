@@ -166,10 +166,21 @@ run_disko() {
     log "BOOTSTRAP_MOCK_DISKO=1: pretending disko ran"
     return 0
   fi
-  nix --experimental-features 'nix-command flakes' run \
-    github:nix-community/disko/latest -- \
-    --mode disko \
-    --flake "${FLAKE_TMP}#${HOSTNAME}"
+  # Prefer a locally-installed disko binary: faster, works offline (the
+  # nixosTest VM has no internet), and stays pinned to whatever version
+  # the installer ISO bundles. Fall back to `nix run github:` only if no
+  # local binary is present — keeps the script usable in a stripped-down
+  # environment (e.g., a stock NixOS minimal ISO without the bundle).
+  if command -v disko >/dev/null 2>&1; then
+    log "Using local disko: $(command -v disko)"
+    disko --mode disko --flake "${FLAKE_TMP}#${HOSTNAME}"
+  else
+    log "No local disko in PATH; fetching from github..."
+    nix --experimental-features 'nix-command flakes' run \
+      github:nix-community/disko/latest -- \
+      --mode disko \
+      --flake "${FLAKE_TMP}#${HOSTNAME}"
+  fi
 }
 
 # Take the @root-blank snapshot for impermanence rollback.

@@ -183,6 +183,62 @@ teardown() {
   [[ "$output" == *"flake.nix"* ]]
 }
 
+# ─── run_disko local-binary preference ────────────────────────────────
+
+@test "run_disko: prefers local disko binary when available" {
+  source "$KIT_DIR/manifest.env"
+  # Don't enable mock — we want to test the fallback logic
+  unset BOOTSTRAP_MOCK_DISKO
+
+  # Stub disko in PATH (the case we want to take)
+  cat >"$FAKE_BIN/disko" <<'EOF'
+#!/usr/bin/env bash
+echo "fake-local-disko: $*"
+EOF
+  chmod +x "$FAKE_BIN/disko"
+
+  # Stub nix to detect if it gets called (it shouldn't when local disko exists)
+  cat >"$FAKE_BIN/nix" <<'EOF'
+#!/usr/bin/env bash
+echo "ASSERT FAIL: nix should not be invoked when local disko exists" >&2
+exit 99
+EOF
+  chmod +x "$FAKE_BIN/nix"
+
+  export FLAKE_TMP="$FIXTURE/flake_tmp_disko"
+  mkdir -p "$FLAKE_TMP"
+
+  run run_disko
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Using local disko"* ]]
+  [[ "$output" == *"fake-local-disko: --mode disko --flake"* ]]
+  [[ "$output" != *"fetching from github"* ]]
+}
+
+@test "run_disko: falls back to nix run github: when no local disko" {
+  source "$KIT_DIR/manifest.env"
+  unset BOOTSTRAP_MOCK_DISKO
+
+  # Make sure no `disko` exists in PATH; FAKE_BIN doesn't have it
+  # (only `id` and any test-specific stubs, none of which are `disko` here).
+
+  # Stub nix to capture the call without actually fetching from github
+  cat >"$FAKE_BIN/nix" <<'EOF'
+#!/usr/bin/env bash
+echo "fake-nix-run: $*"
+EOF
+  chmod +x "$FAKE_BIN/nix"
+
+  export FLAKE_TMP="$FIXTURE/flake_tmp_disko_fb"
+  mkdir -p "$FLAKE_TMP"
+
+  run run_disko
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No local disko in PATH"* ]]
+  [[ "$output" == *"fake-nix-run:"* ]]
+  [[ "$output" == *"github:nix-community/disko/latest"* ]]
+}
+
 # ─── substitute_sentinel ───────────────────────────────────────────────
 
 @test "substitute_sentinel: replaces the sentinel and verifies" {

@@ -16,11 +16,13 @@
 #   4. install.sh handles: pick disk → confirm hostname → disko → @root-blank
 #      snapshot → copy identity → nixos-install → poweroff
 {
+  inputs,
   pkgs,
   modulesPath,
   ...
 }: let
   caches = import ../../lib/caches.nix;
+  diskoPkg = inputs.disko.packages.${pkgs.stdenv.hostPlatform.system}.disko;
 
   # The install logic itself — a real .sh file with shellcheck and bats
   # coverage. Inline shell in the systemd-service wrapper below is just
@@ -72,19 +74,20 @@ in {
   };
 
   # Tools available on a shell drop-out for manual recovery / debugging.
-  # disko fetches its own deps via `nix run`, so we don't strictly need
-  # filesystem tools here, but they're useful if the install fails and
-  # you need to inspect the target.
-  environment.systemPackages = with pkgs; [
-    util-linux
-    gptfdisk
-    e2fsprogs
-    dosfstools
-    btrfs-progs
-    cryptsetup
-    git
-    jq
-  ];
+  # disko is bundled too, so install.sh's run_disko prefers the local
+  # binary (works offline; required for the nixosTest to pass in CI).
+  environment.systemPackages =
+    (with pkgs; [
+      util-linux
+      gptfdisk
+      e2fsprogs
+      dosfstools
+      btrfs-progs
+      cryptsetup
+      git
+      jq
+    ])
+    ++ [diskoPkg];
 
   services.getty.helpLine = defaultBanner;
 
@@ -95,24 +98,26 @@ in {
     wantedBy = ["multi-user.target"];
     after = ["multi-user.target" "network-online.target"];
     wants = ["network-online.target"];
-    path = with pkgs; [
-      util-linux # mount, umount, lsblk
-      gptfdisk
-      e2fsprogs
-      dosfstools
-      btrfs-progs
-      cryptsetup
-      coreutils
-      gawk
-      gnugrep
-      gnused
-      gnutar
-      gzip
-      systemd
-      gitMinimal
-      openssh
-      nixos-install-tools
-    ];
+    path =
+      (with pkgs; [
+        util-linux # mount, umount, lsblk
+        gptfdisk
+        e2fsprogs
+        dosfstools
+        btrfs-progs
+        cryptsetup
+        coreutils
+        gawk
+        gnugrep
+        gnused
+        gnutar
+        gzip
+        systemd
+        gitMinimal
+        openssh
+        nixos-install-tools
+      ])
+      ++ [diskoPkg]; # so install.sh's run_disko sees `disko` in $PATH
     serviceConfig = {
       Type = "oneshot";
       StandardOutput = "journal+console";

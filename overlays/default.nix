@@ -5,11 +5,9 @@
   moarVersionString = "${moarVersion}+g${builtins.substring 0 7 moarRev}";
 in {
   default = final: prev: let
-    shimmerPkg = inputs.shimmer.packages.${final.stdenv.hostPlatform.system}.default;
     devenvPkg = inputs.devenv.packages.${final.stdenv.hostPlatform.system}.devenv;
   in {
     devenv = devenvPkg;
-    shimmer = shimmerPkg;
     myCaddy = final.callPackage ../pkgs/caddy {};
     starlark-lsp = final.callPackage ../pkgs/starlark-lsp {};
     nuclei = final.callPackage ../pkgs/nuclei {};
@@ -85,4 +83,12 @@ in {
   modifications = _: _: {};
   unstable-packages = _: _: {};
   darwin = import ./darwin.nix;
+
+  # Packages whose flake inputs are private (git+ssh://). Applied only by the
+  # specific hosts that consume them, so non-consumer hosts don't drag the
+  # private input into their eval graph (which would block secrets-clean
+  # reinstalls and the nixosTest VM that has no GitHub credentials).
+  privatePackages = final: _prev: {
+    shimmer = inputs.shimmer.packages.${final.stdenv.hostPlatform.system}.default;
+  };
 }

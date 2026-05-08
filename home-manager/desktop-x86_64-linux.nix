@@ -140,6 +140,14 @@ in {
     "Mod+J".action.focus-window-or-workspace-down = [];
     "Mod+K".action.focus-window-or-workspace-up = [];
 
+    # Move the focused window between monitors. Mirrors the H/L focus
+    # binds: same direction, plus Shift to mean "take this window with
+    # me." `move-window-to-monitor-*` moves the focused window only;
+    # if you want to drag a stacked column wholesale, swap to
+    # `move-column-to-monitor-{left,right}`.
+    "Mod+Shift+H".action.move-window-to-monitor-left = [];
+    "Mod+Shift+L".action.move-window-to-monitor-right = [];
+
     # Scratch workspace navigators. Each pre-populated workspace
     # follows a `<role>-<side>` naming convention (term-left,
     # term-right, web-left, web-right, music). T/W look up the named

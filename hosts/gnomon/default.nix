@@ -84,7 +84,11 @@ in
       "sd_mod"
     ];
 
-    # ── Networking: static IP from lib/network.nix ──────────────────────
+    # ── Networking: static IP via systemd-networkd, wildcard interface match ──
+    # Same pattern as ultraviolet/vermissian — no hardcoded interface name.
+    # The actual NIC (whatever its kernel-assigned `enX` name is) is matched
+    # by the `en*` glob, so changing motherboards or upgrading the kernel's
+    # device naming doesn't break the static-IP config.
     networking = {
       useDHCP = false;
       hostName = "gnomon";
@@ -92,14 +96,14 @@ in
         enable = true;
         allowedTCPPorts = [22];
       };
-      defaultGateway = subnet.gateway;
-      nameservers = subnet.nameservers;
-      interfaces.${self.interface}.ipv4.addresses = [
-        {
-          address = self.ip;
-          prefixLength = subnet.prefixLength;
-        }
-      ];
+    };
+
+    systemd.network.wait-online.anyInterface = true;
+    systemd.network.networks."10-lan" = {
+      matchConfig.Name = "en*";
+      address = ["${self.ip}/${toString subnet.prefixLength}"];
+      gateway = [subnet.gateway];
+      dns = subnet.nameservers;
     };
 
     # ── State version ───────────────────────────────────────────────────

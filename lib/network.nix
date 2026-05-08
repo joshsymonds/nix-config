@@ -61,10 +61,11 @@
       subnet = "home";
     };
     gnomon = {
-      ip = "172.31.0.203";
-      # Best guess for X870 EAGLE WIFI7 onboard 2.5GbE; verify on hardware day
-      # via `ip link` and adjust here if different.
-      interface = "enp4s0";
+      # Stable .80 (mirror in blackbox NFS export allowlists for
+      # video/music/books/creative). No hardcoded interface — gnomon
+      # uses systemd-networkd with `matchConfig.Name = "en*"` (same as
+      # ultraviolet/vermissian), so the actual NIC name doesn't matter.
+      ip = "172.31.0.80";
       subnet = "home";
     };
     echelon = {

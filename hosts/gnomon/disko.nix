@@ -15,23 +15,28 @@
     luks.enable = true;
     swapSizeGiB = 32;
 
-    # Defaults from the module: /etc/ssh, /etc/age, /var/lib/nixos, /var/lib/systemd.
-    # Adding desktop-service state so paired devices, color profiles, and power
-    # history survive impermanence rollback.
+    # /etc/ssh is NOT a directory-bind — that whole-dir bind hides
+    # NixOS-generated sshd_config + authorized_keys.d/<user>. We persist
+    # only the host keys via persistFiles below; everything else in
+    # /etc/ssh stays NixOS-managed (regenerated each boot from declarative
+    # config). /var/lib/sbctl persisted so lanzaboote's signing keys
+    # survive @root-blank rollback (without this, every nh os switch
+    # fails with "Failed to read public key from /var/lib/sbctl/keys/db/db.pem").
     persistDirectories = [
-      "/etc/ssh"
       "/etc/age"
       "/var/lib/nixos"
       "/var/lib/systemd"
       "/var/lib/bluetooth"
       "/var/lib/upower"
       "/var/lib/colord"
+      "/var/lib/sbctl"
     ];
 
-    # Defaults from the module: /etc/machine-id, /etc/adjtime.
     persistFiles = [
       "/etc/machine-id"
       "/etc/adjtime"
+      "/etc/ssh/ssh_host_ed25519_key"
+      "/etc/ssh/ssh_host_ed25519_key.pub"
     ];
   };
 }

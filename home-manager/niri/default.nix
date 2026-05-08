@@ -161,6 +161,8 @@ in {
   programs.niri.settings.input.keyboard.repeat-delay = 200;
   programs.niri.settings.input.keyboard.repeat-rate = 50;
 
+  programs.niri.settings.input.focus-follows-mouse.enable = true;
+
   # X11 fallback via xwayland-satellite (package added system-side in
   # modules/desktop/niri.nix). Niri itself is pure Wayland; satellite
   # provides an on-demand Xwayland server claiming DISPLAY=:0 so X11-only

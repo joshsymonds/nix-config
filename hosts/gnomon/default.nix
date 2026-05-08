@@ -54,6 +54,19 @@ in
     };
     hardware.steam-hardware.enable = true;
 
+    # ── 1Password ───────────────────────────────────────────────────────
+    # Enabling at system level provides:
+    #   - `op` CLI on PATH
+    #   - SSH-agent unix socket (~/.1password/agent.sock) for git/ssh signing
+    #   - PolicyKit integration so the GUI can prompt for system auth
+    #     (Quick Unlock, app permissions). polkitPolicyOwners is the list
+    #     of users allowed to invoke that.
+    programs._1password.enable = true;
+    programs._1password-gui = {
+      enable = true;
+      polkitPolicyOwners = ["joshsymonds"];
+    };
+
     # ── Boot: lanzaboote-signed UKI ─────────────────────────────────────
     boot.bootspec.enable = true;
     boot.loader.systemd-boot.enable = lib.mkForce false;

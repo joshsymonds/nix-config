@@ -128,11 +128,10 @@ in {
     {command = ["kitty" "--class" "scratch-term-left"];}
     {command = ["kitty" "--class" "scratch-term-right"];}
     # Single seed per single-process app — firefox/spotify/slack/signal/
-    # claude-desktop each share one app-id across all their windows, so
-    # we can't route two seeds to two different workspaces by app-id
-    # alone. The window-rules below route the seed to the -right copy;
-    # open another instance manually onto the -left side if wanted
-    # (Mod+<letter> from the left monitor lands you on it).
+    # claude-desktop each share one app-id across all their windows.
+    # The window-rules below pin every window of these apps to the
+    # -right copy regardless of when it spawns; use Mod+Alt+<letter>
+    # to fling one onto the -left side when wanted.
     {command = ["firefox"];}
     {command = ["spotify"];}
     {command = ["slack"];}
@@ -149,11 +148,13 @@ in {
   #   signal-desktop     →  "signal"
   #   zoom-us            →  "zoom"
   #   claude-desktop     →  "Claude"
-  # All seed apps use at-startup = true so the rule only catches the
-  # initial windows at niri startup. Ad-hoc copies opened later (e.g.
-  # firefox from clicking a link in kitty, a second slack from
-  # spotlight) go to the focused workspace as normal — that's how a
-  # second window lands on the -left copy.
+  # No at-startup gate: the rules catch every window from these apps
+  # whenever they appear. Heavy Electron apps (Slack/Signal/Firefox/
+  # Claude) often take longer than niri's at-startup grace window to
+  # surface their first window, so gating on it caused them to leak
+  # to unnamed workspaces on login. Trade-off: every firefox window
+  # (link-click, Cmd+N) now also lands on web-right; move with
+  # Mod+Alt+W if you want it on the other side.
   programs.niri.settings.window-rules = [
     {
       matches = [{app-id = "^scratch-term-left$";}];
@@ -164,48 +165,23 @@ in {
       open-on-workspace = "term-right";
     }
     {
-      matches = [
-        {
-          app-id = "^firefox$";
-          at-startup = true;
-        }
-      ];
+      matches = [{app-id = "^firefox$";}];
       open-on-workspace = "web-right";
     }
     {
-      matches = [
-        {
-          app-id = "^spotify$";
-          at-startup = true;
-        }
-      ];
+      matches = [{app-id = "^spotify$";}];
       open-on-workspace = "music-right";
     }
     {
-      matches = [
-        {
-          app-id = "^Slack$";
-          at-startup = true;
-        }
-      ];
+      matches = [{app-id = "^Slack$";}];
       open-on-workspace = "slack-right";
     }
     {
-      matches = [
-        {
-          app-id = "^signal$";
-          at-startup = true;
-        }
-      ];
+      matches = [{app-id = "^signal$";}];
       open-on-workspace = "chat-right";
     }
     {
-      matches = [
-        {
-          app-id = "^Claude$";
-          at-startup = true;
-        }
-      ];
+      matches = [{app-id = "^Claude$";}];
       open-on-workspace = "claude-right";
     }
     # Zoom usually stays on XWayland (via xwayland-satellite), where

@@ -1,4 +1,5 @@
 {
+  config,
   lib,
   workspaceRoles,
   ...
@@ -124,4 +125,31 @@
       }
     ];
   };
+
+  # When the workspaceLabel plugin's settings file (plugin_settings.json)
+  # changes between HM generations, ask the running DMS instance to reload
+  # just that plugin. DMS does watch its config files natively
+  # (`watchChanges: true` on the FileView in Common/SettingsData.qml), but
+  # HM publishes config files by atomically swapping the symlink to a new
+  # /nix/store path — Qt's QFileSystemWatcher tracks the resolved inode,
+  # so the swap is invisible to the watcher and the in-memory labelMap
+  # stays stale. The plugin reload IPC (DMSShellIPC.qml `target: "plugins";
+  # reload(pluginId)`) does an unload + load that re-reads the file from
+  # disk, no unit restart, no bar flicker.
+  #
+  # Skipped when DMS isn't running (first boot, manual stop) and when the
+  # file's contents are byte-identical between generations (no-op rebuilds).
+  home.activation.dmsReloadWorkspaceLabel = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    pluginFile=".config/DankMaterialShell/plugin_settings.json"
+    if [[ -v oldGenPath ]] \
+       && [ -e "$oldGenPath/home-files/$pluginFile" ] \
+       && [ -e "$newGenPath/home-files/$pluginFile" ] \
+       && ! cmp -s "$oldGenPath/home-files/$pluginFile" "$newGenPath/home-files/$pluginFile"; then
+      if systemctl --user is-active --quiet dms.service 2>/dev/null; then
+        XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
+          ${config.programs.dank-material-shell.package}/bin/dms ipc plugins reload workspaceLabel \
+          >/dev/null 2>&1 || true
+      fi
+    fi
+  '';
 }

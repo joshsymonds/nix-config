@@ -8,6 +8,52 @@
     ../desktop-x86_64-linux.nix
   ];
 
+  # Named workspaces for niri + DMS. The niri module turns each role into a
+  # `${role}-left` / `${role}-right` workspace pair plus three Mod+letter
+  # binds (focus / move window into / send to other monitor's copy). The
+  # DMS workspaceLabel plugin uses the same map to render the bar pill.
+  # Adding a role here is the only change needed to get all of that.
+  #
+  # letter: the keyboard key bound under Mod (and Mod+Shift / Mod+Alt).
+  #   Most are the role's first letter; chat and claude collide on C, so
+  #   claude is on O instead.
+  # label: human-readable name shown in the DMS pill *and* in niri's
+  #   hotkey-overlay titles ("Focus Terminal", "Move Window to Web").
+  _module.args.workspaceRoles = {
+    term = {
+      letter = "T";
+      label = "Terminal";
+    };
+    web = {
+      letter = "W";
+      label = "Web";
+    };
+    music = {
+      letter = "M";
+      label = "Music";
+    };
+    slack = {
+      letter = "S";
+      label = "Slack";
+    };
+    chat = {
+      letter = "C";
+      label = "Chat";
+    };
+    claude = {
+      letter = "O";
+      label = "Claude";
+    };
+    zoom = {
+      letter = "Z";
+      label = "Zoom";
+    };
+    game = {
+      letter = "G";
+      label = "Game";
+    };
+  };
+
   home.packages = with pkgs; [
     # Gaming auxiliaries (Steam itself is system-level via programs.steam)
     mangohud # in-game FPS/perf overlay

@@ -1,4 +1,8 @@
-{...}: {
+{
+  lib,
+  workspaceRoles,
+  ...
+}: {
   # DankMaterialShell home-manager configuration. The DMS edge release
   # made several HM-side feature toggles built-in and no-op (they're now
   # always available): enableNightMode, enableSystemSound, enableClipboard,
@@ -40,22 +44,16 @@
     plugins.workspaceLabel = {
       enable = true;
       src = ./plugins/workspaceLabel;
-      settings.labelMap = {
-        term-left = "Terminal";
-        term-right = "Terminal";
-        web-left = "Web";
-        web-right = "Web";
-        music-left = "Music";
-        music-right = "Music";
-        slack-left = "Slack";
-        slack-right = "Slack";
-        chat-left = "Chat";
-        chat-right = "Chat";
-        claude-left = "Claude";
-        claude-right = "Claude";
-        zoom-left = "Zoom";
-        zoom-right = "Zoom";
-      };
+      # `workspaceRoles` comes from the host's `_module.args.workspaceRoles`
+      # (see hosts/<host>.nix). Both `-left` and `-right` map to the same
+      # label — each bar only shows its own monitor's active workspace, so
+      # the duplicate display label is unambiguous.
+      settings.labelMap =
+        lib.concatMapAttrs (role: {label, ...}: {
+          "${role}-left" = label;
+          "${role}-right" = label;
+        })
+        workspaceRoles;
     };
 
     # focusedWindow compact mode hides the app-id prefix and renders only

@@ -1,40 +1,29 @@
 {
   lib,
   pkgs,
+  workspaceRoles,
   ...
 }: let
-  # Roles with a -left/-right pair. The niri config declares both; the
-  # dynamic assignment script (below) attaches each pair to the leftmost
-  # / rightmost output at niri startup. Adding a role here means: declare
-  # workspace, add Mod+<letter>/Mod+Shift+<letter>/Mod+Alt+<letter> binds,
-  # and that role auto-acquires both monitors.
-  workspaceRoles = [
-    "term"
-    "web"
-    "music"
-    "slack"
-    "chat"
-    "claude"
-    "zoom"
-  ];
+  # `workspaceRoles` comes from the host (see hosts/<host>.nix's
+  # `_module.args.workspaceRoles`): an attrset
+  #   { <role> = { letter = "X"; label = "Pretty Name"; }; ... }
+  # The niri config declares a -left/-right pair per role; the dynamic
+  # assignment script (below) attaches each pair to the leftmost / rightmost
+  # output at niri startup. Adding a role in the host file is enough to get
+  # workspaces, Mod+letter/Mod+Shift+letter/Mod+Alt+letter binds, and the
+  # DMS pill label.
+  roleNames = lib.attrNames workspaceRoles;
 
   # Build a map { "term-left" = {}; "term-right" = {}; ... } with no
   # `open-on-output` pinning — we let niri create them on the focused
   # output at startup, then our assignment script moves each to the
   # correct physical monitor.
-  workspacePairs = lib.listToAttrs (
-    lib.concatMap (role: [
-      {
-        name = "${role}-left";
-        value = {};
-      }
-      {
-        name = "${role}-right";
-        value = {};
-      }
-    ])
-    workspaceRoles
-  );
+  workspacePairs =
+    lib.concatMapAttrs (role: _: {
+      "${role}-left" = {};
+      "${role}-right" = {};
+    })
+    workspaceRoles;
 
   # Assign workspaces to monitors at runtime by sorting outputs by their
   # logical x position. Whichever output niri places at the lowest x gets
@@ -76,10 +65,10 @@
     }
 
     ${lib.concatMapStringsSep "\n" (role: ''
-      move "${role}-left" "$left"
-      move "${role}-right" "$right"
-    '')
-    workspaceRoles}
+        move "${role}-left" "$left"
+        move "${role}-right" "$right"
+      '')
+      roleNames}
   '';
 
   # Helper for Mod+T / Mod+W / Mod+M / etc. (every per-monitor named-
@@ -106,38 +95,27 @@
 
   # Per-role binds: Mod+<letter> focuses, Mod+Shift+<letter> moves the
   # focused window into, Mod+Alt+<letter> sends it to the OTHER monitor's
-  # copy. roleBinds builds all three for one role; mergedBinds folds them
-  # together. `letterOverrides` lets a role use a non-first-letter key
-  # (chat → C, claude → O so it doesn't collide with C).
-  letterOverrides = {
-    chat = "C";
-    claude = "O";
-  };
-  letterFor = role:
-    letterOverrides.${role}
-    or (lib.toUpper (lib.substring 0 1 role));
-
-  capitalizeRole = role: lib.toUpper (lib.substring 0 1 role) + lib.substring 1 (-1) role;
-
-  roleBinds = role: let
-    L = letterFor role;
-    Cap = capitalizeRole role;
-  in {
-    "Mod+${L}" = {
-      hotkey-overlay.title = "Focus ${Cap}";
+  # copy. roleBinds builds all three for one role; perRoleBinds folds them
+  # together across every role.
+  roleBinds = role: {
+    letter,
+    label,
+  }: {
+    "Mod+${letter}" = {
+      hotkey-overlay.title = "Focus ${label}";
       action.spawn-sh = perMonitorWsAction "${role}-" "focus-workspace";
     };
-    "Mod+Shift+${L}" = {
-      hotkey-overlay.title = "Move Window to ${Cap}";
+    "Mod+Shift+${letter}" = {
+      hotkey-overlay.title = "Move Window to ${label}";
       action.spawn-sh = perMonitorWsAction "${role}-" "move-window-to-workspace";
     };
-    "Mod+Alt+${L}" = {
-      hotkey-overlay.title = "Send Window to Other ${Cap}";
+    "Mod+Alt+${letter}" = {
+      hotkey-overlay.title = "Send Window to Other ${label}";
       action.spawn-sh = crossMonitorWsAction "${role}-" "move-window-to-workspace";
     };
   };
 
-  perRoleBinds = lib.foldl' (acc: role: acc // (roleBinds role)) {} workspaceRoles;
+  perRoleBinds = lib.concatMapAttrs roleBinds workspaceRoles;
 in {
   # niri-flake's HM module is auto-loaded by its NixOS module when
   # home-manager is detected — no explicit import needed (and an

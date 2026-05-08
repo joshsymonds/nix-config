@@ -5,8 +5,8 @@
   pkgs,
   ...
 }: let
-  # Helper for Mod+T / Mod+Shift+T (and similar per-monitor named-
-  # workspace binds): pick the named workspace whose name starts with
+  # Helper for Mod+T / Mod+W / Mod+M / etc. (every per-monitor named-
+  # workspace bind): pick the named workspace whose name starts with
   # `prefix` and lives on the focused monitor, then run a niri action
   # against it.
   perMonitorWsAction = prefix: action: ''
@@ -15,17 +15,16 @@
     [ -n "$ws" ] && niri msg action ${action} "$ws"
   '';
 
-  # Toggle which monitor a singleton named workspace lives on. Walks
-  # niri IPC to find the workspace's current output, then asks niri
-  # to move it to any output that *isn't* that one. Uses
-  # `move-workspace-to-monitor --reference` so the move targets the
-  # named workspace directly — your keyboard focus stays where it was.
-  toggleWsMonitor = wsName: ''
-    cur=$(niri msg --json workspaces | jq -r --arg n "${wsName}" '.[] | select(.name == $n) | .output')
-    [ -z "$cur" ] && exit 0
-    target=$(niri msg --json outputs | jq -r --arg cur "$cur" 'to_entries[] | .value | select(.name != $cur) | .name' | head -1)
-    [ -z "$target" ] && exit 0
-    niri msg action move-workspace-to-monitor --reference "${wsName}" "$target"
+  # Same as perMonitorWsAction, but targets the named workspace with
+  # the given prefix on the OTHER monitor. Used by the Mod+Alt+<letter>
+  # binds to fling the focused window from (e.g.) zoom-right onto
+  # zoom-left in one keystroke, without changing focus monitor.
+  crossMonitorWsAction = prefix: action: ''
+    focused=$(niri msg --json focused-output | jq -r .name)
+    other=$(niri msg --json outputs | jq -r --arg cur "$focused" 'to_entries[] | .value | select(.name != $cur) | .name' | head -1)
+    [ -z "$other" ] && exit 0
+    ws=$(niri msg --json workspaces | jq -r --arg out "$other" --arg prefix "${prefix}" '.[] | select(.output == $out and ((.name // "") | startswith($prefix))) | .name' | head -1)
+    [ -n "$ws" ] && niri msg action ${action} "$ws"
   '';
 in {
   imports = [
@@ -119,7 +118,17 @@ in {
   # *and* gets propagated to the systemd user manager (niri runs
   # `systemctl --user import-environment` on startup), so app.slice
   # scopes — which is how niri/DMS launch every app — inherit DISPLAY.
-  programs.niri.settings.environment.DISPLAY = ":0";
+  #
+  # NIXOS_OZONE_WL=1 flips Electron apps (Slack, Signal, Spotify, 1Password
+  # GUI, VS Code) onto native Wayland Ozone — without this they default to
+  # XWayland and ignore xdg-decoration, so prefer-no-csd doesn't reach them.
+  # QT_QPA_PLATFORM tries native Wayland for Qt apps (Zoom) with X11 as the
+  # fallback if the app refuses Wayland.
+  programs.niri.settings.environment = {
+    DISPLAY = ":0";
+    NIXOS_OZONE_WL = "1";
+    QT_QPA_PLATFORM = "wayland;xcb";
+  };
   programs.niri.settings.spawn-at-startup = [
     {command = ["xwayland-satellite" ":0"];}
   ];
@@ -161,31 +170,32 @@ in {
     "Mod+Shift+H".action.move-window-to-monitor-left = [];
     "Mod+Shift+L".action.move-window-to-monitor-right = [];
 
-    # Scratch workspace navigators. Each pre-populated workspace
-    # follows a `<role>-<side>` naming convention (term-left,
-    # term-right, web-left, web-right, music). T/W look up the named
-    # workspace pinned to the focused monitor and jump there; M jumps
-    # to the single shared "music" workspace.
+    # Ambient workspace navigators. Each role has a -left/-right pair;
+    # the lookup uses niri IPC to pick the focused monitor's copy
+    # rather than hard-coding monitor names, so the same bind set
+    # works on any host with the same workspace naming. Per-host
+    # pinning + spawn-at-startup live in the host file (e.g.
+    # home-manager/hosts/gnomon.nix).
     #
-    # The lookup uses niri IPC instead of hard-coding monitor names so
-    # the same bind set works on any host with the same workspace
-    # naming. Per-host pinning + spawn-at-startup live in the host
-    # file (e.g. home-manager/hosts/gnomon.nix).
-    # Focus the ambient workspace.
+    # Three modifier flavors per role:
+    #   Mod+<letter>        focus this monitor's copy
+    #   Mod+Shift+<letter>  move focused window to this monitor's copy
+    #   Mod+Alt+<letter>    move focused window to the OTHER monitor's
+    #                       copy (without moving keyboard focus)
     "Mod+T" = {
       hotkey-overlay.title = "Focus Terminal Workspace";
       action.spawn-sh = perMonitorWsAction "term-" "focus-workspace";
     };
     "Mod+W" = {
       hotkey-overlay.title = "Focus Web Workspace";
-      action.focus-workspace = "web";
+      action.spawn-sh = perMonitorWsAction "web-" "focus-workspace";
     };
     # Override DMS's enableKeybinds Mod+M (process list) with our music
     # workspace. Process list is relocated to Mod+Ctrl+M so Mod+Shift+M
     # is free for the move-window-to-music bind below.
     "Mod+M" = lib.mkForce {
       hotkey-overlay.title = "Focus Music";
-      action.focus-workspace = "music";
+      action.spawn-sh = perMonitorWsAction "music-" "focus-workspace";
     };
     "Mod+Ctrl+M" = {
       hotkey-overlay.title = "Toggle Process List";
@@ -193,83 +203,106 @@ in {
     };
     "Mod+S" = {
       hotkey-overlay.title = "Focus Slack";
-      action.focus-workspace = "slack";
+      action.spawn-sh = perMonitorWsAction "slack-" "focus-workspace";
     };
     "Mod+C" = {
       hotkey-overlay.title = "Focus Chat (Signal)";
-      action.focus-workspace = "chat";
+      action.spawn-sh = perMonitorWsAction "chat-" "focus-workspace";
     };
     "Mod+Z" = {
       hotkey-overlay.title = "Focus Zoom";
-      action.focus-workspace = "zoom";
+      action.spawn-sh = perMonitorWsAction "zoom-" "focus-workspace";
+    };
+    "Mod+O" = {
+      hotkey-overlay.title = "Focus Claude";
+      action.spawn-sh = perMonitorWsAction "claude-" "focus-workspace";
     };
 
-    # Mac-style Mod+Shift+<workspace-id> moves the focused window to
-    # that workspace. Mirrors the focus binds above.
+    # Mod+Shift+<letter>: move focused window to this monitor's copy.
     "Mod+Shift+T" = {
       hotkey-overlay.title = "Move Window to Terminal Workspace";
       action.spawn-sh = perMonitorWsAction "term-" "move-window-to-workspace";
     };
     "Mod+Shift+W" = {
       hotkey-overlay.title = "Move Window to Web";
-      action.move-window-to-workspace = "web";
+      action.spawn-sh = perMonitorWsAction "web-" "move-window-to-workspace";
     };
     "Mod+Shift+M" = {
       hotkey-overlay.title = "Move Window to Music";
-      action.move-window-to-workspace = "music";
+      action.spawn-sh = perMonitorWsAction "music-" "move-window-to-workspace";
     };
     "Mod+Shift+S" = {
       hotkey-overlay.title = "Move Window to Slack";
-      action.move-window-to-workspace = "slack";
+      action.spawn-sh = perMonitorWsAction "slack-" "move-window-to-workspace";
     };
     "Mod+Shift+C" = {
       hotkey-overlay.title = "Move Window to Chat";
-      action.move-window-to-workspace = "chat";
+      action.spawn-sh = perMonitorWsAction "chat-" "move-window-to-workspace";
     };
     "Mod+Shift+Z" = {
       hotkey-overlay.title = "Move Window to Zoom";
-      action.move-window-to-workspace = "zoom";
+      action.spawn-sh = perMonitorWsAction "zoom-" "move-window-to-workspace";
+    };
+    "Mod+Shift+O" = {
+      hotkey-overlay.title = "Move Window to Claude";
+      action.spawn-sh = perMonitorWsAction "claude-" "move-window-to-workspace";
     };
 
-    # Toggle which monitor a singleton named workspace lives on. Doesn't
-    # change keyboard focus — the swap targets the named workspace via
-    # niri's --reference flag. Term workspaces aren't in this set since
-    # they're inherently per-monitor (term-left / term-right).
+    # Mod+Alt+<letter>: fling focused window to the OTHER monitor's copy
+    # of the same role (e.g. focused on zoom-right + Mod+Alt+Z → window
+    # lands on zoom-left). Keyboard focus stays on the current monitor.
+    "Mod+Alt+T" = {
+      hotkey-overlay.title = "Send Window to Other Terminal";
+      action.spawn-sh = crossMonitorWsAction "term-" "move-window-to-workspace";
+    };
     "Mod+Alt+W" = {
-      hotkey-overlay.title = "Swap Web Monitor";
-      action.spawn-sh = toggleWsMonitor "web";
+      hotkey-overlay.title = "Send Window to Other Web";
+      action.spawn-sh = crossMonitorWsAction "web-" "move-window-to-workspace";
     };
     "Mod+Alt+M" = {
-      hotkey-overlay.title = "Swap Music Monitor";
-      action.spawn-sh = toggleWsMonitor "music";
+      hotkey-overlay.title = "Send Window to Other Music";
+      action.spawn-sh = crossMonitorWsAction "music-" "move-window-to-workspace";
     };
     "Mod+Alt+S" = {
-      hotkey-overlay.title = "Swap Slack Monitor";
-      action.spawn-sh = toggleWsMonitor "slack";
+      hotkey-overlay.title = "Send Window to Other Slack";
+      action.spawn-sh = crossMonitorWsAction "slack-" "move-window-to-workspace";
     };
     "Mod+Alt+C" = {
-      hotkey-overlay.title = "Swap Chat Monitor";
-      action.spawn-sh = toggleWsMonitor "chat";
+      hotkey-overlay.title = "Send Window to Other Chat";
+      action.spawn-sh = crossMonitorWsAction "chat-" "move-window-to-workspace";
     };
     "Mod+Alt+Z" = {
-      hotkey-overlay.title = "Swap Zoom Monitor";
-      action.spawn-sh = toggleWsMonitor "zoom";
+      hotkey-overlay.title = "Send Window to Other Zoom";
+      action.spawn-sh = crossMonitorWsAction "zoom-" "move-window-to-workspace";
+    };
+    "Mod+Alt+O" = {
+      hotkey-overlay.title = "Send Window to Other Claude";
+      action.spawn-sh = crossMonitorWsAction "claude-" "move-window-to-workspace";
     };
   };
 
   # Niri config that DMS used to write into ~/.config/niri/dms/*.kdl,
   # ported into nix-typed niri-flake settings.
   programs.niri.settings = {
+    # Tell xdg-decoration-aware clients we prefer SSD. niri itself draws
+    # only a border + focus-ring (no titlebar), so apps that honor this
+    # — Electron when on Ozone, GTK, Qt — drop their custom titlebars
+    # and the visual stack flattens to just niri's outer ring.
+    prefer-no-csd = true;
+
     # From dms/layout.kdl
     layout = {
       gaps = 4;
       background-color = "transparent";
 
-      # New windows take half the screen width by default. (niri's
-      # built-in default — when this option is the empty `{}` — is the
-      # first entry of preset-column-widths, which currently leaves
-      # newly opened windows looking small.)
-      default-column-width.proportion = 0.5;
+      # New windows take the full screen width. niri's scrollable-
+      # tiling model treats a workspace as an infinite horizontal
+      # strip — extra columns scroll off rather than auto-shrinking
+      # siblings, so 0.5 mostly hurts (you only ever see two windows
+      # at once, neither full-size). 1.0 leans into the model: each
+      # window full-size, Mod+H/L pans between them. Resize on the
+      # fly with Mod+R if you want a smaller column.
+      default-column-width.proportion = 1.0;
 
       border = {
         width = 2;

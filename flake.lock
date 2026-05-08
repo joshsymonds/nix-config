@@ -174,6 +174,27 @@
         "type": "github"
       }
     },
+    "claude-desktop": {
+      "inputs": {
+        "flake-parts": "flake-parts",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1778204445,
+        "narHash": "sha256-h8ajxLp4E9On60yTajMJIlpbMLYeBFMbHKQhxex+mG4=",
+        "owner": "aaddrick",
+        "repo": "claude-desktop-debian",
+        "rev": "ab5636ef29147fc03649f65872ead82e76a2d689",
+        "type": "github"
+      },
+      "original": {
+        "owner": "aaddrick",
+        "repo": "claude-desktop-debian",
+        "type": "github"
+      }
+    },
     "crane": {
       "locked": {
         "lastModified": 1768873933,
@@ -225,7 +246,7 @@
         "crate2nix_stable": "crate2nix_stable",
         "devshell": "devshell_2",
         "flake-compat": "flake-compat_6",
-        "flake-parts": "flake-parts_5",
+        "flake-parts": "flake-parts_6",
         "nix-test-runner": "nix-test-runner_2",
         "nixpkgs": [
           "savecraft",
@@ -259,7 +280,7 @@
         ],
         "devshell": "devshell",
         "flake-compat": "flake-compat_5",
-        "flake-parts": "flake-parts_4",
+        "flake-parts": "flake-parts_5",
         "nix-test-runner": "nix-test-runner",
         "nixpkgs": "nixpkgs_10",
         "pre-commit-hooks": "pre-commit-hooks"
@@ -382,7 +403,7 @@
       "inputs": {
         "cachix": "cachix",
         "flake-compat": "flake-compat_2",
-        "flake-parts": "flake-parts_2",
+        "flake-parts": "flake-parts_3",
         "git-hooks": "git-hooks",
         "nix": "nix_2",
         "nixd": "nixd",
@@ -407,7 +428,7 @@
         "cachix": "cachix_2",
         "crate2nix": "crate2nix",
         "flake-compat": "flake-compat_7",
-        "flake-parts": "flake-parts_6",
+        "flake-parts": "flake-parts_7",
         "git-hooks": "git-hooks_4",
         "nix": "nix_3",
         "nixd": "nixd_2",
@@ -643,6 +664,24 @@
     },
     "flake-parts": {
       "inputs": {
+        "nixpkgs-lib": "nixpkgs-lib"
+      },
+      "locked": {
+        "lastModified": 1777678872,
+        "narHash": "sha256-EPIFsulyon7Z1vLQq5Fk64GR8L7cQsT+IPhcsukVbgk=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "5250617bffd85403b14dbf43c3870e7f255d2c16",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "flake-parts_2": {
+      "inputs": {
         "nixpkgs-lib": [
           "determinate",
           "nix",
@@ -662,7 +701,7 @@
         "url": "https://flakehub.com/f/hercules-ci/flake-parts/0.1"
       }
     },
-    "flake-parts_2": {
+    "flake-parts_3": {
       "inputs": {
         "nixpkgs-lib": [
           "devenv",
@@ -683,7 +722,7 @@
         "type": "github"
       }
     },
-    "flake-parts_3": {
+    "flake-parts_4": {
       "inputs": {
         "nixpkgs-lib": [
           "nixpkgs"
@@ -703,7 +742,7 @@
         "type": "github"
       }
     },
-    "flake-parts_4": {
+    "flake-parts_5": {
       "inputs": {
         "nixpkgs-lib": [
           "savecraft",
@@ -727,7 +766,7 @@
         "type": "github"
       }
     },
-    "flake-parts_5": {
+    "flake-parts_6": {
       "inputs": {
         "nixpkgs-lib": [
           "savecraft",
@@ -750,7 +789,7 @@
         "type": "github"
       }
     },
-    "flake-parts_6": {
+    "flake-parts_7": {
       "inputs": {
         "nixpkgs-lib": [
           "savecraft",
@@ -1455,7 +1494,7 @@
     },
     "nix": {
       "inputs": {
-        "flake-parts": "flake-parts",
+        "flake-parts": "flake-parts_2",
         "git-hooks-nix": "git-hooks-nix",
         "nixpkgs": "nixpkgs_2",
         "nixpkgs-23-11": "nixpkgs-23-11",
@@ -1676,6 +1715,21 @@
         "owner": "NixOS",
         "repo": "nixpkgs",
         "rev": "a62e6edd6d5e1fa0329b8653c801147986f8d446",
+        "type": "github"
+      }
+    },
+    "nixpkgs-lib": {
+      "locked": {
+        "lastModified": 1777168982,
+        "narHash": "sha256-GOkGPcboWE9BmGCRMLX3worL4EMnsnG8MyKmXNeYuhQ=",
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
+        "rev": "f5901329dade4a6ea039af1433fb087bd9c1fe14",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "nixpkgs.lib",
         "type": "github"
       }
     },
@@ -2085,13 +2139,14 @@
       "inputs": {
         "agenix": "agenix",
         "cc-tools": "cc-tools",
+        "claude-desktop": "claude-desktop",
         "crane": "crane",
         "darwin": "darwin_2",
         "determinate": "determinate",
         "devenv": "devenv",
         "disko": "disko",
         "dms": "dms",
-        "flake-parts": "flake-parts_3",
+        "flake-parts": "flake-parts_4",
         "gambit": "gambit",
         "googleworkspace-cli": "googleworkspace-cli",
         "hardware": "hardware",

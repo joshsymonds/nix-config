@@ -111,6 +111,17 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Claude Desktop (the chat app, not Claude Code) for Linux. The repo
+    # name says "debian" for historical reasons — the flake itself is
+    # standalone and pulls Anthropic's Windows installer at build time,
+    # extracts the asar, applies a patch suite for Linux, and re-wraps
+    # it. CI auto-bumps the URLs/SRI hashes on every upstream release,
+    # so `nix flake update claude-desktop` is the bleeding-edge knob.
+    claude-desktop = {
+      url = "github:aaddrick/claude-desktop-debian";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Devenv for development environments
     # No nixpkgs.follows — devenv 2.0 bundles a nix fork (cachix/nix) that
     # requires its own pinned nixpkgs to build correctly.

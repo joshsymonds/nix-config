@@ -32,6 +32,12 @@ in {
       enable = true;
       wlr.enable = true;
       extraPortals = [pkgs.xdg-desktop-portal-gtk];
+      # Default routing: wlr first (ScreenCast/Screenshot — what Zoom asks
+      # for during screen share), gtk as fallback for everything else
+      # (FileChooser, OpenURI). Without this, the gtk portal claims
+      # ScreenCast on niri and Zoom misroutes; this is the well-trodden
+      # NixOS+wlroots fix.
+      config.common.default = ["wlr" "gtk"];
     };
 
     services.pipewire = {

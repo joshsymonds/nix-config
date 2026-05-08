@@ -14,6 +14,19 @@
     ws=$(niri msg --json workspaces | jq -r --arg out "$focused" --arg prefix "${prefix}" '.[] | select(.output == $out and ((.name // "") | startswith($prefix))) | .name' | head -1)
     [ -n "$ws" ] && niri msg action ${action} "$ws"
   '';
+
+  # Toggle which monitor a singleton named workspace lives on. Walks
+  # niri IPC to find the workspace's current output, then asks niri
+  # to move it to any output that *isn't* that one. Uses
+  # `move-workspace-to-monitor --reference` so the move targets the
+  # named workspace directly — your keyboard focus stays where it was.
+  toggleWsMonitor = wsName: ''
+    cur=$(niri msg --json workspaces | jq -r --arg n "${wsName}" '.[] | select(.name == $n) | .output')
+    [ -z "$cur" ] && exit 0
+    target=$(niri msg --json outputs | jq -r --arg cur "$cur" 'to_entries[] | .value | select(.name != $cur) | .name' | head -1)
+    [ -z "$target" ] && exit 0
+    niri msg action move-workspace-to-monitor --reference "${wsName}" "$target"
+  '';
 in {
   imports = [
     ./common.nix
@@ -216,6 +229,31 @@ in {
     "Mod+Shift+Z" = {
       hotkey-overlay.title = "Move Window to Zoom";
       action.move-window-to-workspace = "zoom";
+    };
+
+    # Toggle which monitor a singleton named workspace lives on. Doesn't
+    # change keyboard focus — the swap targets the named workspace via
+    # niri's --reference flag. Term workspaces aren't in this set since
+    # they're inherently per-monitor (term-left / term-right).
+    "Mod+Alt+W" = {
+      hotkey-overlay.title = "Swap Web Monitor";
+      action.spawn-sh = toggleWsMonitor "web";
+    };
+    "Mod+Alt+M" = {
+      hotkey-overlay.title = "Swap Music Monitor";
+      action.spawn-sh = toggleWsMonitor "music";
+    };
+    "Mod+Alt+S" = {
+      hotkey-overlay.title = "Swap Slack Monitor";
+      action.spawn-sh = toggleWsMonitor "slack";
+    };
+    "Mod+Alt+C" = {
+      hotkey-overlay.title = "Swap Chat Monitor";
+      action.spawn-sh = toggleWsMonitor "chat";
+    };
+    "Mod+Alt+Z" = {
+      hotkey-overlay.title = "Swap Zoom Monitor";
+      action.spawn-sh = toggleWsMonitor "zoom";
     };
   };
 

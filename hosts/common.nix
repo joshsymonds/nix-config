@@ -20,8 +20,16 @@ in {
   nix = {
     # Nix package is managed by Determinate Nix module
 
-    # Make nix3 commands consistent with flake
-    registry = lib.mapAttrs (_: value: {flake = value;}) inputs;
+    # Make nix3 commands consistent with flake. shimmer is excluded for
+    # the same reason it's split out of overlays.default: the registry
+    # assignment forces lazy evaluation of inputs.shimmer.flake, which
+    # tries to fetch git+ssh://github.com/joshsymonds/shimmer.git — and
+    # any host that doesn't have ssh credentials to that repo (the
+    # nixosTest VM, gnomon's first install before identity is in place)
+    # fails with "Failed to fetch git repository". The shimmer service
+    # itself only runs on ultraviolet (which DOES have credentials);
+    # other hosts don't need shimmer in their registry.
+    registry = lib.mapAttrs (_: value: {flake = value;}) (lib.removeAttrs inputs ["shimmer"]);
 
     # Make legacy nix commands consistent too
     nixPath = lib.mapAttrsToList (key: value: "${key}=${value.to.path}") config.nix.registry;

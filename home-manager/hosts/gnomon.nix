@@ -2,14 +2,7 @@
   inputs,
   pkgs,
   ...
-}: let
-  # Every named "ambient" workspace exists as a -left/-right pair, one
-  # per monitor. Mod+<letter> jumps to the focused monitor's copy via
-  # the perMonitorWsAction helper in desktop-x86_64-linux.nix; Mod+
-  # Shift+<letter> moves the focused window into it.
-  rightMonitor = "Dell Inc. DELL U2724D CBC35Z3";
-  leftMonitor = "Dell Inc. DELL U2724D CDL25Z3";
-in {
+}: {
   imports = [
     ../desktop-x86_64-linux.nix
   ];
@@ -63,62 +56,32 @@ in {
     XDG_CURRENT_DESKTOP=gnome
   '';
 
+  # Caps Lock → Escape (host-local: the laptop has its own keyboard
+  # config, this is gnomon's external-keyboard preference).
   programs.niri.settings.input.keyboard.xkb.options = "caps:escape";
 
-  # Monitor layout. Two identical Dell U2724D side-by-side, distinguished
-  # only by serial in the EDID name. Left = CDL25Z3 (DP-6), right = CBC35Z3
-  # (HDMI-A-2). Owned by nix; DMS no longer includes outputs.kdl (see the
-  # niri.includes.filesToInclude override in desktop-x86_64-linux.nix).
-  programs.niri.settings.outputs = {
-    ${leftMonitor}.position = {
-      x = 0;
-      y = 0;
-    };
-    ${rightMonitor}.position = {
-      x = 2560;
-      y = 0;
-    };
+  # Monitor positions. Two identical Dell U2724D side-by-side, distinguished
+  # only by serial in the EDID name. The niri module is monitor-agnostic —
+  # it sorts outputs by `logical.x` at runtime to decide which is "left"
+  # and "right" — but niri itself needs explicit positions when there's no
+  # other signal, otherwise it picks an arbitrary side-by-side ordering at
+  # detection time. Keep this tiny serial→position map here so the niri
+  # module never needs to know about specific hardware.
+  programs.niri.settings.outputs."Dell Inc. DELL U2724D CDL25Z3".position = {
+    x = 0;
+    y = 0;
+  };
+  programs.niri.settings.outputs."Dell Inc. DELL U2724D CBC35Z3".position = {
+    x = 2560;
+    y = 0;
   };
 
-  # Pre-populated "ambient" workspaces. Each is a niri named workspace
-  # (persistent — does not auto-close when emptied), pinned to a
-  # specific monitor, and seeded with one or more apps at niri startup
-  # via spawn-at-startup. The Mod+T/W/M/S/C/Z/O binds in the desktop
-  # file focus the local-monitor copy by name.
-  #
-  # Every role has a -left/-right pair. Single-process apps (firefox,
-  # spotify, slack, signal, claude-desktop) only seed one window —
-  # routed to the -right copy by default. Open another instance manually
-  # onto the other side when you want one there; Mod+<letter> from
-  # either monitor focuses that monitor's workspace, empty or not.
-  programs.niri.settings.workspaces = {
-    term-left = {open-on-output = leftMonitor;};
-    term-right = {open-on-output = rightMonitor;};
-    web-left = {open-on-output = leftMonitor;};
-    web-right = {open-on-output = rightMonitor;};
-    music-left = {open-on-output = leftMonitor;};
-    music-right = {open-on-output = rightMonitor;};
-    slack-left = {open-on-output = leftMonitor;};
-    slack-right = {open-on-output = rightMonitor;};
-    chat-left = {open-on-output = leftMonitor;};
-    chat-right = {open-on-output = rightMonitor;};
-    claude-left = {open-on-output = leftMonitor;};
-    claude-right = {open-on-output = rightMonitor;};
-    # Zoom is intentionally not seeded — Zoom is heavy and only useful
-    # during calls. Empty workspaces exist on both monitors so Mod+Z
-    # always lands somewhere predictable, and any zoom window auto-
-    # routes to zoom-right (move it across with Mod+Shift+H if wanted).
-    zoom-left = {open-on-output = leftMonitor;};
-    zoom-right = {open-on-output = rightMonitor;};
-  };
-
-  # Seeds for the ambient workspaces. Per-instance routing for kitty
-  # uses --class (sets the Wayland app-id), so the window-rules below
-  # can match unambiguously. Firefox/Spotify/Slack/Signal each have
-  # exactly one "scratch" instance per workspace, so we route by their
-  # default app-id + at-startup matching (only the first 60 seconds of
-  # niri lifetime — manually-launched copies later go to the focused
-  # workspace as normal).
+  # Seeds for the niri-module ambient workspaces. Per-instance routing
+  # for kitty uses --class (sets the Wayland app-id), so the window-rules
+  # below can match unambiguously. Firefox/Spotify/Slack/Signal/Claude
+  # each have exactly one "scratch" instance per workspace, so we route
+  # by their default app-id at startup — manually-launched copies later
+  # land on the focused workspace as normal.
   programs.niri.settings.spawn-at-startup = [
     # One kitty per side. Use kitty's built-in tabs (Ctrl+Shift+T) for
     # multiple shells inside the same window — niri's full-width

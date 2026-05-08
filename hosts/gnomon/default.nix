@@ -91,6 +91,7 @@ in
     # device naming doesn't break the static-IP config.
     networking = {
       useDHCP = false;
+      useNetworkd = true; # disable legacy scripted networking; systemd-networkd handles it
       hostName = "gnomon";
       firewall = {
         enable = true;

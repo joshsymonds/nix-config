@@ -127,11 +127,11 @@ in {
     # adds little.
     {command = ["kitty" "--class" "scratch-term-left"];}
     {command = ["kitty" "--class" "scratch-term-right"];}
-    # Single seed per single-process app — firefox/spotify/slack/signal/
-    # claude-desktop each share one app-id across all their windows.
-    # The window-rules below pin every window of these apps to the
-    # -right copy regardless of when it spawns; use Mod+Alt+<letter>
-    # to fling one onto the -left side when wanted.
+    # Single seed per single-process app. No window-rule pins these
+    # to a specific workspace — at startup they land on whichever
+    # workspace niri currently has focused. Use Mod+Shift+<letter>
+    # after login to drop them onto their named workspace if you want
+    # them organized.
     {command = ["firefox"];}
     {command = ["spotify"];}
     {command = ["slack"];}
@@ -139,22 +139,24 @@ in {
     {command = ["claude-desktop"];}
   ];
 
-  # Route windows to their workspaces. App-id values are Wayland
-  # xdg-shell app_id strings as reported by niri:
-  #   kitty --class FOO  →  app-id = "FOO"
-  #   firefox            →  "firefox"
-  #   spotify            →  "spotify"
-  #   slack              →  "Slack"
-  #   signal-desktop     →  "signal"
-  #   zoom-us            →  "zoom"
-  #   claude-desktop     →  "Claude"
-  # No at-startup gate: the rules catch every window from these apps
-  # whenever they appear. Heavy Electron apps (Slack/Signal/Firefox/
-  # Claude) often take longer than niri's at-startup grace window to
-  # surface their first window, so gating on it caused them to leak
-  # to unnamed workspaces on login. Trade-off: every firefox window
-  # (link-click, Cmd+N) now also lands on web-right; move with
-  # Mod+Alt+W if you want it on the other side.
+  # Route windows to their workspaces. Only the per-instance kitty
+  # scratches need static routing — the kitties are seeded with
+  # explicit `--class scratch-term-{left,right}` so each side gets
+  # its own discriminable app-id and lands on the correct named
+  # workspace.
+  #
+  # Other apps (firefox, spotify, slack, signal, claude-desktop, zoom)
+  # have no rule. Niri can't dynamically route an app to "{role}-
+  # {focused-side}" — window-rules are static and can't condition on
+  # focused output — so every routing rule we could write would either
+  # force one monitor (annoying) or only catch startup spawns (the
+  # at-startup gate misses heavy Electron apps when their first window
+  # surfaces > 60s after niri start). Without a rule, every window
+  # from these apps lands on the focused workspace at spawn time —
+  # which is naturally the focused monitor's workspace, matching the
+  # "go to the monitor I'm on" intent. Use Mod+Shift+<letter> to send
+  # an existing window into its named workspace if it landed somewhere
+  # else.
   programs.niri.settings.window-rules = [
     {
       matches = [{app-id = "^scratch-term-left$";}];
@@ -164,36 +166,14 @@ in {
       matches = [{app-id = "^scratch-term-right$";}];
       open-on-workspace = "term-right";
     }
-    {
-      matches = [{app-id = "^firefox$";}];
-      open-on-workspace = "web-right";
-    }
-    {
-      matches = [{app-id = "^spotify$";}];
-      open-on-workspace = "music-right";
-    }
-    {
-      matches = [{app-id = "^Slack$";}];
-      open-on-workspace = "slack-right";
-    }
-    {
-      matches = [{app-id = "^signal$";}];
-      open-on-workspace = "chat-right";
-    }
-    {
-      matches = [{app-id = "^Claude$";}];
-      open-on-workspace = "claude-right";
-    }
     # Zoom usually stays on XWayland (via xwayland-satellite), where
     # xdg-decoration doesn't apply and prefer-no-csd has no effect — so
     # Zoom keeps drawing its own titlebar regardless. Drop niri's border
     # and focus-ring for this app so we're not stacking a niri frame
-    # around Zoom's frame around Zoom's contents. No at-startup gate
-    # here because zoom isn't seeded — every zoom window goes to the
-    # right-side copy.
+    # around Zoom's frame around Zoom's contents. No workspace routing
+    # — like the other apps above, zoom lands on the focused workspace.
     {
       matches = [{app-id = "^zoom$";}];
-      open-on-workspace = "zoom-right";
       border.enable = false;
       focus-ring.enable = false;
     }

@@ -93,6 +93,7 @@ in {
       cryptsetup
       git
       jq
+      sbctl # install.sh's prepare_bootloader_keys, for lanzaboote hosts
     ])
     ++ [diskoPkg];
 
@@ -125,6 +126,7 @@ in {
         openssh
         nix # nixos-install internally invokes nix-env / nix
         nixos-install-tools
+        sbctl # install.sh's prepare_bootloader_keys
       ])
       ++ [diskoPkg]; # so install.sh's run_disko sees `disko` in $PATH
     serviceConfig = {

@@ -82,6 +82,7 @@ EOF
   export BOOTSTRAP_MOCK_DISKO=1
   export BOOTSTRAP_MOCK_BTRFS=1
   export BOOTSTRAP_MOCK_NIXOS_INSTALL=1
+  export BOOTSTRAP_MOCK_LANZABOOTE_KEYS=1
   export BOOTSTRAP_AUTO_CONFIRM=1
   export DISK="$FIXTURE/fake-disk"  # skips the interactive disk picker
 
@@ -310,6 +311,38 @@ EOF
   [ "$status" -ne 0 ]
   [[ "$output" == *"disko.nix"* ]]
 }
+
+# ─── prepare_bootloader_keys ───────────────────────────────────────────
+
+@test "prepare_bootloader_keys: skips when host config doesn't reference lanzaboote" {
+  source "$KIT_DIR/manifest.env"
+  unset BOOTSTRAP_MOCK_LANZABOOTE_KEYS
+  extract_flake  # fixture flake's testhost has no lanzaboote ref
+
+  run prepare_bootloader_keys
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"doesn't use lanzaboote"* ]]
+  # Confirm sbctl was NOT invoked
+  [ ! -d "$MNT/var/lib/sbctl" ]
+  [ ! -d "$MNT/persist/var/lib/sbctl" ]
+}
+
+@test "prepare_bootloader_keys: BOOTSTRAP_MOCK_LANZABOOTE_KEYS=1 short-circuits" {
+  source "$KIT_DIR/manifest.env"
+  export BOOTSTRAP_MOCK_LANZABOOTE_KEYS=1
+  extract_flake
+  # Force the lanzaboote-detection grep to succeed
+  echo "boot.lanzaboote.enable = true;" >> "$FLAKE_TMP/hosts/testhost/disko.nix"
+
+  run prepare_bootloader_keys
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"BOOTSTRAP_MOCK_LANZABOOTE_KEYS=1"* ]]
+}
+
+# Note: the "actually-invoke-sbctl-and-copy-keys" path is covered by the
+# nixosTest integration / real installs. Mocking it in bats requires
+# isolating /var/lib/sbctl and other system paths in a way that's hard to
+# do safely in a nix-shell test runner — keeping the suite hermetic.
 
 # ─── copy_identity ─────────────────────────────────────────────────────
 

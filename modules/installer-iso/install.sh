@@ -225,6 +225,56 @@ copy_identity() {
   install -m 644 "$id_dir/id_ed25519.pub" "$MNT/home/joshsymonds/.ssh/"
 }
 
+# Pre-stage Secure Boot signing keys (sbctl) for hosts that use lanzaboote.
+# Two reasons this can't wait until first boot:
+#
+#   1. nixos-install runs lanzaboote's `lzbt-systemd install` during
+#      activation; that step reads /var/lib/sbctl/keys/db/db.pem to sign
+#      the UKI. If the file isn't there, install fails with
+#      "Failed to read public key from /var/lib/sbctl/keys/db/db.pem".
+#
+#   2. Even if we generate the keys late and the install succeeds, the
+#      keys end up on the @root subvolume — which @root-blank rollback
+#      wipes on first boot. The next nixos-rebuild then can't sign new
+#      generations, AND if SB was enrolled with these keys, regenerating
+#      a fresh set produces signatures UEFI no longer recognizes.
+#
+# Fix: generate the keys now, copy to BOTH /mnt/var/lib/sbctl (so this
+# install's bootloader signing works) AND /mnt/persist/var/lib/sbctl
+# (so the impermanence bind on first boot finds them, surviving the
+# rollback). This was caught by gnomon's first install.
+#
+# No-op if the target host doesn't reference lanzaboote — keeps installs
+# of testhost / non-lanzaboote hosts clean.
+prepare_bootloader_keys() {
+  if ! grep -rq "lanzaboote" "$FLAKE_TMP/hosts/$HOSTNAME" 2>/dev/null; then
+    log "host $HOSTNAME doesn't use lanzaboote; skipping sbctl key staging"
+    return 0
+  fi
+
+  if [ "${BOOTSTRAP_MOCK_LANZABOOTE_KEYS:-0}" = "1" ]; then
+    log "BOOTSTRAP_MOCK_LANZABOOTE_KEYS=1: pretending key staging ran"
+    return 0
+  fi
+
+  if ! command -v sbctl >/dev/null 2>&1; then
+    die "$HOSTNAME uses lanzaboote but sbctl not in PATH; add sbctl to the installer-iso module"
+  fi
+
+  log "Pre-staging sbctl keys for $HOSTNAME (lanzaboote + impermanence)..."
+
+  # sbctl create-keys writes to /var/lib/sbctl/keys/ unconditionally.
+  # On the live ISO that's fine — clear any previous run, generate, copy.
+  rm -rf /var/lib/sbctl/keys
+  sbctl create-keys
+
+  mkdir -p "$MNT/var/lib/sbctl" "$MNT/persist/var/lib/sbctl"
+  cp -a /var/lib/sbctl/. "$MNT/var/lib/sbctl/"
+  cp -a /var/lib/sbctl/. "$MNT/persist/var/lib/sbctl/"
+
+  log "sbctl keys staged at $MNT/var/lib/sbctl and $MNT/persist/var/lib/sbctl"
+}
+
 run_install() {
   log "Running nixos-install (binary cache will pull the closure)..."
   if [ "${BOOTSTRAP_MOCK_NIXOS_INSTALL:-0}" = "1" ]; then
@@ -290,6 +340,7 @@ main() {
   run_disko
   take_root_blank
   copy_identity
+  prepare_bootloader_keys
   run_install
   report_success "$disk"
 }

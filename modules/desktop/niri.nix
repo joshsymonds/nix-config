@@ -61,10 +61,17 @@ in {
     # Low-level CLI tools that complement the DMS-provided GUI equivalents:
     # wl-clipboard for scripts (DMS has its own clipboard manager UI),
     # grim/slurp for ad-hoc CLI screenshots (DMS handles interactive capture).
+    #
+    # xwayland-satellite is niri's X11 compatibility shim: niri itself is
+    # pure Wayland, so any X11-only client (Zoom, older JetBrains, Steam,
+    # Citrix) needs satellite to provide an on-demand Xwayland server.
+    # The home-manager side (desktop-x86_64-linux.nix) spawns it at niri
+    # startup and exports DISPLAY=:0 into niri's env.
     environment.systemPackages = with pkgs; [
       wl-clipboard
       grim
       slurp
+      xwayland-satellite
     ];
   };
 }

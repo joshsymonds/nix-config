@@ -7,42 +7,6 @@
 with lib; let
   zshPackage = config.programs.zsh.package or pkgs.zsh;
   defaultShell = "${zshPackage}/bin/zsh";
-  # Remote link opening script for server side
-  remoteLinkOpenScript = pkgs.writeScriptBin "remote-link-open" ''
-    #!${pkgs.bash}/bin/bash
-    # Open links on the client machine when running on a remote server
-
-    set -euo pipefail
-
-    if [ $# -eq 0 ]; then
-      echo "Usage: remote-link-open <url>"
-      exit 1
-    fi
-
-    URL="$1"
-
-    # Check if we're in an SSH session
-    if [ -z "''${SSH_CLIENT:-}" ]; then
-      echo "Not in an SSH session, opening locally..."
-      if command -v xdg-open >/dev/null 2>&1; then
-        xdg-open "$URL"
-      elif command -v open >/dev/null 2>&1; then
-        open "$URL"
-      else
-        echo "No suitable browser opener found"
-        exit 1
-      fi
-      exit 0
-    fi
-
-    # Get the client IP
-    CLIENT_IP=$(echo $SSH_CLIENT | awk '{print $1}')
-
-    # Use OSC 8 hyperlink sequence to send URL to client
-    printf '\033]8;;%s\033\\Click to open: %s\033]8;;\033\\\n' "$URL" "$URL"
-
-    echo "Sent link to client terminal: $URL"
-  '';
   tmuxDevspaceHelper =
     pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ./scripts/tmux-devspace.sh);
   # Orphan reaper: systemd user timer (10 min). PASS A kills sessions whose
@@ -284,16 +248,6 @@ in {
         bind-key -n M-4 select-window -t 4
         bind-key -n M-5 select-window -t 5
       '';
-    };
-
-    home.packages = with pkgs; [
-      remoteLinkOpenScript
-    ];
-
-    # Set up environment for remote link opening
-    home.sessionVariables = {
-      BROWSER = "remote-link-open";
-      DEFAULT_BROWSER = "remote-link-open";
     };
 
     # systemd user service to keep tmux server running (Linux only).

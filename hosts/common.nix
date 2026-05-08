@@ -98,6 +98,16 @@ in {
     ssh.startAgent = true;
   };
 
+  # Don't let the user manager's per-scope TasksMax (default: 15% of
+  # kernel.threads-max) cap forks inside tmux-spawn-*.scope. Heavy
+  # nix-eval workloads run inside a tmux session can exhaust it and
+  # then every fork() in that session returns EAGAIN until the scope
+  # frees slots. Lift the per-scope cap; the kernel-wide threads-max
+  # still applies as the real ceiling.
+  systemd.user.extraConfig = ''
+    DefaultTasksMax=infinity
+  '';
+
   # Common packages for all headless Linux hosts
   environment.pathsToLink = ["/share/zsh"];
   environment.systemPackages = with pkgs; [
@@ -179,6 +189,7 @@ in {
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID0OvTKlW2Vk5WA11YOQ6SNDS4KsT9I1ffVGomswscZA josh+ultraviolet@joshsymonds.com"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEhL0xP1eFVuYEPAvO6t+Mb9ragHnk4dxeBd/1Tmka41 josh+phone@joshsymonds.com"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIORmNHlIFi2MWPh9H0olD2VBvPNK7+wJkA+A/3wCOtZN josh+vermissian@joshsymonds.com"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKi6ZE7mq37XFkWvBDRAPP5eReUO5c0D2ngU4wEIhPhH josh+gnomon@joshsymonds.com"
     ];
   };
 

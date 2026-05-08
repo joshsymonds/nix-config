@@ -38,6 +38,13 @@ in
     # ── Desktop session (niri + DMS, see modules/desktop/dms-niri.nix) ──
     desktop.dms-niri.enable = true;
 
+    # ── Keyboard: Caps Lock → Escape, everywhere ────────────────────────
+    # services.xserver.xkb drives /etc/X11/xkb + XKB_DEFAULT_* env vars,
+    # which greetd and Wayland compositors (incl. niri's defaults) pick up.
+    # console.useXkbConfig propagates the same to TTYs (Ctrl+Alt+F1..F6).
+    services.xserver.xkb.options = "caps:escape";
+    console.useXkbConfig = true;
+
     # ── Bluetooth (for controllers, headphones) ─────────────────────────
     hardware.bluetooth = {
       enable = true;
@@ -82,8 +89,47 @@ in
     # mitigations=auto keeps default kernel mitigations; gamers sometimes pass
     # =off for a few % perf at security cost — explicit "auto" so the choice
     # is visible if you ever revisit it.
-    boot.kernelParams = ["amd_pstate=active" "mitigations=auto"];
+    #
+    # The quiet/loglevel/rd.* family suppresses dmesg + udev + systemd unit
+    # spam so plymouth can own the screen from initrd through stage 2.
+    # `splash` is the conventional flag plymouth's generator looks for.
+    boot.kernelParams = [
+      "amd_pstate=active"
+      "mitigations=auto"
+      "quiet"
+      "loglevel=3"
+      "rd.systemd.show_status=false"
+      "rd.udev.log_level=3"
+      "udev.log_priority=3"
+      "splash"
+    ];
     boot.kernelModules = ["kvm-amd"];
+    boot.consoleLogLevel = 0;
+    boot.initrd.verbose = false;
+
+    # ── Boot: graphical splash (plymouth) ──────────────────────────────
+    # `bgrt` reads the firmware's BGRT ACPI table and renders the same
+    # logo the BIOS just showed, with an animated spinner. Visually this
+    # is a seamless handoff: POST logo → identical logo + spinner →
+    # greetd, with no scrolling text in between.
+    #
+    # Plymouth files land in the initrd, which lanzaboote bakes into the
+    # signed UKI — so the UKI grows by a few MB but no extra wiring is
+    # needed for secure boot.
+    #
+    # NVIDIA modules in initrd let plymouth render via the real GPU from
+    # the first frame; without this, plymouth falls back to simpledrm at
+    # boot-framebuffer resolution and there's a visible mode-switch flash
+    # when nvidia takes over later. (modesetting.enable in gpu-nvidia.nix
+    # already sets nvidia-drm.modeset=1.)
+    boot.plymouth = {
+      enable = true;
+      theme = "bgrt";
+    };
+    boot.initrd.kernelModules = ["nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm"];
+
+    # 1s grace to hit space for the recovery menu without lingering.
+    boot.loader.timeout = 1;
 
     # ── Boot: initrd hardware modules ──────────────────────────────────
     # Standard for AM5 NVMe + USB. If real hardware reveals missing modules

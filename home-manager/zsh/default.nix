@@ -144,10 +144,15 @@ in {
       }
 
       ${lib.optionalString autoAttachRemoteTmux ''
-        # Auto-attach to tmux on remote hosts (managed by systemd user service)
-        # No exec — shell survives if tmux dies, so kill-server is safe
-        # -A: attach if main exists, create if not — no dependency on systemd pre-creating it
-        if [[ $- == *i* ]] && [[ -z "''${TMUX:-}" ]] && [[ "''${NO_REMOTE_TMUX:-0}" != 1 ]]; then
+        # Auto-attach to tmux ONLY when this shell was started by an
+        # incoming SSH connection — i.e. someone SSH'd into this host and
+        # we want them dropped into the long-lived `main` session managed
+        # by the systemd tmux user service. Local terminal emulators
+        # (kitty, etc.) get a plain zsh and use the emulator's own tabs
+        # for multiplexing.
+        # No exec — shell survives if tmux dies, so kill-server is safe.
+        # -A: attach if main exists, create if not — no dependency on systemd pre-creating it.
+        if [[ $- == *i* ]] && [[ -z "''${TMUX:-}" ]] && [[ -n "''${SSH_CONNECTION:-}" ]] && [[ "''${NO_REMOTE_TMUX:-0}" != 1 ]]; then
           tmux new-session -A -s main
         fi
       ''}

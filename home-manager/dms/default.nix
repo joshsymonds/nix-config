@@ -150,6 +150,12 @@
   # Both paths skip silently when DMS isn't running (first boot, manual
   # stop) and on first activation (no `oldGenPath` to diff against).
   home.activation.dmsReloadConfig = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    # NixOS-integrated HM runs activation via home-manager-joshsymonds.service
+    # with a sanitized env — no XDG_RUNTIME_DIR, no DBUS_SESSION_BUS_ADDRESS.
+    # Both `systemctl --user` and `dms ipc` need the runtime dir to find the
+    # user manager / quickshell socket, so set it explicitly.
+    export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
     fileChanged() {
       local rel="$1"
       [[ -v oldGenPath ]] \
@@ -160,8 +166,7 @@
 
     if systemctl --user is-active --quiet dms.service 2>/dev/null; then
       if fileChanged ".config/DankMaterialShell/plugin_settings.json"; then
-        XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
-          ${config.programs.dank-material-shell.package}/bin/dms ipc plugins reload workspaceLabel \
+        ${config.programs.dank-material-shell.package}/bin/dms ipc plugins reload workspaceLabel \
           >/dev/null 2>&1 || true
       fi
       if fileChanged ".config/DankMaterialShell/settings.json"; then

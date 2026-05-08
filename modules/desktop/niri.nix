@@ -30,14 +30,44 @@ in {
 
     xdg.portal = {
       enable = true;
-      wlr.enable = true;
-      extraPortals = [pkgs.xdg-desktop-portal-gtk];
-      # Default routing: wlr first (ScreenCast/Screenshot — what Zoom asks
-      # for during screen share), gtk as fallback for everything else
-      # (FileChooser, OpenURI). Without this, the gtk portal claims
-      # ScreenCast on niri and Zoom misroutes; this is the well-trodden
-      # NixOS+wlroots fix.
-      config.common.default = ["wlr" "gtk"];
+      # ScreenCast routing for niri goes through xdg-desktop-portal-gnome.
+      # That's what niri's own README and wiki call out as required for
+      # screencasting: gnome's portal is the only one that consumes
+      # niri's native ext-image-capture-source-v1, which gives per-window
+      # share in addition to monitor share. Despite the name, this portal
+      # works standalone — niri's maintainer confirmed it does not need
+      # gnome-shell or mutter at runtime (niri-wm/niri#3085).
+      #
+      # We previously routed via xdg-desktop-portal-wlr. wlr only
+      # implements wlr-screencopy, which is monitor-only — fine for
+      # "share entire screen" in Zoom but gives no window picker.
+      # Removed entirely (no fallback): leaving both portals installed
+      # without a niri-portals.conf is a known footgun where D-Bus
+      # arbitration can silently break screencast.
+      #
+      # gtk stays on as the default fallback for everything that isn't
+      # screencast (FileChooser, OpenURI, Notification, Access). Order
+      # matters in `default`: gnome is tried first, gtk picks up what
+      # gnome doesn't implement.
+      extraPortals = [
+        pkgs.xdg-desktop-portal-gnome
+        pkgs.xdg-desktop-portal-gtk
+      ];
+      # Per-DE routing — written to /etc/xdg/xdg-desktop-portal/niri-portals.conf,
+      # which the portal frontend prefers over the common portals.conf when
+      # XDG_CURRENT_DESKTOP=niri (the module sets that). Mirrors niri's
+      # shipped resources/niri-portals.conf, except:
+      #   - FileChooser pinned to gtk: xdg-desktop-portal-gnome 47+ uses
+      #     nautilus by default, and we don't want to pull that in.
+      #   - Secret omitted: the upstream config points it at gnome-keyring,
+      #     but we use the standard ssh-agent / no keyring service. Apps
+      #     needing the Secret portal will fail; none of ours do.
+      config.niri = {
+        default = ["gnome" "gtk"];
+        "org.freedesktop.impl.portal.FileChooser" = ["gtk"];
+        "org.freedesktop.impl.portal.Access" = ["gtk"];
+        "org.freedesktop.impl.portal.Notification" = ["gtk"];
+      };
     };
 
     services.pipewire = {

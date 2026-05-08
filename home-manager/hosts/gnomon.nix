@@ -1,5 +1,6 @@
 {
   inputs,
+  lib,
   pkgs,
   ...
 }: {
@@ -59,6 +60,14 @@
   # Caps Lock → Escape (host-local: the laptop has its own keyboard
   # config, this is gnomon's external-keyboard preference).
   programs.niri.settings.input.keyboard.xkb.options = "caps:escape";
+
+  # kitty_mod = Alt on gnomon only. The shared kitty module sets
+  # ctrl+shift (Linux convention), but on this Windows-layout keyboard
+  # Alt sits at the same physical position-from-spacebar that Cmd
+  # occupies on the Mac — so Alt+T/C/V/etc. land where macOS muscle
+  # memory expects them. Doesn't help Firefox (Linux apps still want
+  # Ctrl+T), but inside kitty itself the layout matches.
+  programs.kitty.keybindings."kitty_mod" = lib.mkForce "alt";
 
   # Monitor positions. Two identical Dell U2724D side-by-side, distinguished
   # only by serial in the EDID name. The niri module is monitor-agnostic —

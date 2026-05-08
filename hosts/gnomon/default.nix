@@ -82,7 +82,6 @@ in
       enable = true;
       pkiBundle = "/var/lib/sbctl";
     };
-    environment.systemPackages = with pkgs; [sbctl];
 
     # ── Boot: AM5 / 9800X3D ─────────────────────────────────────────────
     # amd_pstate=active matches the X3D's preferred frequency-driver mode.
@@ -154,9 +153,23 @@ in
       hostName = "gnomon";
       firewall = {
         enable = true;
+        trustedInterfaces = ["tailscale0"];
         allowedTCPPorts = [22];
       };
     };
+
+    # ── Tailscale ───────────────────────────────────────────────────────
+    # Workstation-mode client: no subnet routing, no exit-node advertising.
+    # `openFirewall = true` opens the WireGuard UDP port automatically;
+    # tailscale0 is in trustedInterfaces above so peers can reach local services.
+    services.tailscale = {
+      enable = true;
+      package = pkgs.tailscale;
+      useRoutingFeatures = "client";
+      openFirewall = true;
+    };
+
+    environment.systemPackages = with pkgs; [sbctl tailscale];
 
     systemd.network.wait-online.anyInterface = true;
     systemd.network.networks."10-lan" = {

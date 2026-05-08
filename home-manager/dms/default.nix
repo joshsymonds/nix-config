@@ -57,6 +57,12 @@
         workspaceRoles;
     };
 
+    # The launcher button (Material `apps` 3×3 grid icon at the bar's left
+    # edge, opens the app drawer) is always rendered before `leftWidgets`
+    # regardless of bar config. We open the launcher with Mod+Space (DMS's
+    # spotlight bind) instead, so the button is dead weight.
+    settings.showLauncherButton = false;
+
     # focusedWindow compact mode hides the app-id prefix and renders only
     # the window title. With our scratch terminals named `scratch-term-
     # {left,right}`, the non-compact form prints `scratch-term-left  ·
@@ -126,29 +132,40 @@
     ];
   };
 
-  # When the workspaceLabel plugin's settings file (plugin_settings.json)
-  # changes between HM generations, ask the running DMS instance to reload
-  # just that plugin. DMS does watch its config files natively
-  # (`watchChanges: true` on the FileView in Common/SettingsData.qml), but
-  # HM publishes config files by atomically swapping the symlink to a new
-  # /nix/store path — Qt's QFileSystemWatcher tracks the resolved inode,
-  # so the swap is invisible to the watcher and the in-memory labelMap
-  # stays stale. The plugin reload IPC (DMSShellIPC.qml `target: "plugins";
-  # reload(pluginId)`) does an unload + load that re-reads the file from
-  # disk, no unit restart, no bar flicker.
+  # Pick up DMS config changes between HM generations. DMS watches its
+  # config files natively (`watchChanges: true` on the FileView in
+  # Common/SettingsData.qml) but HM publishes config files by atomically
+  # swapping the symlink to a new /nix/store path — Qt's
+  # QFileSystemWatcher tracks the resolved inode, so the swap is
+  # invisible to the watcher and DMS keeps its stale in-memory state.
   #
-  # Skipped when DMS isn't running (first boot, manual stop) and when the
-  # file's contents are byte-identical between generations (no-op rebuilds).
-  home.activation.dmsReloadWorkspaceLabel = lib.hm.dag.entryAfter ["writeBoundary"] ''
-    pluginFile=".config/DankMaterialShell/plugin_settings.json"
-    if [[ -v oldGenPath ]] \
-       && [ -e "$oldGenPath/home-files/$pluginFile" ] \
-       && [ -e "$newGenPath/home-files/$pluginFile" ] \
-       && ! cmp -s "$oldGenPath/home-files/$pluginFile" "$newGenPath/home-files/$pluginFile"; then
-      if systemctl --user is-active --quiet dms.service 2>/dev/null; then
+  # Two paths:
+  #   - plugin_settings.json: hot-reload via the plugins IPC handler
+  #     (DMSShellIPC.qml `target: "plugins"; reload(pluginId)`). No unit
+  #     restart, no bar flicker — just unload + load of the one plugin.
+  #   - settings.json: no IPC reload exists for global settings, so
+  #     restart dms.service. Brief bar flicker, only fires when the file
+  #     actually changed (cmp -s) so no-op rebuilds stay quiet.
+  #
+  # Both paths skip silently when DMS isn't running (first boot, manual
+  # stop) and on first activation (no `oldGenPath` to diff against).
+  home.activation.dmsReloadConfig = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    fileChanged() {
+      local rel="$1"
+      [[ -v oldGenPath ]] \
+        && [ -e "$oldGenPath/home-files/$rel" ] \
+        && [ -e "$newGenPath/home-files/$rel" ] \
+        && ! cmp -s "$oldGenPath/home-files/$rel" "$newGenPath/home-files/$rel"
+    }
+
+    if systemctl --user is-active --quiet dms.service 2>/dev/null; then
+      if fileChanged ".config/DankMaterialShell/plugin_settings.json"; then
         XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}" \
           ${config.programs.dank-material-shell.package}/bin/dms ipc plugins reload workspaceLabel \
           >/dev/null 2>&1 || true
+      fi
+      if fileChanged ".config/DankMaterialShell/settings.json"; then
+        systemctl --user restart dms.service >/dev/null 2>&1 || true
       fi
     fi
   '';

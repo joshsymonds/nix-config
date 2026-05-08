@@ -11,4 +11,8 @@
     url = "https://joshsymonds.cachix.org";
     publicKey = "joshsymonds.cachix.org-1:DajO7Bjk/Q8eQVZQZC/AWOzdUst2TGp8fHS/B1pua2c=";
   };
+  niri = {
+    url = "https://niri.cachix.org";
+    publicKey = "niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964=";
+  };
 }

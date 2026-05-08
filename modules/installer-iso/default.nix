@@ -68,12 +68,14 @@ in {
       caches.joshsymonds.url
       "https://devenv.cachix.org"
       caches.cuda.url
+      caches.niri.url
     ];
     extra-trusted-public-keys = [
       caches.nixCommunity.publicKey
       caches.joshsymonds.publicKey
       "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="
       caches.cuda.publicKey
+      caches.niri.publicKey
     ];
     trusted-users = ["root"];
   };

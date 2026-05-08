@@ -5,9 +5,12 @@
 
   home.packages = with pkgs; [
     # Gaming auxiliaries (Steam itself is system-level via programs.steam)
-    lutris # non-Steam game launcher (GOG, Epic, emulators)
     mangohud # in-game FPS/perf overlay
     protontricks # Proton/Wine troubleshooting for specific games
+    # If you ever want a non-Steam launcher: heroic or bottles are the
+    # modern alternatives to lutris (which we previously had here but
+    # removed because lutris's fhsenv pulls in openldap, whose flaky
+    # syncreplication test broke gnomon's first install).
   ];
 
   # Same signing key vermissian uses — single user identity across machines

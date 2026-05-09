@@ -7,12 +7,47 @@
 
     keybindings = {
       "kitty_mod" = "ctrl+shift";
-      # Keep default macOS clipboard behavior
+
+      # Mac-style Cmd shortcuts. On macOS, kitty interprets `cmd` as the
+      # actual Cmd key. On Linux, kitty interprets `cmd` as Super — and
+      # on gnomon the keyd config has a `[kitty.main]` exception that
+      # lets Super reach kitty raw (instead of being translated to Ctrl
+      # as it is for every other app). Net effect: identical Cmd-key
+      # muscle memory on both platforms.
+      #
+      # Crucially absent from this list: cmd+c is bound below (works on
+      # both), but Ctrl+C is NOT bound — it stays raw to the shell as
+      # SIGINT, same as Ctrl+D for EOF. That's the whole point of the
+      # kitty exception in keyd.
       "cmd+c" = "copy_to_clipboard";
       "cmd+v" = "paste_from_clipboard";
+      "cmd+t" = "new_tab";
+      "cmd+w" = "close_tab";
+      "cmd+n" = "new_os_window";
+      "cmd+1" = "goto_tab 1";
+      "cmd+2" = "goto_tab 2";
+      "cmd+3" = "goto_tab 3";
+      "cmd+4" = "goto_tab 4";
+      "cmd+5" = "goto_tab 5";
+      "cmd+6" = "goto_tab 6";
+      "cmd+7" = "goto_tab 7";
+      "cmd+8" = "goto_tab 8";
+      "cmd+9" = "goto_tab 9";
+      "cmd+shift+]" = "next_tab";
+      "cmd+shift+[" = "previous_tab";
+      "cmd+plus" = "change_font_size all +2.0";
+      "cmd+equal" = "change_font_size all +2.0";
+      "cmd+minus" = "change_font_size all -2.0";
+      "cmd+0" = "change_font_size all 0";
+      "cmd+k" = "clear_terminal scrollback active";
+      "cmd+f" = "show_scrollback";
+      "cmd+enter" = "no_op";
+      "cmd+shift+enter" = "no_op";
+
       # Also map Ctrl+V for consistency in terminal apps
       "ctrl+v" = "paste_from_clipboard";
-      # Also allow kitty modifier versions
+
+      # kitty_mod (= Ctrl+Shift) variants — Linux convention fallback.
       "kitty_mod+c" = "copy_to_clipboard";
       "kitty_mod+v" = "paste_from_clipboard";
       "kitty_mod+s" = "launch --type=overlay --cwd=current cursor -";
@@ -26,8 +61,6 @@
       "kitty_mod+6" = "goto_tab 6";
       "kitty_mod+shift+]" = "next_tab";
       "kitty_mod+shift+[" = "previous_tab";
-      "cmd+enter" = "no_op";
-      "cmd+shift+enter" = "no_op";
       "kitty_mod+h" = "show_scrollback";
       "kitty_mod+g" = "show_last_non_empty_command_output";
     };

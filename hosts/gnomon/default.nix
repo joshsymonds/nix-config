@@ -13,8 +13,17 @@ in
       ./disko.nix
       ../../modules/desktop/dms-niri.nix
       ../../modules/hardware/gpu-nvidia.nix
+      ../../modules/services/keyd.nix
       inputs.lanzaboote.nixosModules.lanzaboote
     ];
+
+    # ── Keyboard: Mac-style Cmd modifier on the Q6 HE ───────────────────
+    # leftmeta/rightmeta (physical Cmd in Mac mode) act as Ctrl globally,
+    # so Cmd+C/V/T/W/etc. fire the Linux Ctrl+letter shortcuts in Firefox,
+    # Slack, Electron apps, and so on. Kitty has a per-app exception so it
+    # receives raw Super (and Ctrl+C/D in the terminal stays as untouched
+    # interrupt/EOF). See modules/services/keyd.nix for the why.
+    services.keyd-mac-style.enable = true;
 
     # ── Performance profile ─────────────────────────────────────────────
     performance.profile = "dev";

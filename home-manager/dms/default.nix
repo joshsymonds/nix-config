@@ -1,9 +1,4 @@
-{
-  config,
-  lib,
-  workspaceRoles,
-  ...
-}: {
+{lib, ...}: {
   # DankMaterialShell home-manager configuration. The DMS edge release
   # made several HM-side feature toggles built-in and no-op (they're now
   # always available): enableNightMode, enableSystemSound, enableClipboard,
@@ -26,36 +21,19 @@
     # runtime, but niri never reads them — they're orphaned, not config.
     niri.includes.enable = false;
 
-    # Use the standard DMS-IPC keybinds (Mod+Space spotlight, Mod+N
-    # notifications, Mod+Comma settings, volume/brightness keys, etc.)
-    # via niri-flake's typed `programs.niri.settings.binds`. This is the
-    # nix-native path — no on-disk binds.kdl involved.
-    niri.enableKeybinds = true;
+    # DMS's stock binds put spotlight/notifications/settings/clipboard/
+    # powermenu under Mod (= Super = the physical Cmd key in Mac mode on
+    # the Q6). On gnomon, Super is reserved for keyd's Mac-style Cmd
+    # remap (Cmd+C → Ctrl+C, etc.) — see modules/services/keyd.nix —
+    # which would translate Mod+Space to Ctrl+Space before DMS ever sees
+    # it, breaking every DMS keybind. Disable the auto-injection and
+    # re-bind the same features under Alt+ in home-manager/niri/default.nix
+    # so they live alongside niri's other Alt-modifier WM binds.
+    niri.enableKeybinds = false;
 
     # Don't spawn DMS via niri startup — systemd.enable handles it,
     # giving us restart-on-failure.
     niri.enableSpawn = false;
-
-    # Local plugin: single-pill widget showing the friendly name of the
-    # bar's monitor's active workspace (e.g. "Terminal", "Web") instead
-    # of the multi-pill workspaceSwitcher. Niri requires unique workspace
-    # names, so we keep `term-left`/`term-right` and let the plugin map
-    # both to "Terminal" — each bar only ever shows its own monitor's
-    # active workspace, so the duplicate display label is unambiguous.
-    plugins.workspaceLabel = {
-      enable = true;
-      src = ./plugins/workspaceLabel;
-      # `workspaceRoles` comes from the host's `_module.args.workspaceRoles`
-      # (see hosts/<host>.nix). Both `-left` and `-right` map to the same
-      # label — each bar only shows its own monitor's active workspace, so
-      # the duplicate display label is unambiguous.
-      settings.labelMap =
-        lib.concatMapAttrs (role: {label, ...}: {
-          "${role}-left" = label;
-          "${role}-right" = label;
-        })
-        workspaceRoles;
-    };
 
     # The launcher button (Material `apps` 3×3 grid icon at the bar's left
     # edge, opens the app drawer) is always rendered before `leftWidgets`
@@ -64,19 +42,16 @@
     settings.showLauncherButton = false;
 
     # focusedWindow compact mode hides the app-id prefix and renders only
-    # the window title. With our scratch terminals named `scratch-term-
-    # {left,right}`, the non-compact form prints `scratch-term-left  ·
-    # Some Title` — the leading app-id reads like a workspace name. The
-    # workspaceLabel pill already covers the "what workspace am I on"
-    # need, so we don't want it duplicated here.
+    # the window title — without it, the bar reads "kitty · ~/proj" with
+    # the app-id prefix that's already obvious from the visible window.
     settings.focusedWindowCompactMode = true;
 
     # Bar layout. `programs.dank-material-shell.settings` is serialized
     # verbatim to ~/.config/DankMaterialShell/settings.json; barConfigs is
     # an array of full bar configurations (DMS supports multiple bars), so
     # we write the whole object — DMS replaces the default array if this
-    # key is present. The only departure from the stock default is
-    # leftWidgets: workspaceSwitcher → workspaceLabel (our plugin).
+    # key is present. leftWidgets is just focusedWindow because we don't
+    # use named workspaces — there's no workspace identity to label.
     settings.barConfigs = [
       {
         id = "default";
@@ -85,7 +60,7 @@
         position = 0;
         screenPreferences = ["all"];
         showOnLastDisplay = true;
-        leftWidgets = ["workspaceLabel" "focusedWindow"];
+        leftWidgets = ["focusedWindow"];
         centerWidgets = ["music" "clock" "weather"];
         rightWidgets = ["systemTray" "clipboard" "cpuUsage" "memUsage" "notificationButton" "battery" "controlCenterButton"];
         spacing = 4;
@@ -138,22 +113,14 @@
   # swapping the symlink to a new /nix/store path — Qt's
   # QFileSystemWatcher tracks the resolved inode, so the swap is
   # invisible to the watcher and DMS keeps its stale in-memory state.
-  #
-  # Two paths:
-  #   - plugin_settings.json: hot-reload via the plugins IPC handler
-  #     (DMSShellIPC.qml `target: "plugins"; reload(pluginId)`). No unit
-  #     restart, no bar flicker — just unload + load of the one plugin.
-  #   - settings.json: no IPC reload exists for global settings, so
-  #     restart dms.service. Brief bar flicker, only fires when the file
-  #     actually changed (cmp -s) so no-op rebuilds stay quiet.
-  #
-  # Both paths skip silently when DMS isn't running (first boot, manual
-  # stop) and on first activation (no `oldGenPath` to diff against).
+  # No IPC reload exists for global settings, so restart dms.service.
+  # Brief bar flicker, only fires when the file actually changed
+  # (cmp -s) so no-op rebuilds stay quiet. Skips silently when DMS
+  # isn't running and on first activation (no `oldGenPath` to diff).
   home.activation.dmsReloadConfig = lib.hm.dag.entryAfter ["writeBoundary"] ''
     # NixOS-integrated HM runs activation via home-manager-joshsymonds.service
     # with a sanitized env — no XDG_RUNTIME_DIR, no DBUS_SESSION_BUS_ADDRESS.
-    # Both `systemctl --user` and `dms ipc` need the runtime dir to find the
-    # user manager / quickshell socket, so set it explicitly.
+    # `systemctl --user` needs the runtime dir to find the user manager.
     export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
     fileChanged() {
@@ -165,10 +132,6 @@
     }
 
     if systemctl --user is-active --quiet dms.service 2>/dev/null; then
-      if fileChanged ".config/DankMaterialShell/plugin_settings.json"; then
-        ${config.programs.dank-material-shell.package}/bin/dms ipc plugins reload workspaceLabel \
-          >/dev/null 2>&1 || true
-      fi
       if fileChanged ".config/DankMaterialShell/settings.json"; then
         systemctl --user restart dms.service >/dev/null 2>&1 || true
       fi

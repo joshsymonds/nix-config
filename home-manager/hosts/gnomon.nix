@@ -23,6 +23,10 @@
     spotify
     signal-desktop
 
+    # Firefox is the daily driver; chromium is here for WebHID-only sites
+    # (gaming-mouse configurators, etc.) since Firefox doesn't implement it.
+    chromium
+
     # Claude Desktop (the chat app — separate from Claude Code).
     # Sourced from the claude-desktop flake input, which tracks
     # upstream Anthropic releases via daily CI auto-bumps. Use

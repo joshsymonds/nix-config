@@ -50,6 +50,16 @@
     # the app-id prefix that's already obvious from the visible window.
     settings.focusedWindowCompactMode = true;
 
+    # Compositor-driven background blur. Master toggle for the
+    # ext-background-effect-v1 path: when on, every WindowBlur instance
+    # in DMS (BlurService.qml:18 gates on this) sets a per-surface
+    # blur_region via Quickshell's BackgroundEffect API, and niri applies
+    # blur within those region shapes. This is DMS's designed path for
+    # frosted-glass chrome — niri layer-rules can only enable/disable,
+    # not reshape, the protocol-set regions, so we let DMS drive shape
+    # and niri drive the actual blur.
+    settings.blurEnabled = true;
+
     # Bar layout. `programs.dank-material-shell.settings` is serialized
     # verbatim to ~/.config/DankMaterialShell/settings.json; barConfigs is
     # an array of full bar configurations (DMS supports multiple bars), so
@@ -117,6 +127,18 @@
       }
     ];
   };
+
+  # Promote DMS modals (spotlight, settings, etc.) to the wlr-layer-shell
+  # `Overlay` layer instead of the default `Top`. Niri renders fullscreen
+  # windows ABOVE Top (per render_above_top_layer() in
+  # src/layout/scrolling.rs:2886-2899), so a fullscreened kitty / Firefox /
+  # game would otherwise cover the spotlight when triggered. Overlay is
+  # the highest layer-shell tier and renders above fullscreen.
+  #
+  # DMS reads this env var in DankLauncherV2ModalStandalone.qml:363-376
+  # (and the same pattern in other modals). Setting it on the systemd
+  # service environment ensures every DMS-spawned surface honors it.
+  systemd.user.services.dms.Service.Environment = "DMS_MODAL_LAYER=overlay";
 
   # Pick up DMS config changes between HM generations. DMS watches its
   # config files natively (`watchChanges: true` on the FileView in

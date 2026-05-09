@@ -595,15 +595,15 @@ in {
           saturation 1.5
       }
 
-      // xray=false → blur whatever is actually beneath the window
-      // (NSVisualEffectView semantics), not just the wallpaper. Per
-      // blurred window per frame: one BlitFramebuffer + a 6-draw
-      // dual-Kawase pyramid — sub-millisecond on modern GPUs. Known
-      // gap: blur drops out during open/close anims and tile drags
-      // due to offscreen-render layering (niri-side refactor pending);
-      // returns once the animation ends.
+      // xray=true blurs only the wallpaper (cheap, default). xray=false
+      // blurs whatever is actually beneath the surface — NSVisualEffectView
+      // semantics where windows behind show through. Per-frame cost is one
+      // BlitFramebuffer + a 6-draw dual-Kawase pyramid: sub-millisecond on
+      // modern GPUs. Known niri quirk: non-xray blur disappears briefly
+      // during window open/close animations and tile drags (offscreen-FB
+      // refactor pending upstream); xray avoids this.
 
-      // kitty terminal — only meaningful with a translucent background.
+      // kitty terminal — only meaningful with kitty's background_opacity < 1.0.
       window-rule {
           match app-id="kitty"
           background-effect {
@@ -612,35 +612,19 @@ in {
           }
       }
 
-      // DMS shell surfaces — explicit allowlist. Niri's blur is
-      // geometry-based, not alpha-aware (background_effect.rs
-      // is_visible() ignores parent surface opacity), so any layer that
-      // fades in/out via opacity animations gets blur fully drawn from
-      // frame 1 of fade-in and persisting through fade-out — wrong on
-      // every DMS modal/popup we tested. Only persistent surfaces here.
-      //
-      // Spotlight is intentionally NOT in this list. The spotlight UI
-      // surface (dms:spotlight) uses Quickshell's
-      // BackgroundEffect.blurRegion API via the WindowBlur block at
-      // DankLauncherV2ModalStandalone.qml:349 — which sets a blur region
-      // sized to the modal container, giving Mac-Spotlight-style localized
-      // blur via the ext-background-effect-v1 protocol with no niri-side
-      // rule needed. That path requires DMS's "Compositor blur" setting
-      // (SettingsData.blurEnabled, gated by BlurService.enabled) to be on.
-      //
-      // We can't blur dms:spotlight:clickcatcher to fake whole-desktop
-      // blur — the clickcatcher must render *above* the spotlight UI
-      // for click-outside-to-dismiss to work, so blurring it captures
-      // the spotlight UI inside the blur region and the UI itself
-      // appears blurred (verified via niri-snap on 2026-05-08).
-      layer-rule {
-          match namespace="^dms:bar$"
-          match namespace="^dms:dock$"
-          background-effect {
-              blur true
-              xray false
-          }
-      }
+      // DMS chrome blur is entirely driven by DMS's protocol path
+      // (BackgroundEffect.blurRegion via ext-background-effect-v1) when
+      // settings.blurEnabled = true (see home-manager/dms/default.nix).
+      // Niri applies blur to the surface-shaped regions DMS sends; we
+      // don't add per-surface layer-rules because:
+      //   - Niri can't reshape protocol-set blur regions (only enable/disable).
+      //   - Layer-rule blur targets a layer's whole rendered geometry,
+      //     which is rectangular and ignores transparency — wrong shape
+      //     on rounded modals.
+      //   - DMS's design intent IS small surface-shaped frosted glass
+      //     on each chrome panel. Fighting it with broad rules introduces
+      //     double-blur and z-order artifacts (verified via niri-snap
+      //     during 2026-05-08 debugging — see commit 9e30d7c).
     '';
   };
 }

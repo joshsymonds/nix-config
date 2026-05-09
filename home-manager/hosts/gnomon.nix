@@ -22,7 +22,7 @@
     zoom-us
     spotify
     signal-desktop
-    discord
+    vesktop
 
     # Firefox is the daily driver; chromium is here for WebHID-only sites
     # (gaming-mouse configurators, etc.) since Firefox doesn't implement it.

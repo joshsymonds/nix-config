@@ -14,12 +14,14 @@ Flake-based Nix configuration managing multiple systems.
 ## Essential Commands
 
 ```bash
-update                    # Rebuild current system (alias)
+update                    # Rebuild current system (real binary, not an alias)
 nix flake check          # Validate flake
 nix build .#<package>    # Build a package
 ```
 
 **IMPORTANT**: Run `update` after any Nix config changes. Nothing takes effect until rebuilt.
+
+`update` is a `writeShellScriptBin` on `PATH` (per host: `nh os switch` for NixOS, `nh darwin switch` for macOS, ssh-into-ultraviolet for bluedesert). It works from non-interactive shells, agents, and subprocesses — no need to fall back to invoking `nh` directly. It pre-flights `sudo -n true` and refuses with a clear error if sudo would prompt, so agents fail fast instead of hanging.
 
 **Git gotcha**: Nix flakes only see git-tracked files. Run `git add` before `nix flake check`.
 

@@ -10,9 +10,9 @@
   # was a holdover from laptop muscle memory: when only one window
   # fits at a time, workspace == app. On a 5120-wide multi-monitor
   # setup, that flips — every "role" is a column on the default
-  # workspace, navigable by Mod+H/L. Workspaces are reserved for
+  # workspace, navigable by Alt+H/L. Workspaces are reserved for
   # genuine mode shifts, which we now handle via fullscreen-window
-  # (Mod+F) instead of dedicated workspaces.
+  # (Alt+F) instead of dedicated workspaces.
 
   # Niri's `recent-windows` (alt-tab) overlay opens via the upper-left
   # hot-corner by default; also, that hot-corner triggers the overview
@@ -57,15 +57,15 @@
 
   programs.niri.settings.binds = {
     # ── Window lifecycle ──────────────────────────────────────────
-    "Mod+Q" = {
+    "Alt+Q" = {
       hotkey-overlay.title = "Close Window";
       action.close-window = [];
     };
 
     # General terminal spawn. Lands a fresh kitty in the focused
     # workspace. Use kitty's built-in tabs (Ctrl+Shift+T) for multiple
-    # shells in one window, or Mod+Return again for another column.
-    "Mod+Return" = {
+    # shells in one window, or Alt+Return again for another column.
+    "Alt+Return" = {
       hotkey-overlay.title = "Open Terminal";
       action.spawn = ["kitty"];
     };
@@ -76,36 +76,36 @@
     # column and fall through to the previous/next workspace when the
     # stack is exhausted. Niri keeps exactly one empty trailing
     # workspace per monitor and auto-creates/collapses as needed.
-    "Mod+H".action.focus-column-or-monitor-left = [];
-    "Mod+L".action.focus-column-or-monitor-right = [];
-    "Mod+J".action.focus-window-or-workspace-down = [];
-    "Mod+K".action.focus-window-or-workspace-up = [];
+    "Alt+H".action.focus-column-or-monitor-left = [];
+    "Alt+L".action.focus-column-or-monitor-right = [];
+    "Alt+J".action.focus-window-or-workspace-down = [];
+    "Alt+K".action.focus-window-or-workspace-up = [];
 
     # ── Move focused window ───────────────────────────────────────
     # Shift+H/L: move window to the other monitor (cross monitors).
     # Shift+J/K: reorder window within its stacked column.
-    "Mod+Shift+H".action.move-window-to-monitor-left = [];
-    "Mod+Shift+L".action.move-window-to-monitor-right = [];
-    "Mod+Shift+J".action.move-window-down = [];
-    "Mod+Shift+K".action.move-window-up = [];
+    "Alt+Shift+H".action.move-window-to-monitor-left = [];
+    "Alt+Shift+L".action.move-window-to-monitor-right = [];
+    "Alt+Shift+J".action.move-window-down = [];
+    "Alt+Shift+K".action.move-window-up = [];
 
     # ── Reorder columns (the structure itself) ────────────────────
     # Ctrl+H/L: swap the focused column with its neighbor. Different
     # from Shift+H/L (which moves a window across monitors) — these
     # rearrange the column strip without crossing monitors.
-    "Mod+Ctrl+H".action.move-column-left = [];
-    "Mod+Ctrl+L".action.move-column-right = [];
+    "Alt+Ctrl+H".action.move-column-left = [];
+    "Alt+Ctrl+L".action.move-column-right = [];
 
     # ── Resize ────────────────────────────────────────────────────
     # R cycles the column through preset widths (1/3, 1/2, 2/3).
     # Shift+R cycles the focused window through preset heights —
     # useful for stacked columns where you want one window to take
     # more vertical space than its siblings.
-    "Mod+R" = {
+    "Alt+R" = {
       hotkey-overlay.title = "Cycle Column Width";
       action.switch-preset-column-width = [];
     };
-    "Mod+Shift+R" = {
+    "Alt+Shift+R" = {
       hotkey-overlay.title = "Cycle Window Height";
       action.switch-preset-window-height = [];
     };
@@ -113,15 +113,15 @@
     # ── Focus modes (replaces modal workspaces) ───────────────────
     # F: fullscreen the focused window (covers the whole monitor;
     # other columns hidden). This is what was previously a Zoom
-    # workspace — Mod+F on the Zoom window IS call mode. Mod+F again
+    # workspace — Alt+F on the Zoom window IS call mode. Alt+F again
     # exits fullscreen.
     # Shift+F: maximize column to fill the monitor (other columns
     # scrolled off but still on the workspace, no fullscreen).
-    "Mod+F" = {
+    "Alt+F" = {
       hotkey-overlay.title = "Fullscreen Window";
       action.fullscreen-window = [];
     };
-    "Mod+Shift+F" = {
+    "Alt+Shift+F" = {
       hotkey-overlay.title = "Maximize Column";
       action.maximize-column = [];
     };
@@ -133,17 +133,92 @@
     # T: toggle the focused column between split (all stacked windows
     #    visible at fractional height) and tabbed (only one visible,
     #    J/K to swap) display.
-    "Mod+I" = {
+    "Alt+I" = {
       hotkey-overlay.title = "Consume Window into Column";
       action.consume-window-into-column = [];
     };
-    "Mod+O" = {
+    "Alt+O" = {
       hotkey-overlay.title = "Expel Window from Column";
       action.expel-window-from-column = [];
     };
-    "Mod+T" = {
+    "Alt+T" = {
       hotkey-overlay.title = "Toggle Tabbed Column";
       action.toggle-column-tabbed-display = [];
+    };
+
+    # ── DMS shell features ────────────────────────────────────────
+    # Mac-style Cmd shortcuts (physical Cmd key → keyd carve-out
+    # passes Super raw → niri grabs Super+key). These mirror the
+    # universal Mac chord for each feature.
+    "Super+Space" = {
+      hotkey-overlay.title = "Toggle Application Launcher";
+      action.spawn = ["dms" "ipc" "call" "spotlight" "toggle"];
+    };
+    "Super+Comma" = {
+      hotkey-overlay.title = "Toggle Settings";
+      action.spawn = ["dms" "ipc" "call" "settings" "toggle"];
+    };
+    # Cmd+Tab / Cmd+Shift+Tab / Cmd+` / Cmd+Shift+` are handled by
+    # niri's built-in `recent-windows` config defaults (Mod+Tab etc.,
+    # Mod = Super) — no explicit bind needed here.
+
+    # Aerospace-style Option shortcuts (no Mac convention for these
+    # features, so they live alongside the WM binds on Alt).
+    "Alt+N" = {
+      hotkey-overlay.title = "Toggle Notification Center";
+      action.spawn = ["dms" "ipc" "call" "notifications" "toggle"];
+    };
+    "Alt+P" = {
+      hotkey-overlay.title = "Toggle Notepad";
+      action.spawn = ["dms" "ipc" "call" "notepad" "toggle"];
+    };
+    "Alt+X" = {
+      hotkey-overlay.title = "Toggle Power Menu";
+      action.spawn = ["dms" "ipc" "call" "powermenu" "toggle"];
+    };
+    "Alt+V" = {
+      hotkey-overlay.title = "Toggle Clipboard Manager";
+      action.spawn = ["dms" "ipc" "call" "clipboard" "toggle"];
+    };
+    # Lock and night mode get Ctrl+Alt because the bare-Alt slot is
+    # already used (Alt+L = focus right, Alt+N = notifications).
+    # Mac's Ctrl+Cmd+Q → Ctrl+Alt+Q would collide with keyd's Cmd→Ctrl
+    # remap (would collapse to Ctrl+Q), so use L instead.
+    "Ctrl+Alt+L" = {
+      hotkey-overlay.title = "Lock Screen";
+      action.spawn = ["dms" "ipc" "call" "lock" "lock"];
+    };
+    "Ctrl+Alt+N" = {
+      allow-when-locked = true;
+      hotkey-overlay.title = "Toggle Night Mode";
+      action.spawn = ["dms" "ipc" "call" "night" "toggle"];
+    };
+
+    # Audio + brightness keys: pass through to DMS for the OSD.
+    # allow-when-locked so they keep working on the lock screen.
+    "XF86AudioRaiseVolume" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "audio" "increment" "3"];
+    };
+    "XF86AudioLowerVolume" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "audio" "decrement" "3"];
+    };
+    "XF86AudioMute" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "audio" "mute"];
+    };
+    "XF86AudioMicMute" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "audio" "micmute"];
+    };
+    "XF86MonBrightnessUp" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "brightness" "increment" "5" ""];
+    };
+    "XF86MonBrightnessDown" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "brightness" "decrement" "5" ""];
     };
   };
 
@@ -168,13 +243,13 @@
 
       # Two columns visible per monitor at 50% width. Niri's
       # scrollable-tiling model is built around proportional widths
-      # exactly so multiple windows can be visible at once. Mod+R
+      # exactly so multiple windows can be visible at once. Alt+R
       # cycles the focused column through 1/3, 1/2, 2/3 if you want
-      # to redistribute briefly. Mod+Shift+F maximizes the column;
-      # Mod+F fullscreens the window.
+      # to redistribute briefly. Alt+Shift+F maximizes the column;
+      # Alt+F fullscreens the window.
       default-column-width.proportion = 0.5;
 
-      # Preset widths cycled by Mod+R. Standard niri progression:
+      # Preset widths cycled by Alt+R. Standard niri progression:
       # one-third, half, two-thirds. Tap repeatedly to walk through.
       preset-column-widths = [
         {proportion = 1.0 / 3.0;}
@@ -182,7 +257,7 @@
         {proportion = 2.0 / 3.0;}
       ];
 
-      # Preset window heights cycled by Mod+Shift+R inside a stacked
+      # Preset window heights cycled by Alt+Shift+R inside a stacked
       # column. Same shape as widths.
       preset-window-heights = [
         {proportion = 1.0 / 3.0;}

@@ -40,12 +40,32 @@ in {
             rightmeta = "layer(cmd)";
           };
 
-          # Empty layer body — the `:C` in the section name is what does the
-          # work. While this layer is active (i.e. while leftmeta/rightmeta
-          # is held), keyd holds Control on every emitted key, and the Super
-          # press is suppressed (the meta keys were reassigned to layer
-          # activation, so they no longer send their own scancode).
-          "cmd:C" = {};
+          # Layer body. The `:C` in the section name makes Ctrl the
+          # default substitute modifier — pressing leftmeta+anything emits
+          # Ctrl+anything, which is what every Linux GUI app expects for
+          # its copy/paste/new-tab/etc. shortcuts.
+          #
+          # The exceptions below override per-key: `M-foo` outputs Super+foo
+          # (just M, ignoring the layer's implicit C). Why each one passes
+          # through as raw Super:
+          #
+          #   space, comma — niri grabs Super+Space → DMS spotlight (Mac
+          #     Cmd+Space) and Super+Comma → DMS settings (Mac Cmd+Comma).
+          #     Carving out preserves real Ctrl+Space (Emacs mark, IDE
+          #     autocomplete) and real Ctrl+Comma.
+          #   tab, grave — niri's built-in `recent-windows` config has
+          #     defaults for Mod+Tab/Mod+Shift+Tab (next/previous window in
+          #     MRU order) and Mod+grave/Mod+Shift+grave (same, filtered
+          #     to the current app — Mac Cmd+`). Mod = Super by niri
+          #     default, so the carve-out lets physical Cmd+Tab and Cmd+`
+          #     hit those defaults. Real Ctrl+Tab keeps working in
+          #     browsers for "next browser tab".
+          "cmd:C" = {
+            space = "M-space";
+            comma = "M-comma";
+            tab = "M-tab";
+            grave = "M-grave";
+          };
         };
 
         # App-specific overrides. keyd's `[<class>.<layer>]` form layers on

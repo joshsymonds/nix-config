@@ -57,7 +57,7 @@
         id = "default";
         name = "Main Bar";
         enabled = true;
-        position = 0;
+        position = 1; # bottom — top is reserved for niri's tab indicator
         screenPreferences = ["all"];
         showOnLastDisplay = true;
         leftWidgets = ["focusedWindow"];

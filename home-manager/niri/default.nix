@@ -73,20 +73,15 @@
     "Alt+J".action.focus-window-or-workspace-down = [];
     "Alt+K".action.focus-window-or-workspace-up = [];
 
-    # ── Move focused window ───────────────────────────────────────
-    # Shift+H/L: move window to the other monitor (cross monitors).
-    # Shift+J/K: reorder window within its stacked column.
-    "Alt+Shift+H".action.move-window-to-monitor-left = [];
-    "Alt+Shift+L".action.move-window-to-monitor-right = [];
+    # ── Reorder (Shift = reorder, mirrors focus motion) ───────────
+    # Shift+H/L: shove the focused column left/right. When already at
+    # the edge, falls through to the next monitor — same edge-crossing
+    # shape as the Alt+H/L focus binds.
+    # Shift+J/K: reorder the focused window within its stacked column.
+    "Alt+Shift+H".action.move-column-left-or-to-monitor-left = [];
+    "Alt+Shift+L".action.move-column-right-or-to-monitor-right = [];
     "Alt+Shift+J".action.move-window-down = [];
     "Alt+Shift+K".action.move-window-up = [];
-
-    # ── Reorder columns (the structure itself) ────────────────────
-    # Ctrl+H/L: swap the focused column with its neighbor. Different
-    # from Shift+H/L (which moves a window across monitors) — these
-    # rearrange the column strip without crossing monitors.
-    "Alt+Ctrl+H".action.move-column-left = [];
-    "Alt+Ctrl+L".action.move-column-right = [];
 
     # ── Resize ────────────────────────────────────────────────────
     # R cycles the column through preset widths (1/3, 1/2, 2/3).
@@ -175,9 +170,7 @@
     # Lock and night mode get Ctrl+Alt because the bare-Alt slots are
     # already used (Alt+N = notifications). Lock lands on Q to mirror
     # Mac's Ctrl+Cmd+Q lock convention: physical Alt+Cmd+Q → keyd →
-    # Ctrl+Alt+Q reaches niri. Note that Ctrl+Alt+L would collide with
-    # the move-column-right bind above (niri treats Alt+Ctrl+L and
-    # Ctrl+Alt+L as the same chord regardless of modifier order).
+    # Ctrl+Alt+Q reaches niri.
     "Ctrl+Alt+Q" = {
       hotkey-overlay.title = "Lock Screen";
       action.spawn = ["dms" "ipc" "call" "lock" "lock"];
@@ -285,9 +278,17 @@
       # sliver on the column edge that's basically invisible. Bump
       # width and put it across the top so a tabbed column looks like
       # browser tabs — N segments visible, active one highlighted.
+      # place-within-column: the indicator renders inside the column's
+      # area (eating 12px from the top of the visible window) instead
+      # of in the outer workspace gap, which is only 4px wide and
+      # would clip the 12px indicator.
+      # length.total-proportion = 1.0: tabs span the full column edge.
       tab-indicator = {
-        width = 12;
+        width = 6;
         position = "top";
+        place-within-column = true;
+        gaps-between-tabs = 2;
+        length.total-proportion = 1.0;
         active.color = "#d0bcff";
         inactive.color = "#948f99";
         urgent.color = "#f2b8b5";

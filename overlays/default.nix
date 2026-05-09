@@ -18,6 +18,7 @@ in {
     coder = final.callPackage ../pkgs/coder-cli {inherit (final) unzip;};
     invidious-companion = final.callPackage ../pkgs/invidious-companion {};
     newrelic-cli = final.callPackage ../pkgs/newrelic-cli {};
+    proton-gamescope = final.callPackage ../pkgs/proton-gamescope {};
     redlib-veraticus = final.callPackage ../pkgs/redlib-veraticus {
       inherit (inputs) crane;
       redlibSrc = inputs.redlib-fork.sourceInfo.outPath;

@@ -19,5 +19,6 @@ in
     coder = pkgs.callPackage ./coder-cli {inherit (pkgs) unzip;};
     invidious-companion = pkgs.callPackage ./invidious-companion {};
     newrelic-cli = pkgs.callPackage ./newrelic-cli {};
+    proton-gamescope = pkgs.callPackage ./proton-gamescope {};
   }
   // darwinOnly

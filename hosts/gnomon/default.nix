@@ -65,13 +65,37 @@ in
     services.blueman.enable = true;
 
     # ── Gaming ──────────────────────────────────────────────────────────
+    # Two compat tools land in Steam via extraCompatPackages:
+    #   - proton-ge-bin: GE-Proton (community Proton fork). Required for
+    #     Steam to install the Steam Linux Runtime sniper, and the Proton
+    #     our wrapper delegates to.
+    #   - proton-gamescope: a custom Steam compat tool that wraps GE-Proton
+    #     in a niri-friendly gamescope (--backend sdl, --force-grab-cursor,
+    #     full monitor resolution). Selected once in Steam → Settings →
+    #     Compatibility → "Run other titles with…" → "Proton (Gamescope)"
+    #     and it applies to every non-native game with no per-game launch
+    #     options. Needed because xwayland-satellite has open fullscreen
+    #     bugs with newer Wine/Proton (#165) that gamescope sidesteps.
     programs.steam = {
       enable = true;
       remotePlay.openFirewall = true;
       dedicatedServer.openFirewall = false;
       gamescopeSession.enable = true;
+      extraCompatPackages = with pkgs; [
+        proton-ge-bin
+        proton-gamescope
+      ];
     };
     hardware.steam-hardware.enable = true;
+
+    # gamescope module installs the binary + sets cap_sys_nice (needed for
+    # gamescope's input-thread scheduling; without it gamescope warns and
+    # cursor capture is flaky). Distinct from gamescopeSession above which
+    # only adds the "boot to Steam Big Picture" session entry.
+    programs.gamescope = {
+      enable = true;
+      capSysNice = true;
+    };
 
     # ── 1Password ───────────────────────────────────────────────────────
     # Enabling at system level provides:

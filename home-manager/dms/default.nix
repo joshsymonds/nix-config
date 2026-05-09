@@ -179,6 +179,14 @@ in {
         #
         # Triadic synthwave palette (cyan + magenta + neon-green) chosen
         # to match the wallpaper's design intent.
+        # Mode selector for ChromeShader: "aurora" (drifting plasma veils),
+        # "hexrain" (matrix-rain through hex grid, matching wallpaper). Read
+        # at BarCanvas.qml via `barConfig?.shaderMode || "aurora"` — flipping
+        # this string is a one-line nix-config edit + rebuild, no DMS source
+        # change required.
+        shaderMode    = "hexrain";
+        shaderHexSize = 14; # px radius per hex; only used by hexrain mode
+
         shaderPrimaryColor          = "#5896E1"; # cyan band hue
         shaderSecondaryColor        = "#B711DB"; # magenta band hue
         shaderPrimaryContainerColor = "#170B55"; # deep purple base in dark zones

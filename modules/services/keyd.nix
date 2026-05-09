@@ -11,16 +11,21 @@ in {
       keyd-driven Mac-style modifier remap.
 
       Default behavior: leftmeta/rightmeta (the physical "Cmd" keys, in Mac
-      mode on the keyboard) act as Control. So Cmd+C in Firefox/Slack/Electron
-      apps becomes Ctrl+C and copies natively. Cmd+T → new tab, Cmd+W → close
-      tab, etc., across every Linux GUI app that binds Ctrl+letter.
+      mode on the keyboard) act as Super (sustained, kernel-held), but
+      Cmd+letter / Cmd+digit / Cmd+arrow / etc. chords get rewritten to
+      Ctrl+key. So Cmd+C in Firefox/Slack/Electron becomes Ctrl+C and
+      copies natively, Cmd+T → new tab, Cmd+W → close tab, while Cmd+Tab
+      / Cmd+Space / Cmd+, / Cmd+\` reach the niri compositor as genuine
+      Super-held chords (which niri's `recent-windows` switcher and DMS
+      spotlight/settings binds require — they only stay open while the
+      modifier is held).
 
       Per-app exceptions go in ~/.config/keyd/app.conf (managed by the user's
       home-manager — see home-manager/hosts/<host>.nix). The kitty exception
       lives there: when kitty is the focused window, leftmeta/rightmeta pass
-      through as Super unchanged so kitty's own super+c / super+v / super+t /
-      etc. binds fire while Ctrl+C and Ctrl+D in kitty stay raw SIGINT/EOF
-      to the running shell.
+      through with no layer activation at all, so kitty's own super+c /
+      super+v / super+t / etc. binds fire while Ctrl+C and Ctrl+D in kitty
+      stay raw SIGINT/EOF to the running shell.
 
       App detection requires keyd-application-mapper, enabled as a user
       service alongside the daemon. It reads ~/.config/keyd/app.conf, then
@@ -49,38 +54,104 @@ in {
       keyboards.default = {
         ids = ["*"];
 
-        settings = {
-          main = {
-            leftmeta = "layer(cmd)";
-            rightmeta = "layer(cmd)";
-          };
+        # We extend keyd's predefined `[meta]` layer rather than swallowing
+        # leftmeta/rightmeta into a custom `[cmd:C]` layer. The reason is
+        # subtle but matters for niri: keyd's predefined `[meta]` is a `:M`
+        # layer that the leftmeta key activates by default, AND in that
+        # mode the kernel sees Super held continuously while the physical
+        # key is held. Niri's `recent-windows` (Cmd+Tab) switcher relies on
+        # exactly that — the overlay closes the moment the modifier
+        # releases, so it has to stay genuinely held for browse-style
+        # cycling to work.
+        #
+        # Our previous design (`leftmeta = layer(cmd)` + `[cmd:C]`) instead
+        # swallowed leftmeta entirely and re-emitted Super+key as a
+        # synthesized chord per keystroke (Super DOWN, Tab DOWN, Tab UP,
+        # Super UP). That released Super between Tab presses and made the
+        # niri switcher commit + flip-flop between two windows on every
+        # tap. Letting `[meta]` retain its sustained-Super semantics fixes
+        # that; we just enumerate the keys we want translated to Ctrl
+        # (the bulk of Mac muscle memory: Cmd+letter, Cmd+digit) instead
+        # of carving out the few that should stay as Super.
+        #
+        # Keys deliberately NOT remapped — they fall through to `:M` and
+        # emit as raw Super+key with the modifier still held, which is
+        # what we want:
+        #   tab, grave   — niri recent-windows (Cmd+Tab / Cmd+`)
+        #   space, comma — niri DMS spotlight / settings (Cmd+Space, Cmd+,)
+        #   F-keys, escape — no Mac convention worth translating
+        settings.meta = {
+          # Letters: Cmd+letter → Ctrl+letter (copy/paste/new-tab/close-
+          # tab/quit/find/save/etc., the universal Linux GUI idiom).
+          a = "C-a";
+          b = "C-b";
+          c = "C-c";
+          d = "C-d";
+          e = "C-e";
+          f = "C-f";
+          g = "C-g";
+          h = "C-h";
+          i = "C-i";
+          j = "C-j";
+          k = "C-k";
+          l = "C-l";
+          m = "C-m";
+          n = "C-n";
+          o = "C-o";
+          p = "C-p";
+          q = "C-q";
+          r = "C-r";
+          s = "C-s";
+          t = "C-t";
+          u = "C-u";
+          v = "C-v";
+          w = "C-w";
+          x = "C-x";
+          y = "C-y";
+          z = "C-z";
 
-          # Layer body. The `:C` in the section name makes Ctrl the
-          # default substitute modifier — pressing leftmeta+anything emits
-          # Ctrl+anything, which is what every Linux GUI app expects for
-          # its copy/paste/new-tab/etc. shortcuts.
-          #
-          # The exceptions below override per-key: `M-foo` outputs Super+foo
-          # (just M, ignoring the layer's implicit C). Why each one passes
-          # through as raw Super:
-          #
-          #   space, comma — niri grabs Super+Space → DMS spotlight (Mac
-          #     Cmd+Space) and Super+Comma → DMS settings (Mac Cmd+Comma).
-          #     Carving out preserves real Ctrl+Space (Emacs mark, IDE
-          #     autocomplete) and real Ctrl+Comma.
-          #   tab, grave — niri's built-in `recent-windows` config has
-          #     defaults for Mod+Tab/Mod+Shift+Tab (next/previous window in
-          #     MRU order) and Mod+grave/Mod+Shift+grave (same, filtered
-          #     to the current app — Mac Cmd+`). Mod = Super by niri
-          #     default, so the carve-out lets physical Cmd+Tab and Cmd+`
-          #     hit those defaults. Real Ctrl+Tab keeps working in
-          #     browsers for "next browser tab".
-          "cmd:C" = {
-            space = "M-space";
-            comma = "M-comma";
-            tab = "M-tab";
-            grave = "M-grave";
-          };
+          # Digits: Cmd+1..9 → Ctrl+1..9 (browser tab switching, IDE
+          # tool-window jumps, terminal-multiplexer pane focus).
+          "1" = "C-1";
+          "2" = "C-2";
+          "3" = "C-3";
+          "4" = "C-4";
+          "5" = "C-5";
+          "6" = "C-6";
+          "7" = "C-7";
+          "8" = "C-8";
+          "9" = "C-9";
+          "0" = "C-0";
+
+          # Arrows: Cmd+arrow → Ctrl+arrow (word/paragraph navigation in
+          # browsers, IDEs, text editors). Not literally what Mac does
+          # (Mac Cmd+Left = Home), but matches the previous `[cmd:C]`
+          # behavior so we don't change muscle memory in this rewrite.
+          left = "C-left";
+          right = "C-right";
+          up = "C-up";
+          down = "C-down";
+
+          # Editing: Cmd+Backspace → Ctrl+Backspace (delete previous word).
+          # Cmd+Enter → Ctrl+Enter (force-send / submit-without-newline in
+          # chat apps, run-cell in notebooks).
+          backspace = "C-backspace";
+          enter = "C-enter";
+
+          # Punctuation that shows up in app shortcuts. Common cases:
+          # Cmd+/ → Ctrl+/ (toggle comment in IDEs); Cmd+- / Cmd+= →
+          # Ctrl+-/= (zoom out/in); Cmd+[ / Cmd+] → Ctrl+[/] (back/forward
+          # in browsers, indent/outdent in IDEs); Cmd+. → Ctrl+. (quick
+          # actions in some IDEs, stop in others).
+          minus = "C-minus";
+          equal = "C-equal";
+          leftbrace = "C-leftbrace";
+          rightbrace = "C-rightbrace";
+          semicolon = "C-semicolon";
+          apostrophe = "C-apostrophe";
+          backslash = "C-backslash";
+          dot = "C-dot";
+          slash = "C-slash";
         };
       };
     };

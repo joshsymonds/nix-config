@@ -26,6 +26,19 @@
     printf '\033]8;;%s\033\\Click to open: %s\033]8;;\033\\\n' "$URL" "$URL"
     echo "Sent link to client terminal: $URL"
   '';
+
+  # `update` as a real binary on PATH, not a zsh shellAlias — so subagents
+  # and other non-interactive shells can call it. Refuses if sudo would
+  # prompt, since hanging on a password prompt is worse than failing fast.
+  updateScript = pkgs.writeShellScriptBin "update" ''
+    set -euo pipefail
+    if ! sudo -n true 2>/dev/null; then
+      echo "update: sudo would prompt for a password — cowardly refusing." >&2
+      echo "update: run 'sudo -v' first, or configure NOPASSWD." >&2
+      exit 1
+    fi
+    exec nh os switch ${config.home.homeDirectory}/nix-config "$@"
+  '';
 in {
   imports = [
     ./common.nix
@@ -42,6 +55,7 @@ in {
       dmidecode
       gcc
       remoteLinkOpenScript
+      updateScript
     ];
 
     sessionVariables = {
@@ -49,11 +63,6 @@ in {
       DEFAULT_BROWSER = "remote-link-open";
     };
   };
-
-  # Pass the flake path explicitly so `update` works from any directory and
-  # before NH_FLAKE is in the active environment (bootstrap case after a fresh
-  # install or before the first home-manager activation that exports it).
-  programs.zsh.shellAliases.update = "nh os switch ${config.home.homeDirectory}/nix-config";
 
   systemd.user.startServices = "sd-switch";
 }

@@ -41,7 +41,6 @@
       syntaxHighlighting.enable = false; # Save resources
 
       shellAliases = {
-        update = "nh os switch ${config.home.homeDirectory}/nix-config";
         ll = "ls -la";
         l = "ls -l";
         # Monitoring aliases for this box

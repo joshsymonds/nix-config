@@ -101,7 +101,7 @@
       "copy_on_select" = false; # Don't auto-copy on select
       "paste_actions" = "quote-urls-at-prompt";
       "strip_trailing_spaces" = "smart";
-      "background_opacity" = "0.9";
+      "background_opacity" = "0.8";
       "sync_to_monitor" = true;
       "hide_window_decorations" = true;
       "scrollback_pager" = "moar --terminal-fg --wrap --no-statusbar --no-linenumbers --quit-if-one-screen +INPUT_LINE_NUMBER";

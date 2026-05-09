@@ -181,6 +181,18 @@ in {
   # `toggle-overview` keybind either, so the grid is fully unreachable.
   programs.niri.settings.gestures.hot-corners.enable = false;
 
+  # Disable direct scanout. Without this, niri sends a fullscreen window's
+  # buffer straight to the GPU's primary plane, bypassing all compositor
+  # work — including the background-effect blur and the alpha channel.
+  # Result: fullscreen kitty looks solid black even with background_opacity
+  # 0.9 and a blur layer-rule, because the primary-plane path treats the
+  # framebuffer as opaque and skips compositing the wallpaper underneath.
+  # Forcing composition every frame trades a small amount of GPU bandwidth
+  # for visual consistency between fullscreen and tiled rendering. Niri
+  # docs warn debug options aren't API-stable, but this one's been around
+  # since the early debug section and is unlikely to vanish.
+  programs.niri.settings.debug.disable-direct-scanout = [];
+
   # Key repeat — niri's stock 600ms delay / 25Hz rate is sluggish for
   # backspace/arrow-key-heavy use. Tuning toward what macOS exposes via
   # `defaults write -g InitialKeyRepeat 12 KeyRepeat 1` (the common

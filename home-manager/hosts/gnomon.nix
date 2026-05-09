@@ -22,6 +22,7 @@
     zoom-us
     spotify
     signal-desktop
+    discord
 
     # Firefox is the daily driver; chromium is here for WebHID-only sites
     # (gaming-mouse configurators, etc.) since Firefox doesn't implement it.
@@ -219,21 +220,6 @@
       y = 0;
     };
   };
-
-  # Seed the daily-driver apps. They land on whichever workspace niri
-  # has focused at startup — no per-app pinning. First boot is messy;
-  # arrange once with Mod+Shift+H/L to push windows where you want
-  # them, and niri's per-output workspace stickiness keeps them there
-  # on subsequent logins. Add open-on-output rules below if the manual
-  # arranging gets old.
-  programs.niri.settings.spawn-at-startup = [
-    {command = ["kitty"];}
-    {command = ["firefox"];}
-    {command = ["spotify"];}
-    {command = ["slack"];}
-    {command = ["signal-desktop"];}
-    {command = ["claude-desktop"];}
-  ];
 
   programs.niri.settings.window-rules = [
     # Zoom on XWayland (via xwayland-satellite). xdg-decoration doesn't

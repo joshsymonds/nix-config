@@ -68,9 +68,18 @@
     # niri-flake — declaratively-typed niri config + module that supersedes nixpkgs'
     # programs/wayland/niri.nix (auto-disabled). DMS's home-manager niri module
     # integrates with this via its `includes` mechanism (config-file merging).
+    #
+    # We override niri-unstable to point at our fork at ~/Personal/niri (branch
+    # josh/integration). dms-niri.nix consumes niri-unstable explicitly. niri-
+    # flake's `make-niri` callPackage wraps this source, so all of its packaging
+    # machinery (config validator, niri-session systemd unit, xwayland-satellite
+    # integration) flows from one source of truth — critical for the validator
+    # step, which would otherwise reject our new `cross-monitor-column-insert`
+    # config key.
     niri-flake = {
       url = "github:sodiboo/niri-flake";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.niri-unstable.url = "github:joshsymonds/niri/josh/integration";
     };
 
     # CC-Tools - Claude Code smart hooks

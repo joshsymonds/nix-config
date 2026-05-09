@@ -525,15 +525,16 @@
         "quickshell": "quickshell"
       },
       "locked": {
-        "lastModified": 1777950612,
-        "narHash": "sha256-LeLFXMbbl/G9mpUL0n8X+IV2E7L2Lh4zN0SFr6DqxdI=",
-        "owner": "AvengeMedia",
+        "lastModified": 1778289517,
+        "narHash": "sha256-YA5ygq3DRegTWpbUK5ZFjjbTknc/YMc8oaYKpYfcsiQ=",
+        "owner": "joshsymonds",
         "repo": "DankMaterialShell",
-        "rev": "b209827f381b9aa0c2a30c4dbf657fd786884b97",
+        "rev": "70ef7476e6bbbbd2f2004383a7c9da0b4fb75ad8",
         "type": "github"
       },
       "original": {
-        "owner": "AvengeMedia",
+        "owner": "joshsymonds",
+        "ref": "josh/local",
         "repo": "DankMaterialShell",
         "type": "github"
       }

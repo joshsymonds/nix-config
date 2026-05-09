@@ -56,9 +56,12 @@
     # DankMaterialShell — Quickshell-based desktop shell for niri (and others).
     # Provides notifications, launcher, lockscreen, polkit agent, idle, login greeter
     # as cohesive Quickshell modules, replacing the typical mako/fuzzel/swaylock stitchwork.
-    # Tracking master (edge) per user directive.
+    # Tracking a personal fork on the `josh/local` branch — long-lived branch
+    # rebased onto upstream master when picking up new DMS releases. Source lives
+    # in ~/Personal/DankMaterialShell with `upstream` remote pointing at AvengeMedia;
+    # refresh with `git fetch upstream && git rebase upstream/master && git push -f`.
     dms = {
-      url = "github:AvengeMedia/DankMaterialShell";
+      url = "github:joshsymonds/DankMaterialShell/josh/local";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

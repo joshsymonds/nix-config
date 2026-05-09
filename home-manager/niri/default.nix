@@ -1,4 +1,165 @@
-{lib, ...}: {
+{
+  lib,
+  pkgs,
+  ...
+}: let
+  # Region pick → satty annotate → wl-copy + timestamped save. Shared by the
+  # Shift+Print and Super+Shift+5 binds. slurp's -d shows the selection's
+  # pixel dimensions while dragging (the "screen ruler" side-effect). The
+  # whole chain runs in one `sh -c` so grim's PNG streams through stdin
+  # into satty without ever touching disk; satty writes the final file
+  # itself via its strftime --output-filename template, and --early-exit
+  # closes it as soon as you copy or save.
+  sattyPipeline = [
+    "sh"
+    "-c"
+    ''mkdir -p "$HOME/Pictures/Screenshots" && grim -g "$(slurp -d)" - | satty --filename - --output-filename "$HOME/Pictures/Screenshots/satty-%Y%m%d-%H%M%S.png" --copy-command wl-copy --early-exit''
+  ];
+
+  # AI-driveable snapshot tool. Captures pixels + niri's structural metadata
+  # into a fresh /tmp/niri-snap/<ts>/ dir, prints a JSON manifest to stdout,
+  # and updates /tmp/niri-snap/latest. Designed so an agent can run one
+  # command and read one stdout line to find every artifact.
+  #
+  # Mode selection:
+  #   default     focused output. Uses `screenshot-screen --path`, which is
+  #               the only screenshot variant that takes an output path, so
+  #               we can write straight to our temp dir.
+  #   --window    focused window (or by id). `screenshot-window` has no
+  #               --path option, so we set `--write-to-disk false` and pull
+  #               the PNG out of the wl-clipboard via wl-paste.
+  #
+  # Caveat: niri's screenshot actions always populate the wl-clipboard with
+  # the captured image. This tool inherits that — running it overwrites
+  # whatever the user had on the clipboard. The same is true of every other
+  # screenshot path on this system (Print binds, satty pipeline), so the
+  # cost is consistent rather than surprising.
+  niri-snap = pkgs.writeShellApplication {
+    name = "niri-snap";
+    runtimeInputs = with pkgs; [jq wl-clipboard];
+    text = ''
+      set -euo pipefail
+
+      usage() {
+        cat <<'EOF'
+      Usage: niri-snap [--window [<id>]]
+
+        (no args)         Capture the focused output (screen.png).
+        --window          Capture the focused window (window.png).
+        --window <id>     Capture a specific window by niri window id.
+        -h, --help        Show this help.
+
+      Outputs land in /tmp/niri-snap/<timestamp>/ alongside structural JSON
+      (windows, workspaces, focused-window, focused-output). The symlink
+      /tmp/niri-snap/latest is updated to point at the newest dir, and a
+      one-line JSON manifest is printed to stdout for programmatic use.
+
+      Note: niri's screenshot actions copy the image to the wl-clipboard,
+      so your clipboard will hold the captured PNG after each run.
+      EOF
+      }
+
+      mode="screen"
+      window_id=""
+
+      while (( $# )); do
+        case "$1" in
+          -h|--help) usage; exit 0 ;;
+          --window)
+            mode="window"
+            shift
+            if (( $# )) && [[ "$1" != -* ]]; then
+              window_id="$1"
+              shift
+            fi
+            ;;
+          *) printf 'niri-snap: unknown flag: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+        esac
+      done
+
+      ts="$(date -u +%Y%m%dT%H%M%SZ)"
+      root="/tmp/niri-snap"
+      dir="$root/$ts"
+      mkdir -p "$dir"
+
+      # Structural metadata, always collected regardless of mode.
+      niri msg --json windows         > "$dir/windows.json"
+      niri msg --json workspaces      > "$dir/workspaces.json"
+      niri msg --json focused-window  > "$dir/focused-window.json"
+      niri msg --json focused-output  > "$dir/focused-output.json"
+
+      # niri's screenshot IPC returns immediately and the compositor writes
+      # the file (or populates the clipboard) on its next frame, so we have
+      # to wait for the artifact before printing the manifest — otherwise an
+      # agent that reads the path right after `niri-snap` exits will race.
+      wait_for_file() {
+        local path="$1"
+        for _ in $(seq 1 50); do
+          [[ -s "$path" ]] && return 0
+          sleep 0.05
+        done
+        printf 'niri-snap: timed out waiting for %s\n' "$path" >&2
+        return 1
+      }
+
+      case "$mode" in
+        screen)
+          niri msg action screenshot-screen --path "$dir/screen.png" >/dev/null
+          wait_for_file "$dir/screen.png"
+          image="$dir/screen.png"
+          ;;
+        window)
+          args=(--write-to-disk false)
+          if [[ -n "$window_id" ]]; then
+            args+=(--id "$window_id")
+          fi
+          # Clear the clipboard before issuing the screenshot. Otherwise a
+          # previous niri-snap (or any earlier screenshot) leaves image/png
+          # in the clipboard, and the wait loop below short-circuits on that
+          # stale offer — handing back the *previous* capture's pixels at the
+          # wrong dimensions. niri's screenshot-window action overwrites the
+          # clipboard regardless, so clearing first costs nothing extra.
+          wl-copy --clear
+          niri msg action screenshot-window "''${args[@]}" >/dev/null
+          for _ in $(seq 1 50); do
+            if wl-paste --list-types 2>/dev/null | grep -qx 'image/png'; then
+              break
+            fi
+            sleep 0.05
+          done
+          wl-paste -t image/png > "$dir/window.png"
+          wait_for_file "$dir/window.png"
+          image="$dir/window.png"
+          ;;
+      esac
+
+      ln -sfn "$dir" "$root/latest"
+
+      jq -n \
+        --arg ts "$ts" \
+        --arg dir "$dir" \
+        --arg mode "$mode" \
+        --arg image "$image" \
+        '{
+          ts: $ts,
+          dir: $dir,
+          mode: $mode,
+          latest: "/tmp/niri-snap/latest",
+          artifacts: {
+            screenshot:     $image,
+            windows:        ($dir + "/windows.json"),
+            workspaces:     ($dir + "/workspaces.json"),
+            focused_window: ($dir + "/focused-window.json"),
+            focused_output: ($dir + "/focused-output.json")
+          }
+        }'
+    '';
+  };
+in {
+  # niri-snap is niri-only, so it ships from this module. The package is
+  # built above via writeShellApplication; here we just expose it on PATH.
+  home.packages = [niri-snap];
+
   # niri-flake's HM module is auto-loaded by its NixOS module when
   # home-manager is detected — no explicit import needed (and an
   # explicit import here would duplicate `programs.niri.finalConfig`).
@@ -201,6 +362,55 @@
       action.show-hotkey-overlay = [];
     };
 
+    # ── Screenshots ───────────────────────────────────────────────
+    # Two parallel bindsets:
+    #
+    #   Print key (PrtSc): niri's standard screenshot keybinds. Print =
+    #     interactive picker (region/window), Ctrl+Print = whole monitor,
+    #     Alt+Print = focused window, Shift+Print = region → satty annotate.
+    #     The Q6 HE's PrtSc currently emits something other than KEY_SYSRQ
+    #     (likely a VIA layer), so these are dormant fallbacks until the
+    #     firmware is fixed or another keyboard is attached.
+    #
+    #   Super+Shift+3/4/5 (Mac-style): mirrors macOS exactly via the
+    #     Cmd→Super keyd carve-out, since this config heavily uses Mac
+    #     muscle memory elsewhere (Cmd+Space spotlight, Ctrl+Cmd+Q lock).
+    #     3 = whole monitor, 4 = niri's interactive picker (analogous to
+    #     macOS's Cmd+Shift+4 + Space window-pick combined into one UI),
+    #     5 = satty annotation pipeline.
+    #
+    # All variants write to ~/Pictures/Screenshots and copy to the
+    # clipboard. Annotation pipeline lives in `sattyPipeline` (top of file).
+    "Print" = {
+      hotkey-overlay.title = "Screenshot";
+      action.screenshot = [];
+    };
+    "Ctrl+Print" = {
+      hotkey-overlay.title = "Screenshot Monitor";
+      action.screenshot-screen = [];
+    };
+    "Alt+Print" = {
+      hotkey-overlay.title = "Screenshot Window";
+      action.screenshot-window = [];
+    };
+    "Shift+Print" = {
+      hotkey-overlay.title = "Region Screenshot → Annotate";
+      action.spawn = sattyPipeline;
+    };
+
+    "Super+Shift+3" = {
+      hotkey-overlay.title = "Screenshot Monitor";
+      action.screenshot-screen = [];
+    };
+    "Super+Shift+4" = {
+      hotkey-overlay.title = "Screenshot";
+      action.screenshot = [];
+    };
+    "Super+Shift+5" = {
+      hotkey-overlay.title = "Region Screenshot → Annotate";
+      action.spawn = sattyPipeline;
+    };
+
     # Audio + brightness keys: pass through to DMS for the OSD.
     # allow-when-locked so they keep working on the lock screen.
     "XF86AudioRaiseVolume" = {
@@ -372,6 +582,63 @@
               corner-radius 12
               active-color "#4f378b"
               urgent-color "#f2b8b5"
+          }
+      }
+
+      // Background blur (since niri 26.04). Tuning rule from upstream:
+      // bump `offset` first (no GPU cost) until artifacts appear, only
+      // then bump `passes` (each pass is a real shader pass).
+      blur {
+          passes 3
+          offset 3
+          noise 0.02
+          saturation 1.5
+      }
+
+      // xray=false → blur whatever is actually beneath the window
+      // (NSVisualEffectView semantics), not just the wallpaper. Per
+      // blurred window per frame: one BlitFramebuffer + a 6-draw
+      // dual-Kawase pyramid — sub-millisecond on modern GPUs. Known
+      // gap: blur drops out during open/close anims and tile drags
+      // due to offscreen-render layering (niri-side refactor pending);
+      // returns once the animation ends.
+
+      // kitty terminal — only meaningful with a translucent background.
+      window-rule {
+          match app-id="kitty"
+          background-effect {
+              blur true
+              xray false
+          }
+      }
+
+      // DMS shell surfaces — explicit allowlist. Niri's blur is
+      // geometry-based, not alpha-aware (background_effect.rs
+      // is_visible() ignores parent surface opacity), so any layer that
+      // fades in/out via opacity animations gets blur fully drawn from
+      // frame 1 of fade-in and persisting through fade-out — wrong on
+      // every DMS modal/popup we tested. Only persistent surfaces here.
+      //
+      // Spotlight is intentionally NOT in this list. The spotlight UI
+      // surface (dms:spotlight) uses Quickshell's
+      // BackgroundEffect.blurRegion API via the WindowBlur block at
+      // DankLauncherV2ModalStandalone.qml:349 — which sets a blur region
+      // sized to the modal container, giving Mac-Spotlight-style localized
+      // blur via the ext-background-effect-v1 protocol with no niri-side
+      // rule needed. That path requires DMS's "Compositor blur" setting
+      // (SettingsData.blurEnabled, gated by BlurService.enabled) to be on.
+      //
+      // We can't blur dms:spotlight:clickcatcher to fake whole-desktop
+      // blur — the clickcatcher must render *above* the spotlight UI
+      // for click-outside-to-dismiss to work, so blurring it captures
+      // the spotlight UI inside the blur region and the UI itself
+      // appears blurred (verified via niri-snap on 2026-05-08).
+      layer-rule {
+          match namespace="^dms:bar$"
+          match namespace="^dms:dock$"
+          background-effect {
+              blur true
+              xray false
           }
       }
     '';

@@ -31,6 +31,12 @@
       # silently falls back to a sans-serif and Nerd Font codepoints
       # render as boxes. Same package the macOS config installs.
       maple-mono.NF-CN-unhinted
+
+      # Screenshot annotation. Niri's built-in screenshot UI (Print) handles
+      # capture-to-disk + clipboard; satty layers on top via Shift+Print for
+      # the grim → slurp → satty pipeline (region pick → draw → copy/save).
+      # grim/slurp/wl-clipboard are installed system-side in modules/desktop/niri.nix.
+      satty
     ];
   };
 

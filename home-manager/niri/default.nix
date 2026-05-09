@@ -574,6 +574,10 @@ in {
     '';
 
     # Niri config blocks not yet exposed by niri-flake's typed schema.
+    # Niri merges duplicate top-level blocks across `include`d files
+    # (each include parses as its own ConfigPart, values accumulate into
+    # the shared Config), so a separate `layout {...}` here augments the
+    # one niri-flake renders into hm.kdl rather than colliding with it.
     "niri/extras.kdl".text = ''
       // recent-windows: alt-tab overlay styling. From dms/alttab.kdl
       // (corner-radius) plus the recent-windows section of dms/colors.kdl.
@@ -625,6 +629,13 @@ in {
       //     on each chrome panel. Fighting it with broad rules introduces
       //     double-blur and z-order artifacts (verified via niri-snap
       //     during 2026-05-08 debugging — see commit 9e30d7c).
+
+      // From the josh/cross-monitor-column-insert patch in our niri fork.
+      // Lands cross-monitor moves on the destination edge we arrived from
+      // instead of after the destination's active column.
+      layout {
+          cross-monitor-column-insert "adjacent"
+      }
     '';
   };
 }

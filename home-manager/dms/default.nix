@@ -185,7 +185,7 @@ in {
         # this string is a one-line nix-config edit + rebuild, no DMS source
         # change required.
         shaderMode    = "hexrain";
-        shaderHexSize = 14; # px radius per hex; only used by hexrain mode
+        shaderHexSize = 22; # px radius per hex; only used by hexrain mode
 
         shaderPrimaryColor          = "#5896E1"; # cyan band hue
         shaderSecondaryColor        = "#B711DB"; # magenta band hue

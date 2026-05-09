@@ -120,30 +120,6 @@
       action.maximize-column = [];
     };
 
-    # G: rescue key for windows that opened/escaped into floating
-    # state (e.g., a Steam game whose open-floating=false rule didn't
-    # apply, or a game that requested unfullscreen mid-session). Forces
-    # the focused window back to tiling and fullscreen — what the
-    # steam_app_* window-rule does on open. Idempotent on tiling
-    # (move-window-to-tiling no-ops if already tiled); fullscreen-window
-    # is a toggle, so pressing twice on an already-fullscreen window
-    # will unfullscreen it. Niri IPC doesn't expose is_fullscreen, so
-    # there's no clean way to make the fullscreen step conditional.
-    #
-    # The 0.15s sleep gives niri time to commit the floating→tiled
-    # layout change before the fullscreen request fires. Without it,
-    # Xwayland windows (Steam/Proton games come through xwayland-satellite,
-    # which adds a round-trip) often miss the first fullscreen toggle —
-    # the request lands while the surface is mid-transition.
-    "Alt+G" = {
-      hotkey-overlay.title = "Force Tiled + Fullscreen";
-      action.spawn = [
-        "sh"
-        "-c"
-        "niri msg action move-window-to-tiling && sleep 0.15 && niri msg action fullscreen-window"
-      ];
-    };
-
     # ── Stack manipulation ────────────────────────────────────────
     # I: pull the right neighbor INTO this column, stacking it.
     # O: expel the focused window OUT of this column, into a new

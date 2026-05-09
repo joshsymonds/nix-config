@@ -62,14 +62,6 @@
       action.close-window = [];
     };
 
-    # General terminal spawn. Lands a fresh kitty in the focused
-    # workspace. Use kitty's built-in tabs (Ctrl+Shift+T) for multiple
-    # shells in one window, or Alt+Return again for another column.
-    "Alt+Return" = {
-      hotkey-overlay.title = "Open Terminal";
-      action.spawn = ["kitty"];
-    };
-
     # ── Focus motion ──────────────────────────────────────────────
     # H/L walk columns and hop to the next monitor when the current
     # monitor is exhausted. J/K walk stacked windows in the focused

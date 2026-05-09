@@ -1,4 +1,8 @@
-{lib, ...}: {
+{
+  lib,
+  pkgs,
+  ...
+}: {
   # DankMaterialShell home-manager configuration. The DMS edge release
   # made several HM-side feature toggles built-in and no-op (they're now
   # always available): enableNightMode, enableSystemSound, enableClipboard,
@@ -57,8 +61,15 @@
         id = "default";
         name = "Main Bar";
         enabled = true;
-        position = 1; # bottom — top is reserved for niri's tab indicator
-        screenPreferences = ["all"];
+        # Position enum (Common/SettingsData.qml:22): 0=Top, 1=Bottom,
+        # 2=Left, 3=Right. Left edge of HDMI-A-1 (the right-hand monitor)
+        # puts the bar on the seam between the two displays — the sightline
+        # we cross most often — and keeps it visible during fullscreen
+        # games, which run on DP-3 (the left monitor).
+        position = 2;
+        screenPreferences = ["HDMI-A-1"];
+        # Fallback: if HDMI-A-1 disconnects and only one screen remains,
+        # show the bar on whatever's left rather than vanishing entirely.
         showOnLastDisplay = true;
         leftWidgets = ["focusedWindow"];
         centerWidgets = ["music" "clock" "weather"];
@@ -118,10 +129,16 @@
   # (cmp -s) so no-op rebuilds stay quiet. Skips silently when DMS
   # isn't running and on first activation (no `oldGenPath` to diff).
   home.activation.dmsReloadConfig = lib.hm.dag.entryAfter ["writeBoundary"] ''
-    # NixOS-integrated HM runs activation via home-manager-joshsymonds.service
-    # with a sanitized env — no XDG_RUNTIME_DIR, no DBUS_SESSION_BUS_ADDRESS.
-    # `systemctl --user` needs the runtime dir to find the user manager.
+    # NixOS-integrated HM runs activation via home-manager-joshsymonds.service.
+    # Two gotchas the hook has to handle itself:
+    #   1. systemd is NOT in the activation script's PATH (HM only adds it
+    #      around its own reloadSystemd block), so a bare `systemctl` call
+    #      exits 127 and the surrounding `2>/dev/null` swallows the error,
+    #      making the hook silently no-op forever. Use the absolute path.
+    #   2. XDG_RUNTIME_DIR isn't set in the sanitized service env;
+    #      `systemctl --user` needs it to find the per-user manager bus.
     export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    SYSTEMCTL=${pkgs.systemd}/bin/systemctl
 
     fileChanged() {
       local rel="$1"
@@ -131,9 +148,9 @@
         && ! cmp -s "$oldGenPath/home-files/$rel" "$newGenPath/home-files/$rel"
     }
 
-    if systemctl --user is-active --quiet dms.service 2>/dev/null; then
+    if $SYSTEMCTL --user is-active --quiet dms.service 2>/dev/null; then
       if fileChanged ".config/DankMaterialShell/settings.json"; then
-        systemctl --user restart dms.service >/dev/null 2>&1 || true
+        $SYSTEMCTL --user restart dms.service >/dev/null 2>&1 || true
       fi
     fi
   '';

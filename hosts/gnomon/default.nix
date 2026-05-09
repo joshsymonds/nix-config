@@ -58,11 +58,12 @@ in
     console.useXkbConfig = true;
 
     # ── Bluetooth (for controllers, headphones) ─────────────────────────
+    # DMS's control center handles pairing/connecting/battery via bluez
+    # directly — no blueman-applet needed (and its tray icon is hideous).
     hardware.bluetooth = {
       enable = true;
       powerOnBoot = true;
     };
-    services.blueman.enable = true;
 
     # ── Gaming ──────────────────────────────────────────────────────────
     # Two compat tools land in Steam via extraCompatPackages:

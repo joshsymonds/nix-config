@@ -61,6 +61,13 @@
   # config, this is gnomon's external-keyboard preference).
   programs.niri.settings.input.keyboard.xkb.options = "caps:escape";
 
+  # Propagate to XKB_DEFAULT_OPTIONS so nested compositors (gamescope
+  # for Steam/Proton games) rebuild their own xkb keymap with caps:escape
+  # too — they don't inherit niri's keymap, just the env vars. niri's
+  # `environment` block lands in niri's own env AND gets imported into
+  # the systemd user manager, so Steam-launched scopes pick it up.
+  programs.niri.settings.environment.XKB_DEFAULT_OPTIONS = "caps:escape";
+
   # keyd app.conf — per-app modifier overrides read by keyd-application-
   # mapper (set up by modules/services/keyd.nix at the system level).
   # The system config has [main] doing leftmeta = layer(cmd) so Cmd+C →
@@ -79,7 +86,12 @@
   # keeps the old in-memory rules. Same hm-symlink-vs-watcher dance as
   # the dms.service activation in home-manager/dms/default.nix.
   home.activation.keydReloadAppConfig = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    # systemd isn't on the activation script's PATH (HM scopes it to its own
+    # reloadSystemd block) — a bare `systemctl` call exits 127 and the
+    # surrounding `2>/dev/null` hides it, leaving the hook a silent no-op.
+    # See home-manager/dms/default.nix for the same gotcha.
     export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    SYSTEMCTL=${pkgs.systemd}/bin/systemctl
     fileChanged() {
       local rel="$1"
       [[ -v oldGenPath ]] \
@@ -87,9 +99,9 @@
         && [ -e "$newGenPath/home-files/$rel" ] \
         && ! cmp -s "$oldGenPath/home-files/$rel" "$newGenPath/home-files/$rel"
     }
-    if systemctl --user is-active --quiet keyd-application-mapper.service 2>/dev/null; then
+    if $SYSTEMCTL --user is-active --quiet keyd-application-mapper.service 2>/dev/null; then
       if fileChanged ".config/keyd/app.conf"; then
-        systemctl --user restart keyd-application-mapper.service >/dev/null 2>&1 || true
+        $SYSTEMCTL --user restart keyd-application-mapper.service >/dev/null 2>&1 || true
       fi
     fi
   '';

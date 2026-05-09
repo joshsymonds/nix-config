@@ -27,7 +27,15 @@
   programs.niri.settings.input.keyboard.repeat-delay = 200;
   programs.niri.settings.input.keyboard.repeat-rate = 50;
 
-  programs.niri.settings.input.focus-follows-mouse.enable = true;
+  # max-scroll-amount = "0%" restricts focus-follows-mouse to columns
+  # that are already fully on screen. Without it, mousing toward a
+  # window edge crosses focus into a partially-offscreen neighbor and
+  # niri auto-scrolls the view to bring it on — feels like windows
+  # shift around just from cursor movement.
+  programs.niri.settings.input.focus-follows-mouse = {
+    enable = true;
+    max-scroll-amount = "0%";
+  };
 
   # X11 fallback via xwayland-satellite (package added system-side in
   # modules/desktop/niri.nix). Niri itself is pure Wayland; satellite

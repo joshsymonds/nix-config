@@ -332,17 +332,24 @@
             installerIso = self.nixosConfigurations.installer.config.system.build.isoImage;
             ultravioletInstallerIso = self.nixosConfigurations.ultraviolet-installer.config.system.build.isoImage;
             vermissianInstallerIso = self.nixosConfigurations.vermissian-installer.config.system.build.isoImage;
+
+            # End-to-end installer VM test. Boots a qemu VM, runs install.sh,
+            # asserts post-install state. Slow (minutes) — exposed as a
+            # package, NOT a check, so `nix flake check` stays fast. Run
+            # explicitly with `nix build .#installerTest -L`.
+            installerTest = import ./tests/installer-test.nix {
+              inherit pkgs inputs self;
+              flakeSource = self.outPath;
+            };
           };
 
         # checks: things that nix flake check (and CI) should validate.
-        # treefmt-nix's flakeModule already adds checks.formatting; we merge.
+        # Keep this fast — anything that needs to boot a VM goes in
+        # packages above, not here. treefmt-nix's flakeModule adds
+        # checks.formatting; we merge.
         checks = lib.optionalAttrs (system == "x86_64-linux") {
           installer-kit-fixture = import ./tests/installer-kit-fixture.nix {
             inherit pkgs;
-            flakeSource = self.outPath;
-          };
-          installer = import ./tests/installer-test.nix {
-            inherit pkgs inputs self;
             flakeSource = self.outPath;
           };
         };

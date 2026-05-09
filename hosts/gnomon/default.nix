@@ -58,12 +58,15 @@ in
     console.useXkbConfig = true;
 
     # ── HID device access for WebHID configurators ──────────────────────
-    # SOLAKAKA E9 PRO mouse (Elan 04f3:026e) — grant the seat-local user
-    # read/write on its hidraw nodes so Chromium's WebHID can open the
-    # vendor interface. Without uaccess the device shows up in the picker
-    # but selection fails with "Failed to select device".
+    # Grant the seat-local user read/write on these devices' hidraw nodes
+    # so Chromium's WebHID can open the vendor interface. Without uaccess
+    # the device shows up in the picker but selection fails with "Failed
+    # to select device".
+    #   04f3:026e — SOLAKAKA E9 PRO mouse (driver.yuandaxin-tech.com)
+    #   3434:0b60 — Keychron Q6 HE keyboard (launcher.keychron.com)
     services.udev.extraRules = ''
       KERNEL=="hidraw*", ATTRS{idVendor}=="04f3", ATTRS{idProduct}=="026e", MODE="0660", TAG+="uaccess"
+      KERNEL=="hidraw*", ATTRS{idVendor}=="3434", ATTRS{idProduct}=="0b60", MODE="0660", TAG+="uaccess"
     '';
 
     # ── Bluetooth (for controllers, headphones) ─────────────────────────

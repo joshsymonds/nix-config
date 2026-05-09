@@ -180,11 +180,13 @@
       hotkey-overlay.title = "Toggle Clipboard Manager";
       action.spawn = ["dms" "ipc" "call" "clipboard" "toggle"];
     };
-    # Lock and night mode get Ctrl+Alt because the bare-Alt slot is
-    # already used (Alt+L = focus right, Alt+N = notifications).
-    # Mac's Ctrl+Cmd+Q → Ctrl+Alt+Q would collide with keyd's Cmd→Ctrl
-    # remap (would collapse to Ctrl+Q), so use L instead.
-    "Ctrl+Alt+L" = {
+    # Lock and night mode get Ctrl+Alt because the bare-Alt slots are
+    # already used (Alt+N = notifications). Lock lands on Q to mirror
+    # Mac's Ctrl+Cmd+Q lock convention: physical Alt+Cmd+Q → keyd →
+    # Ctrl+Alt+Q reaches niri. Note that Ctrl+Alt+L would collide with
+    # the move-column-right bind above (niri treats Alt+Ctrl+L and
+    # Ctrl+Alt+L as the same chord regardless of modifier order).
+    "Ctrl+Alt+Q" = {
       hotkey-overlay.title = "Lock Screen";
       action.spawn = ["dms" "ipc" "call" "lock" "lock"];
     };

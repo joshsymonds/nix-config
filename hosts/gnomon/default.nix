@@ -57,6 +57,15 @@ in
     services.xserver.xkb.options = "caps:escape";
     console.useXkbConfig = true;
 
+    # ── HID device access for WebHID configurators ──────────────────────
+    # SOLAKAKA E9 PRO mouse (Elan 04f3:026e) — grant the seat-local user
+    # read/write on its hidraw nodes so Chromium's WebHID can open the
+    # vendor interface. Without uaccess the device shows up in the picker
+    # but selection fails with "Failed to select device".
+    services.udev.extraRules = ''
+      KERNEL=="hidraw*", ATTRS{idVendor}=="04f3", ATTRS{idProduct}=="026e", MODE="0660", TAG+="uaccess"
+    '';
+
     # ── Bluetooth (for controllers, headphones) ─────────────────────────
     # DMS's control center handles pairing/connecting/battery via bluez
     # directly — no blueman-applet needed (and its tray icon is hideous).

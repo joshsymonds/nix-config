@@ -2,7 +2,17 @@
   lib,
   pkgs,
   ...
-}: {
+}: let
+  # 2560×1440 abstract purple hexagons from wallhaven (id dpo38l). Low-
+  # contrast and uniform enough that tiled windows don't fight the image,
+  # and the purple/magenta palette matches the Material You theme niri
+  # uses for borders/focus rings. Pinned by hash so the wallpaper is
+  # reproducible across rebuilds and machines.
+  wallpaper = pkgs.fetchurl {
+    url = "https://w.wallhaven.cc/full/dp/wallhaven-dpo38l.jpg";
+    sha256 = "1r3wfg75n7f20kph7i5hgg6af518p8p2bw795953jzcdcvy7m89w";
+  };
+in {
   # DankMaterialShell home-manager configuration. The DMS edge release
   # made several HM-side feature toggles built-in and no-op (they're now
   # always available): enableNightMode, enableSystemSound, enableClipboard,
@@ -49,6 +59,24 @@
     # the window title — without it, the bar reads "kitty · ~/proj" with
     # the app-id prefix that's already obvious from the visible window.
     settings.focusedWindowCompactMode = true;
+
+    # Wallpaper, set declaratively. DMS persists this in
+    # ~/.local/state/DankMaterialShell/session.json under wallpaperPath.
+    # `session` is serialized verbatim by the DMS HM module
+    # (distro/nix/home.nix:104).
+    session.wallpaperPath = "${wallpaper}";
+
+    # Run matugen against the actual wallpaper rather than a stock seed
+    # hex. Without this DMS picks Theme.qml:176's stock branch — runs
+    # matugen on currentThemeName's hardcoded primary hex (default
+    # "purple"), producing a palette where tertiary collapses onto
+    # secondary (the M3 generator only differentiates tertiary when
+    # given a real source image with chroma variation). "dynamic" picks
+    # Theme.qml:167's wallpaper branch — matugen extracts the palette
+    # from session.wallpaperPath and generates a distinct tertiary
+    # (hue-shifted complement to primary, used by ChromeShader's
+    # aurora highlights at chrome_aurora.frag:60).
+    settings.currentThemeName = "dynamic";
 
     # Compositor-driven background blur. Master toggle for the
     # ext-background-effect-v1 path: when on, every WindowBlur instance
@@ -124,6 +152,27 @@
         shadowColorMode = "default";
         shadowCustomColor = "#000000";
         clickThrough = false;
+
+        # Hand-picked shader background colors, sampled directly from the
+        # wallpaper's saturated neon hexagon edges. Matugen's tonal-spot
+        # algorithm averages sparse high-chroma pixels away, so its
+        # generated palette is muted pastels. The shader's atmospheric
+        # aurora effect needs the actual neon to read on screen, so we
+        # bypass matugen for the four shader uniforms only — DMS's
+        # widget chrome and the rest of Material You theming still use
+        # the matugen-derived palette.
+        #
+        # SettingsStore.js loads barConfigs raw (no per-key spec
+        # validation; only top-level unknowns are stripped at line 25).
+        # BarCanvas.qml reads `barConfig?.shader<X>Color` and falls back
+        # to Theme.<x> when absent.
+        #
+        # Triadic synthwave palette (cyan + magenta + neon-green) chosen
+        # to match the wallpaper's design intent.
+        shaderPrimaryColor          = "#5896E1"; # cyan band hue
+        shaderSecondaryColor        = "#B711DB"; # magenta band hue
+        shaderPrimaryContainerColor = "#170B55"; # deep purple base in dark zones
+        shaderTertiaryColor         = "#39FF99"; # neon green highlight peak
       }
     ];
   };
@@ -171,7 +220,8 @@
     }
 
     if $SYSTEMCTL --user is-active --quiet dms.service 2>/dev/null; then
-      if fileChanged ".config/DankMaterialShell/settings.json"; then
+      if fileChanged ".config/DankMaterialShell/settings.json" \
+        || fileChanged ".local/state/DankMaterialShell/session.json"; then
         $SYSTEMCTL --user restart dms.service >/dev/null 2>&1 || true
       fi
     fi

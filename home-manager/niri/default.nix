@@ -220,6 +220,33 @@ in {
     QT_QPA_PLATFORM = "wayland;xcb";
   };
 
+  # NVIDIA + niri + PipeWire screencast workarounds.
+  #
+  # Without `force-pipewire-invalid-modifier`, niri offers DMA-BUF formats
+  # using NVIDIA's GPU-tiled modifiers (whatever the EGL context's
+  # `dmabuf_render_formats()` returns). Consumers that come through XDP-G
+  # / Mutter / pipewiresrc cannot import those tiled buffers as EGLImage —
+  # the modifier negotiation pool exhausts and PipeWire returns EPIPE
+  # ("no more input formats"). Symptom: picker shows, you select a source,
+  # the receiving app gets a blank stream. Setting this flag filters the
+  # offered modifier set to `Modifier::Invalid`, which routes through
+  # `gbm.create_buffer_object` (the no-modifier path) and produces a
+  # single-plane DMA-BUF that NVIDIA consumers actually know how to import.
+  # Same idea as Hyprland's `screencopy_force_8b=true`. Negligible cost
+  # because the tiled-modifier path was never working downstream anyway.
+  #
+  # `wait-for-frame-completion-before-queueing` is a separate NVIDIA
+  # screencast quirk fix from niri's NVIDIA wiki — addresses glitched /
+  # black frames during sustained capture. Cheap to enable.
+  #
+  # Both flags are defined in `niri-config/src/debug.rs` and stable across
+  # niri 0.1+. niri-flake passes the `debug` attrset through to KDL
+  # untyped (empty-array value = boolean flag with no args).
+  programs.niri.settings.debug = {
+    force-pipewire-invalid-modifier = [];
+    wait-for-frame-completion-before-queueing = [];
+  };
+
   programs.niri.settings.spawn-at-startup = [
     {command = ["xwayland-satellite" ":0"];}
   ];

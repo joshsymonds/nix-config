@@ -70,6 +70,19 @@ in {
       };
     };
 
+    # Order XDP-G after niri so libgxdp finds niri's `org.gnome.Mutter.
+    # ServiceChannel` D-Bus name when it tries to open a privileged Wayland
+    # service connection at startup. Without this, on cold boot XDP-G starts
+    # first, gets "name without owner", falls back to a degraded init via
+    # `gtk_init_check`, and the screencast picker never renders. Symptom:
+    # "Share Screen" in Zoom/Meet/etc. produces no picker dialog at all.
+    # Diagnostic: `systemctl --user restart xdg-desktop-portal-gnome.service`
+    # after niri is fully up makes the picker appear (verified 2026-05-09).
+    # niri's stub at `src/dbus/mutter_service_channel.rs` is correct; the bug
+    # is purely the unit-ordering race between XDP-G's user service and
+    # niri's session-bus name registration.
+    systemd.user.services.xdg-desktop-portal-gnome.unitConfig.After = ["niri.service"];
+
     services.pipewire = {
       enable = true;
       alsa.enable = true;

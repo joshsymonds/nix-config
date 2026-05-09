@@ -19,85 +19,15 @@ with lib; let
     runtimeInputs = with pkgs; [tmux psmisc procps systemd bash gnugrep coreutils iproute2 gawk];
     text = builtins.readFile ./scripts/tmux-orphan-reaper.sh;
   };
-  netSpeedPatched = pkgs.tmuxPlugins.net-speed.overrideAttrs (old: {
-    postPatch =
-      (old.postPatch or "")
-      + ''
-        for f in scripts/*.sh *.sh; do
-          [ -f "$f" ] && substituteInPlace "$f" --replace-quiet '#!/bin/bash' '#!${pkgs.bash}/bin/bash'
-        done
-      '';
-  });
-  # Status-bar widgets are rendered by tmux's `run-shell` (`#(...)`), which
-  # inherits the tmux server process's PATH. Setting PATH on tmux.service only
-  # works for *fresh* server starts; X-RestartIfChanged=false means an existing
-  # server keeps whatever PATH it was originally launched with (often just
-  # systemd's bin dir). Wrapping the plugin scripts here baked-in PATH means
-  # the widgets work regardless of how the server got started or what its env
-  # looks like.
-  # sysstat provides iostat (cpu plugin's preferred sampler — accurate 1s
-  # delta vs. the ps-aux fallback's lifetime average). systemd provides
-  # systemctl for the failed-units widget.
-  statusBinPath = lib.makeBinPath (with pkgs; [bash coreutils gawk gnugrep gnused procps iproute2 sysstat systemd tmux util-linux]);
-  # Wrap a script with (a) baked-in PATH, (b) a TTL cache + flock, so that
-  # multiple tmux clients (each renders status independently) don't all run
-  # the underlying script in parallel — one process computes per TTL window,
-  # the rest serve cached output. Critical for net-speed, whose state file
-  # would otherwise be raced by N clients and produce nonsense velocities.
-  wrapStatusScript = name: ttl: target:
-    pkgs.writeShellScript name ''
-      export PATH="${statusBinPath}:$PATH"
-      cache=/tmp/tmux-status-${name}.cache
-      lock=/tmp/tmux-status-${name}.lock
-
-      serve_if_fresh() {
-        if [ -f "$cache" ]; then
-          age=$(( $(date +%s) - $(stat -c %Y "$cache") ))
-          if [ "$age" -lt ${toString ttl} ]; then
-            cat "$cache"
-            return 0
-          fi
-        fi
-        return 1
-      }
-
-      serve_if_fresh && exit 0
-
-      # Race for the right to recompute; losers serve stale cache rather than
-      # piling on the underlying script.
-      exec 9>"$lock"
-      if ! flock -n 9; then
-        [ -f "$cache" ] && cat "$cache"
-        exit 0
-      fi
-
-      # We hold the lock — a peer may have refreshed while we waited.
-      serve_if_fresh && exit 0
-
-      ${target} > "$cache.tmp" && mv "$cache.tmp" "$cache"
-      cat "$cache"
-    '';
-  mkInlineStatusScript = name: ttl: text:
-    wrapStatusScript name ttl (pkgs.writeShellScript "${name}-impl" text);
-  # TTL of 4s with status-interval=5s ensures exactly one recompute per tick:
-  # the cache stays fresh through any in-tick re-render bursts (multi-client,
-  # focus events, etc.) and goes stale just before the next scheduled tick.
-  statusTtl = 4;
-  netSpeedScript = wrapStatusScript "tmux-net-speed" statusTtl "${netSpeedPatched}/share/tmux-plugins/net-speed/scripts/net_speed.sh";
-  cpuPercentageScript = wrapStatusScript "tmux-cpu-percentage" statusTtl "${pkgs.tmuxPlugins.cpu}/share/tmux-plugins/cpu/scripts/cpu_percentage.sh";
-  ramPercentageScript = wrapStatusScript "tmux-ram-percentage" statusTtl "${pkgs.tmuxPlugins.cpu}/share/tmux-plugins/cpu/scripts/ram_percentage.sh";
-  diskUsageScript = mkInlineStatusScript "tmux-disk-usage" statusTtl ''
-    df --output=pcent / | tail -n 1 | tr -d ' '
-  '';
-  # When count > 0, emit the full catppuccin pill markup so tmux renders it;
-  # when 0, output nothing so the pill disappears entirely.
-  # `` is U+E0B6 (catppuccin "rounded" left separator), `󰀦` is the alert glyph.
-  failedUnitsScript = mkInlineStatusScript "tmux-failed-units" statusTtl ''
-    count=$(systemctl --failed --no-legend --plain --state=failed | wc -l)
-    if [ "$count" -gt 0 ]; then
-      printf '#[fg=#fab387]#[fg=#11111b,bg=#fab387]󰀦 #[fg=#cdd6f4,bg=#313244] %s#[fg=#313244] ' "$count"
-    fi
-  '';
+  # Combined system-monitor widget. Reads /proc directly (no iostat sample)
+  # for cpu/ram/net/disk, plus systemctl for failed units, and emits the full
+  # styled status-right string. Replaces five separate `#(...)` shell-outs.
+  # Cached for 4s so multi-client redraws don't re-run measurements.
+  tmuxStatus = pkgs.writeShellApplication {
+    name = "tmux-status";
+    runtimeInputs = with pkgs; [coreutils gawk systemd util-linux];
+    text = builtins.readFile ./scripts/tmux-status.sh;
+  };
 in {
   config = {
     programs.tmux = {
@@ -112,33 +42,6 @@ in {
       plugins = with pkgs.tmuxPlugins; [
         sensible
         yank
-        cpu
-        netSpeedPatched
-        {
-          plugin = catppuccin;
-          extraConfig = ''
-            # Catppuccin settings
-            set -g @catppuccin_flavor 'mocha'
-            set -g @catppuccin_window_status_style "rounded"
-
-            # Ensure transparent backgrounds where possible
-            set -g status-bg default
-            set -g message-style "fg=#94e2d5,bg=default"
-            set -g message-command-style "fg=#94e2d5,bg=default"
-
-            # Window settings
-            set -g @catppuccin_window_left_separator ""
-            set -g @catppuccin_window_right_separator " "
-            set -g @catppuccin_window_middle_separator " █"
-            set -g @catppuccin_window_number_position "right"
-
-            set -g @catppuccin_window_default_fill "number"
-            set -g @catppuccin_window_default_text "#{window_name}"
-
-            set -g @catppuccin_window_current_fill "number"
-            set -g @catppuccin_window_current_text "#{window_name}"
-          '';
-        }
       ];
 
       extraConfig = ''
@@ -186,34 +89,31 @@ in {
         # Terminal title: DEV_CONTEXT option (fallback to hostname) + command + compressed path
         set -g set-titles-string '#{?@dev_context,#{@dev_context},#H}*#{pane_current_command}*#(${tmuxDevspaceHelper}/bin/tmux-devspace title-path #{q:pane_current_path})'
 
-        # Status line configuration
+        # Status line configuration. Catppuccin Mocha palette throughout.
+        set -g status-bg default
+        set -g status-justify left
         set -g status-interval 5
         set -g status-right-length 200
         set -g status-left-length 100
         set -g status-left ""
+        set -g window-status-separator ""
+        set -g message-style "fg=#94e2d5,bg=default"
+        set -g message-command-style "fg=#94e2d5,bg=default"
 
-        # Right side status with system monitoring
-        set -g status-right \
-          "#[fg=#94e2d5]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#94e2d5]󰈀  #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${netSpeedScript})#[fg=#313244]#{E:@catppuccin_status_right_separator}"
+        # Window status: rectangular pill matching what the previous catppuccin
+        # plugin produced. Inactive windows show the pane title (#T) on the
+        # surface_0 background; the current window shows the window name (#W)
+        # on surface_1, with a mauve index. Trailing #[default] resets fg/bg
+        # so the next window's pill renders cleanly on the bar bg.
+        set -g window-status-format "#[fg=#cdd6f4,bg=#313244] #T #[fg=#11111b,bg=#9399b2] #I #[default] "
+        set -g window-status-current-format "#[fg=#cdd6f4,bg=#45475a] #W #[fg=#11111b,bg=#cba6f7] #I #[default] "
 
-        set -ag status-right \
-          "#[fg=#f9e2af]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#f9e2af]#{E:@catppuccin_cpu_icon} #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${cpuPercentageScript})#[fg=#313244]#{E:@catppuccin_status_right_separator}"
+        # Right side: one combined system-monitor widget. Reads /proc
+        # directly (no iostat sample), caches output for 4s, emits the full
+        # styled pill string for cpu/ram/net/disk + failed-units alert.
+        set -g status-right "#(${tmuxStatus}/bin/tmux-status)"
 
-        set -g @catppuccin_ram_icon " "
-
-        set -ag status-right \
-          "#[fg=#cba6f7]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#cba6f7]  #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${ramPercentageScript})#[fg=#313244]#{E:@catppuccin_status_right_separator}"
-
-        # Disk usage on / — blue pill, harddisk
-        set -ag status-right \
-          "#[fg=#89b4fa]#{E:@catppuccin_status_left_separator}#[fg=#11111b,bg=#89b4fa]󰋊 #{E:@catppuccin_status_middle_separator}#[fg=#cdd6f4,bg=#313244] #(${diskUsageScript})#[fg=#313244]#{E:@catppuccin_status_right_separator}"
-
-        # Failed systemd units — peach pill, alert. Script emits full pill
-        # markup when count > 0 and nothing otherwise, so the pill disappears
-        # entirely when there are no failures.
-        set -ag status-right "#(${failedUnitsScript})"
-
-        # Pane borders - Catppuccin Mocha colors
+        # Pane borders — Catppuccin Mocha colors
         set -g pane-border-style "fg=#313244"
         set -g pane-active-border-style "fg=#89b4fa"
 
@@ -269,11 +169,11 @@ in {
       };
       Service = {
         Type = "forking";
-        # PATH must include bash + standard utilities so plugin run-shell
-        # scripts (e.g. catppuccin's `#!/usr/bin/env bash`) can find their
+        # PATH must include bash + standard utilities so any plugin run-shell
+        # scripts (e.g. shipped `#!/usr/bin/env bash`) can find their
         # interpreter. systemd's default user PATH is just systemd's bin
-        # dir, which broke the status bar render — `run-shell` returned 127
-        # and the catppuccin plugin never sourced its theme files
+        # dir, which broke the status bar render in the past — `run-shell`
+        # returned 127 and plugin theme files were never sourced
         # (incident 2026-05-05: status bar reverted to default green).
         Environment = [
           "TMUX_TMPDIR=%t"

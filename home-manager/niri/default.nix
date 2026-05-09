@@ -55,7 +55,14 @@
     {command = ["xwayland-satellite" ":0"];}
   ];
 
-  programs.niri.settings.binds = {
+  # Wrap every bind with `allow-inhibiting = false` so the wayland
+  # keyboard-shortcuts-inhibit protocol can't steal our WM keys.
+  # Default niri honors inhibit (intended for remote-desktop clients
+  # and software KVMs), but Steam/SDL/Proton games request it too —
+  # which silently disables Alt+Shift+H/L (move column to monitor),
+  # Alt+F (exit fullscreen), Alt+Q (close), etc. while the game is
+  # focused. We're not running an RDP client; niri's binds always win.
+  programs.niri.settings.binds = lib.mapAttrs (_: v: v // {allow-inhibiting = false;}) {
     # ── Window lifecycle ──────────────────────────────────────────
     "Alt+Q" = {
       hotkey-overlay.title = "Close Window";
@@ -111,6 +118,24 @@
     "Alt+Shift+F" = {
       hotkey-overlay.title = "Maximize Column";
       action.maximize-column = [];
+    };
+
+    # G: rescue key for windows that opened/escaped into floating
+    # state (e.g., a Steam game whose open-floating=false rule didn't
+    # apply, or a game that requested unfullscreen mid-session). Forces
+    # the focused window back to tiling and fullscreen — what the
+    # steam_app_* window-rule does on open. Idempotent on tiling
+    # (move-window-to-tiling no-ops if already tiled); fullscreen-window
+    # is a toggle, so pressing twice on an already-fullscreen window
+    # will unfullscreen it. Niri IPC doesn't expose is_fullscreen, so
+    # there's no clean way to make the fullscreen step conditional.
+    "Alt+G" = {
+      hotkey-overlay.title = "Force Tiled + Fullscreen";
+      action.spawn = [
+        "sh"
+        "-c"
+        "niri msg action move-window-to-tiling && niri msg action fullscreen-window"
+      ];
     };
 
     # ── Stack manipulation ────────────────────────────────────────
@@ -310,6 +335,17 @@
         };
         clip-to-geometry = true;
         draw-border-with-background = false;
+      }
+      # Steam/Proton games: app-id is "steam_app_<numeric>". They often
+      # open as floating Xwayland surfaces, which makes niri's
+      # fullscreen-window action a no-op (it only fullscreens tiled
+      # windows properly) and leaves the universal corner-radius +
+      # focus-ring visible. Force them tiled and fullscreen on open;
+      # Alt+F still toggles back to windowed if needed.
+      {
+        matches = [{app-id = "^steam_app_";}];
+        open-floating = false;
+        open-fullscreen = true;
       }
     ];
 

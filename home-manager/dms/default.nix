@@ -78,6 +78,16 @@ in {
     # aurora highlights at chrome_aurora.frag:60).
     settings.currentThemeName = "dynamic";
 
+    # Promote notification popups to WlrLayershell.Overlay so they appear
+    # above fullscreen windows (movies, games, full-window terminals). DMS
+    # default is false — only Critical-urgency notifications get Overlay,
+    # everything else lands on WlrLayershell.Top, which niri (and most
+    # layer-shell compositors) hide beneath fullscreen surfaces.
+    # Trade-off: anything tagged via libnotify (Slack pings, etc.) will pop
+    # over presentations and movies. Worth it for never missing a message.
+    # Logic at NotificationPopup.qml:178-180.
+    settings.notificationOverlayEnabled = true;
+
     # Compositor-driven background blur. Master toggle for the
     # ext-background-effect-v1 path: when on, every WindowBlur instance
     # in DMS (BlurService.qml:18 gates on this) sets a per-surface

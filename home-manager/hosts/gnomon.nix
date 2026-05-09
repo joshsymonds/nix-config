@@ -98,13 +98,24 @@
   # only by serial in the EDID name. Niri needs explicit positions when
   # there's no other signal, otherwise it picks an arbitrary side-by-side
   # ordering at detection time.
-  programs.niri.settings.outputs."Dell Inc. DELL U2724D CDL25Z3".position = {
-    x = 0;
-    y = 0;
+  #
+  # scale = 1.1 nudges every app's effective DPI up ~10% (kitty, browser,
+  # gnomon, GTK, Qt). Niri output positions are in *logical* (post-scale)
+  # coordinates — at scale 1.1 the 2560-wide panel takes 2328 logical px,
+  # so the right monitor sits at x=2328 to stay edge-to-edge.
+  programs.niri.settings.outputs."Dell Inc. DELL U2724D CDL25Z3" = {
+    scale = 1.1;
+    position = {
+      x = 0;
+      y = 0;
+    };
   };
-  programs.niri.settings.outputs."Dell Inc. DELL U2724D CBC35Z3".position = {
-    x = 2560;
-    y = 0;
+  programs.niri.settings.outputs."Dell Inc. DELL U2724D CBC35Z3" = {
+    scale = 1.1;
+    position = {
+      x = 2328;
+      y = 0;
+    };
   };
 
   # Seed the daily-driver apps. They land on whichever workspace niri

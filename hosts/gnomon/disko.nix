@@ -30,6 +30,7 @@
       "/var/lib/upower"
       "/var/lib/colord"
       "/var/lib/sbctl"
+      "/var/lib/tailscale"
     ];
 
     persistFiles = [

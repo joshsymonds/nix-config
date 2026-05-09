@@ -196,6 +196,11 @@
       action.spawn = ["dms" "ipc" "call" "night" "toggle"];
     };
 
+    "Alt+Shift+Slash" = {
+      hotkey-overlay.title = "Show Hotkeys";
+      action.show-hotkey-overlay = [];
+    };
+
     # Audio + brightness keys: pass through to DMS for the OSD.
     # allow-when-locked so they keep working on the lock screen.
     "XF86AudioRaiseVolume" = {

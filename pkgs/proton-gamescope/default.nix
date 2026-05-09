@@ -46,17 +46,17 @@ in
       }
       VDF
 
-      # require_tool_appid 1628350 is the Steam Linux Runtime (sniper) — same
-      # one proton-ge-bin's own manifest declares. Steam wraps us in the
-      # sniper container before invoking run.sh; inside the sniper, /nix/store
-      # is bind-mounted by pressure-vessel so we can reach gamescope and
-      # proton-ge by their store paths.
+      # No require_tool_appid here. Modern Steam wraps every compat
+      # tool launch in the Steam Linux Runtime sniper container
+      # automatically (declaring it ourselves would be redundant), and
+      # this mirrors the proven-working per-game `gamescope ... -- %command%`
+      # launch-option pattern: gamescope inside the sniper, Proton inside
+      # gamescope.
       cat > $steamcompattool/toolmanifest.vdf <<'VDF'
       "manifest"
       {
         "version" "2"
         "commandline" "/run.sh %verb%"
-        "require_tool_appid" "1628350"
         "use_sessions" "1"
       }
       VDF

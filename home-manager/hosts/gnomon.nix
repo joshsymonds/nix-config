@@ -158,6 +158,16 @@
   in ''
     [kitty]
     ${kittyMetaOverrides}
+
+    # Firefox: Mac-style tab cycling on Cmd+Shift+]/[. Linux Firefox
+    # doesn't bind Ctrl+Shift+]/[ — its tab-cycle shortcuts are Ctrl+Tab
+    # / Ctrl+Shift+Tab. Targeting the composite [meta+shift] layer means
+    # plain Cmd+] / Cmd+[ keep their existing [meta] translation
+    # (Ctrl+]/Ctrl+[) and only the shifted variant cycles tabs. The
+    # [meta+shift] layer is declared (empty) in modules/services/keyd.nix.
+    [firefox]
+    meta+shift.rightbrace = C-tab
+    meta+shift.leftbrace = C-S-tab
   '';
 
   # Restart keyd-application-mapper when app.conf changes. The mapper

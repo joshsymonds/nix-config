@@ -167,6 +167,19 @@ in {
           dot = "C-dot";
           slash = "C-slash";
         };
+
+        # Composite layer that activates when both Cmd and Shift are held.
+        # We don't bind anything here at the system level — it exists only
+        # so per-app overrides in ~/.config/keyd/app.conf can target it
+        # (e.g. Firefox's `meta+shift.rightbrace = C-tab` for Mac-style
+        # tab cycling). keyd refuses dynamic binds against an undeclared
+        # composite layer ("meta+shift is not a valid layer"), so we
+        # register it once here. Composite layers MUST be declared after
+        # their component layers; both [meta] and [shift] are keyd
+        # built-ins, so order is fine.
+        extraConfig = ''
+          [meta+shift]
+        '';
       };
     };
 

@@ -1,5 +1,6 @@
 {
   inputs,
+  lib,
   pkgs,
   ...
 }: {
@@ -59,6 +60,39 @@
   # Caps Lock → Escape (host-local: the laptop has its own keyboard
   # config, this is gnomon's external-keyboard preference).
   programs.niri.settings.input.keyboard.xkb.options = "caps:escape";
+
+  # keyd app.conf — per-app modifier overrides read by keyd-application-
+  # mapper (set up by modules/services/keyd.nix at the system level).
+  # The system config has [main] doing leftmeta = layer(cmd) so Cmd+C →
+  # Ctrl+C globally; this override restores raw passthrough when kitty
+  # is focused so kitty's own super+c/v/t/etc. binds fire and Ctrl+C/D
+  # in the terminal stay raw SIGINT/EOF.
+  xdg.configFile."keyd/app.conf".text = ''
+    [kitty]
+    leftmeta = leftmeta
+    rightmeta = rightmeta
+  '';
+
+  # Restart keyd-application-mapper when app.conf changes. The mapper
+  # reads the file at startup only and doesn't watch for changes, so
+  # without this the new override sits on disk but the running mapper
+  # keeps the old in-memory rules. Same hm-symlink-vs-watcher dance as
+  # the dms.service activation in home-manager/dms/default.nix.
+  home.activation.keydReloadAppConfig = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    fileChanged() {
+      local rel="$1"
+      [[ -v oldGenPath ]] \
+        && [ -e "$oldGenPath/home-files/$rel" ] \
+        && [ -e "$newGenPath/home-files/$rel" ] \
+        && ! cmp -s "$oldGenPath/home-files/$rel" "$newGenPath/home-files/$rel"
+    }
+    if systemctl --user is-active --quiet keyd-application-mapper.service 2>/dev/null; then
+      if fileChanged ".config/keyd/app.conf"; then
+        systemctl --user restart keyd-application-mapper.service >/dev/null 2>&1 || true
+      fi
+    fi
+  '';
 
   # Monitor positions. Two identical Dell U2724D side-by-side, distinguished
   # only by serial in the EDID name. Niri needs explicit positions when

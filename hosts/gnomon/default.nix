@@ -23,7 +23,10 @@ in
     # Slack, Electron apps, and so on. Kitty has a per-app exception so it
     # receives raw Super (and Ctrl+C/D in the terminal stays as untouched
     # interrupt/EOF). See modules/services/keyd.nix for the why.
-    services.keyd-mac-style.enable = true;
+    services.keyd-mac-style = {
+      enable = true;
+      users = ["joshsymonds"];
+    };
 
     # ── Performance profile ─────────────────────────────────────────────
     performance.profile = "dev";

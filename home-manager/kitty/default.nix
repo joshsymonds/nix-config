@@ -106,6 +106,12 @@
       "hide_window_decorations" = true;
       "scrollback_pager" = "moar --terminal-fg --wrap --no-statusbar --no-linenumbers --quit-if-one-screen +INPUT_LINE_NUMBER";
       "mouse_map ctrl+shift+right" = "press ungrabbed combine : mouse_select_command_output : show_last_visited_command_output";
+      # Open URLs on plain left-click even when an app (tmux) has grabbed
+      # the mouse. Default kitty restricts this to ungrabbed mode, so
+      # clicks land on tmux which has no URL handler. `link`-only action
+      # means non-URL clicks still pass through to tmux for selection /
+      # pane focus.
+      "mouse_map left click grabbed" = "mouse_handle_click link";
       "exe_search_path" = "/run/current-system/sw/bin:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin:/opt/homebrew/bin";
       # Enable hyperlink handling
       "open_url_with" = "default";

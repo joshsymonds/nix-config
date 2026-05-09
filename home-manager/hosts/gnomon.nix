@@ -74,14 +74,90 @@
 
   # keyd app.conf — per-app modifier overrides read by keyd-application-
   # mapper (set up by modules/services/keyd.nix at the system level).
-  # The system config has [main] doing leftmeta = layer(cmd) so Cmd+C →
-  # Ctrl+C globally; this override restores raw passthrough when kitty
-  # is focused so kitty's own super+c/v/t/etc. binds fire and Ctrl+C/D
-  # in the terminal stay raw SIGINT/EOF.
-  xdg.configFile."keyd/app.conf".text = ''
+  #
+  # Two non-obvious mechanics:
+  #
+  # 1. The system config translates Cmd+key → Ctrl+key via rules in the
+  #    predefined [meta] layer (a `:M` modifier layer that leftmeta/
+  #    rightmeta activate implicitly — that activation is hardcoded in
+  #    keyd's modifier handler, NOT a [main] binding you can rebind
+  #    away). So a per-app exception has to override the [meta] rules
+  #    themselves; `[kitty] leftmeta = leftmeta` is a literal no-op,
+  #    since leftmeta still activates [meta] regardless.
+  #
+  # 2. Section headers in app.conf are `[<class>]` (split on `|`, not
+  #    `.`) — keyd-application-mapper does NOT recognize a layer-suffix
+  #    syntax in the header. The layer prefix goes on each *binding*
+  #    inside, the same `[<layer>.]<key> = <action>` form the `keyd bind`
+  #    CLI accepts. So `meta.t = M-t` under `[kitty]` is right;
+  #    `t = M-t` under `[kitty.meta]` would silently never match
+  #    because the focused-class "kitty" doesn't fnmatch "kitty.meta".
+  #
+  # For kitty we re-translate every Ctrl-prefixed [meta] rule to use
+  # Super (M-) instead, so kitty's own super+c/v/t/etc. binds fire while
+  # raw Ctrl+C / Ctrl+D in the terminal stay SIGINT/EOF. Keep this list
+  # in sync with `settings.meta` in modules/services/keyd.nix.
+  xdg.configFile."keyd/app.conf".text = let
+    kittyPassthroughKeys = [
+      "a"
+      "b"
+      "c"
+      "d"
+      "e"
+      "f"
+      "g"
+      "h"
+      "i"
+      "j"
+      "k"
+      "l"
+      "m"
+      "n"
+      "o"
+      "p"
+      "q"
+      "r"
+      "s"
+      "t"
+      "u"
+      "v"
+      "w"
+      "x"
+      "y"
+      "z"
+      "1"
+      "2"
+      "3"
+      "4"
+      "5"
+      "6"
+      "7"
+      "8"
+      "9"
+      "0"
+      "left"
+      "right"
+      "up"
+      "down"
+      "backspace"
+      "enter"
+      "minus"
+      "equal"
+      "leftbrace"
+      "rightbrace"
+      "semicolon"
+      "apostrophe"
+      "backslash"
+      "dot"
+      "slash"
+    ];
+    kittyMetaOverrides =
+      lib.concatMapStringsSep "\n"
+      (k: "meta.${k} = M-${k}")
+      kittyPassthroughKeys;
+  in ''
     [kitty]
-    leftmeta = leftmeta
-    rightmeta = rightmeta
+    ${kittyMetaOverrides}
   '';
 
   # Restart keyd-application-mapper when app.conf changes. The mapper

@@ -22,10 +22,24 @@ in {
 
       Per-app exceptions go in ~/.config/keyd/app.conf (managed by the user's
       home-manager — see home-manager/hosts/<host>.nix). The kitty exception
-      lives there: when kitty is the focused window, leftmeta/rightmeta pass
-      through with no layer activation at all, so kitty's own super+c /
-      super+v / super+t / etc. binds fire while Ctrl+C and Ctrl+D in kitty
-      stay raw SIGINT/EOF to the running shell.
+      lives there: under `[kitty]` we override each Ctrl-translation in
+      [meta] with its Super equivalent (`meta.t = M-t`, etc.), so kitty
+      receives raw Super+key for its own super+c/v/t/etc. binds while raw
+      Ctrl+C and Ctrl+D in the terminal stay SIGINT/EOF.
+
+      Why we override [meta] rules instead of just neutralizing leftmeta:
+      keyd's [meta] is a predefined `:M` layer whose activation by
+      leftmeta/rightmeta is hardcoded into the modifier handler, not a
+      [main] binding. Rebinding leftmeta in [main] does NOT suppress that
+      activation, so a [main]-level exception is a silent no-op.
+
+      Why the layer prefix is on the binding (`meta.t = M-t`) and not on
+      the section header (`[kitty.meta]`): keyd-application-mapper splits
+      section names on `|` (class|title), not `.`, so `[kitty.meta]`
+      would be treated as the class string "kitty.meta" and never match
+      the focused window class "kitty". The mapper passes each line
+      under `[kitty]` verbatim to `keyd bind reset`, which accepts the
+      `[<layer>.]<key> = <action>` form natively.
 
       App detection requires keyd-application-mapper, enabled as a user
       service alongside the daemon. It reads ~/.config/keyd/app.conf, then

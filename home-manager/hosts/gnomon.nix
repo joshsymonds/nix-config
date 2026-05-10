@@ -48,6 +48,26 @@
   # Same signing key vermissian uses — single user identity across machines
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
 
+  programs.claudeCode.hostContext = ''
+    # Host: gnomon (Linux NixOS, x86_64)
+
+    You are on `gnomon`. This is a **Linux NixOS** host — not macOS, not
+    another machine in the fleet.
+
+    ## Hardware
+    - AMD Ryzen 7 9800X3D — 8 cores (SMT off → 8 threads), Zen 5 + 96 MB V-Cache
+    - 64 GB RAM
+    - NVIDIA RTX 5070 Ti, 16 GB VRAM, CUDA 12.0 (Blackwell sm_120)
+    - ~1.9 TB encrypted NVMe root
+    - niri + DankMaterialShell desktop, Wayland, lanzaboote-signed boot
+
+    ## Role
+    Linux gaming + GPU workstation. Steam/Proton (gamescope), 1Password GUI,
+    Bluetooth controllers/headphones. The RTX 5070 Ti makes this the local
+    CUDA / inference box. The 9800X3D is tuned for game latency, not parallel
+    throughput.
+  '';
+
   # Caps Lock → Escape (host-local: the laptop has its own keyboard
   # config, this is gnomon's external-keyboard preference).
   programs.niri.settings.input.keyboard.xkb.options = "caps:escape";

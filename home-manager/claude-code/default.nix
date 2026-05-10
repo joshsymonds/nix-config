@@ -5,6 +5,8 @@
   pkgs,
   ...
 }: let
+  cfg = config.programs.claudeCode;
+
   # Get cc-tools binaries from the flake
   cc-tools = inputs.cc-tools.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
@@ -57,11 +59,22 @@
       ]
     );
 in {
-  age.secrets."ntfy-url" = {
+  options.programs.claudeCode.hostContext = lib.mkOption {
+    type = lib.types.str;
+    default = "";
+    description = ''
+      Per-host markdown rendered to ~/.claude/host.md and ~/.claude-work/host.md,
+      then imported from CLAUDE.md via @host.md. Used to ground agents about
+      which physical machine they're running on (hardware, role, capabilities).
+      Empty string produces an empty file; the @-import is harmless in that case.
+    '';
+  };
+
+  config.age.secrets."ntfy-url" = {
     file = ../../secrets/user/ntfy-url.age;
   };
 
-  home = {
+  config.home = {
     # Install Node.js to enable npm
     packages =
       (with pkgs; [
@@ -107,6 +120,20 @@ in {
           name: type: type == "regular" && lib.hasSuffix ".md" name
         )
         commandFiles;
+      # CLAUDE.md is written as text (not symlinked) so the trailing
+      # @host.md and @fleet.md imports resolve relative to ~/.claude
+      # (or ~/.claude-work) rather than the nix store path the symlink
+      # would otherwise expose. Per Claude Code's memory docs, relative
+      # @-imports resolve relative to the file containing them.
+      claudeMdText =
+        builtins.readFile ./CLAUDE.md
+        + ''
+
+
+          @host.md
+          @fleet.md
+        '';
+
       mkClaudeFiles = dir: let
         commandFileAttrs =
           lib.mapAttrs' (
@@ -118,7 +145,9 @@ in {
           commandFileAttrs
           {
             "${dir}/settings.json".source = settingsJson;
-            "${dir}/CLAUDE.md".source = ./CLAUDE.md;
+            "${dir}/CLAUDE.md".text = claudeMdText;
+            "${dir}/host.md".text = cfg.hostContext;
+            "${dir}/fleet.md".source = ./fleet.md;
             "${dir}/agents".source = ./agents;
             "${dir}/skills".source = skillsDir;
             "${dir}/bin/cc-tools-statusline".source = "${cc-tools}/bin/cc-tools-statusline";

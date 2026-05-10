@@ -220,31 +220,31 @@ in {
     QT_QPA_PLATFORM = "wayland;xcb";
   };
 
-  # NVIDIA + niri + PipeWire screencast workarounds.
+  # NVIDIA + niri + PipeWire screencast workaround.
   #
-  # Without `force-pipewire-invalid-modifier`, niri offers DMA-BUF formats
-  # using NVIDIA's GPU-tiled modifiers (whatever the EGL context's
-  # `dmabuf_render_formats()` returns). Consumers that come through XDP-G
-  # / Mutter / pipewiresrc cannot import those tiled buffers as EGLImage —
-  # the modifier negotiation pool exhausts and PipeWire returns EPIPE
-  # ("no more input formats"). Symptom: picker shows, you select a source,
-  # the receiving app gets a blank stream. Setting this flag filters the
-  # offered modifier set to `Modifier::Invalid`, which routes through
-  # `gbm.create_buffer_object` (the no-modifier path) and produces a
-  # single-plane DMA-BUF that NVIDIA consumers actually know how to import.
-  # Same idea as Hyprland's `screencopy_force_8b=true`. Negligible cost
-  # because the tiled-modifier path was never working downstream anyway.
+  # NVIDIA's open driver exposes only specific tiled modifiers via EGL's
+  # `dmabuf_render_formats()`; `Modifier::Invalid` is never in that set.
+  # XDP-G consumers (Zoom under XWayland, etc.) offer a Choice/Enum of
+  # modifiers that doesn't intersect NVIDIA's set, and PipeWire format
+  # negotiation fails with EPIPE / "no more input formats". Symptom:
+  # picker shows, you pick a source, receiving app gets a blank stream.
   #
-  # `wait-for-frame-completion-before-queueing` is a separate NVIDIA
-  # screencast quirk fix from niri's NVIDIA wiki — addresses glitched /
-  # black frames during sustained capture. Cheap to enable.
+  # `add-pipewire-invalid-modifier` is a fork-local debug flag (carried
+  # on josh/zoom-screencast-fix in our niri patch stack) that augments
+  # the offered set with one `(fourcc, Invalid)` entry per fourcc. niri's
+  # `allocate_buffer` already routes Invalid-modifier requests through
+  # `gbm_create_buffer_object` (the no-modifier path), so consumers that
+  # fixate on Invalid get an implementation-defined-layout DMA-BUF.
   #
-  # Both flags are defined in `niri-config/src/debug.rs` and stable across
-  # niri 0.1+. niri-flake passes the `debug` attrset through to KDL
-  # untyped (empty-array value = boolean flag with no args).
+  # The previous attempt used upstream's `force-pipewire-invalid-modifier`
+  # which is a *filter*: keep only formats whose modifier is already
+  # Invalid. On NVIDIA that empties the set entirely, leaving niri to
+  # offer SHM-only formats — even worse than no flag at all. Removed.
+  #
+  # niri-flake passes the `debug` attrset through to KDL untyped
+  # (empty-array value = boolean flag with no args).
   programs.niri.settings.debug = {
-    force-pipewire-invalid-modifier = [];
-    wait-for-frame-completion-before-queueing = [];
+    add-pipewire-invalid-modifier = [];
   };
 
   programs.niri.settings.spawn-at-startup = [

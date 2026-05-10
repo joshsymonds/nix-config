@@ -1,6 +1,7 @@
 {
   lib,
   pkgs,
+  inputs,
   ...
 }: let
   # 2560×1440 abstract purple hexagons from wallhaven (id dpo38l). Low-
@@ -119,7 +120,7 @@ in {
         # Fallback: if DP-2 disconnects and only one screen remains,
         # show the bar on whatever's left rather than vanishing entirely.
         showOnLastDisplay = true;
-        leftWidgets = ["focusedWindow"];
+        leftWidgets = ["claudeCodeUsage" "focusedWindow"];
         centerWidgets = ["music" "clock" "weather"];
         rightWidgets = ["systemTray" "clipboard" "cpuUsage" "memUsage" "notificationButton" "battery" "controlCenterButton"];
         spacing = 4;
@@ -193,6 +194,25 @@ in {
         shaderTertiaryColor = "#39FF99"; # neon green highlight peak
       }
     ];
+
+    # DMS plugins. Each attrname becomes a directory under
+    # ~/.config/DankMaterialShell/plugins/<name>, populated from `src`.
+    # The DMS plugin loader keys off plugin.json:id (not the dir name),
+    # but matching the manifest id keeps things grep-friendly.
+    #
+    # `managePluginSettings = true` is required: it generates
+    # ~/.config/DankMaterialShell/plugin_settings.json with `{enabled: true}`
+    # per plugin. Without that file DMS treats the plugin as disabled even
+    # though its source sits in plugins/. The HM module's default auto-flips
+    # this only when at least one plugin has a non-empty `settings` attr,
+    # which we don't have a use for here — so set it explicitly.
+    managePluginSettings = true;
+
+    # Claude Code subscription usage widget. Source is our personal fork at
+    # ~/Personal/dms-claudecode (flake input `dms-claudecode`); upstream is
+    # titeya/dms-claudecode. Picks up token burn from ~/.claude/projects
+    # and rate-window state from the OAuth token in ~/.claude/.credentials.json.
+    plugins.claudeCodeUsage.src = inputs.dms-claudecode;
   };
 
   # Promote DMS modals (spotlight, settings, etc.) to the wlr-layer-shell
@@ -237,9 +257,30 @@ in {
         && ! cmp -s "$oldGenPath/home-files/$rel" "$newGenPath/home-files/$rel"
     }
 
+    # Compare the resolved store paths of each plugin directory between
+    # generations. Each plugin under home-files/.config/DankMaterialShell/
+    # plugins/<name> is a symlink into a flake-input store path; when the
+    # input bumps, the resolved path changes even though the JSON files
+    # don't, so cmp-on-JSON misses it. Added/removed plugins also show up
+    # here as a changed listing.
+    pluginsChanged() {
+      local dir=".config/DankMaterialShell/plugins"
+      [[ -v oldGenPath ]] || return 1
+      local old new
+      old=$([ -d "$oldGenPath/home-files/$dir" ] \
+        && (cd "$oldGenPath/home-files/$dir" && for p in *; do [ -e "$p" ] && echo "$p $(readlink -f "$p")"; done | sort) \
+        || echo "")
+      new=$([ -d "$newGenPath/home-files/$dir" ] \
+        && (cd "$newGenPath/home-files/$dir" && for p in *; do [ -e "$p" ] && echo "$p $(readlink -f "$p")"; done | sort) \
+        || echo "")
+      [ "$old" != "$new" ]
+    }
+
     if $SYSTEMCTL --user is-active --quiet dms.service 2>/dev/null; then
       if fileChanged ".config/DankMaterialShell/settings.json" \
-        || fileChanged ".local/state/DankMaterialShell/session.json"; then
+        || fileChanged ".config/DankMaterialShell/plugin_settings.json" \
+        || fileChanged ".local/state/DankMaterialShell/session.json" \
+        || pluginsChanged; then
         $SYSTEMCTL --user restart dms.service >/dev/null 2>&1 || true
       fi
     fi

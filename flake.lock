@@ -622,6 +622,22 @@
         "type": "github"
       }
     },
+    "dms-claudecode": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778442885,
+        "narHash": "sha256-Qt4AXsv4BUHzw+0dd0a+T2lMI7GbnO8rgXtz/Jg03O0=",
+        "owner": "joshsymonds",
+        "repo": "dms-claudecode",
+        "rev": "cd4a6d92eaf52da2e727c9a212edca19de9fe95e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "joshsymonds",
+        "repo": "dms-claudecode",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -1806,11 +1822,11 @@
     "niri-unstable": {
       "flake": false,
       "locked": {
-        "lastModified": 1778428945,
-        "narHash": "sha256-5Qnppog9kupppLYiiwwx1OsAn911svNIWnXsJ+2dIfo=",
+        "lastModified": 1778444561,
+        "narHash": "sha256-kngzP+jGNztmNy2lvPqBfkd15K2qRlVzUJFijnPLC18=",
         "owner": "joshsymonds",
         "repo": "niri",
-        "rev": "168cbc5f19f3409f2f1f1e2aa41953cdb8d9d124",
+        "rev": "019aebfa115ef761629227b2ffe24bd23a58df64",
         "type": "github"
       },
       "original": {
@@ -2596,6 +2612,7 @@
         "devenv": "devenv",
         "disko": "disko",
         "dms": "dms",
+        "dms-claudecode": "dms-claudecode",
         "flake-parts": "flake-parts_4",
         "gambit": "gambit",
         "googleworkspace-cli": "googleworkspace-cli",

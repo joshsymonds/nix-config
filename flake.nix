@@ -94,6 +94,16 @@
     # CC-Tools - Claude Code smart hooks
     cc-tools.url = "github:joshsymonds/cc-tools";
 
+    # dms-claudecode — DMS plugin showing Claude Code subscription usage
+    # (5h/7d rate windows, token burn, cost estimates) in the bar. Personal
+    # fork of titeya/dms-claudecode; source lives in ~/Personal/dms-claudecode
+    # with `upstream` remote pointing at titeya. `flake = false` because the
+    # plugin is just a directory of QML + a shell script — no flake.nix.
+    dms-claudecode = {
+      url = "github:joshsymonds/dms-claudecode";
+      flake = false;
+    };
+
     # Gambit — Claude Code skills marketplace (consumed as a directory
     # source; deployed into both ~/.claude and ~/.claude-work).
     gambit.url = "github:joshsymonds/gambit";

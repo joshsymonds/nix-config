@@ -627,6 +627,31 @@ in {
           }
       }
 
+      // Vesktop — Discord client. Pairs with home-manager/vesktop's
+      // activation script that flips Vencord's `transparent: true`. With
+      // that flag set, Vesktop's BrowserWindow opens with Electron
+      // `transparent: true` and a fully-transparent backgroundColor, so
+      // anywhere the Discord UI doesn't paint (gaps between message
+      // groups, the rounded-corner clip from our universal corner-radius
+      // rule) we want a frosted blur of what's behind, not the bare
+      // wallpaper. xray=false matches kitty above for the same reason —
+      // stacked windows still show through softly instead of flat-cropping
+      // to the wallpaper.
+      window-rule {
+          match app-id="vesktop"
+          background-effect {
+              blur true
+              xray false
+          }
+      }
+
+      // No Spotify blur rule on purpose: vanilla Spotify's Electron
+      // BrowserWindow is opaque (no transparent:true at construction)
+      // and Spicetify can't change that — it's a renderer-side mod, not
+      // a native Electron one. Adding background-effect blur here would
+      // be a no-op against the opaque surface. Revisit only if/when we
+      // patch Spotify's app.asar to enable BrowserWindow transparency.
+
       // DMS chrome blur is entirely driven by DMS's protocol path
       // (BackgroundEffect.blurRegion via ext-background-effect-v1) when
       // settings.blurEnabled = true (see home-manager/dms/default.nix).

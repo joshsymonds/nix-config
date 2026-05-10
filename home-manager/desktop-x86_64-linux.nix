@@ -20,6 +20,7 @@ in {
   imports = [
     ./common.nix
     ./devspaces-client
+    ./firefox
     ./niri
     ./dms
     # DMS's niri HM module adds the niri-flake-typed bindings DMS needs;

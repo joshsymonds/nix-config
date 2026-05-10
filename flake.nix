@@ -143,6 +143,20 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # spicetify-nix — declarative Spotify customization via spicetify-cli.
+    # Wraps the nixpkgs `spotify` derivation in a script that runs
+    # `spicetify backup apply` on every nix-store rebuild, so the patched
+    # Spotify is itself a nix-built package (path-pinned, GC-managed)
+    # rather than an imperatively-modified copy of /home/.../Spotify.
+    # When nixpkgs bumps spotify, the wrapper rebuilds and reapplies —
+    # no manual `spicetify apply` step survives in the user's workflow.
+    # Use `programs.spicetify` from the home-manager module; do NOT also
+    # install pkgs.spotify, the wrapper provides it.
+    spicetify-nix = {
+      url = "github:Gerg-L/spicetify-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Devenv for development environments
     # No nixpkgs.follows — devenv 2.0 bundles a nix fork (cachix/nix) that
     # requires its own pinned nixpkgs to build correctly.

@@ -6,6 +6,8 @@
 }: {
   imports = [
     ../desktop-x86_64-linux.nix
+    ../vesktop
+    ../spicetify
   ];
 
   home.packages = with pkgs; [
@@ -22,9 +24,13 @@
     # Zoom is installed via nix-flatpak (us.zoom.Zoom) at the system level —
     # see hosts/gnomon/default.nix. The nixpkgs zoom-us build couldn't keep
     # up with portal/screencast quirks on niri.
-    spotify
+    # spotify is provided by ../spicetify (a wrapped Spotify with the
+    # comfy theme + transparency snippet baked in at build time). Don't
+    # add pkgs.spotify here — the wrapper IS the spotify package.
     signal-desktop
-    vesktop
+    # vesktop is provided by ../vesktop along with its transparent-window
+    # settings activation. See that module for why we don't symlink the
+    # JSON files declaratively.
 
     # Firefox is the daily driver; chromium is here for WebHID-only sites
     # (gaming-mouse configurators, etc.) since Firefox doesn't implement it.

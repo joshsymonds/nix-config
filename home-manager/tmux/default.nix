@@ -101,12 +101,14 @@ in {
         set -g message-command-style "fg=#94e2d5,bg=default"
 
         # Window status: rounded pill (left cap U+E0B6, right cap U+E0B4) wrapping
-        # window name and index. Outer caps render fg=pill-color on bg=default,
+        # pane title and index. Outer caps render fg=pill-color on bg=default,
         # producing the curve from the bar background into the pill body. Inactive
         # on surface_0 + overlay_2 index; current on surface_1 + mauve index.
-        # (#W = window name; auto-renames to current command via automatic-rename.)
-        set -g window-status-format "#[fg=#313244,bg=default]#[fg=#cdd6f4,bg=#313244] #W #[fg=#11111b,bg=#9399b2] #I #[fg=#9399b2,bg=default]"
-        set -g window-status-current-format "#[fg=#45475a,bg=default]#[fg=#cdd6f4,bg=#45475a] #W #[fg=#11111b,bg=#cba6f7] #I #[fg=#cba6f7,bg=default]"
+        # #T = pane title (set via OSC by the running program — claude
+        # publishes the active task description here; #W would just be
+        # "claude" for every window since automatic-rename uses the cmd name).
+        set -g window-status-format "#[fg=#313244,bg=default]#[fg=#cdd6f4,bg=#313244] #T #[fg=#11111b,bg=#9399b2] #I #[fg=#9399b2,bg=default]"
+        set -g window-status-current-format "#[fg=#45475a,bg=default]#[fg=#cdd6f4,bg=#45475a] #T #[fg=#11111b,bg=#cba6f7] #I #[fg=#cba6f7,bg=default]"
 
         # Right side: one combined system-monitor widget. Reads /proc
         # directly (no iostat sample), caches output for 4s, emits the full

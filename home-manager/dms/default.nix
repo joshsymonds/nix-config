@@ -184,13 +184,13 @@ in {
         # at BarCanvas.qml via `barConfig?.shaderMode || "aurora"` — flipping
         # this string is a one-line nix-config edit + rebuild, no DMS source
         # change required.
-        shaderMode    = "hexrain";
+        shaderMode = "hexrain";
         shaderHexSize = 14; # inradius per hex (cellSize); hex width = 2*this
 
-        shaderPrimaryColor          = "#5896E1"; # cyan band hue
-        shaderSecondaryColor        = "#B711DB"; # magenta band hue
+        shaderPrimaryColor = "#5896E1"; # cyan band hue
+        shaderSecondaryColor = "#B711DB"; # magenta band hue
         shaderPrimaryContainerColor = "#170B55"; # deep purple base in dark zones
-        shaderTertiaryColor         = "#39FF99"; # neon green highlight peak
+        shaderTertiaryColor = "#39FF99"; # neon green highlight peak
       }
     ];
   };

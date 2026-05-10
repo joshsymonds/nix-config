@@ -166,9 +166,13 @@ in {
         # with this hook script returning before the upload starts.
         # Failures land in `journalctl -u 'attic-push-*'`.
         # $OUT_PATHS is intentionally word-split inside the inner shell.
+        # RuntimeMaxSec caps the unit so a worker hung on DB contention
+        # (or any other reason) can't sit forever holding a token-bearing
+        # tmpdir; SIGTERM at the cap fires bash's EXIT trap → cleanup.
         exec ${pkgs.systemd}/bin/systemd-run \
           --no-block --collect \
           --unit="attic-push-$$" \
+          --property=RuntimeMaxSec=300 \
           --setenv=ATTIC_TOKEN_FILE=${lib.escapeShellArg cfg.publisher.tokenFile} \
           --setenv=ATTIC_ENDPOINT=${lib.escapeShellArg endpoint} \
           --setenv=ATTIC_CACHE_NAME=${lib.escapeShellArg cacheName} \

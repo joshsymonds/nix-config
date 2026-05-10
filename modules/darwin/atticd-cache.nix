@@ -84,7 +84,10 @@ in {
           echo "token = \"$(cat ${lib.escapeShellArg cfg.publisher.tokenFile})\""
         } > "$CFG/attic/config.toml"
         chmod 0400 "$CFG/attic/config.toml"
+        # 5min cap so a worker hung on DB contention can't sit forever
+        # holding the token-bearing tmpdir; on timeout bash's EXIT trap fires.
         XDG_CONFIG_HOME="$CFG" \
+          ${pkgs.coreutils}/bin/timeout 300 \
           ${pkgs.attic-client}/bin/attic push "h:${cacheName}" $@
       '';
 

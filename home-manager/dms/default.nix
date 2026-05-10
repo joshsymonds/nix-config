@@ -110,13 +110,13 @@ in {
         name = "Main Bar";
         enabled = true;
         # Position enum (Common/SettingsData.qml:22): 0=Top, 1=Bottom,
-        # 2=Left, 3=Right. Left edge of HDMI-A-1 (the right-hand monitor)
-        # puts the bar on the seam between the two displays — the sightline
-        # we cross most often — and keeps it visible during fullscreen
-        # games, which run on DP-3 (the left monitor).
+        # 2=Left, 3=Right. Left edge of DP-2 (the right-hand monitor,
+        # CBC35Z3) puts the bar on the seam between the two displays — the
+        # sightline we cross most often — and keeps it visible during
+        # fullscreen games, which run on DP-3 (the left monitor, CDL25Z3).
         position = 2;
-        screenPreferences = ["HDMI-A-1"];
-        # Fallback: if HDMI-A-1 disconnects and only one screen remains,
+        screenPreferences = ["DP-2"];
+        # Fallback: if DP-2 disconnects and only one screen remains,
         # show the bar on whatever's left rather than vanishing entirely.
         showOnLastDisplay = true;
         leftWidgets = ["focusedWindow"];

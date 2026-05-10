@@ -38,6 +38,18 @@ let
   };
 
   allUserKeys = builtins.attrValues users;
+
+  # Hosts authorized to push to / pull from the household atticd cache.
+  # When bluedesert and echelon host keys land, add them here AND re-key
+  # secrets/shared/atticd-push-token.age (do not bulk re-key — see CLAUDE.md).
+  publisherHosts =
+    [
+      hosts.ultraviolet
+      hosts.vermissian
+      hosts.ninuan
+      hosts.gnomon
+    ]
+    ++ allUserKeys;
 in {
   # Per-host: host key (for boot-time agenix decryption) + EVERY user key
   # (so any of josh's machines can edit any host's secrets). When a new
@@ -50,4 +62,9 @@ in {
   # User-context secrets (home-manager agenix) — all user keys, no host keys.
   gnomon = [hosts.gnomon] ++ allUserKeys;
   joshsymonds = allUserKeys;
+
+  # Hosts that participate in the household atticd cache (pull + push).
+  # Used by secrets/shared/atticd-push-token.age. Excludes bluedesert/echelon
+  # (host keys not yet in this file).
+  inherit publisherHosts;
 }

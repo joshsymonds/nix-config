@@ -6,6 +6,7 @@ in {
   # Shared secrets
   "secrets/shared/coder-db-password.age".publicKeys = keys.vermissian;
   "secrets/shared/coder-env.age".publicKeys = keys.vermissian;
+  "secrets/shared/atticd-push-token.age".publicKeys = keys.publisherHosts;
 
   # User secrets (home-manager agenix, all machines)
   "secrets/user/ntfy-url.age".publicKeys = keys.joshsymonds;

@@ -47,11 +47,6 @@ in
       useDHCP = false;
       useNetworkd = true;
       hostName = "vermissian";
-      extraHosts = ''
-        ${network.hosts.ultraviolet.ip} ultraviolet
-        ${network.hosts.bluedesert.ip} bluedesert
-        ${network.hosts.echelon.ip} echelon
-      '';
       firewall = {
         enable = true;
         checkReversePath = "loose";

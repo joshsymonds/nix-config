@@ -81,6 +81,16 @@ in {
     ];
   };
 
+  # Household DNS — the LAN router (172.31.0.1) doesn't serve names for
+  # household hosts, so every host needs a static map to talk to its
+  # neighbors. Single source of truth in lib/network.nix.
+  networking.extraHosts = ''
+    ${network.hosts.ultraviolet.ip} ultraviolet
+    ${network.hosts.vermissian.ip} vermissian
+    ${network.hosts.bluedesert.ip} bluedesert
+    ${network.hosts.echelon.ip} echelon
+  '';
+
   # Core services
   services.openssh = {
     enable = true;

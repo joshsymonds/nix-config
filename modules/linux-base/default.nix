@@ -1,4 +1,6 @@
 {lib, ...}: {
+  imports = [./hardening.nix];
+
   boot.loader = {
     systemd-boot = {
       enable = true;

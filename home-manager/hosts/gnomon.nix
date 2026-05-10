@@ -19,7 +19,9 @@
 
     # Communication / media
     slack
-    zoom-us
+    # Zoom is installed via nix-flatpak (us.zoom.Zoom) at the system level —
+    # see hosts/gnomon/default.nix. The nixpkgs zoom-us build couldn't keep
+    # up with portal/screencast quirks on niri.
     spotify
     signal-desktop
     vesktop
@@ -39,28 +41,6 @@
 
   # Same signing key vermissian uses — single user identity across machines
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
-
-  # Zoom on Wayland. The official client has no native-Wayland mode and
-  # hard-codes which "OS" gets to use the Wayland screencast path — niri
-  # isn't on the list. Three lines in ~/.config/zoomus.conf flip the
-  # behavior:
-  #   enableWaylandShare=true   — opt into the Wayland screencast code
-  #                               path (otherwise it's Xorg-only)
-  #   enableMiniWindow=true     — fix the floating self-view under Wayland
-  #   XDG_CURRENT_DESKTOP=gnome — *application-internal* lie that gets
-  #                               Zoom past its DE allowlist. Doesn't
-  #                               affect the system XDG_CURRENT_DESKTOP
-  #                               (still "niri" globally), so portals
-  #                               still route via the niri/common section.
-  # If screen share still misbehaves, the documented bailout is the
-  # us.zoom.Zoom Flatpak (ships with FHS layout that Zoom's hard-coded
-  # /usr/share/xdg-desktop-portal/portals/ lookups expect).
-  xdg.configFile."zoomus.conf".text = ''
-    [General]
-    enableWaylandShare=true
-    enableMiniWindow=true
-    XDG_CURRENT_DESKTOP=gnome
-  '';
 
   # Caps Lock → Escape (host-local: the laptop has its own keyboard
   # config, this is gnomon's external-keyboard preference).

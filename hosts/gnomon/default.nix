@@ -15,6 +15,7 @@ in
       ../../modules/hardware/gpu-nvidia.nix
       ../../modules/services/keyd.nix
       inputs.lanzaboote.nixosModules.lanzaboote
+      inputs.nix-flatpak.nixosModules.nix-flatpak
     ];
 
     # ── Keyboard: Mac-style Cmd modifier on the Q6 HE ───────────────────
@@ -108,6 +109,28 @@ in
     programs.gamescope = {
       enable = true;
       capSysNice = true;
+    };
+
+    # ── Flatpak (declarative via nix-flatpak) ───────────────────────────
+    # `services.flatpak.packages` is reconciled on activation: missing apps
+    # are installed, declared apps are updated, and anything not on the list
+    # is uninstalled (uninstallUnmanaged = true). The Flathub remote is
+    # auto-added by nix-flatpak — no imperative `flatpak remote-add` needed.
+    #
+    # Why Zoom is here and not in nixpkgs: the official zoom-us client has
+    # hard-coded /usr/share/xdg-desktop-portal/portals/ lookups for the
+    # screencast path, and niri's portal layout doesn't match. The us.zoom.Zoom
+    # Flatpak ships with the FHS layout Zoom expects, so screen sharing on
+    # Wayland just works without the in-app config workarounds we used to
+    # carry in home-manager/hosts/gnomon.nix (zoomus.conf).
+    #
+    # Persistence: /var/lib/flatpak is on @root (ephemeral). Without persisting
+    # it, every reboot would re-download the GNOME runtime + Zoom (~500 MB).
+    # See hosts/gnomon/disko.nix for the persistDirectories entry.
+    services.flatpak = {
+      enable = true;
+      uninstallUnmanaged = true;
+      packages = ["us.zoom.Zoom"];
     };
 
     # ── 1Password ───────────────────────────────────────────────────────

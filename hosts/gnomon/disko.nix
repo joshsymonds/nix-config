@@ -31,6 +31,11 @@
       "/var/lib/colord"
       "/var/lib/sbctl"
       "/var/lib/tailscale"
+      # nix-flatpak installs system Flatpaks here. Without persistence,
+      # @root-blank rollback wipes the OSTree repo + state file every boot
+      # and the activation re-downloads runtimes (~500 MB+) every time.
+      # Per-user state (~/.var/app/...) lives on @home and survives natively.
+      "/var/lib/flatpak"
     ];
 
     persistFiles = [

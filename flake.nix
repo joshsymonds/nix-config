@@ -47,6 +47,15 @@
     # Ephemeral root + selective persistence (paired with disko)
     impermanence.url = "github:nix-community/impermanence";
 
+    # Declarative Flatpak management. Adds `services.flatpak.packages` so the
+    # system's Flatpak install set is reconciled on activation (install missing,
+    # update existing, remove unmanaged). Used on gnomon for the Zoom Flatpak —
+    # the official client's nixpkgs build can't keep up with portal/screencast
+    # quirks, and the upstream Flatpak ships the FHS layout Zoom hard-codes.
+    nix-flatpak = {
+      url = "github:gmodena/nix-flatpak";
+    };
+
     # Lanzaboote — Secure Boot for NixOS (signed UKI; PCR 7 binding for TPM-sealed LUKS)
     lanzaboote = {
       url = "github:nix-community/lanzaboote/v1.0.0";

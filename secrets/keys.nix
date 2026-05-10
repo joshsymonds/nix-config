@@ -21,8 +21,8 @@ let
     vermissian = "age1gk07t276expcprxg4el8rsmap4ry3vq9ungmhs9ap3rtwljge9qsqdvnkw";
     ninuan = "age1kyf60tq3yg9msawwtjrvxzqlhspsje3qedtqj2f4aexj7th7juwsg938nu";
     gnomon = "age1m0fk0lmddud0k6k6mpql73egwysadfvxuqv0kga24d4pls9fff4suaevff";
+    bluedesert = "age1ycyy70v27m56f9pq3ry86s5tvwpdehhupc48g3d5raj28qk079xsyhtt7g";
     # TODO: audit and add
-    # bluedesert = "...";
     # echelon = "...";
   };
 
@@ -48,6 +48,7 @@ let
       hosts.vermissian
       hosts.ninuan
       hosts.gnomon
+      hosts.bluedesert
     ]
     ++ allUserKeys;
 in {
@@ -61,6 +62,7 @@ in {
 
   # User-context secrets (home-manager agenix) — all user keys, no host keys.
   gnomon = [hosts.gnomon] ++ allUserKeys;
+  bluedesert = [hosts.bluedesert] ++ allUserKeys;
   joshsymonds = allUserKeys;
 
   # Hosts that participate in the household atticd cache (pull + push).

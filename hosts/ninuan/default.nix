@@ -12,6 +12,7 @@ in
     imports = [
       ../../modules/nix/defaults.nix
       ../../modules/darwin/applications.nix
+      ../../modules/darwin/atticd-cache.nix
       ../../modules/darwin/defaults.nix
       ../../modules/darwin/software.nix
       inputs.determinate.darwinModules.default

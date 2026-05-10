@@ -174,5 +174,51 @@ in {
 
     # /persist needs to exist as a mountpoint root before bind-mounts run.
     fileSystems."/persist".neededForBoot = true;
+
+    # Persist bind-mounts that the new initrd-init flow can rely on. NixOS
+    # unstable runs `activate` inside `chroot /sysroot` BEFORE stage-2,
+    # so any activation snippet that reads from a /persist-backed path
+    # (agenix decrypt of /etc/age/<host>.agekey, lanzaboote signing keys
+    # in /var/lib/sbctl, …) sees an empty target unless the bind-mount
+    # was already wired in initrd. Impermanence's own initrd path only
+    # covers persistDirectories whose path is in NixOS's static
+    # `pathsNeededForBoot` list (/, /etc, /var, /var/lib, /var/lib/nixos,
+    # /usr, …) — the rest get mounted only at stage-2, too late for
+    # initrd-chroot activation. We add the missing ones here.
+    #
+    # Why this matters: the original incident was an agenix snippet for
+    # atticd-push-token failing because /etc/age wasn't bound in initrd,
+    # which made `set -e` propagate, which made `activate` exit early,
+    # which made switch-root fail with no init in /sysroot. Mounting
+    # everything up front prevents the same shape of failure for any
+    # future activation step that reads /persist-backed config.
+    boot.initrd.systemd.mounts = let
+      # Mirror lib/utils.nix's `pathsNeededForBoot` so we don't duplicate
+      # impermanence's own initrd mounts. (We can't read it cleanly from
+      # _module.args.utils without making this module non-portable.)
+      stdNeededForBoot = [
+        "/"
+        "/usr"
+        "/usr/local"
+        "/nix"
+        "/nix/store"
+        "/var"
+        "/var/log"
+        "/var/lib"
+        "/var/lib/nixos"
+        "/etc"
+      ];
+      extras = lib.filter (d: !(builtins.elem d stdNeededForBoot)) cfg.persistDirectories;
+    in
+      map (dir: {
+        wantedBy = ["initrd.target"];
+        before = ["initrd-nixos-activation.service"];
+        where = "/sysroot${dir}";
+        what = "/sysroot/persist${dir}";
+        unitConfig.DefaultDependencies = "no";
+        type = "none";
+        options = "bind";
+      })
+      extras;
   };
 }

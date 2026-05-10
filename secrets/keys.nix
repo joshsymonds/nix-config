@@ -22,8 +22,7 @@ let
     ninuan = "age1kyf60tq3yg9msawwtjrvxzqlhspsje3qedtqj2f4aexj7th7juwsg938nu";
     gnomon = "age1m0fk0lmddud0k6k6mpql73egwysadfvxuqv0kga24d4pls9fff4suaevff";
     bluedesert = "age1ycyy70v27m56f9pq3ry86s5tvwpdehhupc48g3d5raj28qk079xsyhtt7g";
-    # TODO: audit and add
-    # echelon = "...";
+    echelon = "age1gpv6ehlyxflqp0glz6kkh4c3tn57kl73u59wcc2l8vsuj3m6u3lsz7t3fs";
   };
 
   # User keys (from ~/.ssh/<key>.pub, converted via ssh-to-age)
@@ -40,8 +39,8 @@ let
   allUserKeys = builtins.attrValues users;
 
   # Hosts authorized to push to / pull from the household atticd cache.
-  # When bluedesert and echelon host keys land, add them here AND re-key
-  # secrets/shared/atticd-push-token.age (do not bulk re-key — see CLAUDE.md).
+  # When adding a host here, re-key secrets/shared/atticd-push-token.age
+  # (do not bulk re-key — see CLAUDE.md).
   publisherHosts =
     [
       hosts.ultraviolet
@@ -49,6 +48,7 @@ let
       hosts.ninuan
       hosts.gnomon
       hosts.bluedesert
+      hosts.echelon
     ]
     ++ allUserKeys;
 in {
@@ -66,7 +66,6 @@ in {
   joshsymonds = allUserKeys;
 
   # Hosts that participate in the household atticd cache (pull + push).
-  # Used by secrets/shared/atticd-push-token.age. Excludes bluedesert/echelon
-  # (host keys not yet in this file).
+  # Used by secrets/shared/atticd-push-token.age.
   inherit publisherHosts;
 }

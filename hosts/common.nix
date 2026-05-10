@@ -177,16 +177,14 @@ in {
   ];
 
   # atticd-cache: every NixOS host pulls from + pushes to ultraviolet's cache.
-  # bluedesert/echelon are excluded until their host keys land in
-  # secrets/keys.nix and the shared push token is re-keyed to them.
-  age.secrets."atticd-push-token" = lib.mkIf (!builtins.elem config.networking.hostName ["echelon"]) {
+  age.secrets."atticd-push-token" = {
     file = ../secrets/shared/atticd-push-token.age;
     owner = "root";
     group = "root";
     mode = "0400";
   };
 
-  services.atticd-cache = lib.mkIf (!builtins.elem config.networking.hostName ["echelon"]) {
+  services.atticd-cache = {
     consumer.enable = true;
     publisher = {
       enable = true;

@@ -34,6 +34,90 @@
   # whatever the user had on the clipboard. The same is true of every other
   # screenshot path on this system (Print binds, satty pipeline), so the
   # cost is consistent rather than surprising.
+  # Launcher hotkeys: focus a window matching --app-id if one exists,
+  # otherwise spawn the command. With multiple matches, cycles to the next
+  # window after the currently-focused one (or the first match if focus is
+  # elsewhere). app_id matching is case-insensitive exact — covers the
+  # capitalisation drift between apps (e.g. Slack reports "Slack", spotify
+  # reports "spotify") without a per-bind regex.
+  focus-or-spawn = pkgs.writeShellApplication {
+    name = "focus-or-spawn";
+    runtimeInputs = with pkgs; [jq];
+    text = ''
+      set -euo pipefail
+
+      usage() {
+        cat <<'EOF'
+      Usage: focus-or-spawn --app-id <id> [--title-regex <re>] -- <command> [args...]
+
+        --app-id <id>       Case-insensitive exact match on the window's app_id.
+        --title-regex <re>  Optional regex (case-insensitive) further narrowing
+                            matches by title.
+        <command>           Argv to spawn through niri if no window matches.
+
+      With one match, focuses it. With multiple matches, focuses the next one
+      after the currently-focused window (cycle), or the first match if focus
+      is elsewhere. With zero matches, spawns the command via niri.
+      EOF
+      }
+
+      app_id=""
+      title_re=""
+      while (( $# )); do
+        case "$1" in
+          -h|--help) usage; exit 0 ;;
+          --app-id)
+            [[ $# -ge 2 ]] || { printf 'focus-or-spawn: --app-id needs a value\n' >&2; exit 2; }
+            app_id="$2"; shift 2 ;;
+          --title-regex)
+            [[ $# -ge 2 ]] || { printf 'focus-or-spawn: --title-regex needs a value\n' >&2; exit 2; }
+            title_re="$2"; shift 2 ;;
+          --) shift; break ;;
+          *) printf 'focus-or-spawn: unknown flag: %s\n' "$1" >&2; usage >&2; exit 2 ;;
+        esac
+      done
+
+      if [[ -z "$app_id" ]]; then
+        printf 'focus-or-spawn: --app-id required\n' >&2
+        exit 2
+      fi
+      if (( $# == 0 )); then
+        printf 'focus-or-spawn: spawn command required after --\n' >&2
+        exit 2
+      fi
+
+      windows="$(niri msg --json windows)"
+
+      matches="$(jq --arg app "$app_id" --arg title "$title_re" '
+        [.[]
+         | select((.app_id // "") | ascii_downcase == ($app | ascii_downcase))
+         | select(($title == "") or ((.title // "") | test($title; "i")))]
+        | sort_by(.id)
+      ' <<<"$windows")"
+
+      count="$(jq 'length' <<<"$matches")"
+
+      if (( count == 0 )); then
+        exec niri msg action spawn -- "$@"
+      fi
+
+      # Cycle order is by window id (stable, monotonic at creation time).
+      # Predictable across presses; not always visually adjacent, but that
+      # only matters for >2 matches of the same app, which is the rare case.
+      target="$(jq -r '
+        (map(select(.is_focused)) | first | .id // null) as $focused
+        | (map(.id)) as $ids
+        | if $focused == null then $ids[0]
+          else
+            ($ids | index($focused)) as $i
+            | $ids[(($i + 1) % ($ids | length))]
+          end
+      ' <<<"$matches")"
+
+      exec niri msg action focus-window --id "$target"
+    '';
+  };
+
   niri-snap = pkgs.writeShellApplication {
     name = "niri-snap";
     runtimeInputs = with pkgs; [jq wl-clipboard];
@@ -158,7 +242,7 @@
 in {
   # niri-snap is niri-only, so it ships from this module. The package is
   # built above via writeShellApplication; here we just expose it on PATH.
-  home.packages = [niri-snap];
+  home.packages = [niri-snap focus-or-spawn];
 
   # niri-flake's HM module is auto-loaded by its NixOS module when
   # home-manager is detected — no explicit import needed (and an
@@ -195,7 +279,7 @@ in {
   # shift around just from cursor movement.
   programs.niri.settings.input.focus-follows-mouse = {
     enable = true;
-    max-scroll-amount = "0%";
+    max-scroll-amount = "1%";
   };
 
   # X11 fallback via xwayland-satellite (package added system-side in
@@ -301,23 +385,65 @@ in {
     };
 
     # ── Stack manipulation ────────────────────────────────────────
-    # I: pull the right neighbor INTO this column, stacking it.
-    # O: expel the focused window OUT of this column, into a new
+    # Shift+I: pull the right neighbor INTO this column, stacking it.
+    # Shift+O: expel the focused window OUT of this column, into a new
     #    column to the right.
-    # T: toggle the focused column between split (all stacked windows
+    # Shift+T: toggle the focused column between split (all stacked windows
     #    visible at fractional height) and tabbed (only one visible,
     #    J/K to swap) display.
-    "Alt+I" = {
+    # The bare Alt+I/O/T slots are now launcher binds (see below) — these
+    # WM ops moved to Alt+Shift to free those letters for app focus-or-spawn.
+    "Alt+Shift+I" = {
       hotkey-overlay.title = "Consume Window into Column";
       action.consume-window-into-column = [];
     };
-    "Alt+O" = {
+    "Alt+Shift+O" = {
       hotkey-overlay.title = "Expel Window from Column";
       action.expel-window-from-column = [];
     };
-    "Alt+T" = {
+    "Alt+Shift+T" = {
       hotkey-overlay.title = "Toggle Tabbed Column";
       action.toggle-column-tabbed-display = [];
+    };
+
+    # ── App launchers (focus-or-spawn) ────────────────────────────
+    # Each bind hits the named app's window if one exists (cycling
+    # between matches if multiple), else spawns it via niri so the
+    # window lands through the same code path as action.spawn. app_id
+    # match is case-insensitive exact — covers the Slack/spotify
+    # capitalisation drift without per-bind regex.
+    #
+    # If a launcher fails to find an existing window after launch,
+    # check `niri msg --json windows | jq '.[].app_id'` against the
+    # --app-id below — Electron apps occasionally drift their app_id
+    # across versions and the bind needs a one-letter update.
+    "Alt+M" = {
+      hotkey-overlay.title = "Focus or Launch Spotify";
+      action.spawn = ["focus-or-spawn" "--app-id" "spotify" "--" "spotify"];
+    };
+    "Alt+O" = {
+      hotkey-overlay.title = "Focus or Launch Claude";
+      action.spawn = ["focus-or-spawn" "--app-id" "claude" "--" "claude-desktop"];
+    };
+    "Alt+W" = {
+      hotkey-overlay.title = "Focus or Launch Firefox";
+      action.spawn = ["focus-or-spawn" "--app-id" "firefox" "--" "firefox"];
+    };
+    "Alt+T" = {
+      hotkey-overlay.title = "Focus or Launch Kitty";
+      action.spawn = ["focus-or-spawn" "--app-id" "kitty" "--" "kitty"];
+    };
+    "Alt+S" = {
+      hotkey-overlay.title = "Focus or Launch Slack";
+      action.spawn = ["focus-or-spawn" "--app-id" "slack" "--" "slack"];
+    };
+    "Alt+C" = {
+      hotkey-overlay.title = "Focus or Launch Signal";
+      action.spawn = ["focus-or-spawn" "--app-id" "signal" "--" "signal-desktop"];
+    };
+    "Alt+D" = {
+      hotkey-overlay.title = "Focus or Launch Vesktop";
+      action.spawn = ["focus-or-spawn" "--app-id" "vesktop" "--" "vesktop"];
     };
 
     # ── DMS shell features ────────────────────────────────────────

@@ -124,7 +124,14 @@ in {
         centerWidgets = ["music" "clock" "weather"];
         rightWidgets = ["systemTray" "clipboard" "cpuUsage" "memUsage" "notificationButton" "battery" "controlCenterButton"];
         spacing = 4;
-        innerPadding = 4;
+        # innerPadding drives DMS bar/widget thickness via:
+        #   widgetThickness    = max(20, 26 + innerPadding * 0.6)
+        #   effectiveBarThick. = max(widgetThickness + innerPadding + 4, 40)
+        # Bumping to 16 takes the vertical bar from ~40px → ~56px and the
+        # widget cross-axis from ~28 → ~36, giving the claudeCodeUsage
+        # plugin's two stacked rings (28px each) room to render with
+        # legible labels inside them.
+        innerPadding = 16;
         bottomGap = 0;
         transparency = 1.0;
         widgetTransparency = 1.0;

@@ -625,11 +625,11 @@
     "dms-claudecode": {
       "flake": false,
       "locked": {
-        "lastModified": 1778442885,
-        "narHash": "sha256-Qt4AXsv4BUHzw+0dd0a+T2lMI7GbnO8rgXtz/Jg03O0=",
+        "lastModified": 1778448506,
+        "narHash": "sha256-Je01Ugz6i22LVKrhZRAgCVdtB6P505YSJTFm3+JVtQc=",
         "owner": "joshsymonds",
         "repo": "dms-claudecode",
-        "rev": "cd4a6d92eaf52da2e727c9a212edca19de9fe95e",
+        "rev": "9a7804b0ad1baf81620e68c6783fe79f2e1a0b55",
         "type": "github"
       },
       "original": {

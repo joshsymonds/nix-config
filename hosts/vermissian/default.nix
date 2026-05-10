@@ -86,7 +86,6 @@ in
       kernelParams = [
         # amd_pstate=active is provided by performance module
       ];
-      kernelPackages = pkgs.linuxPackages_latest;
     };
 
     users.users.joshsymonds.extraGroups = ["podman" "docker"];

@@ -52,6 +52,11 @@ in {
     optimise.automatic = true;
   };
 
+  # Latest mainline kernel everywhere — pinned in one place so a critical
+  # kernel fix lands on all hosts together. NVIDIA `production` driver
+  # tracks linuxPackages_latest.nvidiaPackages.production (gnomon).
+  boot.kernelPackages = pkgs.linuxPackages_latest;
+
   # Timezone and locale
   time.timeZone = "America/Los_Angeles";
   i18n.defaultLocale = "en_US.UTF-8";

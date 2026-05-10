@@ -138,7 +138,6 @@ in
         "i915.enable_fbc=1"
         "i915.enable_psr=2"
       ];
-      kernelPackages = pkgs.linuxPackages_latest;
     };
 
     users.users.joshsymonds.extraGroups = ["podman"];

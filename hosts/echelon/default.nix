@@ -79,11 +79,16 @@ in
 
         # Default-drop FORWARD; only allow friend's LAN to reach ultraviolet.
         # Return traffic is allowed via conntrack. Anything else (friend → other
-        # 172.31.x hosts, our tailnet → friend's LAN) is dropped.
+        # 172.31.x hosts, tailnet → friend's LAN) is dropped — explicit drops
+        # are required because networking.nat adds a broad
+        # "iifname enp2s0 oifname tailscale0 accept" to forward-allow that
+        # would otherwise let friend reach the entire tailnet.
         filterForward = true;
         extraForwardRules = ''
           ct state established,related accept
           iifname "${self.interface}" oifname "tailscale0" ip daddr 172.31.0.66 accept
+          iifname "${self.interface}" drop comment "deny friend LAN → anything else"
+          iifname "tailscale0" oifname "${self.interface}" drop comment "deny tailnet → friend LAN"
         '';
       };
     };

@@ -1,7 +1,7 @@
 _: {
   # Devspace client configuration
   programs.zsh.shellAliases = let
-    devspaceAlias = name: icon: "et vermissian:2022 -c \"tmux-devspace attach --icon '${icon}' ${name}\"";
+    devspaceAlias = name: icon: "ssh -t vermissian \"tmux-devspace attach --icon '${icon}' ${name}\"";
   in {
     # Direct connection aliases - ensure TMUX_DEVSPACE/DEV_CONTEXT metadata is set
     mercury = devspaceAlias "mercury" "☿";

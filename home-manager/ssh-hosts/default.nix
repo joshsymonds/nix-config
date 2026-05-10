@@ -1,5 +1,5 @@
 _: {
-  # 🌐 Smart SSH Host Commands for Mac - SSH only, no ET
+  # 🌐 Smart SSH host commands. Tries Tailscale first, then local network.
   programs.zsh.initContent = ''
     # Configuration for all hosts
     declare -A HOST_IPS
@@ -50,24 +50,12 @@ _: {
       shift
       local extra_args=("$@")
       local use_autossh=false
-      local use_et=true  # Default to ET
 
       # Check for connection type flags
       while [[ "$1" =~ ^- ]]; do
         case "$1" in
           -a|--auto)
             use_autossh=true
-            use_et=false  # AutoSSH implies SSH
-            shift
-            ;;
-          -e|--et)
-            use_et=true
-            shift
-            ;;
-          --ssh)
-            # Force SSH instead of ET
-            use_et=false
-            use_autossh=false
             shift
             ;;
           *)
@@ -123,34 +111,16 @@ _: {
 
       # Handle command execution vs interactive connection
       if [ ''${#extra_args[@]} -gt 0 ]; then
-        # Run command with ET or SSH
-        if [ "$use_et" = true ] && command -v et &> /dev/null; then
-          # Use ET with -c flag for command execution
-          echo "⚡ Executing via Eternal Terminal..."
-          et "$target_host:2022" -c "''${extra_args[*]}"
-        elif [ "$use_autossh" = true ]; then
-          # Use autossh for persistent connection with command
+        if [ "$use_autossh" = true ]; then
           AUTOSSH_GATETIME=0 autossh -M 0 -t "$target_host" "''${extra_args[@]}"
         else
           ssh -t "$target_host" "''${extra_args[@]}"
         fi
       else
-        # Just connect interactively
-        # Default to ET if available and not explicitly disabled
-        if [ "$use_et" = true ] && command -v et &> /dev/null; then
-          # Use Eternal Terminal for persistent low-latency connection
-          echo "⚡ Using Eternal Terminal for low-latency persistent connection..."
-          et "$target_host:2022"
-        elif [ "$use_et" = true ] && ! command -v et &> /dev/null; then
-          # ET requested (default) but not available
-          echo "❌ Eternal Terminal not available, falling back to SSH..."
-          ssh "$target_host"
-        elif [ "$use_autossh" = true ]; then
-          # Use autossh for persistent interactive connection
+        if [ "$use_autossh" = true ]; then
           echo "🔄 Using autossh for persistent connection..."
           AUTOSSH_GATETIME=0 autossh -M 0 "$target_host"
         elif command -v kitten &> /dev/null && [ -t 0 ]; then
-          # STDIN is a terminal, safe to use kitten
           kitten ssh "$target_host"
         else
           ssh "$target_host"
@@ -238,9 +208,7 @@ _: {
       echo
       echo "Legend: 🏠 local | 🔒 tailscale | 🌐 local network | ❌ unreachable"
       echo
-      echo "Connection: Uses Eternal Terminal (ET) by default for low-latency persistent connections"
-      echo "For SSH: use --ssh flag (e.g., 'ultraviolet --ssh')"
-      echo "For autossh: use -a flag (e.g., 'ultraviolet -a')"
+      echo "Connection: SSH. For autossh use -a flag (e.g., 'ultraviolet -a')"
     }
 
     # Convenient aliases

@@ -179,7 +179,24 @@ in {
           --setenv=ATTIC_OUT_PATHS="$OUT_PATHS" \
           ${pkgs.bash}/bin/bash -c '
             set -eu
-            export PATH=${pkgs.coreutils}/bin
+            export PATH=${pkgs.coreutils}/bin:${pkgs.curl}/bin
+
+            # Skip paths the cache already has via the public narinfo endpoint —
+            # avoids spawning attic-client (each instance ~500MB-2GB RSS while
+            # walking closures) for paths that would no-op anyway. Falls through
+            # on any curl failure (network, non-200) so a degraded check can
+            # never silently drop pushes.
+            TO_PUSH=""
+            for p in $ATTIC_OUT_PATHS; do
+              HASH=$(basename "$p" | cut -d- -f1)
+              if curl -sfo /dev/null --max-time 5 \
+                "$ATTIC_ENDPOINT/$ATTIC_CACHE_NAME/$HASH.narinfo"; then
+                continue
+              fi
+              TO_PUSH="$TO_PUSH $p"
+            done
+            [ -n "$TO_PUSH" ] || exit 0
+
             CFG=$(mktemp -d -p /run attic-push-XXXXXX)
             trap "rm -rf $CFG" EXIT
             mkdir -p "$CFG/attic"
@@ -190,8 +207,12 @@ in {
               echo "token = \"$(cat $ATTIC_TOKEN_FILE)\""
             } > "$CFG/attic/config.toml"
             chmod 0400 "$CFG/attic/config.toml"
+            # --no-closure: every locally-built path fires its own hook, so
+            # walking the closure here is pure redundant work and the source
+            # of the per-process memory blow-up.
             XDG_CONFIG_HOME="$CFG" \
-              ${pkgs.attic-client}/bin/attic push "h:$ATTIC_CACHE_NAME" $ATTIC_OUT_PATHS
+              ${pkgs.attic-client}/bin/attic push --no-closure \
+                "h:$ATTIC_CACHE_NAME" $TO_PUSH
           '
       '';
     in {

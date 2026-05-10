@@ -130,7 +130,7 @@ build_status() {
   failed=$(read_failed_units)
   pill '#94e2d5' '󰈀' "$net"
   pill '#f9e2af' '' "${cpu}%"
-  pill '#cba6f7' '󰍛' "${ram}%"
+  pill '#cba6f7' '' "${ram}%"
   pill '#89b4fa' '󰋊' "${disk}%"
   if (( failed > 0 )); then
     pill '#fab387' '󰀦' "$failed"

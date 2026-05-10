@@ -90,23 +90,23 @@ in {
         set -g set-titles-string '#{?@dev_context,#{@dev_context},#H}*#{pane_current_command}*#(${tmuxDevspaceHelper}/bin/tmux-devspace title-path #{q:pane_current_path})'
 
         # Status line configuration. Catppuccin Mocha palette throughout.
-        set -g status-bg default
+        set -g status-style "fg=#cdd6f4,bg=default"
         set -g status-justify left
         set -g status-interval 5
         set -g status-right-length 200
         set -g status-left-length 100
         set -g status-left ""
-        set -g window-status-separator ""
+        set -g window-status-separator " "
         set -g message-style "fg=#94e2d5,bg=default"
         set -g message-command-style "fg=#94e2d5,bg=default"
 
-        # Window status: rectangular pill matching what the previous catppuccin
-        # plugin produced. Inactive windows show the pane title (#T) on the
-        # surface_0 background; the current window shows the window name (#W)
-        # on surface_1, with a mauve index. Trailing #[default] resets fg/bg
-        # so the next window's pill renders cleanly on the bar bg.
-        set -g window-status-format "#[fg=#cdd6f4,bg=#313244] #T #[fg=#11111b,bg=#9399b2] #I #[default] "
-        set -g window-status-current-format "#[fg=#cdd6f4,bg=#45475a] #W #[fg=#11111b,bg=#cba6f7] #I #[default] "
+        # Window status: rounded pill (left cap U+E0B6, right cap U+E0B4) wrapping
+        # window name and index. Outer caps render fg=pill-color on bg=default,
+        # producing the curve from the bar background into the pill body. Inactive
+        # on surface_0 + overlay_2 index; current on surface_1 + mauve index.
+        # (#W = window name; auto-renames to current command via automatic-rename.)
+        set -g window-status-format "#[fg=#313244,bg=default]#[fg=#cdd6f4,bg=#313244] #W #[fg=#11111b,bg=#9399b2] #I #[fg=#9399b2,bg=default]"
+        set -g window-status-current-format "#[fg=#45475a,bg=default]#[fg=#cdd6f4,bg=#45475a] #W #[fg=#11111b,bg=#cba6f7] #I #[fg=#cba6f7,bg=default]"
 
         # Right side: one combined system-monitor widget. Reads /proc
         # directly (no iostat sample), caches output for 4s, emits the full

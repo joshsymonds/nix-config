@@ -660,8 +660,26 @@ in {
       // From the josh/cross-monitor-column-insert patch in our niri fork.
       // Lands cross-monitor moves on the destination edge we arrived from
       // instead of after the destination's active column.
+      //
+      // From the josh/focus-flash patch in our niri fork. Pulses the focus
+      // ring (and a screen-edge frame on fullscreen windows) through
+      // `flash-color` on focus arrival. Solves the original problem of
+      // fullscreen windows having no focus-change feedback at all.
+      //
+      // `flash-color` matches DMS's `shaderTertiaryColor` (chrome shader's
+      // "highlight peak" hue — see home-manager/dms/default.nix:193). Same
+      // semantic role across the desktop: synthwave neon green is the
+      // "this is the active highlight" accent. Lerps cleanly off the
+      // purple `active.color` and stays out of the urgent-pink lane.
+      // 220 ms / 1 pulse: long enough to register on a 144 Hz display,
+      // short enough that rapid focus cycling doesn't feel busy.
       layout {
           cross-monitor-column-insert "adjacent"
+          focus-flash {
+              flash-color "#39FF99"
+              pulse-duration-ms 220
+              pulses 1
+          }
       }
     '';
   };

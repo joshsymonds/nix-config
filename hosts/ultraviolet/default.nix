@@ -261,8 +261,9 @@ in
       publisher = {
         enable = true;
         tokenFile = config.age.secrets."atticd-push-token".path;
-        # Loopback so self-pushes don't round-trip through DNS/Tailscale.
-        cacheUrl = "http://localhost:8081/nix-config";
+        # Defaults to consumer.url (http://ultraviolet:8081/nix-config), which
+        # resolves to the local NIC. localhost would be true loopback but
+        # atticd's allowedHosts default rejects "localhost:8081".
       };
     };
 

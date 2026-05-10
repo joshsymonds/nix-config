@@ -63,8 +63,31 @@ in {
     })
 
     (lib.mkIf cfg.publisher.enable (let
+      # cacheUrl is "http://host:port/cachename"; split into endpoint + cache.
+      cacheName = lib.last (lib.splitString "/" cfg.publisher.cacheUrl);
+      endpoint = lib.removeSuffix "/${cacheName}" cfg.publisher.cacheUrl;
+
+      # The detached child renders an attic config.toml with the token inlined
+      # (attic supports neither token_file nor a token env var), runs `attic
+      # push`, then cleans up the token-bearing tmp dir on exit. Subshell-with-
+      # trap pattern avoids racing the parent script's exit.
+      pushScript = pkgs.writeShellScript "atticd-push-detached" ''
+        set -eu
+        CFG=$(${pkgs.coreutils}/bin/mktemp -d -t atticd-push)
+        trap "rm -rf $CFG" EXIT
+        mkdir -p "$CFG/attic"
+        {
+          echo "default-server = \"h\""
+          echo "[servers.h]"
+          echo "endpoint = \"${endpoint}\""
+          echo "token = \"$(cat ${lib.escapeShellArg cfg.publisher.tokenFile})\""
+        } > "$CFG/attic/config.toml"
+        chmod 0400 "$CFG/attic/config.toml"
+        XDG_CONFIG_HOME="$CFG" \
+          ${pkgs.attic-client}/bin/attic push "h:${cacheName}" $@
+      '';
+
       hookScript = pkgs.writeShellScript "upload-to-attic" ''
-        #!${pkgs.runtimeShell}
         set -eu
 
         # nix invokes the hook even when no outputs were produced.
@@ -75,14 +98,11 @@ in {
           exit 1
         fi
 
-        ATTIC_TOKEN="$(cat ${lib.escapeShellArg cfg.publisher.tokenFile})"
-        export ATTIC_TOKEN
-
         # Darwin has no systemd-run; detach via nohup to a log file.
         # The script exits immediately so `nix build` never waits.
         # $OUT_PATHS is intentionally word-split (space-separated path list from nix).
         ${pkgs.coreutils}/bin/nohup \
-          ${pkgs.attic-client}/bin/attic push ${lib.escapeShellArg cfg.publisher.cacheUrl} $OUT_PATHS \
+          ${pushScript} $OUT_PATHS \
           >>/var/log/attic-push.log 2>&1 </dev/null &
       '';
     in {

@@ -146,8 +146,11 @@ in {
     })
 
     (lib.mkIf cfg.publisher.enable (let
+      # cacheUrl is "http://host:port/cachename"; split into endpoint + cache.
+      cacheName = lib.last (lib.splitString "/" cfg.publisher.cacheUrl);
+      endpoint = lib.removeSuffix "/${cacheName}" cfg.publisher.cacheUrl;
+
       hookScript = pkgs.writeShellScript "upload-to-attic" ''
-        #!${pkgs.runtimeShell}
         set -eu
 
         # nix invokes the hook even when no outputs were produced (e.g. fixed-output failures).
@@ -158,16 +161,33 @@ in {
           exit 1
         fi
 
-        ATTIC_TOKEN="$(cat ${lib.escapeShellArg cfg.publisher.tokenFile})"
-
-        # Detach via systemd-run so `nix build` never waits on uploads.
-        # Failures land in `journalctl -u 'attic-push-*'` rather than the build log.
-        # $OUT_PATHS is intentionally word-split (space-separated path list from nix).
+        # Detach into a transient unit. The unit owns the token-bearing
+        # config dir and cleans it up on its own exit, avoiding a race
+        # with this hook script returning before the upload starts.
+        # Failures land in `journalctl -u 'attic-push-*'`.
+        # $OUT_PATHS is intentionally word-split inside the inner shell.
         exec ${pkgs.systemd}/bin/systemd-run \
           --no-block --collect \
           --unit="attic-push-$$" \
-          --setenv=ATTIC_TOKEN="$ATTIC_TOKEN" \
-          ${pkgs.attic-client}/bin/attic push ${lib.escapeShellArg cfg.publisher.cacheUrl} $OUT_PATHS
+          --setenv=ATTIC_TOKEN_FILE=${lib.escapeShellArg cfg.publisher.tokenFile} \
+          --setenv=ATTIC_ENDPOINT=${lib.escapeShellArg endpoint} \
+          --setenv=ATTIC_CACHE_NAME=${lib.escapeShellArg cacheName} \
+          --setenv=ATTIC_OUT_PATHS="$OUT_PATHS" \
+          ${pkgs.bash}/bin/bash -c '
+            set -eu
+            CFG=$(${pkgs.coreutils}/bin/mktemp -d -p /run attic-push-XXXXXX)
+            trap "rm -rf $CFG" EXIT
+            mkdir -p "$CFG/attic"
+            {
+              echo "default-server = \"h\""
+              echo "[servers.h]"
+              echo "endpoint = \"$ATTIC_ENDPOINT\""
+              echo "token = \"$(cat $ATTIC_TOKEN_FILE)\""
+            } > "$CFG/attic/config.toml"
+            chmod 0400 "$CFG/attic/config.toml"
+            XDG_CONFIG_HOME="$CFG" \
+              ${pkgs.attic-client}/bin/attic push "h:$ATTIC_CACHE_NAME" $ATTIC_OUT_PATHS
+          '
       '';
     in {
       environment.systemPackages = [pkgs.attic-client];

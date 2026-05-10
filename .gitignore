@@ -10,6 +10,7 @@ venv/
 .env.local
 .aider*
 !.aider.model*
+.claude/scheduled_tasks.lock
 
 # Secrets
 modules/services/signal-cli-bot-secrets.nix

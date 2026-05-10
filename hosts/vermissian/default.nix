@@ -19,7 +19,14 @@ in
       ./hardware-configuration.nix
     ];
 
-    services.atticd-cache.consumer.enable = true;
+    services.atticd-cache = {
+      consumer.enable = true;
+      publisher = {
+        enable = true;
+        tokenFile = config.age.secrets."atticd-push-token".path;
+        # cacheUrl defaults to consumer.url (http://ultraviolet:8081/nix-config).
+      };
+    };
 
     services.cleanup-services = {
       enable = true;
@@ -208,6 +215,13 @@ in
       file = ../../secrets/hosts/vermissian/cloudflared-token.age;
       owner = "cloudflared";
       group = "cloudflared";
+      mode = "0400";
+    };
+
+    age.secrets."atticd-push-token" = {
+      file = ../../secrets/shared/atticd-push-token.age;
+      owner = "root";
+      group = "root";
       mode = "0400";
     };
 

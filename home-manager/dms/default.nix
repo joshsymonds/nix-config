@@ -99,6 +99,20 @@ in {
     # and niri drive the actual blur.
     settings.blurEnabled = true;
 
+    # Idle / power. DMS's IdleService (Services/IdleService.qml) drives
+    # Wayland idle directly via Quickshell's IdleMonitor, so no swayidle
+    # needed. Timeouts are in seconds; 0 disables that stage. Defaults
+    # are all 0, which leaves a desktop running at ~110W indefinitely.
+    #
+    # Cascade on AC: monitors DPMS-off after 5 min (saves ~50W of
+    # backlight, instant wake on input), then full suspend-to-RAM after
+    # 30 min (drops the box to ~3-5W, S3 resume is ~1-2s). Battery keys
+    # are irrelevant on gnomon (desktop, no battery) — leave at 0.
+    # fadeToDpmsEnabled is already true by default; the screen dims
+    # smoothly for fadeToDpmsGracePeriod (5s) before the DPMS-off signal.
+    settings.acMonitorTimeout = 300;
+    settings.acSuspendTimeout = 1800;
+
     # Bar layout. `programs.dank-material-shell.settings` is serialized
     # verbatim to ~/.config/DankMaterialShell/settings.json; barConfigs is
     # an array of full bar configurations (DMS supports multiple bars), so

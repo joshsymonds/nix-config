@@ -124,14 +124,7 @@ in {
         centerWidgets = ["music" "clock" "weather"];
         rightWidgets = ["systemTray" "clipboard" "cpuUsage" "memUsage" "notificationButton" "battery" "controlCenterButton"];
         spacing = 4;
-        # innerPadding drives DMS bar/widget thickness via:
-        #   widgetThickness    = max(20, 26 + innerPadding * 0.6)
-        #   effectiveBarThick. = max(widgetThickness + innerPadding + 4, 40)
-        # Bumping to 16 takes the vertical bar from ~40px → ~56px and the
-        # widget cross-axis from ~28 → ~36, giving the claudeCodeUsage
-        # plugin's two stacked rings (28px each) room to render with
-        # legible labels inside them.
-        innerPadding = 16;
+        innerPadding = 4;
         bottomGap = 0;
         transparency = 1.0;
         widgetTransparency = 1.0;
@@ -240,10 +233,21 @@ in {
   # swapping the symlink to a new /nix/store path — Qt's
   # QFileSystemWatcher tracks the resolved inode, so the swap is
   # invisible to the watcher and DMS keeps its stale in-memory state.
-  # No IPC reload exists for global settings, so restart dms.service.
-  # Brief bar flicker, only fires when the file actually changed
-  # (cmp -s) so no-op rebuilds stay quiet. Skips silently when DMS
-  # isn't running and on first activation (no `oldGenPath` to diff).
+  #
+  # Two recovery paths depending on what changed:
+  #   • Plugins: call `qs ipc plugins reload <id>` (DMSShellIPC.qml,
+  #     handler at target "plugins"). That calls
+  #     PluginService.reloadPlugin = unloadPlugin + loadPlugin, picking
+  #     up the new QML in-process without restarting the bar. DMS's own
+  #     FolderListModel-based auto-detection (PluginService.qml:72) only
+  #     fires on dir entry add/remove and misses symlink retargets, which
+  #     is how HM publishes new plugin sources.
+  #   • Global settings / session state: no IPC equivalent exists, so we
+  #     fall back to restarting dms.service (brief bar flicker).
+  #
+  # Only fires when the resolved store path / file content actually
+  # changed, so no-op rebuilds stay quiet. Skips silently when DMS isn't
+  # running and on first activation (no `oldGenPath` to diff).
   home.activation.dmsReloadConfig = lib.hm.dag.entryAfter ["writeBoundary"] ''
     # NixOS-integrated HM runs activation via home-manager-joshsymonds.service.
     # Two gotchas the hook has to handle itself:
@@ -255,6 +259,7 @@ in {
     #      `systemctl --user` needs it to find the per-user manager bus.
     export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
     SYSTEMCTL=${pkgs.systemd}/bin/systemctl
+    QS=${pkgs.quickshell}/bin/qs
 
     fileChanged() {
       local rel="$1"
@@ -264,30 +269,56 @@ in {
         && ! cmp -s "$oldGenPath/home-files/$rel" "$newGenPath/home-files/$rel"
     }
 
-    # Compare the resolved store paths of each plugin directory between
-    # generations. Each plugin under home-files/.config/DankMaterialShell/
-    # plugins/<name> is a symlink into a flake-input store path; when the
-    # input bumps, the resolved path changes even though the JSON files
-    # don't, so cmp-on-JSON misses it. Added/removed plugins also show up
-    # here as a changed listing.
-    pluginsChanged() {
-      local dir=".config/DankMaterialShell/plugins"
-      [[ -v oldGenPath ]] || return 1
-      local old new
-      old=$([ -d "$oldGenPath/home-files/$dir" ] \
-        && (cd "$oldGenPath/home-files/$dir" && for p in *; do [ -e "$p" ] && echo "$p $(readlink -f "$p")"; done | sort) \
-        || echo "")
-      new=$([ -d "$newGenPath/home-files/$dir" ] \
-        && (cd "$newGenPath/home-files/$dir" && for p in *; do [ -e "$p" ] && echo "$p $(readlink -f "$p")"; done | sort) \
-        || echo "")
-      [ "$old" != "$new" ]
+    # Find the DMS quickshell instance among potentially many running
+    # quickshell processes (the user may also have shader previews etc.).
+    # Match on the config path containing `/dms/shell.qml`, which is how
+    # the dms-shell package exposes its entry point.
+    findDmsInstance() {
+      "$QS" list --all 2>/dev/null \
+        | awk '/^Instance / { id = $2; sub(/:$/, "", id) }
+               /Config path:.*\/dms\/shell\.qml/ { print id; exit }'
+    }
+
+    # For each plugin whose resolved store target differs between
+    # generations, ask DMS to reload it via IPC. Brand-new plugins (not
+    # present in oldGen) are skipped here — DMS's FolderListModel does
+    # detect directory entry additions and auto-loads them.
+    reloadChangedPlugins() {
+      [[ -v oldGenPath ]] || return 0
+      local dir="home-files/.config/DankMaterialShell/plugins"
+      [ -d "$newGenPath/$dir" ] || return 0
+
+      local instance
+      instance=$(findDmsInstance)
+      [ -n "$instance" ] || return 0
+
+      local p name new_target old_p old_target
+      for p in "$newGenPath/$dir"/*; do
+        [ -e "$p" ] || continue
+        name=$(basename "$p")
+        new_target=$(readlink -f "$p" 2>/dev/null || true)
+        old_p="$oldGenPath/$dir/$name"
+        [ -e "$old_p" ] || continue
+        old_target=$(readlink -f "$old_p" 2>/dev/null || true)
+        if [ -n "$new_target" ] && [ "$old_target" != "$new_target" ]; then
+          "$QS" ipc -i "$instance" call plugins reload "$name" \
+            >/dev/null 2>&1 || true
+        fi
+      done
     }
 
     if $SYSTEMCTL --user is-active --quiet dms.service 2>/dev/null; then
+      # Plugins first: hot-reload anything whose source changed.
+      reloadChangedPlugins
+
+      # Settings/state files have no IPC reload, so fall back to a full
+      # service restart. (Plugin reloads above happen before this, so if
+      # both kinds of change land in the same generation, plugins get
+      # reloaded twice — once via IPC, once via the restart that follows.
+      # Harmless.)
       if fileChanged ".config/DankMaterialShell/settings.json" \
         || fileChanged ".config/DankMaterialShell/plugin_settings.json" \
-        || fileChanged ".local/state/DankMaterialShell/session.json" \
-        || pluginsChanged; then
+        || fileChanged ".local/state/DankMaterialShell/session.json"; then
         $SYSTEMCTL --user restart dms.service >/dev/null 2>&1 || true
       fi
     fi

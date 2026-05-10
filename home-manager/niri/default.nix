@@ -220,32 +220,16 @@ in {
     QT_QPA_PLATFORM = "wayland;xcb";
   };
 
-  # NVIDIA + niri + PipeWire screencast workaround.
-  #
-  # NVIDIA's open driver exposes only specific tiled modifiers via EGL's
-  # `dmabuf_render_formats()`; `Modifier::Invalid` is never in that set.
-  # XDP-G consumers (Zoom under XWayland, etc.) offer a Choice/Enum of
-  # modifiers that doesn't intersect NVIDIA's set, and PipeWire format
-  # negotiation fails with EPIPE / "no more input formats". Symptom:
-  # picker shows, you pick a source, receiving app gets a blank stream.
-  #
-  # `add-pipewire-invalid-modifier` is a fork-local debug flag (carried
-  # on josh/zoom-screencast-fix in our niri patch stack) that augments
-  # the offered set with one `(fourcc, Invalid)` entry per fourcc. niri's
-  # `allocate_buffer` already routes Invalid-modifier requests through
-  # `gbm_create_buffer_object` (the no-modifier path), so consumers that
-  # fixate on Invalid get an implementation-defined-layout DMA-BUF.
-  #
-  # The previous attempt used upstream's `force-pipewire-invalid-modifier`
-  # which is a *filter*: keep only formats whose modifier is already
-  # Invalid. On NVIDIA that empties the set entirely, leaving niri to
-  # offer SHM-only formats — even worse than no flag at all. Removed.
-  #
-  # niri-flake passes the `debug` attrset through to KDL untyped
-  # (empty-array value = boolean flag with no args).
-  programs.niri.settings.debug = {
-    add-pipewire-invalid-modifier = [];
-  };
+  # NVIDIA + niri + PipeWire screencast: SHM-fallback ships in our niri
+  # fork via josh/zoom-screencast-fix, which carries niri PR #1791
+  # (wrvsrx). That PR teaches niri's pw_utils to emit two SPA EnumFormat
+  # pods per fourcc — one with the modifier prop (DMA-BUF), one without
+  # (SHM) — matching the canonical pattern from Mutter MR !1939, KWin
+  # MR !1210, and the PipeWire dma-buf negotiation spec. Consumers like
+  # Zoom / Slack / Chromium that don't speak DMA-BUF can now fixate on
+  # the SHM offer; niri allocates a memfd, renders into it via the same
+  # path used by wlr-screencopy, and queues it back. No debug flags
+  # needed at the niri side. See INTEGRATION.md in the niri fork repo.
 
   programs.niri.settings.spawn-at-startup = [
     {command = ["xwayland-satellite" ":0"];}

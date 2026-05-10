@@ -202,17 +202,35 @@ in
       pkiBundle = "/var/lib/sbctl";
     };
 
-    # ── Kernel: CachyOS x86_64-v3 ───────────────────────────────────────
+    # ── Kernel: CachyOS latest (generic march) ──────────────────────────
     # Overrides hosts/common.nix's mkDefault linuxPackages_latest. Same
     # mainline Linux source the rest of the fleet runs, with the CachyOS
-    # patch stack on top (BORE-EEVDF scheduler, AutoFDO/PGO, x86_64-v3
-    # ISA tuning). Symmetric with proton-cachyos-x86_64-v3 + mesa-git.
-    # See flake.nix nix-cachyos-kernel comment for input rationale.
+    # patch stack on top (BORE-EEVDF scheduler, cachy patchset, BBR3).
+    # Those patches are where CachyOS earns its tail-latency wins —
+    # independent of march flag.
+    #
+    # Was -x86_64-v3 previously. Switched off because cache.garnix.io
+    # ships exactly four xddxdd variants — latest{,-lto}, lts{,-lto} —
+    # and the v3-suffixed variants are not among them. Eating 25–30 min
+    # from-source rebuild per kernel bump for sub-1% kernel perf was
+    # the wrong trade: the kernel forbids SSE/AVX outside
+    # kernel_fpu_begin/end via arch/x86/Makefile -mno-* flags, so
+    # -march=v3 can only enable narrow GPR instructions (BMI1/2, LZCNT,
+    # MOVBE) in kernel code; SIMD subsystems like crypto/RAID are
+    # runtime-dispatched via alternative_call regardless of -march.
+    # Userspace v3 (proton-cachyos, mesa-git) keeps its v3 builds where
+    # AVX2 actually fires in hot loops; the kernel is generic and
+    # substituted from garnix.
+    #
+    # The -lto variant is also on garnix but skipped — clang+ThinLTO
+    # would force the out-of-tree it87 module below to build with LLVM
+    # too (kernelModuleLLVMOverride), and the LTO kernel-perf gain
+    # doesn't pay for that integration work.
     #
     # nvidiaPackages.production is auto-derived by linuxPackagesFor —
     # the NVIDIA proprietary blob rebuilds against this kernel. No
     # special compat shims required; CachyOS is a major NVIDIA distro.
-    boot.kernelPackages = inputs.nix-cachyos-kernel.legacyPackages.x86_64-linux.linuxPackages-cachyos-latest-x86_64-v3;
+    boot.kernelPackages = inputs.nix-cachyos-kernel.legacyPackages.x86_64-linux.linuxPackages-cachyos-latest;
 
     # ── Boot: AM5 / 9800X3D ─────────────────────────────────────────────
     # amd_pstate=active matches the X3D's preferred frequency-driver mode.

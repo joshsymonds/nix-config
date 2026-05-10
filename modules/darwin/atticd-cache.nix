@@ -73,7 +73,8 @@ in {
       # trap pattern avoids racing the parent script's exit.
       pushScript = pkgs.writeShellScript "atticd-push-detached" ''
         set -eu
-        CFG=$(${pkgs.coreutils}/bin/mktemp -d -t atticd-push)
+        export PATH=${pkgs.coreutils}/bin
+        CFG=$(mktemp -d -t atticd-push)
         trap "rm -rf $CFG" EXIT
         mkdir -p "$CFG/attic"
         {

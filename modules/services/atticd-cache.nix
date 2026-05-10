@@ -175,7 +175,8 @@ in {
           --setenv=ATTIC_OUT_PATHS="$OUT_PATHS" \
           ${pkgs.bash}/bin/bash -c '
             set -eu
-            CFG=$(${pkgs.coreutils}/bin/mktemp -d -p /run attic-push-XXXXXX)
+            export PATH=${pkgs.coreutils}/bin
+            CFG=$(mktemp -d -p /run attic-push-XXXXXX)
             trap "rm -rf $CFG" EXIT
             mkdir -p "$CFG/attic"
             {

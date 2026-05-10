@@ -18,7 +18,6 @@ in {
     coder = final.callPackage ../pkgs/coder-cli {inherit (final) unzip;};
     invidious-companion = final.callPackage ../pkgs/invidious-companion {};
     newrelic-cli = final.callPackage ../pkgs/newrelic-cli {};
-    proton-gamescope = final.callPackage ../pkgs/proton-gamescope {};
     redlib-veraticus = final.callPackage ../pkgs/redlib-veraticus {
       inherit (inputs) crane;
       redlibSrc = inputs.redlib-fork.sourceInfo.outPath;
@@ -92,4 +91,9 @@ in {
   privatePackages = final: _prev: {
     shimmer = inputs.shimmer.packages.${final.stdenv.hostPlatform.system}.default;
   };
+
+  # Gaming overlay: proton-cachyos + mesa-git from nix-gaming-edge. Applied
+  # only on gnomon (see flake.nix) — keeps the bleeding-edge mesa-git rebuild
+  # and the tokidoki cache out of headless servers' eval graphs.
+  gaming = inputs.nix-gaming-edge.overlays.default;
 }

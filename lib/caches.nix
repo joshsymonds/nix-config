@@ -15,4 +15,12 @@
     url = "https://niri.cachix.org";
     publicKey = "niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964=";
   };
+  # nix-gaming-edge upstream cache (proton-cachyos + mesa-git prebuilds).
+  # Gnomon-only — wired into hosts/gnomon/default.nix nix.settings, NOT
+  # added to modules/nix/defaults.nix so headless servers don't trust an
+  # external signer they don't need.
+  tokidoki = {
+    url = "https://nix-cache.tokidoki.dev/tokidoki";
+    publicKey = "tokidoki:MD4VWt3kK8Fmz3jkiGoNRJIW31/QAm7l1Dcgz2Xa4hk=";
+  };
 }

@@ -79,25 +79,24 @@ in
     };
 
     # ── Gaming ──────────────────────────────────────────────────────────
-    # Two compat tools land in Steam via extraCompatPackages:
-    #   - proton-ge-bin: GE-Proton (community Proton fork). Required for
-    #     Steam to install the Steam Linux Runtime sniper, and the Proton
-    #     our wrapper delegates to.
-    #   - proton-gamescope: a custom Steam compat tool that wraps GE-Proton
-    #     in a niri-friendly gamescope (--backend sdl, --force-grab-cursor,
-    #     full monitor resolution). Selected once in Steam → Settings →
-    #     Compatibility → "Run other titles with…" → "Proton (Gamescope)"
-    #     and it applies to every non-native game with no per-game launch
-    #     options. Needed because xwayland-satellite has open fullscreen
-    #     bugs with newer Wine/Proton (#165) that gamescope sidesteps.
+    # proton-cachyos-x86_64-v3 (CachyOS Proton, AVX2/x86_64-v3 ISA build,
+    # Steam Linux Runtime sniper variant) is the only Proton in the picker.
+    # Comes from nix-gaming-edge (flake input), prebuilt and pulled from the
+    # tokidoki cache below — no compile cost. Set once in Steam → Settings
+    # → Compatibility → "Run other titles with…" → "Proton CachyOS x86_64-v3".
+    #
+    # No automatic gamescope wrapping. Two ways to get gamescope:
+    #   - Big Picture: boot the "Steam (Gamescope)" greetd session
+    #     (gamescopeSession.enable = true)
+    #   - Per-game: add `gamescope -W 2560 -H 1440 -f -- %command%` to that
+    #     game's Launch Options
     programs.steam = {
       enable = true;
       remotePlay.openFirewall = true;
       dedicatedServer.openFirewall = false;
       gamescopeSession.enable = true;
       extraCompatPackages = with pkgs; [
-        proton-ge-bin
-        proton-gamescope
+        proton-cachyos-x86_64-v3
       ];
     };
     hardware.steam-hardware.enable = true;
@@ -109,6 +108,41 @@ in
     programs.gamescope = {
       enable = true;
       capSysNice = true;
+    };
+
+    # ── Mesa-git ────────────────────────────────────────────────────────
+    # nix-gaming-edge's mesa-git module replaces the system mesa with the
+    # latest from upstream git. On NVIDIA the GPU driver is unaffected
+    # (proprietary blob via hardware.nvidia), but compositor infrastructure
+    # — libgbm, libdrm, Vulkan loader/layers — all get bumped. Required to
+    # land for two reasons even on NVIDIA:
+    #   1. Steam's FHS env bundles stable libdrm; mesa-git refuses to load
+    #      against it. The module's overlay rewrites buildFHSEnv to inject
+    #      libdrm-git into every FHS sandbox so Steam keeps working.
+    #   2. cacheCleanup wipes stale Mesa/Proton shader caches when those
+    #      packages bump version, avoiding the "old shaders crash on new
+    #      drivers" footgun. Pinned to proton-cachyos-x86_64-v3 below so
+    #      Proton's DXVK/VKD3D caches also flush on upstream releases.
+    #
+    # Fallback: the module auto-creates a `stable-mesa` boot specialisation,
+    # selectable at the systemd-boot menu if mesa HEAD regresses.
+    drivers.mesa-git = {
+      enable = true;
+      enableCache = false; # cache wired in nix.settings below instead
+      cacheCleanup = {
+        enable = true;
+        protonPackage = pkgs.proton-cachyos-x86_64-v3;
+      };
+    };
+
+    # tokidoki cache hosts mesa-git + proton-cachyos prebuilds. Without it,
+    # mesa-git compiles from source on every flake-lock bump (~30 min of
+    # clang). Scoped to gnomon — see lib/caches.nix.
+    nix.settings = {
+      extra-substituters = ["https://nix-cache.tokidoki.dev/tokidoki"];
+      extra-trusted-public-keys = [
+        "tokidoki:MD4VWt3kK8Fmz3jkiGoNRJIW31/QAm7l1Dcgz2Xa4hk="
+      ];
     };
 
     # ── Flatpak (declarative via nix-flatpak) ───────────────────────────

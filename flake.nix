@@ -126,6 +126,25 @@
     # Savecraft — game save parser + MCP server
     savecraft.url = "github:joshsymonds/savecraft.gg";
 
+    # nix-gaming-edge — proton-cachyos (the SLR x86_64-v3 build) + mesa-git
+    # module. Replaces proton-ge-bin on gnomon. Module ships shader-cache
+    # cleanup on Mesa/Proton bumps + an FHS-env libdrm-git rewrite Steam
+    # needs to function once mesa-git is system-wide. Cache (tokidoki) is
+    # wired in on gnomon only — the only host that consumes any of this.
+    #
+    # Tracking joshsymonds/nix-gaming-edge josh/fix-fhsenv-override until
+    # the upstream FHS-env wrapper bug is merged: the upstream wrapFhsEnv
+    # rewrites pkgs.buildFHSEnv as a plain function, dropping `.override`.
+    # That breaks evaluation when programs.steam.gamescopeSession.enable
+    # AND programs.gamescope.capSysNice are both true (steam.nix calls
+    # pkgs.buildFHSEnv.override to swap in setuid bubblewrap). Source lives
+    # at ~/Personal/nix-gaming-edge with `upstream` remote pointing at
+    # powerofthe69; rebase + push when picking up new releases.
+    nix-gaming-edge = {
+      url = "github:joshsymonds/nix-gaming-edge/josh/fix-fhsenv-override";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Google Workspace CLI — official `gws` from Google
     googleworkspace-cli = {
       url = "github:googleworkspace/cli";
@@ -277,6 +296,10 @@
           ./hosts/gnomon
           ./hosts/common.nix
           inputs.agenix.nixosModules.default
+          inputs.nix-gaming-edge.nixosModules.mesa-git
+          ({outputs, ...}: {
+            nixpkgs.overlays = [outputs.overlays.gaming];
+          })
         ];
         homeModule = ./home-manager/hosts/gnomon.nix;
       };

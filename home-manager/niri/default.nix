@@ -567,6 +567,18 @@ in {
         matches = [{namespace = "dms:blurwallpaper";}];
         place-within-backdrop = true;
       }
+      # Hide DMS notification popups from screencast captures (Zoom
+      # window/screen share, OBS, xdg-desktop-portal-gnome). Notifications
+      # still appear locally and still beep; they're just blacked out in
+      # the captured stream. Mirrors the existing `block-out-from`
+      # window rule, applied to layer-shell namespaces.
+      {
+        matches = [
+          {namespace = "^dms:notification-popup$";}
+          {namespace = "^dms:dnd-duration-menu$";}
+        ];
+        block-out-from = "screencast";
+      }
     ];
   };
 

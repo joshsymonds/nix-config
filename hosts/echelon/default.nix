@@ -13,6 +13,9 @@ in
     imports = [
       inputs.hardware.nixosModules.common-cpu-intel
       ./hardware-configuration.nix
+
+      # Headless-server hardening (BT module blacklist on top of fleet-wide)
+      ../../modules/linux-base/server-hardening.nix
     ];
 
     # Hardware setup

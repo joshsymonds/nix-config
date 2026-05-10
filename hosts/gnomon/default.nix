@@ -71,13 +71,13 @@ in
       KERNEL=="hidraw*", ATTRS{idVendor}=="3434", ATTRS{idProduct}=="0b60", MODE="0660", TAG+="uaccess"
     '';
 
-    # ── Bluetooth (for controllers, headphones) ─────────────────────────
-    # DMS's control center handles pairing/connecting/battery via bluez
-    # directly — no blueman-applet needed (and its tray icon is hideous).
-    hardware.bluetooth = {
-      enable = true;
-      powerOnBoot = true;
-    };
+    # ── Bluetooth: disabled ─────────────────────────────────────────────
+    # Probed live: zero connected devices, zero paired devices, no
+    # journal activity in 7+ days. The radio was on but unused. Disabling
+    # the userspace stack here; the bluetooth + btusb kernel modules are
+    # not blacklisted on gnomon (only on servers via server-hardening.nix)
+    # so a future re-enable just needs flipping this back to true.
+    hardware.bluetooth.enable = false;
 
     # ── Gaming ──────────────────────────────────────────────────────────
     # proton-cachyos-x86_64-v3 (CachyOS Proton, AVX2/x86_64-v3 ISA build,

@@ -53,6 +53,9 @@ in
 
       # Import your generated (nixos-generate-config) hardware configuration
       ./hardware-configuration.nix
+
+      # Headless-server hardening (BT module blacklist on top of fleet-wide)
+      ../../modules/linux-base/server-hardening.nix
     ];
 
     # Performance tuning

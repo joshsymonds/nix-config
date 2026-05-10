@@ -16,6 +16,9 @@ in
       ../../modules/services/cleanup-services.nix
       ../../modules/services/cloudflare-tunnel.nix
       ./hardware-configuration.nix
+
+      # Headless-server hardening (BT module blacklist on top of fleet-wide)
+      ../../modules/linux-base/server-hardening.nix
     ];
 
     services.cleanup-services = {

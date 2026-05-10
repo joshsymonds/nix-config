@@ -7,36 +7,113 @@
 # hosts (gnomon, vermissian).
 {lib, ...}: {
   # ── Module blacklists ──────────────────────────────────────────────
-  # AF_ALG userspace crypto API — unused fleet-wide. Removing it closes
-  # the surface that produced CVE-2026-31431 ("Copy Fail"): a local
-  # user with AF_ALG sockets + splice() can write 4 bytes into any
-  # page-cache page (typical target: setuid binaries). 7.0 mainline
-  # fixed the specific bug; blacklisting the whole family is defense-
-  # in-depth against the next vuln in the same subsystem. Does NOT
-  # break dm-crypt/LUKS, kTLS, IPsec, OpenSSL default paths, or SSH —
-  # those use the in-kernel crypto API directly, not AF_ALG.
+  # Layered rationale (each group documented inline):
   #
-  # Cold-attack-surface filesystems: legacy formats kept for
-  # compatibility, historically vulnerable to parser bugs on malformed
-  # images. Blocking autoload means an attacker who can plug in a USB
-  # stick can't trigger one of their CVEs by autoprobe.
+  # AF_ALG family — closes the surface that produced CVE-2026-31431
+  # ("Copy Fail"). 7.0 mainline fixed the specific bug; blacklisting
+  # the whole family is defense-in-depth against the next vuln in the
+  # same subsystem. dm-crypt/LUKS, kTLS, IPsec, OpenSSL default paths,
+  # and SSH use the in-kernel crypto API directly, not AF_ALG, so
+  # nothing on this fleet breaks.
   #
-  # NOT blacklisted: thunderbolt / thunderbolt-net — gnomon uses a
-  # Thunderbolt drive intermittently.
+  # IPsec ESP / IPcomp / rxrpc — entry points for CVE-2026-43284
+  # ("Dirty Frag", May 2026): xfrm scatterlist confusion → LPE via
+  # corrupting page-cache pages of files like /etc/passwd. Tailscale
+  # uses WireGuard (not IPsec), no AFS in fleet, so these auto-loaded
+  # modules are pure attack surface for us.
+  #
+  # Dead protocol families — DCCP/SCTP/RDS/TIPC are niche cluster/
+  # telecom protocols with multiple historical CVEs (CVE-2017-6074
+  # DCCP UAF, CVE-2021-43267 TIPC remote heap overflow). The amateur-
+  # radio / legacy WAN stacks (ax25/netrom/rose/n-hdlc/x25/decnet/
+  # econet/ipx/appletalk/p8023/psnap/atm) are dead protocol families
+  # with unaudited code. CAN bus has no automotive workload.
+  #
+  # Legacy filesystems — verbatim from NixOS's last canonical
+  # profiles/hardened.nix (nixos-25.05, before the profile was
+  # removed in 26.05). All historically vulnerable to parser bugs on
+  # malformed images; blacklisting blocks autoprobe attacks via USB.
+  # NTFS family kept enabled — user actively plugs in NTFS USBs.
+  #
+  # FireWire — IEEE-1394 grants direct memory access to attached
+  # devices (DMA attack surface). Distinct from `thunderbolt` module
+  # which is preserved (modern TB is PCIe-tunneling, not 1394).
+  #
+  # ksmbd — kernel-mode SMB server with multiple 2025 CVEs
+  # (CVE-2025-37899 UAF in SMB2 LOGOFF found by an LLM, plus -21945
+  # / -22041). Fleet uses NFS for media + Synology, never SMB.
+  #
+  # vivid — V4L2 test driver, CVE-2019-18683 LPE history. Not
+  # auto-loaded by any normal hardware so this is pure surface
+  # reduction at zero compatibility cost.
   boot.blacklistedKernelModules = [
-    # AF_ALG family — see CVE-2026-31431
+    # AF_ALG family — CVE-2026-31431 ("Copy Fail")
     "af_alg"
     "algif_aead"
     "algif_hash"
     "algif_rng"
     "algif_skcipher"
 
-    # Legacy / cold-attack-surface filesystems
+    # IPsec ESP + IPcomp + rxrpc — CVE-2026-43284 ("Dirty Frag")
+    "esp4"
+    "esp6"
+    "ipcomp4"
+    "ipcomp6"
+    "rxrpc"
+
+    # Dead network protocols — niche cluster / telecom / amateur radio /
+    # vendor stacks with unaudited code paths
+    "dccp"
+    "sctp"
+    "rds"
+    "tipc"
+    "ax25"
+    "netrom"
+    "rose"
+    "n-hdlc"
+    "x25"
+    "decnet"
+    "econet"
+    "ipx"
+    "appletalk"
+    "p8023"
+    "psnap"
+    "atm"
+    "can"
+
+    # Legacy filesystems — autoload-via-USB attack vector
     "freevxfs"
     "jffs2"
     "hfsplus"
+    "hfs"
     "udf"
     "cramfs"
+    "adfs"
+    "affs"
+    "bfs"
+    "befs"
+    "efs"
+    "exofs"
+    "f2fs"
+    "hpfs"
+    "jfs"
+    "minix"
+    "nilfs2"
+    "omfs"
+    "qnx4"
+    "qnx6"
+    "sysv"
+    "ufs"
+    "gfs2"
+
+    # FireWire — DMA attack surface (distinct from thunderbolt)
+    "firewire-core"
+    "firewire-ohci"
+    "firewire-sbp2"
+
+    # Specific surfaces
+    "ksmbd" # kernel SMB server, multiple 2025 CVEs
+    "vivid" # V4L2 test driver, LPE history
   ];
 
   # ── Memory-corruption mitigation kernelParams ──────────────────────

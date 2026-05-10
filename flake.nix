@@ -150,6 +150,32 @@
     # cache-hit. Worth ~5s of extra eval time for a 30-minute compile.
     nix-gaming-edge.url = "github:joshsymonds/nix-gaming-edge/josh/fix-fhsenv-override";
 
+    # nix-cachyos-kernel — CachyOS kernel for gnomon, completing the
+    # gaming-edge stack alongside proton-cachyos + mesa-git. Provides
+    # the BORE-EEVDF scheduler + AutoFDO/PGO + x86_64-v3 ISA build on
+    # top of the same mainline Linux source nixpkgs ships (no security
+    # delta — same CVE coverage as linuxPackages_latest). Gain is
+    # tail-latency in interactive workloads (game 1% lows, compositor
+    # latency, compile throughput), not headline FPS.
+    #
+    # Wired in on gnomon ONLY — see hosts/gnomon/default.nix. The
+    # nix-cachyos-kernel.legacyPackages API exposes the full
+    # linuxPackages set per variant; we use linuxPackages-cachyos-
+    # latest-x86_64-v3 to match proton-cachyos-x86_64-v3's ISA target.
+    # LTO variants are available but skipped — clang+ThinLTO complicates
+    # the out-of-tree it87 module build (would need kernelModuleLLVM-
+    # Override) for marginal extra gain.
+    #
+    # NB: deliberately NOT `inputs.nixpkgs.follows = "nixpkgs"`. The
+    # upstream README warns ("there can be mismatch between patches and
+    # kernel version") and their lantian Attic cache is built against
+    # their pinned nixpkgs. Same reasoning as nix-gaming-edge above.
+    #
+    # Cache: lantian Attic (https://attic.xuyh0120.win/lantian) is
+    # wired in on gnomon only via nix.settings. Garnix is a fallback
+    # for builds the lantian Attic doesn't have yet.
+    nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
+
     # Google Workspace CLI — official `gws` from Google
     googleworkspace-cli = {
       url = "github:googleworkspace/cli";

@@ -7,6 +7,7 @@ in
     inputs,
     lib,
     pkgs,
+    config,
     ...
   }: {
     imports = [
@@ -135,13 +136,25 @@ in
       };
     };
 
-    # tokidoki cache hosts mesa-git + proton-cachyos prebuilds. Without it,
-    # mesa-git compiles from source on every flake-lock bump (~30 min of
-    # clang). Scoped to gnomon — see lib/caches.nix.
+    # Caches scoped to gnomon — host-level rather than flake-level because
+    # only gnomon consumes any of this content:
+    #
+    #   tokidoki  — mesa-git + proton-cachyos prebuilds (~30 min of clang
+    #               otherwise). Wired by nix-gaming-edge.
+    #   lantian   — xddxdd/nix-cachyos-kernel kernel binaries. Without
+    #               it the kernel rebuilds from source on every bump.
+    #   garnix    — fallback for cache hits lantian Attic is missing
+    #               (lantian is on a free Garnix plan + their own Hydra).
     nix.settings = {
-      extra-substituters = ["https://nix-cache.tokidoki.dev/tokidoki"];
+      extra-substituters = [
+        "https://nix-cache.tokidoki.dev/tokidoki"
+        "https://attic.xuyh0120.win/lantian"
+        "https://cache.garnix.io"
+      ];
       extra-trusted-public-keys = [
         "tokidoki:MD4VWt3kK8Fmz3jkiGoNRJIW31/QAm7l1Dcgz2Xa4hk="
+        "lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc="
+        "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
       ];
     };
 
@@ -189,16 +202,47 @@ in
       pkiBundle = "/var/lib/sbctl";
     };
 
+    # ── Kernel: CachyOS x86_64-v3 ───────────────────────────────────────
+    # Overrides hosts/common.nix's mkDefault linuxPackages_latest. Same
+    # mainline Linux source the rest of the fleet runs, with the CachyOS
+    # patch stack on top (BORE-EEVDF scheduler, AutoFDO/PGO, x86_64-v3
+    # ISA tuning). Symmetric with proton-cachyos-x86_64-v3 + mesa-git.
+    # See flake.nix nix-cachyos-kernel comment for input rationale.
+    #
+    # nvidiaPackages.production is auto-derived by linuxPackagesFor —
+    # the NVIDIA proprietary blob rebuilds against this kernel. No
+    # special compat shims required; CachyOS is a major NVIDIA distro.
+    boot.kernelPackages = inputs.nix-cachyos-kernel.legacyPackages.x86_64-linux.linuxPackages-cachyos-latest-x86_64-v3;
+
     # ── Boot: AM5 / 9800X3D ─────────────────────────────────────────────
     # amd_pstate=active matches the X3D's preferred frequency-driver mode.
     # mitigations=auto keeps default kernel mitigations; gamers sometimes pass
     # =off for a few % perf at security cost — explicit "auto" so the choice
     # is visible if you ever revisit it.
+    # acpi_enforce_resources=lax: the IT8696E super-I/O on Gigabyte X870
+    # boards declares its IO ports in ACPI, which the kernel refuses to
+    # let drivers touch under default strict resource enforcement. lax
+    # downgrades that refusal to a warning, so the out-of-tree it87
+    # module below can claim the ports and expose fan tachs + PWM.
     boot.kernelParams = [
       "amd_pstate=active"
       "mitigations=auto"
+      "acpi_enforce_resources=lax"
     ];
-    boot.kernelModules = ["kvm-amd"];
+
+    # ── it87 fan tach / PWM (out-of-tree) ───────────────────────────────
+    # Mainline it87 doesn't recognize the IT8689E/IT8696E chip IDs on
+    # newer Gigabyte boards (X670/X870). The out-of-tree fork
+    # (config.boot.kernelPackages.it87, ultimately frankcrawford/it87)
+    # carries the ID additions. Exposes fan*_input (RPMs) and pwm*
+    # (duty cycle) under /sys/class/hwmon/, which lm_sensors / hass-cli
+    # can surface for monitoring.
+    #
+    # NB: lantian Attic does NOT pre-build kernel modules other than zfs,
+    # so this rebuilds locally on every kernel bump. Few minutes per
+    # `update`; acceptable trade for the fan visibility.
+    boot.extraModulePackages = [config.boot.kernelPackages.it87];
+    boot.kernelModules = ["kvm-amd" "it87"];
 
     # NVIDIA modules in initrd avoid the simpledrm → nvidia-drm mode-switch
     # flash on boot. Keeps the kernel console text-mode but at the panel's

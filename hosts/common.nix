@@ -52,10 +52,19 @@ in {
     optimise.automatic = true;
   };
 
-  # Latest mainline kernel everywhere — pinned in one place so a critical
-  # kernel fix lands on all hosts together. NVIDIA `production` driver
-  # tracks linuxPackages_latest.nvidiaPackages.production (gnomon).
-  boot.kernelPackages = pkgs.linuxPackages_latest;
+  # Default kernel: mainline latest from nixpkgs-unstable. Only gnomon
+  # overrides (linuxPackages-cachyos-latest-x86_64-v3 for perf symmetry
+  # with proton-cachyos + mesa-git). All other hosts run this default.
+  #
+  # Note: linuxPackages_hardened (and all _X_Y_hardened variants) were
+  # removed from nixpkgs-unstable in 2026 due to lack of maintenance.
+  # Hardening on the fleet now comes from modules/linux-base/hardening.nix
+  # — sysctls, kernelParams, and module blacklists — not from a hardened
+  # kernel build. If/when an actively-maintained hardened variant emerges
+  # in nixpkgs, revisit per-host overrides here.
+  #
+  # mkDefault so hosts can override without lib.mkForce.
+  boot.kernelPackages = lib.mkDefault pkgs.linuxPackages_latest;
 
   # Timezone and locale
   time.timeZone = "America/Los_Angeles";

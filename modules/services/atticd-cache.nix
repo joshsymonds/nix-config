@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   cfg = config.services.atticd-cache;
@@ -76,6 +77,34 @@ in {
         description = "Cache signing public key (from `attic cache info`). Public keys are not secret.";
       };
     };
+
+    publisher = {
+      # Independent of `enable` and `consumer.enable`. A host can publish without being a server
+      # or substituter, though typical use is publisher + consumer together.
+      enable = lib.mkEnableOption "push successful nix builds to the household atticd";
+
+      tokenFile = lib.mkOption {
+        type = lib.types.path;
+        description = ''
+          Path to a file containing the atticd push token (single line, no trailing newline).
+          Typically wired to `config.age.secrets."atticd-push-token".path`.
+          The token must be scoped (atticadm) to push+pull on the target cache only — never
+          an admin token, since this file lives on multiple machines.
+        '';
+      };
+
+      cacheUrl = lib.mkOption {
+        type = lib.types.str;
+        default = cfg.consumer.url;
+        defaultText = lib.literalExpression "config.services.atticd-cache.consumer.url";
+        description = ''
+          Push target URL. Defaults to the consumer URL so most hosts need no override.
+          The cache server itself should override this to a loopback URL
+          (e.g. http://localhost:8081/nix-config) to avoid round-tripping through DNS/Tailscale
+          on self-pushes.
+        '';
+      };
+    };
   };
 
   config = lib.mkMerge [
@@ -115,5 +144,34 @@ in {
       nix.settings.extra-substituters = [cfg.consumer.url];
       nix.settings.extra-trusted-public-keys = [cfg.consumer.publicKey];
     })
+
+    (lib.mkIf cfg.publisher.enable (let
+      hookScript = pkgs.writeShellScript "upload-to-attic" ''
+        #!${pkgs.runtimeShell}
+        set -eu
+
+        # nix invokes the hook even when no outputs were produced (e.g. fixed-output failures).
+        [ -n "''${OUT_PATHS:-}" ] || exit 0
+
+        if [ ! -r ${lib.escapeShellArg cfg.publisher.tokenFile} ]; then
+          echo "atticd-push: token file unreadable: ${cfg.publisher.tokenFile}" >&2
+          exit 1
+        fi
+
+        ATTIC_TOKEN="$(cat ${lib.escapeShellArg cfg.publisher.tokenFile})"
+
+        # Detach via systemd-run so `nix build` never waits on uploads.
+        # Failures land in `journalctl -u 'attic-push-*'` rather than the build log.
+        # $OUT_PATHS is intentionally word-split (space-separated path list from nix).
+        exec ${pkgs.systemd}/bin/systemd-run \
+          --no-block --collect \
+          --unit="attic-push-$$" \
+          --setenv=ATTIC_TOKEN="$ATTIC_TOKEN" \
+          ${pkgs.attic-client}/bin/attic push ${lib.escapeShellArg cfg.publisher.cacheUrl} $OUT_PATHS
+      '';
+    in {
+      environment.systemPackages = [pkgs.attic-client];
+      nix.settings.post-build-hook = "${hookScript}";
+    }))
   ];
 }

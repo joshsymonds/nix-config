@@ -11,22 +11,12 @@ in
     pkgs,
     ...
   }: {
-    # You can import other NixOS modules here
+    # You can import other NixOS modules here. atticd-cache comes via common.nix.
     imports = [
-      ../../modules/services/atticd-cache.nix
       ../../modules/services/cleanup-services.nix
       ../../modules/services/cloudflare-tunnel.nix
       ./hardware-configuration.nix
     ];
-
-    services.atticd-cache = {
-      consumer.enable = true;
-      publisher = {
-        enable = true;
-        tokenFile = config.age.secrets."atticd-push-token".path;
-        # cacheUrl defaults to consumer.url (http://ultraviolet:8081/nix-config).
-      };
-    };
 
     services.cleanup-services = {
       enable = true;
@@ -215,13 +205,6 @@ in
       file = ../../secrets/hosts/vermissian/cloudflared-token.age;
       owner = "cloudflared";
       group = "cloudflared";
-      mode = "0400";
-    };
-
-    age.secrets."atticd-push-token" = {
-      file = ../../secrets/shared/atticd-push-token.age;
-      owner = "root";
-      group = "root";
       mode = "0400";
     };
 

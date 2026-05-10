@@ -242,29 +242,14 @@ in
         group = "root";
         mode = "0400";
       };
-
-      "atticd-push-token" = {
-        file = ../../secrets/shared/atticd-push-token.age;
-        owner = "root";
-        group = "root";
-        mode = "0400";
-      };
     };
 
+    # Server-side bits only. consumer + publisher + push-token agenix come
+    # from hosts/common.nix.
     services.atticd-cache = {
       enable = true;
       environmentFile = config.age.secrets."atticd-env".path;
       apiEndpoint = "http://ultraviolet:8081/";
-
-      consumer.enable = true;
-
-      publisher = {
-        enable = true;
-        tokenFile = config.age.secrets."atticd-push-token".path;
-        # Defaults to consumer.url (http://ultraviolet:8081/nix-config), which
-        # resolves to the local NIC. localhost would be true loopback but
-        # atticd's allowedHosts default rejects "localhost:8081".
-      };
     };
 
     services.savecraftPobServer = {

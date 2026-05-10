@@ -12,6 +12,7 @@ in {
     ../modules/linux-base
     ../modules/nix/defaults.nix
     ../modules/services/age-identity.nix
+    ../modules/services/atticd-cache.nix
     ../modules/services/cleanup-stale-processes.nix
     ../modules/performance/profiles.nix
     inputs.determinate.nixosModules.default
@@ -150,6 +151,24 @@ in {
     zip
     p7zip
   ];
+
+  # atticd-cache: every NixOS host pulls from + pushes to ultraviolet's cache.
+  # bluedesert/echelon are excluded until their host keys land in
+  # secrets/keys.nix and the shared push token is re-keyed to them.
+  age.secrets."atticd-push-token" = lib.mkIf (!builtins.elem config.networking.hostName ["bluedesert" "echelon"]) {
+    file = ../secrets/shared/atticd-push-token.age;
+    owner = "root";
+    group = "root";
+    mode = "0400";
+  };
+
+  services.atticd-cache = lib.mkIf (!builtins.elem config.networking.hostName ["bluedesert" "echelon"]) {
+    consumer.enable = true;
+    publisher = {
+      enable = true;
+      tokenFile = config.age.secrets."atticd-push-token".path;
+    };
+  };
 
   fileSystems = lib.mkIf (!builtins.elem config.networking.hostName ["bluedesert" "echelon"]) {
     "/mnt/video" = {

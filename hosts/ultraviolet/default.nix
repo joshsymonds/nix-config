@@ -242,12 +242,28 @@ in
         group = "root";
         mode = "0400";
       };
+
+      "atticd-push-token" = {
+        file = ../../secrets/shared/atticd-push-token.age;
+        owner = "root";
+        group = "root";
+        mode = "0400";
+      };
     };
 
     services.atticd-cache = {
       enable = true;
       environmentFile = config.age.secrets."atticd-env".path;
       apiEndpoint = "http://ultraviolet:8081/";
+
+      consumer.enable = true;
+
+      publisher = {
+        enable = true;
+        tokenFile = config.age.secrets."atticd-push-token".path;
+        # Loopback so self-pushes don't round-trip through DNS/Tailscale.
+        cacheUrl = "http://localhost:8081/nix-config";
+      };
     };
 
     services.savecraftPobServer = {

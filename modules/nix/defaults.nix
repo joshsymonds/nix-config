@@ -24,12 +24,14 @@
         "https://joshsymonds.cachix.org"
         "https://devenv.cachix.org"
         "https://niri.cachix.org"
+        "https://cache.nixos-cuda.org"
       ];
       extra-trusted-public-keys = lib.mkDefault [
         "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
         "joshsymonds.cachix.org-1:DajO7Bjk/Q8eQVZQZC/AWOzdUst2TGp8fHS/B1pua2c="
         "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="
         "niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964="
+        "cache.nixos-cuda.org:74DUi4Ye579gUqzH4ziL9IyiJBlDpMRn9MBN8oNan9M="
       ];
       trusted-users = ["root" "joshsymonds"];
       accept-flake-config = true;

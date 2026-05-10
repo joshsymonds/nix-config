@@ -260,6 +260,7 @@ in {
     export XDG_RUNTIME_DIR="''${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
     SYSTEMCTL=${pkgs.systemd}/bin/systemctl
     QS=${pkgs.quickshell}/bin/qs
+    AWK=${pkgs.gawk}/bin/awk
 
     fileChanged() {
       local rel="$1"
@@ -275,7 +276,7 @@ in {
     # the dms-shell package exposes its entry point.
     findDmsInstance() {
       "$QS" list --all 2>/dev/null \
-        | awk '/^Instance / { id = $2; sub(/:$/, "", id) }
+        | "$AWK" '/^Instance / { id = $2; sub(/:$/, "", id) }
                /Config path:.*\/dms\/shell\.qml/ { print id; exit }'
     }
 

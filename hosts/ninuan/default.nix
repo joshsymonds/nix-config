@@ -15,8 +15,24 @@ in
       ../../modules/darwin/atticd-cache.nix
       ../../modules/darwin/defaults.nix
       ../../modules/darwin/software.nix
+      inputs.agenix.darwinModules.default
       inputs.determinate.darwinModules.default
     ];
+
+    age.secrets."atticd-push-token" = {
+      file = ../../secrets/shared/atticd-push-token.age;
+      owner = "root";
+      group = "wheel";
+      mode = "0400";
+    };
+
+    services.atticd-cache = {
+      consumer.enable = true;
+      publisher = {
+        enable = true;
+        tokenFile = config.age.secrets."atticd-push-token".path;
+      };
+    };
 
     determinateNix = {
       enable = true;

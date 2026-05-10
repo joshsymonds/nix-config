@@ -170,24 +170,26 @@ in {
     };
   };
 
-  fileSystems = lib.mkIf (!builtins.elem config.networking.hostName ["echelon"]) {
-    "/mnt/video" = {
-      device = "${nas.ip}:${nas.shares.video}";
+  # NFS mounts. `nofail` keeps a failed network mount from stalling boot at
+  # remote-fs.target → emergency mode. Bluedesert isn't authorized for the
+  # `creative` share on the NAS (per export ACL), so it gets the other three only.
+  fileSystems = let
+    nfs = device: {
+      device = device;
       fsType = "nfs";
+      options = ["nofail"];
     };
-    "/mnt/music" = {
-      device = "${nas.ip}:${nas.shares.music}";
-      fsType = "nfs";
-    };
-    "/mnt/books" = {
-      device = "${nas.ip}:${nas.shares.books}";
-      fsType = "nfs";
-    };
-    "/mnt/creative" = {
-      device = "${nas.ip}:${nas.shares.creative}";
-      fsType = "nfs";
-    };
-  };
+  in
+    lib.mkMerge [
+      (lib.mkIf (!builtins.elem config.networking.hostName ["echelon"]) {
+        "/mnt/video" = nfs "${nas.ip}:${nas.shares.video}";
+        "/mnt/music" = nfs "${nas.ip}:${nas.shares.music}";
+        "/mnt/books" = nfs "${nas.ip}:${nas.shares.books}";
+      })
+      (lib.mkIf (!builtins.elem config.networking.hostName ["bluedesert" "echelon"]) {
+        "/mnt/creative" = nfs "${nas.ip}:${nas.shares.creative}";
+      })
+    ];
 
   services.eternal-terminal = {
     enable = true;

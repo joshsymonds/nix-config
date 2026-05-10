@@ -140,10 +140,15 @@
     # pkgs.buildFHSEnv.override to swap in setuid bubblewrap). Source lives
     # at ~/Personal/nix-gaming-edge with `upstream` remote pointing at
     # powerofthe69; rebase + push when picking up new releases.
-    nix-gaming-edge = {
-      url = "github:joshsymonds/nix-gaming-edge/josh/fix-fhsenv-override";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    #
+    # NB: deliberately NOT `inputs.nixpkgs.follows = "nixpkgs"`. nix-gaming-
+    # edge's tokidoki binary cache is built by their CI against THEIR pinned
+    # nixpkgs; following ours forces a different output hash and a full
+    # mesa-git rebuild from source on every flake-lock bump. The mesa-git
+    # source revision is already pinned upstream by nvfetcher, so eval
+    # graph carries an extra nixpkgs but every artifact is identical and
+    # cache-hit. Worth ~5s of extra eval time for a 30-minute compile.
+    nix-gaming-edge.url = "github:joshsymonds/nix-gaming-edge/josh/fix-fhsenv-override";
 
     # Google Workspace CLI — official `gws` from Google
     googleworkspace-cli = {

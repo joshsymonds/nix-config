@@ -17,10 +17,20 @@
     [hosts.ninuan]
     label = "nn"
 
-    # --- k8s contexts (populate as encountered) ------------------------
-    # [k8s."connectgateway_klover-loan-application_global_core-production-us-east1"]
-    # label = "klover prod"
-    # env = "prod"
+    [hosts.vermissian]
+    label = "vm"
+
+    # --- k8s contexts --------------------------------------------------
+    # klover-central is the platform/tooling account (atlantis lives
+    # there). Not in the prod/staging/dev triad — leave env unset so
+    # the chip renders in the neutral `unknown` color and the label
+    # carries the identity.
+    [k8s."connectgateway_klover-central_global_klover-central-us-east1"]
+    label = "central"
+
+    [k8s."connectgateway_klover-loan-application_global_core-production-us-east1"]
+    label = "loan prod"
+    env = "prod"
 
     # --- AWS profiles --------------------------------------------------
     # [aws."acme-prod-administrator"]
@@ -28,9 +38,12 @@
     # env = "prod"
 
     # --- gcloud projects -----------------------------------------------
-    # [gcloud."klover-loan-application"]
-    # label = "klover"
-    # env = "prod"
+    [gcloud."klover-central"]
+    label = "central"
+
+    [gcloud."klover-loan-application"]
+    label = "loan"
+    env = "prod"
 
     # --- env classifier fallback (substring match, case-insensitive) ---
     [env_patterns]

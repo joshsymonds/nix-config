@@ -75,15 +75,30 @@
       custom = {
         context = {
           when = ''test -n "$CODER_WORKSPACE_NAME" || test -n "$DEV_CONTEXT"'';
+          # Mirror cc-tools' devspace rule: known planet names truncate
+          # to 3 chars (the glyph carries identity); arbitrary names
+          # (Coder workspaces, custom devspaces) keep their full text
+          # since the name IS the identifier.
           command = ''
+            shorten() {
+              case "$1" in
+                mercury|venus|earth|mars|jupiter)
+                  printf '%s' "$1" | cut -c1-3
+                  ;;
+                *)
+                  printf '%s' "$1"
+                  ;;
+              esac
+            }
             if [ -n "$CODER_WORKSPACE_NAME" ]; then
               icon="''${DEV_CONTEXT_ICON:-}"
               printf " %s %s" "$icon" "$CODER_WORKSPACE_NAME"
             elif [ -n "$DEV_CONTEXT" ]; then
+              name="$(shorten "$DEV_CONTEXT")"
               if [ -n "$DEV_CONTEXT_ICON" ]; then
-                printf " %s %s" "$DEV_CONTEXT_ICON" "$DEV_CONTEXT"
+                printf " %s %s" "$DEV_CONTEXT_ICON" "$name"
               else
-                printf " ● %s" "$DEV_CONTEXT"
+                printf " ● %s" "$name"
               fi
             fi
           '';

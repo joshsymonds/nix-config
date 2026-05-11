@@ -136,11 +136,16 @@
     # Savecraft — game save parser + MCP server
     savecraft.url = "github:joshsymonds/savecraft.gg";
 
-    # nix-gaming-edge — proton-cachyos (the SLR x86_64-v3 build) + mesa-git
-    # module. Replaces proton-ge-bin on gnomon. Module ships shader-cache
-    # cleanup on Mesa/Proton bumps + an FHS-env libdrm-git rewrite Steam
-    # needs to function once mesa-git is system-wide. Cache (tokidoki) is
-    # wired in on gnomon only — the only host that consumes any of this.
+    # nix-gaming-edge — proton-cachyos (the SLR x86_64-v3 build). Replaces
+    # proton-ge-bin on gnomon. Cache (tokidoki) is wired in on gnomon only —
+    # the only host that consumes any of this.
+    #
+    # Used to also enable the mesa-git module, but mesa is bypassed entirely
+    # on NVIDIA proprietary (all rendering goes through libGLX_nvidia /
+    # nvidia_icd.json — mesa is only libgbm/libdrm dispatch on this stack)
+    # and from-source rebuilds of every mesa-touching package weren't
+    # earning measurable FPS. Reverted to nixpkgs stable mesa. The overlay
+    # still ships proton-cachyos, which we do want.
     #
     # Tracking joshsymonds/nix-gaming-edge josh/fix-fhsenv-override until
     # the upstream FHS-env wrapper bug is merged: the upstream wrapFhsEnv
@@ -153,11 +158,9 @@
     #
     # NB: deliberately NOT `inputs.nixpkgs.follows = "nixpkgs"`. nix-gaming-
     # edge's tokidoki binary cache is built by their CI against THEIR pinned
-    # nixpkgs; following ours forces a different output hash and a full
-    # mesa-git rebuild from source on every flake-lock bump. The mesa-git
-    # source revision is already pinned upstream by nvfetcher, so eval
-    # graph carries an extra nixpkgs but every artifact is identical and
-    # cache-hit. Worth ~5s of extra eval time for a 30-minute compile.
+    # nixpkgs; following ours would force a different output hash on every
+    # flake-lock bump and miss the cache. Worth ~5s of extra eval time for
+    # the cache hit on proton-cachyos.
     nix-gaming-edge.url = "github:joshsymonds/nix-gaming-edge/josh/fix-fhsenv-override";
 
     # nix-cachyos-kernel — CachyOS kernel for gnomon, completing the
@@ -339,7 +342,6 @@
           ./hosts/gnomon
           ./hosts/common.nix
           inputs.agenix.nixosModules.default
-          inputs.nix-gaming-edge.nixosModules.mesa-git
           ({outputs, ...}: {
             nixpkgs.overlays = [outputs.overlays.gaming];
           })

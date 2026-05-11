@@ -80,17 +80,28 @@ in
     hardware.bluetooth.enable = false;
 
     # ── Gaming ──────────────────────────────────────────────────────────
-    # proton-cachyos-x86_64-v3 (CachyOS Proton, AVX2/x86_64-v3 ISA build,
-    # Steam Linux Runtime sniper variant) is the only Proton in the picker.
-    # Comes from nix-gaming-edge (flake input), prebuilt and pulled from the
-    # tokidoki cache below — no compile cost. Set once in Steam → Settings
-    # → Compatibility → "Run other titles with…" → "Proton CachyOS x86_64-v3".
+    # Two Proton tools in Steam → Settings → Compatibility:
     #
-    # No automatic gamescope wrapping. Two ways to get gamescope:
-    #   - Big Picture: boot the "Steam (Gamescope)" greetd session
-    #     (gamescopeSession.enable = true)
-    #   - Per-game: add `gamescope -W 2560 -H 1440 -f -- %command%` to that
-    #     game's Launch Options
+    #   "Proton CachyOS x86_64-v3" — bare proton-cachyos from nix-gaming-edge
+    #     (AVX2/x86_64-v3 ISA build, Steam Linux Runtime sniper variant).
+    #     Prebuilt and pulled from the tokidoki cache below — no compile cost.
+    #
+    #   "Proton CachyOS (Gamescope)" — local pkgs/proton-gamescope wrapper.
+    #     Drops a 2560x1440 fullscreen gamescope between Steam Linux Runtime
+    #     and Proton, so every Windows game gets a niri-friendly stable
+    #     Wayland surface instead of fighting xwayland-satellite. Set this
+    #     ONCE as the default ("Run other titles with…") and forget it.
+    #     Also exports PROTON_ENABLE_NVAPI=1 so RE Engine titles (PRAGMATA,
+    #     RE4R, MH Wilds, DD2) can probe the NVIDIA GPU and unlock RT/DLSS.
+    #
+    #   Per-game escape hatches (Steam → Properties → Launch Options):
+    #     PROTON_GAMESCOPE_DISABLE=1     bypass gamescope (EAC titles, etc.)
+    #     PROTON_GAMESCOPE_FORCE_GRAB=1  force pointer lock (buggy FPS games)
+    #     PROTON_ENABLE_NVAPI=0          hide NVIDIA GPU again (rare)
+    #
+    # gamescopeSession.enable below adds a separate "Steam (Gamescope)"
+    # greetd login session for Big Picture mode — unrelated to the
+    # per-game wrapping that proton-gamescope provides.
     programs.steam = {
       enable = true;
       remotePlay.openFirewall = true;
@@ -98,6 +109,7 @@ in
       gamescopeSession.enable = true;
       extraCompatPackages = with pkgs; [
         proton-cachyos-x86_64-v3
+        proton-gamescope
       ];
     };
     hardware.steam-hardware.enable = true;
@@ -111,36 +123,23 @@ in
       capSysNice = true;
     };
 
-    # ── Mesa-git ────────────────────────────────────────────────────────
-    # nix-gaming-edge's mesa-git module replaces the system mesa with the
-    # latest from upstream git. On NVIDIA the GPU driver is unaffected
-    # (proprietary blob via hardware.nvidia), but compositor infrastructure
-    # — libgbm, libdrm, Vulkan loader/layers — all get bumped. Required to
-    # land for two reasons even on NVIDIA:
-    #   1. Steam's FHS env bundles stable libdrm; mesa-git refuses to load
-    #      against it. The module's overlay rewrites buildFHSEnv to inject
-    #      libdrm-git into every FHS sandbox so Steam keeps working.
-    #   2. cacheCleanup wipes stale Mesa/Proton shader caches when those
-    #      packages bump version, avoiding the "old shaders crash on new
-    #      drivers" footgun. Pinned to proton-cachyos-x86_64-v3 below so
-    #      Proton's DXVK/VKD3D caches also flush on upstream releases.
-    #
-    # Fallback: the module auto-creates a `stable-mesa` boot specialisation,
-    # selectable at the systemd-boot menu if mesa HEAD regresses.
-    drivers.mesa-git = {
-      enable = true;
-      enableCache = false; # cache wired in nix.settings below instead
-      cacheCleanup = {
-        enable = true;
-        protonPackage = pkgs.proton-cachyos-x86_64-v3;
-      };
-    };
+    # Expose gamescope's WSI Vulkan implicit layer (VkLayer_FROG_gamescope_wsi)
+    # to the Vulkan loader. programs.gamescope.enable only adds the binary
+    # to system PATH via a makeWrapper wrapper that drops share/vulkan/.
+    # hardware.graphics.extraPackages symlinks the unwrapped package's
+    # share/vulkan/implicit_layer.d/ into /run/opengl-driver/share/vulkan/
+    # where pressure-vessel / the SLR sniper's Vulkan loader will find it.
+    # Without this, the WSI layer is built (enableWsi = true in the gaming
+    # overlay) but never loaded — gamescope's xwm dedup path fires for
+    # every commit and gamescope output is permanently black on NVIDIA
+    # for any vkd3d-proton or DXVK game.
+    hardware.graphics.extraPackages = [pkgs.gamescope];
 
     # Caches scoped to gnomon — host-level rather than flake-level because
     # only gnomon consumes any of this content:
     #
-    #   tokidoki  — mesa-git + proton-cachyos prebuilds (~30 min of clang
-    #               otherwise). Wired by nix-gaming-edge.
+    #   tokidoki  — proton-cachyos prebuilts (~30 min of clang otherwise).
+    #               Wired by nix-gaming-edge.
     #   lantian   — xddxdd/nix-cachyos-kernel kernel binaries. Without
     #               it the kernel rebuilds from source on every bump.
     #   garnix    — fallback for cache hits lantian Attic is missing
@@ -218,8 +217,8 @@ in
     # -march=v3 can only enable narrow GPR instructions (BMI1/2, LZCNT,
     # MOVBE) in kernel code; SIMD subsystems like crypto/RAID are
     # runtime-dispatched via alternative_call regardless of -march.
-    # Userspace v3 (proton-cachyos, mesa-git) keeps its v3 builds where
-    # AVX2 actually fires in hot loops; the kernel is generic and
+    # Userspace v3 (proton-cachyos) keeps its v3 builds where AVX2
+    # actually fires in hot loops; the kernel is generic and
     # substituted from garnix.
     #
     # The -lto variant is also on garnix but skipped — clang+ThinLTO

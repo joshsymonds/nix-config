@@ -32,6 +32,11 @@
     # settings activation. See that module for why we don't symlink the
     # JSON files declaratively.
 
+    # Todoist desktop client — Electron wrapper around the web app. The
+    # native Linux app from Doist (Flatpak/Snap-only) and todoist-electron
+    # are functionally equivalent; nixpkgs only carries the Electron one.
+    todoist-electron
+
     # Firefox is the daily driver; chromium is here for WebHID-only sites
     # (gaming-mouse configurators, etc.) since Firefox doesn't implement it.
     chromium

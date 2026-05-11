@@ -323,10 +323,11 @@ in {
   # focused. We're not running an RDP client; niri's binds always win.
   programs.niri.settings.binds = lib.mapAttrs (_: v: v // {allow-inhibiting = false;}) {
     # ── Window lifecycle ──────────────────────────────────────────
-    "Alt+Q" = {
-      hotkey-overlay.title = "Close Window";
-      action.close-window = [];
-    };
+    # Alt+Q lives in extras.kdl bound to force-close-window from the
+    # josh/force-close-window patch — niri-flake's typed schema doesn't
+    # know that action variant yet. Polite xdg-toplevel close is dropped
+    # entirely: SIGTERM-within-grace is observably identical for
+    # well-behaved apps and actually kills tray-hiding Electron clients.
 
     # ── Focus motion ──────────────────────────────────────────────
     # H/L walk columns and hop to the next monitor when the current
@@ -758,16 +759,20 @@ in {
       // force-close from josh/force-close-window. SIGTERM the focused
       // window's process group, then SIGKILL after grace-period-ms if
       // the process is still alive. For tray-hiding Electron apps
-      // (Spotify, Discord) that swallow xdg-toplevel close. Bound
-      // below to Alt+Shift+Q with allow-inhibiting=false so games and
-      // SDL clients can't intercept the kill via the keyboard-shortcuts-
-      // inhibit protocol — same reasoning as the typed-binds wrapper.
+      // (Spotify, Discord) that swallow xdg-toplevel close.
+      //
+      // Bound to Alt+Q (replacing the polite xdg-toplevel close) with
+      // allow-inhibiting=false so games and SDL clients can't intercept
+      // the kill via the keyboard-shortcuts-inhibit protocol — same
+      // reasoning as the typed-binds wrapper around the rest of the
+      // bind table. For well-behaved apps the SIGTERM-within-grace
+      // path is observably identical to a polite close.
       force-close {
           grace-period-ms 2000
       }
 
       binds {
-          Alt+Shift+Q allow-inhibiting=false hotkey-overlay-title="Force Close Window" { force-close-window; }
+          Alt+Q allow-inhibiting=false hotkey-overlay-title="Close Window" { force-close-window; }
       }
 
       // recent-windows: alt-tab overlay styling. From dms/alttab.kdl

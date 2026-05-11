@@ -258,8 +258,22 @@ in
     # NB: lantian Attic does NOT pre-build kernel modules other than zfs,
     # so this rebuilds locally on every kernel bump. Few minutes per
     # `update`; acceptable trade for the fan visibility.
-    boot.extraModulePackages = [config.boot.kernelPackages.it87];
-    boot.kernelModules = ["kvm-amd" "it87"];
+    boot.extraModulePackages = [
+      config.boot.kernelPackages.it87
+      config.boot.kernelPackages.v4l2loopback
+    ];
+    boot.kernelModules = ["kvm-amd" "it87" "v4l2loopback"];
+
+    # v4l2loopback: virtual /dev/video device that OBS (or any other
+    # producer) writes into, so Zoom / Meet / Firefox see it as a webcam.
+    # exclusive_caps=1 makes the kernel advertise V4L2_CAP_VIDEO_CAPTURE
+    # on the device — without it, Chromium-based apps (incl. the Zoom
+    # flatpak's CEF stack) skip the loopback entirely because it only
+    # advertises V4L2_CAP_VIDEO_OUTPUT. video_nr=10 pins it at /dev/video10
+    # so it never collides with the real USB cam at video0/1 across reboots.
+    boot.extraModprobeConfig = ''
+      options v4l2loopback devices=1 video_nr=10 card_label="OBS Cam" exclusive_caps=1
+    '';
 
     # NVIDIA modules in initrd avoid the simpledrm → nvidia-drm mode-switch
     # flash on boot. Keeps the kernel console text-mode but at the panel's

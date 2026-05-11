@@ -23,7 +23,23 @@
     slack
     # Zoom is installed via nix-flatpak (us.zoom.Zoom) at the system level —
     # see hosts/gnomon/default.nix. The nixpkgs zoom-us build couldn't keep
-    # up with portal/screencast quirks on niri.
+    # up with portal/screencast quirks on niri. The flatpak's ZoomLauncher
+    # binary aborts in libQt6Core during init on our NVIDIA-on-niri stack
+    # (confirmed 2026-05-11 — SIGABRT at libQt6Core+0xbced0 in 6 consecutive
+    # launches); the xdg.dataFile entry below shadows the desktop entry to
+    # bypass ZoomLauncher entirely and exec /app/extra/zoom/zoom directly,
+    # which lets Qt auto-pick libqwayland-generic and works cleanly.
+
+    # OBS Studio with background-removal plugin: virtual webcam pipeline
+    # (writes to /dev/video10, which the v4l2loopback module in
+    # hosts/gnomon/default.nix exposes with exclusive_caps=1 so Chromium-
+    # based clients like Zoom actually see it). Background-removal is the
+    # ML chroma-key behind the "blur my background" effect — same model
+    # family as Zoom's own. Face-tracking auto-zoom-follow is a V2 effort
+    # via a hand-rolled Python script plugin against this same pipeline.
+    (pkgs.wrapOBS {
+      plugins = [pkgs.obs-studio-plugins.obs-backgroundremoval];
+    })
     # spotify is provided by ../spicetify (a wrapped Spotify with the
     # comfy theme + transparency snippet baked in at build time). Don't
     # add pkgs.spotify here — the wrapper IS the spotify package.
@@ -237,10 +253,75 @@
     # apply there, so prefer-no-csd doesn't reach Zoom — it keeps drawing
     # its own titlebar. Drop niri's border and focus-ring so we're not
     # stacking a niri frame around Zoom's frame around Zoom's contents.
+    # Capital-Z is what xwayland-satellite reports as app-id, confirmed via
+    # `niri msg windows` 2026-05-11 — the lowercase form never matched.
     {
-      matches = [{app-id = "^zoom$";}];
+      matches = [{app-id = "^Zoom$";}];
       border.enable = false;
       focus-ring.enable = false;
     }
+    # Zoom popups (annotate_toolbar, leave/end-meeting confirmation
+    # dialogs, share-screen pickers, etc.) all register as separate
+    # XWayland top-levels but Zoom designs them as transient floating
+    # overlays. Under niri's tiling layout each one becomes a full-tile
+    # window — annotate_toolbar in particular renders fully transparent
+    # pre-annotation, showing up as a "ghost column" the cursor reveals
+    # on hover. Float everything under app-id Zoom *except* the two
+    # legitimate top-levels (the Workplace home and the Meeting view),
+    # which we want tiled normally.
+    {
+      matches = [{app-id = "^Zoom$";}];
+      excludes = [
+        {title = "^Zoom Workplace";}
+        {title = "^Meeting$";}
+      ];
+      open-floating = true;
+    }
   ];
+
+  # Shadow the flatpak's us.zoom.Zoom.desktop entry. The flatpak's wrapper
+  # at /app/bin/zoom execs /app/extra/zoom/ZoomLauncher, a stripped binary
+  # that probes the session and sets QT_QPA_PLATFORM / LD_LIBRARY_PATH
+  # before invoking the real ./zoom. On our NVIDIA-on-niri stack that
+  # probe path SIGABRTs in libQt6Core+0xbced0 during init (6/6 launches
+  # 2026-05-11, all the same offset). Running /app/extra/zoom/zoom
+  # directly bypasses ZoomLauncher; Qt then auto-picks libqwayland-generic
+  # and the client comes up cleanly. ~/.local/share/applications takes
+  # precedence over /var/lib/flatpak/exports/share/applications in XDG
+  # lookup order, so this entry wins for both menu launches and zoommtg://
+  # URL handlers without needing to disable the flatpak's exports.
+  #
+  # Wrapper script (not inline Exec=) because the freedesktop Exec= field
+  # parser is finicky about embedded shell quoting — defining the command
+  # once in writeShellScript sidesteps escaping entirely. The wrapper
+  # uses flatpak's --file-forwarding @@u "$@" @@ syntax so zoommtg://
+  # URIs from xdg-open still get sandboxed-translated correctly.
+  xdg.dataFile."applications/us.zoom.Zoom.desktop".text = let
+    zoomLauncher = pkgs.writeShellScript "zoom-bypass-zoomlauncher" ''
+      exec flatpak run \
+        --branch=stable \
+        --arch=x86_64 \
+        --command=sh \
+        --file-forwarding \
+        us.zoom.Zoom \
+        -c 'cd /app/extra/zoom && exec ./zoom "$@"' \
+        zoom @@u "$@" @@
+    '';
+  in ''
+    [Desktop Entry]
+    Name=Zoom
+    Comment=Zoom Video Conference
+    GenericName=Zoom Client for Linux
+    Exec=${zoomLauncher} %U
+    Icon=us.zoom.Zoom
+    Terminal=false
+    Type=Application
+    StartupNotify=true
+    Categories=Network;InstantMessaging;VideoConference;Telephony;
+    MimeType=x-scheme-handler/zoommtg;x-scheme-handler/zoomus;x-scheme-handler/tel;x-scheme-handler/callto;x-scheme-handler/zoomphonecall;application/x-zoom
+    X-KDE-Protocols=zoommtg;zoomus;tel;callto;zoomphonecall;
+    StartupWMClass=zoom
+    X-Flatpak-Tags=proprietary;
+    X-Flatpak=us.zoom.Zoom
+  '';
 }

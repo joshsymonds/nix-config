@@ -19,7 +19,8 @@
   "statusLine": {
     "type": "command",
     "command": "~/.claude/bin/cc-tools-statusline",
-    "padding": 0
+    "padding": 0,
+    "refreshInterval": 5
   },
   "hooks": {
     "Stop": [
@@ -40,6 +41,17 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/ntfy-notifier.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/aws-profile-mirror.sh"
           }
         ]
       }

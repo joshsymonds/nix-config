@@ -155,6 +155,10 @@ in {
               source = ./hooks/ntfy-notifier.sh;
               executable = true;
             };
+            "${dir}/hooks/aws-profile-mirror.sh" = {
+              source = ./hooks/aws-profile-mirror.sh;
+              executable = true;
+            };
             "${dir}/.keep".text = "";
             "${dir}/statsig/.keep".text = "";
             "${dir}/commands/.keep".text = "";

@@ -7,9 +7,15 @@
     settings = {
       palette = "catppuccin_mocha";
 
-      format = "[](fg:lavender)$directory$character";
+      format = "[](fg:lavender)$directory$character";
 
-      right_format = "[](fg:mauve)\${custom.context}[](fg:rosewater bg:mauve)\${custom.workspaceHost}[](fg:sky bg:rosewater)$git_branch$git_status[](fg:peach bg:sky)$aws[](bg:peach fg:teal)$kubernetes[](fg:teal)";
+      # Right side: devspace? | host | git | aws? | gcloud? | k8s? | curve.
+      # Static-color chips (devspace, host, git) use built-in starship
+      # styling. Dynamic-color chips (aws, gcloud, k8s) are rendered as a
+      # single block by `cc-tools render-clouds`, which emits raw ANSI
+      # including its own internal powerline chevrons and the closing
+      # right curve.
+      right_format = "[](fg:mauve)\${custom.context}[](fg:rosewater bg:mauve)\${custom.host}[](fg:sky bg:rosewater)$git_branch$git_status\${custom.clouds}";
 
       add_newline = false;
 
@@ -25,25 +31,23 @@
         style = "bg:lavender fg:base";
         format = "[ $path ]($style)";
 
+        # Match cc-tools formatPath: keep first segment (~ or /), last
+        # two full, middle replaced with …. Starship's truncation_length
+        # is the count of TRAILING segments to keep (last N), and
+        # truncation_symbol prepends when truncation occurred.
         truncation_length = 2;
         truncation_symbol = "…/";
-        fish_style_pwd_dir_length = 2;
+        truncate_to_repo = false;
       };
 
       character = {
-        success_symbol = "[](bg:green fg:lavender)[](fg:green)";
-        error_symbol = "[](bg:red fg:lavender)[](fg:red)";
+        success_symbol = "[](bg:green fg:lavender)[](fg:green)";
+        error_symbol = "[](bg:red fg:lavender)[](fg:red)";
       };
 
       "cmd_duration" = {
         style = "bg:mauve fg:base";
         format = "[ $duration ]($style)";
-      };
-
-      aws = {
-        style = "bg:peach fg:base";
-        format = "[  $profile ]($style)";
-        force_display = true;
       };
 
       "git_branch" = {
@@ -56,11 +60,16 @@
         format = "[$all_status$ahead_behind ]($style)";
       };
 
+      # Built-in aws/kubernetes modules are intentionally NOT configured.
+      # Their output is replaced by `custom.clouds` below, which calls
+      # `cc-tools render-clouds` for a single ANSI block that matches the
+      # Claude Code statusline byte-for-byte. (Disabling them explicitly
+      # prevents accidental fallback rendering.)
+      aws = {
+        disabled = true;
+      };
       kubernetes = {
-        disabled = false;
-        format = "[ ☸ $context ]($style)";
-        style = "bg:teal fg:base";
-        symbol = "";
+        disabled = true;
       };
 
       custom = {
@@ -68,7 +77,7 @@
           when = ''test -n "$CODER_WORKSPACE_NAME" || test -n "$DEV_CONTEXT"'';
           command = ''
             if [ -n "$CODER_WORKSPACE_NAME" ]; then
-              icon="''${DEV_CONTEXT_ICON:-}"
+              icon="''${DEV_CONTEXT_ICON:-}"
               printf " %s %s" "$icon" "$CODER_WORKSPACE_NAME"
             elif [ -n "$DEV_CONTEXT" ]; then
               if [ -n "$DEV_CONTEXT_ICON" ]; then
@@ -81,26 +90,43 @@
           format = "[ $output ]($style)";
           style = "bg:mauve fg:base bold";
         };
-        workspaceHost = {
+
+        # Host chip: 2-char alias from the shared statusline-aliases
+        # table. Falls back to the raw short hostname when no alias exists.
+        # Always bg=rosewater (the adjacency invariant rules out per-host
+        # tinting). Sources hostname from $HOSTNAME, then $CODER_AGENT_URL
+        # (for Coder workspaces), then `hostname -s`.
+        host = {
           when = ''true'';
           command = ''
-            host_output=""
+            host=""
             if [ -n "$CODER_WORKSPACE_NAME" ] && [ -n "$CODER_AGENT_URL" ]; then
-              host_output="$(printf '%s' "$CODER_AGENT_URL" | sed -e 's|^[^:]*://||' -e 's|/.*$||')"
+              host="$(printf '%s' "$CODER_AGENT_URL" | sed -e 's|^[^:]*://||' -e 's|/.*$||')"
+            elif [ -n "$HOSTNAME" ]; then
+              host="$HOSTNAME"
             else
-              host_output="$(hostname 2>/dev/null || printf "")"
-              if [ -z "$host_output" ]; then
-                host_output="$(cat /proc/sys/kernel/hostname 2>/dev/null || printf "")"
-              fi
+              host="$(hostname -s 2>/dev/null || cat /proc/sys/kernel/hostname 2>/dev/null || printf "")"
             fi
-            if [ -n "$host_output" ]; then
-              printf " 󰒋 %s" "$host_output"
-            else
-              printf ""
+            if [ -n "$host" ]; then
+              label="$(cc-tools resolve --type=host --raw="$host" 2>/dev/null | awk -F '\t' '{print $1}')"
+              [ -z "$label" ] && label="$host"
+              printf " 󰒋 %s" "$label"
             fi
           '';
           format = "[ $output ]($style)";
           style = "bg:rosewater fg:base";
+        };
+
+        # Cloud section: aws + gcloud + k8s chips, rendered as a single
+        # raw-ANSI block. The leading chevron transitions from sky (git's
+        # color); the trailing right curve seals the prompt. cc-tools owns
+        # the resolution logic and chevron drawing, so this stays in lockstep
+        # with the Claude Code statusline.
+        clouds = {
+          when = ''true'';
+          command = ''cc-tools render-clouds 2>/dev/null'';
+          format = "$output";
+          style = "";
         };
       };
 

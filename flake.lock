@@ -1861,11 +1861,11 @@
     "niri-unstable": {
       "flake": false,
       "locked": {
-        "lastModified": 1778522102,
-        "narHash": "sha256-V9WoObtfmQUVbOV5k1RHK/reuhvlHEHz53qewb+ocjE=",
+        "lastModified": 1778525463,
+        "narHash": "sha256-hmA0CcBxT8WMfIkWNS02hOP3W2o0n504lWwMk9VE2eY=",
         "owner": "joshsymonds",
         "repo": "niri",
-        "rev": "fbfc31dc5ee06a7f457a989f3790354fbeb7c8d9",
+        "rev": "53bb3247ba4b3f80e93aa6093a7c8ae577be1c18",
         "type": "github"
       },
       "original": {

@@ -56,28 +56,33 @@ stdenv.mkDerivation rec {
     qt6.qtbase
   ];
 
+  # The dock UI's obsgui-helper.hpp includes <qpa/qplatformnativeinterface.h>
+  # (a Qt platform-private header), so Qt::GuiPrivate is genuinely needed.
+  # But the plugin's find_qt() call only asks for `Widgets Core Gui`, so
+  # the GuiPrivate target is never imported into CMake's target graph and
+  # the subsequent target_link_libraries fails to resolve it. Add
+  # GuiPrivate to the COMPONENTS list so the private include path is
+  # propagated correctly.
+  postPatch = ''
+    substituteInPlace CMakeLists.txt \
+      --replace-fail "find_qt(VERSION \''${QT_VERSION} COMPONENTS Widgets Core Gui)" \
+                     "find_qt(VERSION \''${QT_VERSION} COMPONENTS Widgets Core Gui GuiPrivate)"
+  '';
+
   cmakeFlags = [
     "-DWITH_DLIB_SUBMODULE=OFF"
     "-DWITH_PTZ_TCP=OFF"
     "-DENABLE_DATAGEN=OFF"
+    # The plugin's bundled ObsPluginHelpers.cmake defaults QT_VERSION to 5;
+    # obs-studio in nixpkgs is Qt6-only, so force the Qt6 path explicitly.
+    "-DQT_VERSION=6"
+    # LINUX_PORTABLE=ON (the helpers' default) installs to
+    # $out/obs-plugins/64bit/*.so + $out/data/. wrapOBS expects the
+    # FHS-style $out/lib/obs-plugins/*.so + $out/share/obs/obs-plugins/.
+    # Switch to the non-portable layout so the wrapper's symlinkJoin
+    # finds the plugin without any postInstall acrobatics.
+    "-DLINUX_PORTABLE=OFF"
   ];
-
-  # ObsPluginHelpers installs to lib/obs-plugins/ + share/obs/. wrapOBS
-  # joins plugins via symlinkJoin and points OBS_PLUGINS_DATA_PATH at
-  # share/obs/obs-plugins/, so move data into the expected layout.
-  postInstall = ''
-    if [ -d "$out/share/obs/obs-plugins" ]; then
-      :  # already in the expected layout
-    elif [ -d "$out/share/obs" ]; then
-      mkdir -p "$out/share/obs/obs-plugins"
-      shopt -s nullglob
-      for d in "$out/share/obs"/*; do
-        name="$(basename "$d")"
-        [ "$name" = "obs-plugins" ] && continue
-        mv "$d" "$out/share/obs/obs-plugins/$name"
-      done
-    fi
-  '';
 
   meta = {
     description = "OBS Studio plugin for face-tracking auto-crop / PTZ control";

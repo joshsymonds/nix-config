@@ -91,6 +91,21 @@
       inputs.niri-unstable.url = "github:joshsymonds/niri/josh/integration";
     };
 
+    # niri-float-sticky — Go daemon that pins floating windows across
+    # workspaces, used to make Zoom's screen-share popups (annotate
+    # toolbar, sharing controls, participant mini-tile, leave/end
+    # dialogs) follow the focused workspace including across monitor
+    # switches. niri doesn't natively support sticky-across-workspaces;
+    # this is the well-known third-party fill (probeldev/niri-float-
+    # sticky; we fork to joshsymonds for safety against upstream churn).
+    # Wired only into the Zoom .desktop wrapper in
+    # home-manager/hosts/gnomon.nix — it spawns when Zoom launches and
+    # the wrapper kills it on flatpak-run exit, so no idle resident.
+    niri-float-sticky = {
+      url = "github:joshsymonds/niri-float-sticky";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # CC-Tools - Claude Code smart hooks
     cc-tools.url = "github:joshsymonds/cc-tools";
 

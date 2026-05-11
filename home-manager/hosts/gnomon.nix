@@ -30,15 +30,22 @@
     # bypass ZoomLauncher entirely and exec /app/extra/zoom/zoom directly,
     # which lets Qt auto-pick libqwayland-generic and works cleanly.
 
-    # OBS Studio with background-removal plugin: virtual webcam pipeline
-    # (writes to /dev/video10, which the v4l2loopback module in
-    # hosts/gnomon/default.nix exposes with exclusive_caps=1 so Chromium-
-    # based clients like Zoom actually see it). Background-removal is the
-    # ML chroma-key behind the "blur my background" effect — same model
-    # family as Zoom's own. Face-tracking auto-zoom-follow is a V2 effort
-    # via a hand-rolled Python script plugin against this same pipeline.
+    # OBS Studio with background-removal + face-tracker plugins. Virtual
+    # webcam pipeline writes to /dev/video10 (v4l2loopback in hosts/
+    # gnomon/default.nix with exclusive_caps=1 so Chromium-based clients
+    # like Zoom actually enumerate it). Background-removal is the ML
+    # chroma-key behind the "blur my background" effect. Face-tracker is
+    # norihiro/obs-face-tracker 0.9.1 — dlib HOG detection on a worker
+    # thread, Kalman-smoothed crop rect, GPU resample via OBS effects —
+    # which lands the V1 auto-zoom-follow (Center Stage analog). V2
+    # roadmap: swap dlib HOG for an OpenCV DNN backend in our fork for
+    # better small-face recall + GPU inference, then add shader-based
+    # bilateral skin smoothing keyed off facial landmarks.
     (pkgs.wrapOBS {
-      plugins = [pkgs.obs-studio-plugins.obs-backgroundremoval];
+      plugins = [
+        pkgs.obs-studio-plugins.obs-backgroundremoval
+        pkgs.obs-face-tracker
+      ];
     })
     # spotify is provided by ../spicetify (a wrapped Spotify with the
     # comfy theme + transparency snippet baked in at build time). Don't
@@ -297,8 +304,26 @@
   # uses flatpak's --file-forwarding @@u "$@" @@ syntax so zoommtg://
   # URIs from xdg-open still get sandboxed-translated correctly.
   xdg.dataFile."applications/us.zoom.Zoom.desktop".text = let
+    # niri-float-sticky daemon: pins floating Zoom popups (annotate toolbar,
+    # share toolbar, participant mini-tile, leave/end dialogs — anything
+    # niri's window-rules float above) to the user's focused workspace
+    # across monitor switches. Niri has no native sticky-across-workspaces;
+    # this is the gap-filler. `-app-id '^Zoom$'` scopes the daemon to only
+    # touch Zoom's own popups, never other apps. `-allow-moving-to-foreign-
+    # monitors` is what makes the "follow me when I switch monitors" part
+    # actually work (without it, sticky windows stay on their birth monitor).
+    stickyDaemon = "${inputs.niri-float-sticky.packages.${pkgs.system}.default}/bin/niri-float-sticky";
     zoomLauncher = pkgs.writeShellScript "zoom-bypass-zoomlauncher" ''
-      exec flatpak run \
+      # Spawn the sticky daemon in the background, then run Zoom in the
+      # foreground. When Zoom (`flatpak run`) exits, the EXIT trap kills
+      # the daemon — tracking *Zoom's lifecycle* not Zoom's window count,
+      # which sidesteps the "Zoom helper subprocess exits but main is
+      # alive" races. Daemon stderr is dropped; pass --debug here when
+      # iterating.
+      ${stickyDaemon} -app-id '^Zoom$' -allow-moving-to-foreign-monitors 2>/dev/null &
+      STICKY_PID=$!
+      trap 'kill $STICKY_PID 2>/dev/null || true' EXIT
+      flatpak run \
         --branch=stable \
         --arch=x86_64 \
         --command=sh \

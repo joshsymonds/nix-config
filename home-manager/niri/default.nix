@@ -272,15 +272,10 @@ in {
   programs.niri.settings.input.keyboard.repeat-delay = 200;
   programs.niri.settings.input.keyboard.repeat-rate = 50;
 
-  # max-scroll-amount = "0%" restricts focus-follows-mouse to columns
-  # that are already fully on screen. Without it, mousing toward a
-  # window edge crosses focus into a partially-offscreen neighbor and
-  # niri auto-scrolls the view to bring it on — feels like windows
-  # shift around just from cursor movement.
-  programs.niri.settings.input.focus-follows-mouse = {
-    enable = true;
-    max-scroll-amount = "1%";
-  };
+  # focus-follows-mouse lives in extras.kdl as a fork-only block (the
+  # `edge-deadzone` property comes from josh/ffm-edge-deadzone and isn't
+  # in niri-flake's typed schema yet — same pattern as
+  # `cross-monitor-column-insert` and `clip-fullscreen-backdrop-to-window`).
 
   # X11 fallback via xwayland-satellite (package added system-side in
   # modules/desktop/niri.nix). Niri itself is pure Wayland; satellite
@@ -748,6 +743,18 @@ in {
     # the shared Config), so a separate `layout {...}` here augments the
     # one niri-flake renders into hm.kdl rather than colliding with it.
     "niri/extras.kdl".text = ''
+      // focus-follows-mouse from josh/ffm-edge-deadzone. `edge-deadzone`
+      // requires the cursor to be at least N logical pixels from any edge
+      // of the candidate window before FFM activates — gates focus on
+      // cursor position rather than view-shift, which is what we actually
+      // want for the "no accidental focus on edge-brush" semantic that
+      // max-scroll-amount was the wrong tool for. The whole block lives
+      // here (not in typed settings) because niri-flake's schema doesn't
+      // know `edge-deadzone` yet.
+      input {
+          focus-follows-mouse edge-deadzone=30
+      }
+
       // recent-windows: alt-tab overlay styling. From dms/alttab.kdl
       // (corner-radius) plus the recent-windows section of dms/colors.kdl.
       recent-windows {

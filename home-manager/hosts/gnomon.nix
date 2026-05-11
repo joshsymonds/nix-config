@@ -8,6 +8,7 @@
     ../desktop-x86_64-linux.nix
     ../vesktop
     ../spicetify
+    inputs.lazycam.homeManagerModules.default
   ];
 
   home.packages = with pkgs; [
@@ -349,4 +350,29 @@
     X-Flatpak-Tags=proprietary;
     X-Flatpak=us.zoom.Zoom
   '';
+
+  # lazycam — on-demand v4l2loopback producer gating. Daemon watches
+  # /dev/video10 (the v4l2loopback device declared in
+  # hosts/gnomon/default.nix) and asks OBS to switch scenes via
+  # WebSocket v5 (127.0.0.1:4455) when consumers attach/detach. The
+  # privacy payoff is the hardware LED: OBS only holds /dev/video0
+  # while the "Active" scene is the program scene, so leaving Zoom /
+  # Meet / etc. genuinely releases the camera and turns the LED off.
+  #
+  # Requires a one-time OBS scene-collection setup: two scenes named
+  # "Active" (containing a Video Capture Device source against
+  # /dev/video0) and "Standby" (no camera source — image, color, or
+  # placeholder). OBS WebSocket server enabled in Tools → WebSocket
+  # Server Settings → Enable.
+  services.lazycam = {
+    enable = true;
+    # All other options take their module defaults:
+    # - device      = /dev/video10
+    # - obsUrl      = ws://127.0.0.1:4455
+    # - sceneActive = "Active"
+    # - sceneStandby= "Standby"
+    # - stateSocket = null → daemon picks $XDG_RUNTIME_DIR/lazycam.sock
+    # - dryRun      = false (genuinely contact OBS)
+    # - debug       = false
+  };
 }

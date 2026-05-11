@@ -21,6 +21,7 @@ in {
     ./ssh-agent
     ./zsh
     ./starship
+    ./statusline-aliases
   ];
 
   config = {

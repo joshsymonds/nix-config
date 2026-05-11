@@ -97,9 +97,19 @@
     ];
 
     sources = [
-      # The real webcam source. input/pixelformat/framerate/resolution
-      # = -1 means "auto-detect from the device on activation."
-      # buffering=false keeps latency low (no v4l2 ring buffer).
+      # The real webcam source. Pinned to MJPG (Motion-JPEG) because
+      # OBS's pixelformat=-1 auto-detect picks the device's index-0
+      # format, which on most webcams (Logitech C920 confirmed here)
+      # is uncompressed YUYV — and YUYV over USB chokes framerate at
+      # >480p because the bandwidth required for raw frames exceeds
+      # what USB 2.0 can deliver. MJPG is hardware-compressed JPEG
+      # frames and sustains 1080p30 on the same bus.
+      #
+      # 1196444237 = the v4l2 fourcc 'MJPG' as little-endian uint32:
+      #   'M'(0x4D) | 'J'(0x4A)<<8 | 'P'(0x50)<<16 | 'G'(0x47)<<24
+      # framerate/resolution stay at -1 (auto) — OBS picks the
+      # highest MJPG combination the device exposes. buffering=false
+      # keeps the v4l2 ring buffer disabled for low latency.
       {
         id = "v4l2_input";
         versioned_id = "v4l2_input";
@@ -108,7 +118,7 @@
         settings = {
           device_id = "/dev/video0";
           input = -1;
-          pixelformat = -1;
+          pixelformat = 1196444237;
           framerate = -1;
           resolution = -1;
           buffering = false;

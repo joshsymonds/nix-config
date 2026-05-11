@@ -757,8 +757,13 @@ in {
       // refactor pending upstream); xray avoids this.
 
       // kitty terminal — only meaningful with kitty's background_opacity < 1.0.
+      // clip-fullscreen-backdrop-to-window opts out of niri's spec-compliant
+      // black backdrop behind a non-opaque fullscreen surface so a translucent
+      // fullscreen kitty composes against the wallpaper instead of black.
+      // This is a downstream-only config option (see josh/fullscreen-backdrop-clip).
       window-rule {
           match app-id="kitty"
+          clip-fullscreen-backdrop-to-window true
           background-effect {
               blur true
               xray false

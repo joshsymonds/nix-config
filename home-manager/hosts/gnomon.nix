@@ -36,6 +36,9 @@
     # above) — that module ships the wrapped OBS package, the
     # declarative scene collection, and global.ini with the WebSocket
     # server enabled. Don't add pkgs.obs-studio here.
+    #
+    # gnomon's specific camera ID is configured below via
+    # programs.obsLazycam.cameraDeviceId.
     # spotify is provided by ../spicetify (a wrapped Spotify with the
     # comfy theme + transparency snippet baked in at build time). Don't
     # add pkgs.spotify here — the wrapper IS the spotify package.
@@ -369,4 +372,9 @@
     # - dryRun      = false (genuinely contact OBS)
     # - debug       = false
   };
+
+  # gnomon's HD Pro Webcam C920 as PipeWire enumerates it. Stable per
+  # USB port + PCI host controller — moving the camera will require a
+  # re-discovery via `pw-cli ls Node | grep -B1 -A8 'media.class = "Video/Source"'`.
+  programs.obsLazycam.cameraDeviceId = "v4l2_input.pci-0000_75_00.0-usb-0_1.1_1.0";
 }

@@ -36,6 +36,8 @@
   pkgs,
   ...
 }: let
+  cfg = config.programs.obsLazycam;
+
   # Stable UUIDs so re-applying the module across rebuilds produces
   # byte-identical config files (avoids OBS-internal cache churn on
   # every `update`).
@@ -97,39 +99,34 @@
     ];
 
     sources = [
-      # The real webcam source. Pinned to MJPG (Motion-JPEG) because
-      # OBS's pixelformat=-1 auto-detect picks the device's index-0
-      # format, which on most webcams (Logitech C920 confirmed here)
-      # is uncompressed YUYV — and YUYV over USB chokes framerate at
-      # >480p because the bandwidth required for raw frames exceeds
-      # what USB 2.0 can deliver. MJPG is hardware-compressed JPEG
-      # frames and sustains 1080p30 on the same bus.
+      # The real webcam source — pipewire-camera-source NOT v4l2_input.
       #
-      # 1196444237 = the v4l2 fourcc 'MJPG' as little-endian uint32:
-      #   'M'(0x4D) | 'J'(0x4A)<<8 | 'P'(0x50)<<16 | 'G'(0x47)<<24
-      # framerate/resolution stay at -1 (auto) — OBS picks the
-      # highest MJPG combination the device exposes. buffering=false
-      # keeps the v4l2 ring buffer disabled for low latency.
+      # OBS's v4l2_input plugin has no .show/.hide hooks (verified in
+      # plugins/linux-v4l2/v4l2-input.c — only .create / .destroy /
+      # .update). That means it holds the camera file descriptor open
+      # for the entire lifetime of the source, regardless of which
+      # scene is the program scene. With v4l2_input, the hardware LED
+      # stays on while OBS is running, period — defeating lazycam's
+      # entire reason for existing.
+      #
+      # The PipeWire camera source (plugins/linux-pipewire/camera-
+      # portal.c) DOES implement .show/.hide; they delegate to
+      # obs_pipewire_stream_show/hide which releases the underlying
+      # PipeWire stream and the kernel camera handle. LED follows
+      # show-state — the desired behavior.
+      #
+      # device_id is the PipeWire node name (stable per camera + USB
+      # port + PCI host controller). Find yours via:
+      #   pw-cli ls Node | grep -B1 -A8 'media.class = "Video/Source"'
+      # We require it as an explicit option rather than defaulting so
+      # this module is reusable on any desktop host.
       {
-        id = "v4l2_input";
-        versioned_id = "v4l2_input";
+        id = "pipewire-camera-source";
+        versioned_id = "pipewire-camera-source";
         uuid = uuid.webcam;
         name = "Real Webcam";
         settings = {
-          device_id = "/dev/video0";
-          input = -1;
-          pixelformat = 1196444237;
-          framerate = -1;
-          resolution = -1;
-          buffering = false;
-          # The load-bearing privacy bit: when this source isn't part
-          # of the currently-displayed scene (program OR preview),
-          # release the v4l2 file descriptor so the kernel turns the
-          # hardware LED off. Without this, OBS keeps the device open
-          # eagerly across scene switches and the LED stays lit even
-          # while Standby is the program scene — defeating lazycam's
-          # entire reason for existing.
-          deactivate_when_not_showing = true;
+          device_id = cfg.cameraDeviceId;
         };
         sync = 0;
         muted = false;
@@ -232,6 +229,26 @@
     groups = [];
   };
 in {
+  options.programs.obsLazycam = {
+    cameraDeviceId = lib.mkOption {
+      type = lib.types.str;
+      example = "v4l2_input.pci-0000_75_00.0-usb-0_1.1_1.0";
+      description = ''
+        PipeWire node name of the camera the Active scene should
+        capture. Find it via:
+            pw-cli ls Node | grep -B1 -A8 'media.class = "Video/Source"'
+        The value is stable per camera + USB port + PCI host
+        controller — moving the camera to a different USB port will
+        change it.
+
+        Required (no default) because the right value is host-
+        specific and any plausible default would silently fall back
+        to "no camera" on hosts that don't set it explicitly.
+      '';
+    };
+  };
+
+  config = {
   # OBS itself + lazycam-relevant plugins. Sourced from the gaming
   # overlay's nixpkgs so face-tracker resolves via pkgs.obs-face-tracker
   # (set up in nix-config's pkgs/ + overlays/).
@@ -296,5 +313,6 @@ in {
     server_password = "";
     alerts_enabled = false;
     first_load = false;
+  };
   };
 }

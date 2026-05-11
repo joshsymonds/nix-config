@@ -2352,13 +2352,17 @@
         ]
       },
       "locked": {
-        "narHash": "sha256-u+kCIW4WmHZ56IyjaEU7lUChQNzkkky211yXgzFWrrw=",
-        "path": "/home/joshsymonds/Personal/lazycam",
-        "type": "path"
+        "lastModified": 1778530463,
+        "narHash": "sha256-6yhflLNVhOv4eUheHMP5VQxaNcsim7Pw9wAjHVGK888=",
+        "owner": "joshsymonds",
+        "repo": "lazycam",
+        "rev": "707113aa2c54e14c6d04dd471be7cfb241e27b6d",
+        "type": "github"
       },
       "original": {
-        "path": "/home/joshsymonds/Personal/lazycam",
-        "type": "path"
+        "owner": "joshsymonds",
+        "repo": "lazycam",
+        "type": "github"
       }
     },
     "libgit2-src": {

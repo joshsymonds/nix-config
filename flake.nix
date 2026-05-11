@@ -112,13 +112,9 @@
     # source, hardware LED on) and "Standby" scene (no camera source,
     # LED off). Lets the webcam LED honestly reflect "something is
     # actually using me" instead of staying lit whenever OBS holds the
-    # device handle. Source at ~/Personal/lazycam.
-    #
-    # Local-path input for now so we can iterate without round-tripping
-    # through GitHub. Switch to `github:joshsymonds/lazycam` once the
-    # interface stabilizes — change one URL line; the lock will follow.
+    # device handle. Source at ~/Personal/lazycam (joshsymonds/lazycam).
     lazycam = {
-      url = "path:/home/joshsymonds/Personal/lazycam";
+      url = "github:joshsymonds/lazycam";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

@@ -263,8 +263,8 @@ in {
     cameraFormat = lib.mkOption {
       type = lib.types.attrs;
       default = {
-        encoded = true;
-        video_format = 131074; # SPA_MEDIA_SUBTYPE_mjpg
+        encoded = false;
+        video_format = 4; # SPA_VIDEO_FORMAT_YUY2
         width = 1920;
         height = 1080;
       };

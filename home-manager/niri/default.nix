@@ -285,7 +285,9 @@ in {
   # Empty block uses default mode: only warp when cursor isn't already
   # inside the focused window (intra-output: per-axis nudge; cross-output:
   # always center on the new window).
-  programs.niri.settings.input.warp-mouse-to-focus = { };
+  programs.niri.settings.input.warp-mouse-to-focus = {
+    enable = true;
+  };
 
   # X11 fallback via xwayland-satellite (package added system-side in
   # modules/desktop/niri.nix). Niri itself is pure Wayland; satellite

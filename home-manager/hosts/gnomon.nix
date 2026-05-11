@@ -34,11 +34,12 @@
 
     # OBS Studio + lazycam-related scenes live in ../obs (imported
     # above) — that module ships the wrapped OBS package, the
-    # declarative scene collection, and global.ini with the WebSocket
-    # server enabled. Don't add pkgs.obs-studio here.
+    # declarative scene collection, and the WebSocket server config.
+    # Don't add pkgs.obs-studio here.
     #
-    # gnomon's specific camera ID is configured below via
-    # programs.obsLazycam.cameraDeviceId.
+    # The "Real Webcam" v4l2_input source starts with device_id="";
+    # lazycam fills it in on Activate via SetInputSettings. See the
+    # services.lazycam block below.
     # spotify is provided by ../spicetify (a wrapped Spotify with the
     # comfy theme + transparency snippet baked in at build time). Don't
     # add pkgs.spotify here — the wrapper IS the spotify package.
@@ -363,6 +364,16 @@
   # Server Settings → Enable.
   services.lazycam = {
     enable = true;
+    # cameraSource names the OBS input that lazycam gates via
+    # SetInputSettings device_id. The OBS module ships this source
+    # with an empty device_id so OBS launches in the LED-off state;
+    # lazycam fills it in on Activate and clears it on Deactivate,
+    # which is the only reliable way to make the v4l2_input plugin
+    # release the camera fd (and the hardware LED with it).
+    cameraSource = "Real Webcam";
+    # cameraDevice defaults to /dev/video0 — gnomon's C920 lives
+    # there. If the device path ever shifts we'd set it here.
+    #
     # All other options take their module defaults:
     # - device      = /dev/video10
     # - obsUrl      = ws://127.0.0.1:4455
@@ -372,9 +383,4 @@
     # - dryRun      = false (genuinely contact OBS)
     # - debug       = false
   };
-
-  # gnomon's HD Pro Webcam C920 as PipeWire enumerates it. Stable per
-  # USB port + PCI host controller — moving the camera will require a
-  # re-discovery via `pw-cli ls Node | grep -B1 -A8 'media.class = "Video/Source"'`.
-  programs.obsLazycam.cameraDeviceId = "v4l2_input.pci-0000_75_00.0-usb-0_1.1_1.0";
 }

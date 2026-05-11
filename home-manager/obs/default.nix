@@ -31,13 +31,10 @@
 #   until we have a reason to declare it.
 # - plugin_config/ — same story.
 {
-  config,
   lib,
   pkgs,
   ...
 }: let
-  cfg = config.programs.obsLazycam;
-
   # Stable UUIDs so re-applying the module across rebuilds produces
   # byte-identical config files (avoids OBS-internal cache churn on
   # every `update`).
@@ -99,47 +96,46 @@
     ];
 
     sources = [
-      # The real webcam source — pipewire-camera-source NOT v4l2_input.
+      # The real webcam source. v4l2_input — NOT pipewire-camera-source.
       #
-      # OBS's v4l2_input plugin has no .show/.hide hooks (verified in
-      # plugins/linux-v4l2/v4l2-input.c — only .create / .destroy /
-      # .update). That means it holds the camera file descriptor open
-      # for the entire lifetime of the source, regardless of which
-      # scene is the program scene. With v4l2_input, the hardware LED
-      # stays on while OBS is running, period — defeating lazycam's
-      # entire reason for existing.
+      # We attempted the PipeWire-portal source first because it has
+      # .show/.hide hooks (releases the camera handle when not displayed,
+      # making the hardware LED honestly track scene visibility). But
+      # format negotiation through xdg-desktop-portal-camera empirically
+      # fails on this stack with "no more input formats" across multiple
+      # format configurations (YUY2 raw, MJPG encoded, no constraints).
+      # Setting that path aside for now.
       #
-      # The PipeWire camera source (plugins/linux-pipewire/camera-
-      # portal.c) DOES implement .show/.hide; they delegate to
-      # obs_pipewire_stream_show/hide which releases the underlying
-      # PipeWire stream and the kernel camera handle. LED follows
-      # show-state — the desired behavior.
+      # v4l2_input works reliably but its plugin has no show/hide hooks
+      # (plugins/linux-v4l2/v4l2-input.c registers only .create /
+      # .destroy / .update). So the source holds the camera fd for its
+      # entire lifetime — the LED stays lit while OBS runs, regardless
+      # of which scene is the program scene. Lazycam closes that gap
+      # at the daemon layer: on Activate it issues a SetInputSettings
+      # RPC writing device_id="/dev/video0", which opens the camera; on
+      # Deactivate it writes device_id="", which makes v4l2_update fail
+      # the reopen and release the prior fd (LED off). See lazycam's
+      # SetCameraDevice in switcher.go.
       #
-      # device_id is the PipeWire node name (stable per camera + USB
-      # port + PCI host controller). Find yours via:
-      #   pw-cli ls Node | grep -B1 -A8 'media.class = "Video/Source"'
-      # We require it as an explicit option rather than defaulting so
-      # this module is reusable on any desktop host.
+      # We ship the source with device_id="" by default so OBS launches
+      # in the LED-off state. The first Activate transition fills it in.
+      #
+      # pixelformat 1196444237 = the v4l2 fourcc 'MJPG' as little-endian
+      # uint32 ('M'|'J'<<8|'P'<<16|'G'<<24). Pins the device to MJPG so
+      # 1080p30 fits within USB 2.0 bandwidth (uncompressed YUYV would
+      # choke at >480p).
       {
-        id = "pipewire-camera-source";
-        versioned_id = "pipewire-camera-source";
+        id = "v4l2_input";
+        versioned_id = "v4l2_input";
         uuid = uuid.webcam;
         name = "Real Webcam";
         settings = {
-          device_id = cfg.cameraDeviceId;
-          # format and framerate are JSON-encoded strings inside the
-          # parent JSON (the camera-portal.c parses them via
-          # obs_data_create_from_json). Without both, the PipeWire
-          # stream's format negotiation fails with "no more input
-          # formats" — the stream never establishes and OBS shows
-          # nothing in the preview.
-          format = builtins.toJSON cfg.cameraFormat;
-          framerate = builtins.toJSON {
-            framerate = {
-              numerator = cfg.cameraFramerate.numerator;
-              denominator = cfg.cameraFramerate.denominator;
-            };
-          };
+          device_id = "";
+          input = -1;
+          pixelformat = 1196444237;
+          framerate = -1;
+          resolution = -1;
+          buffering = false;
         };
         sync = 0;
         muted = false;
@@ -242,82 +238,6 @@
     groups = [];
   };
 in {
-  options.programs.obsLazycam = {
-    cameraDeviceId = lib.mkOption {
-      type = lib.types.str;
-      example = "v4l2_input.pci-0000_75_00.0-usb-0_1.1_1.0";
-      description = ''
-        PipeWire node name of the camera the Active scene should
-        capture. Find it via:
-            pw-cli ls Node | grep -B1 -A8 'media.class = "Video/Source"'
-        The value is stable per camera + USB port + PCI host
-        controller — moving the camera to a different USB port will
-        change it.
-
-        Required (no default) because the right value is host-
-        specific and any plausible default would silently fall back
-        to "no camera" on hosts that don't set it explicitly.
-      '';
-    };
-
-    cameraFormat = lib.mkOption {
-      type = lib.types.attrs;
-      default = {
-        encoded = false;
-        video_format = 4; # SPA_VIDEO_FORMAT_YUY2
-        width = 1920;
-        height = 1080;
-      };
-      description = ''
-        Camera format configuration for the PipeWire stream.
-        Encoded as JSON-within-JSON in the OBS scene file. Default
-        is MJPG 1920x1080 — the common high-resolution webcam mode
-        with hardware JPEG encoding for USB bandwidth efficiency.
-
-        Schema (fields read by camera-portal.c parse_format):
-          encoded       — true for compressed formats (MJPG/H264),
-                          false for raw (YUY2/NV12/etc)
-          video_format  — SPA enum: SPA_MEDIA_SUBTYPE_mjpg=131074
-                          (for encoded=true), or SPA_VIDEO_FORMAT_*
-                          (for encoded=false)
-          width, height — integers, in pixels
-
-        Values:
-          SPA_MEDIA_SUBTYPE_mjpg   = 131074  (0x20002)
-          SPA_MEDIA_SUBTYPE_h264   = 131073  (0x20001)
-          SPA_MEDIA_SUBTYPE_raw    = 1
-        See pipewire spa/param/format.h + spa/param/video/raw.h.
-
-        Without a format configured, OBS asks PipeWire for "any
-        format" and the negotiation fails with "no more input
-        formats" — observed empirically with the C920.
-      '';
-    };
-
-    cameraFramerate = lib.mkOption {
-      type = lib.types.submodule {
-        options = {
-          numerator = lib.mkOption {
-            type = lib.types.int;
-            default = 30;
-          };
-          denominator = lib.mkOption {
-            type = lib.types.int;
-            default = 1;
-          };
-        };
-      };
-      default = {};
-      description = ''
-        Camera framerate as a numerator/denominator fraction. 30/1
-        is the common webcam max. Encoded as JSON-within-JSON
-        ({"framerate":{"numerator":30,"denominator":1}}) in the
-        OBS scene file.
-      '';
-    };
-  };
-
-  config = {
   # OBS itself + lazycam-relevant plugins. Sourced from the gaming
   # overlay's nixpkgs so face-tracker resolves via pkgs.obs-face-tracker
   # (set up in nix-config's pkgs/ + overlays/).
@@ -382,6 +302,5 @@ in {
     server_password = "";
     alerts_enabled = false;
     first_load = false;
-  };
   };
 }

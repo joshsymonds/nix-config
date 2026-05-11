@@ -7,7 +7,7 @@
     settings = {
       palette = "catppuccin_mocha";
 
-      format = "[](fg:lavender)$directory$character";
+      format = "[](fg:lavender)$directory$character";
 
       # Right side: devspace? | host | git | aws? | gcloud? | k8s? | curve.
       # Static-color chips (devspace, host, git) use built-in starship
@@ -15,7 +15,7 @@
       # single block by `cc-tools render-clouds`, which emits raw ANSI
       # including its own internal powerline chevrons and the closing
       # right curve.
-      right_format = "[](fg:mauve)\${custom.context}[](fg:rosewater bg:mauve)\${custom.host}[](fg:sky bg:rosewater)$git_branch$git_status\${custom.clouds}";
+      right_format = "[](fg:mauve)\${custom.context}[](fg:rosewater bg:mauve)\${custom.host}[](fg:sky bg:rosewater)$git_branch$git_status\${custom.clouds}";
 
       add_newline = false;
 
@@ -41,8 +41,8 @@
       };
 
       character = {
-        success_symbol = "[](bg:green fg:lavender)[](fg:green)";
-        error_symbol = "[](bg:red fg:lavender)[](fg:red)";
+        success_symbol = "[](bg:green fg:lavender)[](fg:green)";
+        error_symbol = "[](bg:red fg:lavender)[](fg:red)";
       };
 
       "cmd_duration" = {

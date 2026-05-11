@@ -233,31 +233,50 @@ in {
   xdg.configFile."obs-studio/basic/scenes/lazycam.json".text =
     builtins.toJSON lazycamSceneCollection;
 
-  # Global config: pick the lazycam collection as the active one,
-  # enable the WebSocket server lazycam's switcher dials. Auth is
-  # disabled by design — lazycam's requireLoopback() refuses to dial
-  # anything off 127.0.0.0/8 / ::1 / localhost, so the access boundary
-  # is the loopback interface itself, not a shared password.
+  # user.ini is where OBS 30+ stores the active-profile + active-
+  # scene-collection pointers (the legacy global.ini path silently
+  # stopped being read for these keys somewhere around OBS 30). Empirical
+  # check on this host: OBS ignores [BasicWindow] SceneCollection in
+  # global.ini, reads SceneCollection from [Basic] in user.ini.
   #
-  # OBS reads this on startup. Anything OBS tries to write back on
-  # shutdown (window geometry, last-collection switch, etc.) hits the
-  # read-only symlink and is dropped, which is the desired behavior.
-  xdg.configFile."obs-studio/global.ini".text = ''
+  # We keep this minimal — anything not declared falls through to
+  # OBS's built-in defaults, which is fine. Window geometry / preview
+  # snapping / theme prefs are deliberately NOT declared so OBS can
+  # use its sensible defaults; the only invariants that matter for
+  # the lazycam pipeline are the collection + profile selection and
+  # the "don't show the first-run wizard" suppression.
+  #
+  # Profile=Untitled because we don't ship a declarative profile yet
+  # (see module top comment). OBS auto-creates ~/.config/obs-studio/
+  # basic/profiles/Untitled/ as a writable dir on first launch.
+  xdg.configFile."obs-studio/user.ini".text = ''
     [General]
     FirstRun=false
-    LastVersion=520093698
-    Pre30TutorialFinished=true
     ConfirmOnExit=false
 
-    [BasicWindow]
+    [Basic]
+    Profile=Untitled
+    ProfileDir=Untitled
     SceneCollection=lazycam
     SceneCollectionFile=lazycam
-
-    [WebsocketAPI]
-    ServerEnabled=true
-    ServerPort=4455
-    AlertsEnabled=false
-    AuthRequired=false
-    ServerPassword=
   '';
+
+  # obs-websocket config. Lives in plugin_config/, NOT global.ini's
+  # legacy [WebsocketAPI] section. server_port matches what lazycam's
+  # --obs-url defaults to (ws://127.0.0.1:4455). auth_required=false
+  # is safe because lazycam.requireLoopback() refuses to dial
+  # anything off 127.0.0.0/8 / ::1 / localhost — the access boundary
+  # is the loopback interface itself, not a shared secret.
+  #
+  # alerts_enabled=false suppresses OBS's "WebSocket client
+  # connected" popup; lazycam connects/reconnects often enough that
+  # the popup is noise.
+  xdg.configFile."obs-studio/plugin_config/obs-websocket/config.json".text = builtins.toJSON {
+    server_enabled = true;
+    server_port = 4455;
+    auth_required = false;
+    server_password = "";
+    alerts_enabled = false;
+    first_load = false;
+  };
 }

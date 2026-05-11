@@ -445,6 +445,26 @@ in {
       hotkey-overlay.title = "Focus or Launch Vesktop";
       action.spawn = ["focus-or-spawn" "--app-id" "vesktop" "--" "vesktop"];
     };
+    # Zoom is special-cased because its app_id "Zoom" covers many
+    # top-levels (hub "Zoom Workplace …", chat, settings, annotate
+    # toolbar, screen-share controls). Tier the lookup:
+    #   1. In-call video window (title exactly "Meeting") — preferred
+    #      target during a call.
+    #   2. Hub ("Zoom Workplace …") — has the Join/Start/Schedule UI,
+    #      so focusing it is what we want when no meeting is live.
+    #   3. Nothing open → gtk-launch the desktop entry. This MUST go
+    #      through us.zoom.Zoom.desktop (hosts/gnomon nix.xdg.dataFile)
+    #      so the zoom-bypass-zoomlauncher wrapper and any OBS/exec
+    #      shimming in that .desktop apply. Direct `flatpak run` would
+    #      bypass the wrapper and SIGILL on NVIDIA.
+    "Alt+Z" = {
+      hotkey-overlay.title = "Focus or Launch Zoom";
+      action.spawn = [
+        "focus-or-spawn" "--app-id" "Zoom" "--title-regex" "^Meeting$" "--"
+        "focus-or-spawn" "--app-id" "Zoom" "--title-regex" "^Zoom Workplace" "--"
+        "${pkgs.gtk3}/bin/gtk-launch" "us.zoom.Zoom"
+      ];
+    };
 
     # ── DMS shell features ────────────────────────────────────────
     # Mac-style Cmd shortcuts (physical Cmd key → keyd carve-out

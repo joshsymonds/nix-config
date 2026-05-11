@@ -755,6 +755,21 @@ in {
           focus-follows-mouse edge-deadzone=30
       }
 
+      // force-close from josh/force-close-window. SIGTERM the focused
+      // window's process group, then SIGKILL after grace-period-ms if
+      // the process is still alive. For tray-hiding Electron apps
+      // (Spotify, Discord) that swallow xdg-toplevel close. Bound
+      // below to Alt+Shift+Q with allow-inhibiting=false so games and
+      // SDL clients can't intercept the kill via the keyboard-shortcuts-
+      // inhibit protocol — same reasoning as the typed-binds wrapper.
+      force-close {
+          grace-period-ms 2000
+      }
+
+      binds {
+          Alt+Shift+Q allow-inhibiting=false hotkey-overlay-title="Force Close Window" { force-close-window; }
+      }
+
       // recent-windows: alt-tab overlay styling. From dms/alttab.kdl
       // (corner-radius) plus the recent-windows section of dms/colors.kdl.
       recent-windows {

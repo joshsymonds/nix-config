@@ -268,7 +268,7 @@ in {
     Profile=Untitled
     ProfileDir=Untitled
     SceneCollection=lazycam
-    SceneCollectionFile=lazycam
+    SceneCollectionFile=lazycam.json
   '';
 
   # obs-websocket config. Lives in plugin_config/, NOT global.ini's

@@ -41,19 +41,22 @@ fi
 new_value=""
 new_value_set="no"
 
+# Split the command on shell separators so each logical statement
+# becomes one line. Then anchor the export/unset match at the start
+# of that line (after whitespace) so `echo "export AWS_PROFILE=fake"`,
+# `# unset AWS_PROFILE in comment`, and `grep "export AWS_PROFILE"`
+# don't false-positive.
 while IFS= read -r line; do
-  # Trim leading whitespace and an optional leading `&&`/`;`/`|`.
-  trimmed="${line## }"
+  # Properly strip leading whitespace (POSIX): sed-based, not the
+  # single-space `${line## }` trick which only strips one char.
+  trimmed=$(printf '%s' "$line" | sed -e 's/^[[:space:]]*//')
   case "$trimmed" in
-    *"export AWS_PROFILE="*)
-      # Take everything after the last `export AWS_PROFILE=`.
-      value="${trimmed##*export AWS_PROFILE=}"
-      # Strip any trailing shell separators (`&&`, `;`, `|`, etc.) by
-      # taking only the first word.
+    "export AWS_PROFILE="*)
+      # `export AWS_PROFILE=VALUE` — take the value (everything after =).
+      value="${trimmed#export AWS_PROFILE=}"
+      # If the value has a trailing word (separator collapsed by our
+      # `tr` earlier left one), trim at the first space.
       value="${value%% *}"
-      value="${value%%;*}"
-      value="${value%%&*}"
-      value="${value%%|*}"
       # Strip surrounding quotes.
       value="${value#\"}"
       value="${value%\"}"
@@ -62,7 +65,7 @@ while IFS= read -r line; do
       new_value="$value"
       new_value_set="yes"
       ;;
-    *"unset AWS_PROFILE"*)
+    "unset AWS_PROFILE"|"unset AWS_PROFILE "*)
       new_value=""
       new_value_set="yes"
       ;;
@@ -79,12 +82,14 @@ fi
 mkdir -p "$state_dir" 2>/dev/null || exit 0
 
 # Read existing state if any; merge the aws_profile field. Atomic
-# rename so cc-tools never sees a partial file.
+# rename so cc-tools never sees a partial file. `jq -n --arg p` produces
+# valid JSON for any value including empty strings — without this, the
+# unset-AWS_PROFILE case used to emit `{"aws_profile":}` (malformed).
 tmp="$state_file.tmp.$$"
-if [ -f "$state_file" ] && command -v jq >/dev/null 2>&1; then
-  jq --arg p "$new_value" '.aws_profile = $p' "$state_file" 2>/dev/null > "$tmp" || \
-    printf '{"aws_profile":%s}\n' "$(printf '%s' "$new_value" | jq -R .)" > "$tmp"
+if [ -f "$state_file" ]; then
+  jq --arg p "$new_value" '.aws_profile = $p' "$state_file" > "$tmp" 2>/dev/null \
+    || jq -n --arg p "$new_value" '{aws_profile: $p}' > "$tmp"
 else
-  printf '{"aws_profile":%s}\n' "$(printf '%s' "$new_value" | jq -R .)" > "$tmp"
+  jq -n --arg p "$new_value" '{aws_profile: $p}' > "$tmp"
 fi
 mv "$tmp" "$state_file"

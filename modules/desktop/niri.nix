@@ -107,6 +107,20 @@ in {
       inter
     ];
 
+    # Rendering tweaks for ~108 PPI IPS panels (Dell U2724D on gnomon).
+    # At this density, greyscale-only AA leaves visible jaggies on text;
+    # RGB subpixel rendering + slight hinting is markedly sharper. On any
+    # future high-DPI panel (>=180 PPI) these settings are effectively a
+    # no-op because the subpixel structure is below the eye's resolving
+    # threshold, so it's safe to apply module-wide.
+    fonts.fontconfig = {
+      antialias = true;
+      hinting.enable = true;
+      hinting.style = "slight";
+      subpixel.rgba = "rgb";
+      subpixel.lcdfilter = "default";
+    };
+
     # Low-level CLI tools that complement the DMS-provided GUI equivalents:
     # wl-clipboard for scripts (DMS has its own clipboard manager UI),
     # grim/slurp for ad-hoc CLI screenshots (DMS handles interactive capture).

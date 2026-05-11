@@ -237,21 +237,27 @@
   # there's no other signal, otherwise it picks an arbitrary side-by-side
   # ordering at detection time.
   #
-  # scale = 1.1 nudges every app's effective DPI up ~10% (kitty, browser,
-  # gnomon, GTK, Qt). Niri output positions are in *logical* (post-scale)
-  # coordinates — at scale 1.1 the 2560-wide panel takes 2328 logical px,
-  # so the right monitor sits at x=2328 to stay edge-to-edge.
+  # scale = 1.0: native pixel mapping, sharpest possible at this ~108 PPI.
+  # Avoids the wp-fractional-scale path and XWayland bilinear downscale
+  # that fractional scales (1.1, 1.25, …) impose. Tradeoff: smaller UI.
+  # Output positions are in *logical* (post-scale) coordinates, so at 1.0
+  # the right monitor sits at x=2560 to stay edge-to-edge.
+  #
+  # variable-refresh-rate = true: the U2724D advertises Adaptive-Sync up
+  # to 120Hz on DP and the RTX 5070 Ti drives it cleanly.
   programs.niri.settings.outputs."Dell Inc. DELL U2724D CDL25Z3" = {
-    scale = 1.1;
+    scale = 1.0;
+    variable-refresh-rate = true;
     position = {
       x = 0;
       y = 0;
     };
   };
   programs.niri.settings.outputs."Dell Inc. DELL U2724D CBC35Z3" = {
-    scale = 1.1;
+    scale = 1.0;
+    variable-refresh-rate = true;
     position = {
-      x = 2328;
+      x = 2560;
       y = 0;
     };
   };

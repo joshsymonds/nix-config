@@ -277,6 +277,16 @@ in {
   # in niri-flake's typed schema yet — same pattern as
   # `cross-monitor-column-insert` and `clip-fullscreen-backdrop-to-window`).
 
+  # Warp the mouse to the focused window on keyboard focus changes. Without
+  # this, cross-monitor keyboard switches land the cursor at the new
+  # monitor's center (per `move_cursor_to_output` in niri's focus_window),
+  # which on monitors with vertical taskbars sits over a non-focused tile —
+  # the next mouse motion would then bounce focus to that tile via FFM.
+  # Empty block uses default mode: only warp when cursor isn't already
+  # inside the focused window (intra-output: per-axis nudge; cross-output:
+  # always center on the new window).
+  programs.niri.settings.input.warp-mouse-to-focus = { };
+
   # X11 fallback via xwayland-satellite (package added system-side in
   # modules/desktop/niri.nix). Niri itself is pure Wayland; satellite
   # provides an on-demand Xwayland server claiming DISPLAY=:0 so X11-only

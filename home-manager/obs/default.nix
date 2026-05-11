@@ -127,6 +127,19 @@
         name = "Real Webcam";
         settings = {
           device_id = cfg.cameraDeviceId;
+          # format and framerate are JSON-encoded strings inside the
+          # parent JSON (the camera-portal.c parses them via
+          # obs_data_create_from_json). Without both, the PipeWire
+          # stream's format negotiation fails with "no more input
+          # formats" — the stream never establishes and OBS shows
+          # nothing in the preview.
+          format = builtins.toJSON cfg.cameraFormat;
+          framerate = builtins.toJSON {
+            framerate = {
+              numerator = cfg.cameraFramerate.numerator;
+              denominator = cfg.cameraFramerate.denominator;
+            };
+          };
         };
         sync = 0;
         muted = false;
@@ -244,6 +257,62 @@ in {
         Required (no default) because the right value is host-
         specific and any plausible default would silently fall back
         to "no camera" on hosts that don't set it explicitly.
+      '';
+    };
+
+    cameraFormat = lib.mkOption {
+      type = lib.types.attrs;
+      default = {
+        encoded = true;
+        video_format = 131074; # SPA_MEDIA_SUBTYPE_mjpg
+        width = 1920;
+        height = 1080;
+      };
+      description = ''
+        Camera format configuration for the PipeWire stream.
+        Encoded as JSON-within-JSON in the OBS scene file. Default
+        is MJPG 1920x1080 — the common high-resolution webcam mode
+        with hardware JPEG encoding for USB bandwidth efficiency.
+
+        Schema (fields read by camera-portal.c parse_format):
+          encoded       — true for compressed formats (MJPG/H264),
+                          false for raw (YUY2/NV12/etc)
+          video_format  — SPA enum: SPA_MEDIA_SUBTYPE_mjpg=131074
+                          (for encoded=true), or SPA_VIDEO_FORMAT_*
+                          (for encoded=false)
+          width, height — integers, in pixels
+
+        Values:
+          SPA_MEDIA_SUBTYPE_mjpg   = 131074  (0x20002)
+          SPA_MEDIA_SUBTYPE_h264   = 131073  (0x20001)
+          SPA_MEDIA_SUBTYPE_raw    = 1
+        See pipewire spa/param/format.h + spa/param/video/raw.h.
+
+        Without a format configured, OBS asks PipeWire for "any
+        format" and the negotiation fails with "no more input
+        formats" — observed empirically with the C920.
+      '';
+    };
+
+    cameraFramerate = lib.mkOption {
+      type = lib.types.submodule {
+        options = {
+          numerator = lib.mkOption {
+            type = lib.types.int;
+            default = 30;
+          };
+          denominator = lib.mkOption {
+            type = lib.types.int;
+            default = 1;
+          };
+        };
+      };
+      default = {};
+      description = ''
+        Camera framerate as a numerator/denominator fraction. 30/1
+        is the common webcam max. Encoded as JSON-within-JSON
+        ({"framerate":{"numerator":30,"denominator":1}}) in the
+        OBS scene file.
       '';
     };
   };

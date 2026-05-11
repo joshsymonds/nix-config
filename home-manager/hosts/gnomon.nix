@@ -8,6 +8,7 @@
     ../desktop-x86_64-linux.nix
     ../vesktop
     ../spicetify
+    ../obs
     inputs.lazycam.homeManagerModules.default
   ];
 
@@ -31,23 +32,10 @@
     # bypass ZoomLauncher entirely and exec /app/extra/zoom/zoom directly,
     # which lets Qt auto-pick libqwayland-generic and works cleanly.
 
-    # OBS Studio with background-removal + face-tracker plugins. Virtual
-    # webcam pipeline writes to /dev/video10 (v4l2loopback in hosts/
-    # gnomon/default.nix with exclusive_caps=1 so Chromium-based clients
-    # like Zoom actually enumerate it). Background-removal is the ML
-    # chroma-key behind the "blur my background" effect. Face-tracker is
-    # norihiro/obs-face-tracker 0.9.1 — dlib HOG detection on a worker
-    # thread, Kalman-smoothed crop rect, GPU resample via OBS effects —
-    # which lands the V1 auto-zoom-follow (Center Stage analog). V2
-    # roadmap: swap dlib HOG for an OpenCV DNN backend in our fork for
-    # better small-face recall + GPU inference, then add shader-based
-    # bilateral skin smoothing keyed off facial landmarks.
-    (pkgs.wrapOBS {
-      plugins = [
-        pkgs.obs-studio-plugins.obs-backgroundremoval
-        pkgs.obs-face-tracker
-      ];
-    })
+    # OBS Studio + lazycam-related scenes live in ../obs (imported
+    # above) — that module ships the wrapped OBS package, the
+    # declarative scene collection, and global.ini with the WebSocket
+    # server enabled. Don't add pkgs.obs-studio here.
     # spotify is provided by ../spicetify (a wrapped Spotify with the
     # comfy theme + transparency snippet baked in at build time). Don't
     # add pkgs.spotify here — the wrapper IS the spotify package.

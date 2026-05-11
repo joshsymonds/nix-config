@@ -1,0 +1,263 @@
+# Declarative OBS Studio — every config file is a read-only symlink
+# into /nix/store. Any change to scenes, the WebSocket port, plugin
+# set, etc. flows through `update`; OBS itself can never persist a
+# mutation on disk. When OBS tries to save on shutdown (window
+# geometry, last-active scene, etc.) the write fails and is dropped —
+# that failure is the desired behavior: any UI-induced state that
+# wants to survive a session has to be declared here in nix instead.
+#
+# To reset to the canonical state at any time:
+#   rm -rf ~/.config/obs-studio
+#   update
+#
+# Scope of this module:
+#
+# - The OBS binary itself, with the lazycam-required plugins
+#   (background-removal for blur, obs-face-tracker for the V1 Center
+#   Stage analog, obs-websocket built into OBS 28+ so no plugin
+#   needed there).
+# - A "lazycam" scene collection with Active (Video Capture Device on
+#   /dev/video0) and Standby (solid-black color source) scenes — the
+#   pair the lazycam daemon expects (--scene-active / --scene-standby).
+# - global.ini configuring the WebSocket server on 127.0.0.1:4455 with
+#   auth disabled (loopback-only contract; see ~/Personal/lazycam's
+#   switcher.requireLoopback enforcement) and pointing OBS at the
+#   lazycam collection as the default.
+#
+# Out of scope (for now):
+#
+# - Profile config (recording paths, encoder settings) — OBS creates a
+#   default writable profile dir on first launch; leave imperative
+#   until we have a reason to declare it.
+# - plugin_config/ — same story.
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
+  # Stable UUIDs so re-applying the module across rebuilds produces
+  # byte-identical config files (avoids OBS-internal cache churn on
+  # every `update`).
+  uuid = {
+    sceneStandby = "11111111-1111-1111-1111-111111111111";
+    sceneActive = "22222222-2222-2222-2222-222222222222";
+    webcam = "33333333-3333-3333-3333-333333333333";
+    standbyBackground = "44444444-4444-4444-4444-444444444444";
+  };
+
+  # Default scene-item transform — top-left origin, scale 1.0, no
+  # crop or bounding. align=5 is OBS's ALIGN_LEFT|ALIGN_TOP.
+  defaultItemTransform = {
+    visible = true;
+    locked = false;
+    rot = 0.0;
+    scale = {
+      x = 1.0;
+      y = 1.0;
+    };
+    align = 5;
+    bounds_type = 0;
+    bounds_align = 0;
+    bounds_crop = false;
+    bounds = {
+      x = 0.0;
+      y = 0.0;
+    };
+    crop_left = 0;
+    crop_top = 0;
+    crop_right = 0;
+    crop_bottom = 0;
+    pos = {
+      x = 0.0;
+      y = 0.0;
+    };
+    scale_filter = "disable";
+    blend_method = "default";
+    blend_type = "normal";
+    show_transition = {
+      duration = 0;
+      id = "cut_transition";
+    };
+    hide_transition = {
+      duration = 0;
+      id = "cut_transition";
+    };
+    private_settings = {};
+    group_item_backup = false;
+  };
+
+  lazycamSceneCollection = {
+    name = "lazycam";
+    current_scene = "Standby";
+    current_program_scene = "Standby";
+    scene_order = [
+      {name = "Standby";}
+      {name = "Active";}
+    ];
+
+    sources = [
+      # The real webcam source. input/pixelformat/framerate/resolution
+      # = -1 means "auto-detect from the device on activation."
+      # buffering=false keeps latency low (no v4l2 ring buffer).
+      {
+        id = "v4l2_input";
+        versioned_id = "v4l2_input";
+        uuid = uuid.webcam;
+        name = "Real Webcam";
+        settings = {
+          device_id = "/dev/video0";
+          input = -1;
+          pixelformat = -1;
+          framerate = -1;
+          resolution = -1;
+          buffering = false;
+        };
+        sync = 0;
+        muted = false;
+        private_settings = {};
+        filters = [];
+        hotkeys = {};
+      }
+
+      # Standby placeholder: opaque black at canvas size. The
+      # important invariant is that THIS source holds no /dev/video0
+      # handle — when OBS's program scene is Standby, the camera
+      # source is not active and the hardware LED is off.
+      #
+      # color is ARGB packed into uint32: 0xFF000000 = opaque black.
+      {
+        id = "color_source_v3";
+        versioned_id = "color_source_v3";
+        uuid = uuid.standbyBackground;
+        name = "Standby Background";
+        settings = {
+          color = 4278190080;
+          width = 1920;
+          height = 1080;
+        };
+        sync = 0;
+        muted = false;
+        private_settings = {};
+        filters = [];
+        hotkeys = {};
+      }
+
+      # Standby scene: only contains the color source.
+      {
+        id = "scene";
+        versioned_id = "scene";
+        uuid = uuid.sceneStandby;
+        name = "Standby";
+        settings = {
+          id_counter = 1;
+          custom_size = false;
+          items = [
+            (defaultItemTransform
+              // {
+                name = "Standby Background";
+                source_uuid = uuid.standbyBackground;
+                id = 1;
+              })
+          ];
+        };
+        sync = 0;
+        muted = false;
+        private_settings = {};
+        filters = [];
+        hotkeys = {};
+      }
+
+      # Active scene: only the webcam source. The face-tracker filter
+      # would be a per-source filter living in this source's `filters`
+      # array — leaving it empty in V1 so the canonical scene loads
+      # cleanly; add filters declaratively as we shape the face
+      # pipeline.
+      {
+        id = "scene";
+        versioned_id = "scene";
+        uuid = uuid.sceneActive;
+        name = "Active";
+        settings = {
+          id_counter = 1;
+          custom_size = false;
+          items = [
+            (defaultItemTransform
+              // {
+                name = "Real Webcam";
+                source_uuid = uuid.webcam;
+                id = 1;
+              })
+          ];
+        };
+        sync = 0;
+        muted = false;
+        private_settings = {};
+        filters = [];
+        hotkeys = {};
+      }
+    ];
+
+    # Top-level collection fields OBS expects. The version stamp matches
+    # the OBS 28+ scene-format generation; OBS will accept this as long
+    # as the JSON parses.
+    saved_projectors = [];
+    transitions = [];
+    transition_duration = 300;
+    preview_locked = false;
+    scaling_enabled = false;
+    scaling_level = 0;
+    scaling_off_x = 0.0;
+    scaling_off_y = 0.0;
+    modules = {};
+    quick_transitions = [];
+    groups = [];
+  };
+in {
+  # OBS itself + lazycam-relevant plugins. Sourced from the gaming
+  # overlay's nixpkgs so face-tracker resolves via pkgs.obs-face-tracker
+  # (set up in nix-config's pkgs/ + overlays/).
+  home.packages = [
+    (pkgs.wrapOBS {
+      plugins = [
+        pkgs.obs-studio-plugins.obs-backgroundremoval
+        pkgs.obs-face-tracker
+      ];
+    })
+  ];
+
+  # Scene collection. Read-only symlink — any edit OBS attempts to
+  # persist (e.g. shifting an item, picking a different default scene)
+  # will fail at the OS level and be discarded. The right way to
+  # change scenes is to edit this module and run `update`.
+  xdg.configFile."obs-studio/basic/scenes/lazycam.json".text =
+    builtins.toJSON lazycamSceneCollection;
+
+  # Global config: pick the lazycam collection as the active one,
+  # enable the WebSocket server lazycam's switcher dials. Auth is
+  # disabled by design — lazycam's requireLoopback() refuses to dial
+  # anything off 127.0.0.0/8 / ::1 / localhost, so the access boundary
+  # is the loopback interface itself, not a shared password.
+  #
+  # OBS reads this on startup. Anything OBS tries to write back on
+  # shutdown (window geometry, last-collection switch, etc.) hits the
+  # read-only symlink and is dropped, which is the desired behavior.
+  xdg.configFile."obs-studio/global.ini".text = ''
+    [General]
+    FirstRun=false
+    LastVersion=520093698
+    Pre30TutorialFinished=true
+    ConfirmOnExit=false
+
+    [BasicWindow]
+    SceneCollection=lazycam
+    SceneCollectionFile=lazycam
+
+    [WebsocketAPI]
+    ServerEnabled=true
+    ServerPort=4455
+    AlertsEnabled=false
+    AuthRequired=false
+    ServerPassword=
+  '';
+}

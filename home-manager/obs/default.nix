@@ -122,6 +122,14 @@
           framerate = -1;
           resolution = -1;
           buffering = false;
+          # The load-bearing privacy bit: when this source isn't part
+          # of the currently-displayed scene (program OR preview),
+          # release the v4l2 file descriptor so the kernel turns the
+          # hardware LED off. Without this, OBS keeps the device open
+          # eagerly across scene switches and the LED stays lit even
+          # while Standby is the program scene — defeating lazycam's
+          # entire reason for existing.
+          deactivate_when_not_showing = true;
         };
         sync = 0;
         muted = false;

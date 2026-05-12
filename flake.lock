@@ -326,11 +326,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1778464645,
-        "narHash": "sha256-pKaZ4WKxdSn2Pelc+GhJnPTVbN9Hus5QNtYXaO+rwb4=",
+        "lastModified": 1778603874,
+        "narHash": "sha256-0BsaS3GYi1i15iqOLmlpnW5jr6hR1KQb8ueCaW6FRbQ=",
         "owner": "joshsymonds",
         "repo": "cc-tools",
-        "rev": "3769fe0ca699149d4b5ca28398c40cb6218a9265",
+        "rev": "7107819dc20d0230c3ccc947fa634028d4eab460",
         "type": "github"
       },
       "original": {
@@ -842,11 +842,11 @@
         "quickshell": "quickshell"
       },
       "locked": {
-        "lastModified": 1778562658,
-        "narHash": "sha256-qVn3yv832sHMsFPVMtJAGJh7U4vpKkMV9wIyuzDvZio=",
+        "lastModified": 1778604044,
+        "narHash": "sha256-kFQrMww7gM5SgHBDfmVt4S065pjU6bNGFKcwKLn5L3g=",
         "owner": "joshsymonds",
         "repo": "DankMaterialShell",
-        "rev": "5a1288dfc3e68601b7224bb4f45869783a88c176",
+        "rev": "39ef82a1eeb492b07314ceed0743689e19de92bb",
         "type": "github"
       },
       "original": {

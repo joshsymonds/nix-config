@@ -335,11 +335,10 @@ in {
   # focused. We're not running an RDP client; niri's binds always win.
   programs.niri.settings.binds = lib.mapAttrs (_: v: v // {allow-inhibiting = false;}) {
     # ── Window lifecycle ──────────────────────────────────────────
-    # Alt+Q lives in extras.kdl bound to force-close-window from the
-    # josh/force-close-window patch — niri-flake's typed schema doesn't
-    # know that action variant yet. Polite xdg-toplevel close is dropped
-    # entirely: SIGTERM-within-grace is observably identical for
-    # well-behaved apps and actually kills tray-hiding Electron clients.
+    "Alt+Q" = {
+      hotkey-overlay.title = "Close Window";
+      action.close-window = [];
+    };
 
     # ── Focus motion ──────────────────────────────────────────────
     # H/L walk columns and hop to the next monitor when the current
@@ -356,11 +355,13 @@ in {
     # Shift+H/L: shove the focused column left/right. When already at
     # the edge, falls through to the next monitor — same edge-crossing
     # shape as the Alt+H/L focus binds.
-    # Shift+J/K: reorder the focused window within its stacked column.
+    # Shift+J/K: reorder the focused window within its stacked column,
+    # falling through to the previous/next workspace when the stack is
+    # exhausted — mirrors the focus binds.
     "Alt+Shift+H".action.move-column-left-or-to-monitor-left = [];
     "Alt+Shift+L".action.move-column-right-or-to-monitor-right = [];
-    "Alt+Shift+J".action.move-window-down = [];
-    "Alt+Shift+K".action.move-window-up = [];
+    "Alt+Shift+J".action.move-window-down-or-to-workspace-down = [];
+    "Alt+Shift+K".action.move-window-up-or-to-workspace-up = [];
 
     # ── Resize ────────────────────────────────────────────────────
     # R cycles the column through preset widths (1/3, 1/2, 2/3).
@@ -766,25 +767,6 @@ in {
       // know `edge-deadzone` yet.
       input {
           focus-follows-mouse edge-deadzone=30
-      }
-
-      // force-close from josh/force-close-window. SIGTERM the focused
-      // window's process group, then SIGKILL after grace-period-ms if
-      // the process is still alive. For tray-hiding Electron apps
-      // (Spotify, Discord) that swallow xdg-toplevel close.
-      //
-      // Bound to Alt+Q (replacing the polite xdg-toplevel close) with
-      // allow-inhibiting=false so games and SDL clients can't intercept
-      // the kill via the keyboard-shortcuts-inhibit protocol — same
-      // reasoning as the typed-binds wrapper around the rest of the
-      // bind table. For well-behaved apps the SIGTERM-within-grace
-      // path is observably identical to a polite close.
-      force-close {
-          grace-period-ms 2000
-      }
-
-      binds {
-          Alt+Q allow-inhibiting=false hotkey-overlay-title="Close Window" { force-close-window; }
       }
 
       // recent-windows: alt-tab overlay styling. From dms/alttab.kdl

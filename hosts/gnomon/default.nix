@@ -2,6 +2,7 @@ let
   network = import ../../lib/network.nix;
   self = network.hosts.gnomon;
   subnet = network.subnets.${self.subnet};
+  caches = import ../../lib/caches.nix;
 in
   {
     inputs,
@@ -138,22 +139,34 @@ in
     # Caches scoped to gnomon — host-level rather than flake-level because
     # only gnomon consumes any of this content:
     #
-    #   tokidoki  — proton-cachyos prebuilts (~30 min of clang otherwise).
-    #               Wired by nix-gaming-edge.
-    #   lantian   — xddxdd/nix-cachyos-kernel kernel binaries. Without
-    #               it the kernel rebuilds from source on every bump.
-    #   garnix    — fallback for cache hits lantian Attic is missing
-    #               (lantian is on a free Garnix plan + their own Hydra).
+    #   tokidoki        — proton-cachyos prebuilts (~30 min of clang
+    #                     otherwise). Wired by nix-gaming-edge.
+    #   lantian         — xddxdd/nix-cachyos-kernel kernel binaries.
+    #                     Without it the kernel rebuilds from source on
+    #                     every bump.
+    #   garnix          — fallback for cache hits lantian Attic is
+    #                     missing (lantian is on a free Garnix plan +
+    #                     their own Hydra).
+    #   nixos-cuda      — SomeoneSerge/nixpkgs-cuda-ci pre-builds
+    #                     cudaSupport=true variants of nixpkgs packages
+    #                     (onnxruntime, ollama-cuda, pytorch, etc.).
+    #                     Pulled in for the obs-backgroundremoval RVM
+    #                     pipeline + future ML work on the 5070 Ti.
+    #                     Without it, every CUDA-enabled package
+    #                     rebuilds from source locally (~45 min for
+    #                     onnxruntime alone).
     nix.settings = {
       extra-substituters = [
         "https://nix-cache.tokidoki.dev/tokidoki"
         "https://attic.xuyh0120.win/lantian"
         "https://cache.garnix.io"
+        caches.cuda.url
       ];
       extra-trusted-public-keys = [
         "tokidoki:MD4VWt3kK8Fmz3jkiGoNRJIW31/QAm7l1Dcgz2Xa4hk="
         "lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc="
         "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
+        caches.cuda.publicKey
       ];
     };
 

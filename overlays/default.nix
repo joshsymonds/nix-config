@@ -105,20 +105,29 @@ in {
   # config; headless hosts (ultraviolet/bluedesert/echelon, no GPU) skip
   # the rebuild entirely.
   #
+  # cudaPackages explicitly pinned to cudaPackages_13_2 (CUDA Toolkit
+  # 13.2). nixpkgs's default `cudaPackages` alias still points at 12.9
+  # at the time of writing — we want the newer Blackwell-tuned CUDA
+  # kernels. The pre-built artifacts on cache.nixos-cuda.org
+  # (added to gnomon's nix.settings.extra-substituters) are produced
+  # from this same combination, so the upgrade is a cache hit rather
+  # than a 45-min local rebuild.
+  #
   # cudaCapabilities = ["12.0"] is set system-wide by
   # modules/hardware/gpu-nvidia.nix on gnomon — the override here picks
   # that up automatically, so the resulting onnxruntime targets sm_120
-  # (Blackwell RTX 50-series) only. Build artifacts push to atticd
-  # (services.atticd-cache in common.nix), available for future GPU
-  # hosts to cache-hit.
+  # (Blackwell RTX 50-series) only.
   #
   # The plugin (`obs-studio-plugins.obs-backgroundremoval`) uses
   # `-DUSE_SYSTEM_ONNXRUNTIME=ON` and links against `pkgs.onnxruntime`;
   # overriding the dependency is sufficient, no plugin-level cudaSupport
   # flag exists. Plugin CMake auto-detects CUDA EP availability through
   # the linked onnxruntime symbols.
-  ml = _final: prev: {
-    onnxruntime = prev.onnxruntime.override {cudaSupport = true;};
+  ml = final: prev: {
+    onnxruntime = prev.onnxruntime.override {
+      cudaSupport = true;
+      cudaPackages = final.cudaPackages_13_2;
+    };
   };
 
   # Gaming overlay: proton-cachyos + mesa-git from nix-gaming-edge, extended

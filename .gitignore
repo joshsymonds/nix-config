@@ -11,6 +11,7 @@ venv/
 .aider*
 !.aider.model*
 .claude/scheduled_tasks.lock
+.claude/worktrees/
 
 # Secrets
 modules/services/signal-cli-bot-secrets.nix

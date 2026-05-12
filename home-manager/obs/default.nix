@@ -208,16 +208,25 @@
               # UNLESS CPU inference drops frames" clause.
               useGPU = "cuda";
               blur_background = 0;
-              # threshold defaults to 0.5 — the plugin binarizes RVM's
-              # soft alpha at this cutoff, which is too aggressive
-              # and clips low-confidence regions (ears, hair wisps).
-              # 0.3 keeps more of the user.
-              threshold = 0.3;
-              # mask_expansion grows the foreground mask outward by N
-              # pixels (or fraction of canvas; range -30 to +30). +5
-              # restores the rim that low-threshold doesn't fully
-              # rescue, particularly around shoulders.
-              mask_expansion = 5;
+              # threshold: the plugin binarizes RVM's soft alpha at
+              # this cutoff. RVM gives confident foreground pixels
+              # an alpha of ~1.0 and ramps DOWN toward the silhouette
+              # boundary; anything below the cutoff becomes
+              # background. 0.1 is intentionally permissive — we'd
+              # rather scoop in a bit of room behind the user's
+              # shoulders than ever cut INTO the body. The bg-layer
+              # is just neutral gray so the cost of "too much
+              # foreground" is just a soft rim of gray-tinted room,
+              # which is fine.
+              threshold = 0.1;
+              # mask_expansion grows the foreground mask outward by
+              # N pixels (range -30 to +30). +15 gives a comfortable
+              # margin around the silhouette so that body-internal
+              # cuts (the user observed it "intersecting" their body
+              # at +5) are physically impossible: the mask must
+              # extend at least 15 px beyond what RVM's alpha
+              # threshold decides is foreground.
+              mask_expansion = 15;
               # feather: gaussian blur radius on the mask edge. Higher
               # = softer transition. 0.15 is the visual sweet spot for
               # this matting model — soft enough to feel natural,

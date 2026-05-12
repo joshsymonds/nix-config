@@ -842,16 +842,16 @@
         "quickshell": "quickshell"
       },
       "locked": {
-        "lastModified": 1778366488,
-        "narHash": "sha256-j8CTA1zhLIPmC1vRVYRJ0N601IxFZhvd8FoMyNwNupM=",
+        "lastModified": 1778550481,
+        "narHash": "sha256-Xa3Z2fB/+QXh5wAwkrZnyBZAU5Z+rVInUPfSXm5xhLY=",
         "owner": "joshsymonds",
         "repo": "DankMaterialShell",
-        "rev": "860ba6ea41f82541058aea24418e9681d3be1db6",
+        "rev": "05b49142891bb9cf8423d68e3c772793dc245c7a",
         "type": "github"
       },
       "original": {
         "owner": "joshsymonds",
-        "ref": "josh/local",
+        "ref": "josh/chrome-shader",
         "repo": "DankMaterialShell",
         "type": "github"
       }
@@ -870,6 +870,25 @@
         "owner": "joshsymonds",
         "repo": "dms-claudecode",
         "type": "github"
+      }
+    },
+    "dxvk-nvapi-josh": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778550326,
+        "narHash": "sha256-okCqVbBcxeOi9/u3ln6+WcPpHFOxXLLlWSkbrmtwXqc=",
+        "ref": "josh/blackwell-streamline-stubs",
+        "rev": "f787d0af8c45775ce4b79901104216abf6fd875d",
+        "revCount": 1197,
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/joshsymonds/dxvk-nvapi.git"
+      },
+      "original": {
+        "ref": "josh/blackwell-streamline-stubs",
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/joshsymonds/dxvk-nvapi.git"
       }
     },
     "flake-compat": {
@@ -3654,6 +3673,7 @@
         "disko": "disko",
         "dms": "dms",
         "dms-claudecode": "dms-claudecode",
+        "dxvk-nvapi-josh": "dxvk-nvapi-josh",
         "flake-parts": "flake-parts_4",
         "gambit": "gambit",
         "googleworkspace-cli": "googleworkspace-cli",

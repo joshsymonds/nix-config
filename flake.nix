@@ -65,12 +65,13 @@
     # DankMaterialShell — Quickshell-based desktop shell for niri (and others).
     # Provides notifications, launcher, lockscreen, polkit agent, idle, login greeter
     # as cohesive Quickshell modules, replacing the typical mako/fuzzel/swaylock stitchwork.
-    # Tracking a personal fork on the `josh/local` branch — long-lived branch
-    # rebased onto upstream master when picking up new DMS releases. Source lives
-    # in ~/Personal/DankMaterialShell with `upstream` remote pointing at AvengeMedia;
-    # refresh with `git fetch upstream && git rebase upstream/master && git push -f`.
+    # Tracking a personal fork on the `josh/chrome-shader` branch — long-lived
+    # branch rebased onto upstream master when picking up new DMS releases.
+    # Source lives in ~/Personal/DankMaterialShell with `upstream` remote
+    # pointing at AvengeMedia; refresh with
+    # `git fetch upstream && git rebase upstream/master && git push -f`.
     dms = {
-      url = "github:joshsymonds/DankMaterialShell/josh/local";
+      url = "github:joshsymonds/DankMaterialShell/josh/chrome-shader";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -189,6 +190,27 @@
     # flake-lock bump and miss the cache. Worth ~5s of extra eval time for
     # the cache hit on proton-cachyos.
     nix-gaming-edge.url = "github:joshsymonds/nix-gaming-edge/josh/fix-fhsenv-override";
+
+    # dxvk-nvapi-josh — joshsymonds/dxvk-nvapi fork, branch
+    # josh/blackwell-streamline-stubs. Adds 5 NVIDIA-internal NVAPI function
+    # ID stubs that Streamline 2.x's closed DLSS-G plugin, the NGX runtime,
+    # and Capcom RE Engine games (PRAGMATA) query on RTX 50-series under
+    # Proton. Without these the proton log fills with "Unknown function ID"
+    # entries, Streamline disables DLSS-G, and RE Engine grays out the
+    # RT/PT/DLSS-RR menu options. See pkgs/dxvk-nvapi/default.nix.
+    #
+    # The fork de-vendors NVIDIA's external/nvapi submodule so this input
+    # is self-contained; flake.lock pins the commit. Source lives at
+    # ~/Personal/dxvk-nvapi with `upstream` remote pointing at jp7677.
+    dxvk-nvapi-josh = {
+      # git+https (not github:) so ?submodules=1 actually applies.
+      # The github: fetcher silently drops submodule params; only the git
+      # fetcher honours them. We need Vulkan-Headers + vkroots +
+      # DirectX-Headers (used as include dirs by meson.build); the
+      # external/nvapi submodule was de-vendored into the fork itself.
+      url = "git+https://github.com/joshsymonds/dxvk-nvapi.git?ref=josh/blackwell-streamline-stubs&submodules=1";
+      flake = false;
+    };
 
     # nix-cachyos-kernel — CachyOS kernel for gnomon, completing the
     # gaming-edge stack alongside proton-cachyos + mesa-git. Provides
@@ -370,7 +392,10 @@
           ./hosts/common.nix
           inputs.agenix.nixosModules.default
           ({outputs, ...}: {
-            nixpkgs.overlays = [outputs.overlays.gaming];
+            nixpkgs.overlays = [
+              outputs.overlays.gaming
+              outputs.overlays.ml
+            ];
           })
         ];
         homeModule = ./home-manager/hosts/gnomon.nix;

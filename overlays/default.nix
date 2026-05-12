@@ -98,6 +98,29 @@ in {
     shimmer = inputs.shimmer.packages.${final.stdenv.hostPlatform.system}.default;
   };
 
+  # ML overlay: rebuild `onnxruntime` with the CUDA execution provider so
+  # ML inference (obs-backgroundremoval's RVM, future models) offloads to
+  # the GPU instead of the CPU. Applied only on gnomon (see flake.nix) —
+  # CUDA toolkit + cuDNN are multi-GB and pull only one consumer in this
+  # config; headless hosts (ultraviolet/bluedesert/echelon, no GPU) skip
+  # the rebuild entirely.
+  #
+  # cudaCapabilities = ["12.0"] is set system-wide by
+  # modules/hardware/gpu-nvidia.nix on gnomon — the override here picks
+  # that up automatically, so the resulting onnxruntime targets sm_120
+  # (Blackwell RTX 50-series) only. Build artifacts push to atticd
+  # (services.atticd-cache in common.nix), available for future GPU
+  # hosts to cache-hit.
+  #
+  # The plugin (`obs-studio-plugins.obs-backgroundremoval`) uses
+  # `-DUSE_SYSTEM_ONNXRUNTIME=ON` and links against `pkgs.onnxruntime`;
+  # overriding the dependency is sufficient, no plugin-level cudaSupport
+  # flag exists. Plugin CMake auto-detects CUDA EP availability through
+  # the linked onnxruntime symbols.
+  ml = _final: prev: {
+    onnxruntime = prev.onnxruntime.override {cudaSupport = true;};
+  };
+
   # Gaming overlay: proton-cachyos + mesa-git from nix-gaming-edge, extended
   # with the local proton-gamescope wrapper (a Steam compatibility tool that
   # auto-wraps every Proton game in gamescope) and a libvpx.so.9 patch for
@@ -119,14 +142,12 @@ in {
   #    when the window has a real size, or stop destroying the swapchain
   #    when Streamline's DLSS-G context init fails.
   #
-  # 2. DXVK-NVAPI is missing function IDs that NVIDIA Streamline 2.8 queries
-  #    to detect Blackwell (RTX 50-series) DLSS-G hardware support. The
-  #    misdetect cascades — Streamline disables DLSS-G, and PRAGMATA's RE
-  #    Engine treats the whole RT/PT/DLSS-RR section as unavailable. NVAPI
-  #    exposure (PROTON_ENABLE_NVAPI=1 in proton-gamescope/run.sh) is
-  #    necessary but not sufficient on its own. Look at jp7677/dxvk-nvapi's
-  #    nvapi_QueryInterface table; the 5 "Unknown function ID" hex hashes
-  #    in the proton log are the gap to fill.
+  # 2. DXVK-NVAPI Blackwell/Streamline private IDs are addressed by
+  #    inputs.dxvk-nvapi-josh (joshsymonds/dxvk-nvapi @ josh/blackwell-
+  #    streamline-stubs). The pkgs/dxvk-nvapi derivation cross-compiles
+  #    nvapi64.dll + nvapi.dll from that fork, and the proton-cachyos
+  #    postFixup below drops them over the bundled DLLs. Verification
+  #    pending — if it works, this comment + TODO can be removed.
   gaming = inputs.nixpkgs.lib.composeManyExtensions [
     inputs.nix-gaming-edge.overlays.default
     (final: prev: let
@@ -154,6 +175,16 @@ in {
       # on the first try (observed via `nix derivation show`). lib.getOutput
       # is the canonical accessor that unambiguously selects an output.
       libvpxLibPath = inputs.nixpkgs.lib.getOutput "out" libvpxForProton;
+
+      # Cross-compile our forked dxvk-nvapi for both Wine target architectures.
+      # The fork adds 5 NVIDIA-internal NVAPI function ID stubs (Blackwell +
+      # Streamline 2.x DLSS-G + NGX runtime). See pkgs/dxvk-nvapi/default.nix.
+      dxvkNvapi64 = final.pkgsCross.mingwW64.callPackage ../pkgs/dxvk-nvapi {
+        src = inputs.dxvk-nvapi-josh;
+      };
+      dxvkNvapi32 = final.pkgsCross.mingw32.callPackage ../pkgs/dxvk-nvapi {
+        src = inputs.dxvk-nvapi-josh;
+      };
     in {
       # gamescope ships a Vulkan implicit layer (VkLayer_FROG_gamescope_wsi)
       # that proxies WSI surface creation to gamescope, surfacing present
@@ -205,6 +236,23 @@ in {
         postFixup = (old.postFixup or "") + ''
           install -m 0644 ${libvpxLibPath}/lib/libvpx.so.9 \
             $steamcompattool/files/lib/x86_64-linux-gnu/libvpx.so.9
+
+          # Replace bundled jp7677/dxvk-nvapi with our forked build that has
+          # the 5 Blackwell/Streamline-private NVAPI ID stubs. proton-cachyos
+          # ships the same DLL twice (legacy + new wine layout); overwrite
+          # both copies so whichever path Wine resolves wins.
+          for dst in \
+            $steamcompattool/files/lib/wine/nvapi/x86_64-windows/nvapi64.dll \
+            $steamcompattool/files/lib/wine/nvidia-libs/nvapi/x86_64-windows/nvapi64.dll
+          do
+            install -m 0644 ${dxvkNvapi64}/nvapi64.dll "$dst"
+          done
+          for dst in \
+            $steamcompattool/files/lib/wine/nvapi/i386-windows/nvapi.dll \
+            $steamcompattool/files/lib/wine/nvidia-libs/nvapi/i386-windows/nvapi.dll
+          do
+            install -m 0644 ${dxvkNvapi32}/nvapi.dll "$dst"
+          done
         '';
       });
       proton-gamescope = final.callPackage ../pkgs/proton-gamescope {};

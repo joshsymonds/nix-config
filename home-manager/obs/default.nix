@@ -181,7 +181,15 @@
             name = "Background Removal";
             settings = {
               model_select = "models/rvm_mobilenetv3_fp32.with_runtime_opt.ort";
-              useGPU = "cpu";
+              # CUDA EP. The ml overlay rebuilds `onnxruntime` with
+              # CUDA support (overlays/default.nix); the plugin links
+              # against it via `-DUSE_SYSTEM_ONNXRUNTIME=ON` and the
+              # runtime EP selection here switches inference to the
+              # 5070 Ti. CPU mode bottlenecked at ~40% process CPU
+              # with poor framerate during real-world Active sessions
+              # — empirically met the V1 epic's "DO NOT REVISIT
+              # UNLESS CPU inference drops frames" clause.
+              useGPU = "cuda";
               blur_background = 0;
               feather = 0.05;
             };

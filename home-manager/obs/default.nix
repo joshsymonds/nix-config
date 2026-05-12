@@ -202,67 +202,85 @@
               # CUDA support (overlays/default.nix); the plugin links
               # against it via `-DUSE_SYSTEM_ONNXRUNTIME=ON` and the
               # runtime EP selection here switches inference to the
-              # 5070 Ti. CPU mode bottlenecked at ~40% process CPU
-              # with poor framerate during real-world Active sessions
-              # — empirically met the V1 epic's "DO NOT REVISIT
-              # UNLESS CPU inference drops frames" clause.
+              # 5070 Ti.
               useGPU = "cuda";
-              # blur_background: in-place Kawase blur strength (0-20).
-              # Setting > 0 disables alpha-output mode and instead
-              # produces a single composited frame with the user
-              # sharp + the room blurred. This is the "portrait
-              # mode" look most video-call apps deliver natively.
+              # advanced = true unlocks the focal-blur settings group
+              # in the OBS filter properties UI. Without this flag the
+              # enable_focal_blur / blur_focus_point / blur_focus_depth
+              # values below would still take effect (they're filter
+              # settings, not UI gating), but the UI would not expose
+              # them — making it impossible to re-tune from the OBS
+              # window. Keep this on so the dialog stays useful.
+              advanced = true;
+              # blur_background: number of Kawase blur passes (0-20).
+              # When > 0 the filter composites a portrait-mode frame
+              # (sharp user + blurred room) rather than alpha-output;
+              # V2's image/video/shader background swap will require
+              # this back to 0 plus the Active Background color source
+              # taking over as the back layer. For V1 we use blur
+              # directly for the look.
+              blur_background = 9;
+              # enable_focal_blur + blur_focus_point/depth: switches
+              # the blur shader from uniform Kawase to a focal-blur
+              # variant that varies blur magnitude by distance from
+              # the focal plane. blur_focus_point = 0.0 anchors the
+              # focus at the back of the depth range, blur_focus_depth
+              # = 0.12 keeps a narrow in-focus band — together this
+              # yields the "subject sharp, room falls off gradually"
+              # depth-of-field look that uniform blur can't match.
+              enable_focal_blur = true;
+              blur_focus_point = 0.0;
+              blur_focus_depth = 0.12;
+              # threshold + post-processing strategy: counterintuitive
+              # but empirically the best matte on this rig.
               #
-              # NOTE: this deviates from the V1 epic's chosen
-              # alpha+layer architecture (epic anti-pattern: "NO
-              # blur_background > 0 in V1"). Done for visualization
-              # — flat-gray bg-layer made it hard to evaluate matte
-              # quality. To return to alpha+layer for V2's
-              # image/video/shader bg swap, flip this back to 0;
-              # the Active Background color_source_v3 is still in
-              # the scene and will become visible again.
-              blur_background = 15;
-              # threshold: the plugin binarizes RVM's soft alpha at
-              # this cutoff. RVM gives confident foreground pixels
-              # an alpha of ~1.0 and ramps DOWN toward the silhouette
-              # boundary; anything below the cutoff becomes
-              # background. 0.1 is intentionally permissive — we'd
-              # rather scoop in a bit of room behind the user's
-              # shoulders than ever cut INTO the body.
-              threshold = 0.1;
-              # mask_expansion: grow the foreground mask outward by
-              # N pixels (range -30 to +30). +10 is the sweet spot —
-              # +15 was too generous (visible rim of room around
-              # shoulders), +5 occasionally cut into body.
-              mask_expansion = 10;
-              # feather: gaussian blur radius on the mask edge.
-              # 0.25 produces a noticeably softer rim than 0.15;
-              # the body-edge transition fades over a wider zone,
-              # which masks the discrete "snap to mask boundary"
-              # the human eye catches with sharp cutouts.
-              feather = 0.25;
-              # smooth_contour: how aggressively to smooth the
-              # mask's boundary polyline. Default 0.5; raising to
-              # 0.7 makes the silhouette ride along longer curves
-              # instead of tracking fine concavities, again helping
-              # the cut-out feel less surgical / more natural.
-              smooth_contour = 0.7;
-              # temporal_smooth_factor: per-frame EMA blend with
-              # previous mask. Default 0.85 = 15% new + 85% old →
-              # very stable but laggy on movement. RVM is already
-              # recurrent (has r1i/r2i/r3i/r4i state inputs), so
-              # the model itself smooths across time; this setting
-              # is *additional* smoothing on top. Dropping to 0.3
-              # makes the matte snappier — the model's internal
-              # recurrence still provides flicker resistance.
-              temporal_smooth_factor = 0.3;
-              # enable_image_similarity: if true, the plugin
-              # compares consecutive frames and skips inference
-              # when they're "similar enough" (PSNR-based,
-              # threshold default 35.0). Saves GPU but freezes
-              # the matte during subtle movements like head tilts.
-              # On a 5070 Ti, every-frame inference is cheap;
-              # disable the skip for maximum reactivity.
+              # threshold = 1.0 binarizes RVM's pha at the maximum
+              # cutoff — only pixels with alpha == 1.0 (the model's
+              # high-confidence core of the silhouette) survive as
+              # foreground. Everything else becomes background. This
+              # would produce a tiny matte on its own — but the
+              # post-processing pipeline below treats the core as a
+              # SEED and reconstructs a generous silhouette around it.
+              enable_threshold = true;
+              threshold = 1.0;
+              # contour_filter = 0.28 drops any foreground island
+              # smaller than 28% of frame area; with threshold=1.0
+              # this removes the speckle of high-confidence pixels
+              # outside the main body, leaving exactly one large
+              # contour (the user's core).
+              contour_filter = 0.28;
+              # smooth_contour = 1.0 maximally smooths the binary
+              # silhouette before resizing back, eliminating the
+              # jaggy artifacts the threshold=1.0 binarize would
+              # otherwise produce.
+              smooth_contour = 1.0;
+              # mask_expansion = 22 erodes the background mask (i.e.
+              # grows the foreground silhouette outward) by 22
+              # iterations — rebuilding a generous halo around the
+              # confident core. This is what makes the matte cover
+              # the full body including hair edges and shoulders
+              # despite threshold being maxed out.
+              mask_expansion = 22;
+              # feather = 1.0 (max) gives the widest possible soft
+              # falloff at the silhouette edge — the body transitions
+              # to background over a wide gradient rather than a hard
+              # boundary.
+              feather = 1.0;
+              # temporal_smooth_factor controls per-frame EMA over
+              # the mask. Semantics: factor is the weight on the NEW
+              # frame in addWeighted(new, factor, old, 1-factor),
+              # so HIGHER = more reactive (less smoothing), LOWER =
+              # more smoothed (laggier). 0.0 (and 1.0) bypasses
+              # the EMA branch entirely — every frame's mask is the
+              # raw inference output. RVM's internal recurrent state
+              # (r1i-r4i) still provides inter-frame coherence, so
+              # bypassing the OpenCV EMA does not produce flicker.
+              temporal_smooth_factor = 0.0;
+              # enable_image_similarity: if true the plugin skips
+              # inference when consecutive frames are "similar
+              # enough" (PSNR-based). Saves GPU but freezes the
+              # matte on subtle movement. On a 5070 Ti every-frame
+              # inference is cheap; keep off for reactivity.
               enable_image_similarity = false;
             };
             enabled = true;

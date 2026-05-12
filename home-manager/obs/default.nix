@@ -135,13 +135,19 @@
           device_id = "";
           input = -1;
           pixelformat = 1196444237;
-          # framerate encoded as v4l2 fraction packed into uint32:
-          # (numerator << 16) | denominator. 30/1 = (30 << 16) | 1 =
-          # 1966081. Pinning explicit 30fps because -1 (auto-pick)
-          # was sometimes locking onto 15fps depending on the
-          # camera's negotiation state — the C920 supports 30fps at
-          # 1080p MJPG comfortably, no reason to leave it ambiguous.
-          framerate = 1966081;
+          # framerate is the v4l2 timeperframe fraction (seconds per
+          # frame, INVERSE of fps) packed as
+          # `(numerator << 16) | denominator` per OBS's
+          # plugins/linux-v4l2/v4l2-helpers.h: v4l2_pack_tuple.
+          # For 30fps: timeperframe 1/30 → (1 << 16) | 30 = 65566.
+          #
+          # Previously had this wrong as (30 << 16) | 1 = 1966081,
+          # which the plugin decoded as 30 seconds per frame ≈
+          # 0.033fps. The C920 clamped that up to its 5fps minimum,
+          # producing visibly choppy capture even though OBS's
+          # internal canvas renderer ran at 30fps (it just kept
+          # re-emitting the same stale frame between camera reads).
+          framerate = 65566;
           resolution = -1;
           buffering = false;
         };

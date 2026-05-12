@@ -373,7 +373,20 @@
     cameraSource = "Real Webcam";
     # cameraDevice defaults to /dev/video0 — gnomon's C920 lives
     # there. If the device path ever shifts we'd set it here.
+
+    # OBS auto-starts at graphical-session.target with --startvirtualcam
+    # (see ../obs/default.nix), which opens /dev/video10 as a producer.
+    # Without this exclusion, lazycam would treat that producer-side
+    # open as a consumer attachment and pin itself in the Active state
+    # for the entire OBS lifetime — LED on whenever the user is logged
+    # in. Filter OBS out by comm so only real consumers (Zoom, Meet,
+    # ffmpeg, ...) count toward the ref-count.
     #
+    # `.obs-wrapped` is the comm string the kernel reports for the
+    # nix-wrapped OBS process; verify on this host with:
+    #     cat /proc/$(pgrep -f obs | head -1)/comm
+    excludeComms = [".obs-wrapped"];
+
     # All other options take their module defaults:
     # - device      = /dev/video10
     # - obsUrl      = ws://127.0.0.1:4455

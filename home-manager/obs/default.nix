@@ -237,18 +237,19 @@
     quick_transitions = [];
     groups = [];
   };
-in {
   # OBS itself + lazycam-relevant plugins. Sourced from the gaming
   # overlay's nixpkgs so face-tracker resolves via pkgs.obs-face-tracker
-  # (set up in nix-config's pkgs/ + overlays/).
-  home.packages = [
-    (pkgs.wrapOBS {
-      plugins = [
-        pkgs.obs-studio-plugins.obs-backgroundremoval
-        pkgs.obs-face-tracker
-      ];
-    })
-  ];
+  # (set up in nix-config's pkgs/ + overlays/). Bound to a local
+  # variable so both home.packages and the systemd unit ExecStart can
+  # reference the same derivation.
+  wrappedObs = pkgs.wrapOBS {
+    plugins = [
+      pkgs.obs-studio-plugins.obs-backgroundremoval
+      pkgs.obs-face-tracker
+    ];
+  };
+in {
+  home.packages = [wrappedObs];
 
   # Scene collection. Read-only symlink — any edit OBS attempts to
   # persist (e.g. shifting an item, picking a different default scene)
@@ -302,5 +303,49 @@ in {
     server_password = "";
     alerts_enabled = false;
     first_load = false;
+  };
+
+  # Auto-launch OBS at graphical-session.target with the virtual
+  # camera output already running and the main window minimized to
+  # the system tray. The point is to make "OBS Cam" permanently
+  # available in Zoom / Meet / etc.'s device dropdowns without
+  # requiring the user to launch OBS by hand before every call.
+  #
+  # Privacy invariant is preserved because lazycam recognizes OBS's
+  # producer-side open of /dev/video10 as background noise (filtered
+  # by comm via services.lazycam.excludeComms). The camera LED only
+  # lights when *another* process — Zoom, Meet, ffmpeg — also
+  # attaches to /dev/video10.
+  #
+  # Flags:
+  #   --startvirtualcam              auto-start the v4l2 output module
+  #   --minimize-to-tray             stay out of the user's way
+  #   --disable-missing-files-check  suppress the startup nag dialog
+  #                                  (irrelevant for our declarative
+  #                                  scene collection)
+  systemd.user.services.obs = {
+    Unit = {
+      Description = "OBS Studio (auto-start with virtual camera)";
+      Documentation = ["https://obsproject.com/"];
+      PartOf = ["graphical-session.target"];
+      After = ["graphical-session.target"];
+    };
+    Service = {
+      ExecStart =
+        "${lib.getExe wrappedObs}"
+        + " --startvirtualcam"
+        + " --minimize-to-tray"
+        + " --disable-missing-files-check";
+      Restart = "on-failure";
+      RestartSec = 5;
+      # OBS occasionally needs a moment after the compositor is up
+      # before its EGL/Vulkan context can attach. Don't let an
+      # ExecStart that fails fast spin the restart counter.
+      StartLimitIntervalSec = 60;
+      StartLimitBurst = 3;
+    };
+    Install = {
+      WantedBy = ["graphical-session.target"];
+    };
   };
 }

@@ -148,15 +148,15 @@ in {
   # scene-collection load.
   #
   # RVM .onnx pulled from PeterL1n/RobustVideoMatting v1.0.0 release
-  # (the canonical Sep 2021 upload). Using fp16 (7 MB) instead of
-  # fp32 (14 MB) — same model, half-precision weights. On Blackwell
-  # this drops inference latency by ~2× via fp16 tensor cores while
-  # the matte quality delta is negligible (RVM was trained at fp32
-  # but the fp16 cast is well-behaved for this graph).
+  # (the canonical Sep 2021 upload, 14.3 MB, fp32). Stays at fp32
+  # because RVM at fp32 measures ~5 ms/frame on a 5070 Ti — well
+  # under the 33 ms 30fps budget. No latency problem to solve, so
+  # no reason to trade away the model's trained numerical precision
+  # for speed we don't need.
   ml = _final: prev: let
     rvmOnnx = prev.fetchurl {
-      url = "https://github.com/PeterL1n/RobustVideoMatting/releases/download/v1.0.0/rvm_mobilenetv3_fp16.onnx";
-      sha256 = "0r3gc56s9jhsip2ds57y9i1fs8a5kf3mk1alpq9jcw0prkk5q3ba";
+      url = "https://github.com/PeterL1n/RobustVideoMatting/releases/download/v1.0.0/rvm_mobilenetv3_fp32.onnx";
+      sha256 = "0a18pp5z10636vsd20iq75cybhmfcvszcq7xy9dmk3qijw957m48";
     };
   in {
     obs-studio-plugins =

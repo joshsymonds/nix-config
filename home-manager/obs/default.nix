@@ -247,6 +247,23 @@
               # instead of tracking fine concavities, again helping
               # the cut-out feel less surgical / more natural.
               smooth_contour = 0.7;
+              # temporal_smooth_factor: per-frame EMA blend with
+              # previous mask. Default 0.85 = 15% new + 85% old →
+              # very stable but laggy on movement. RVM is already
+              # recurrent (has r1i/r2i/r3i/r4i state inputs), so
+              # the model itself smooths across time; this setting
+              # is *additional* smoothing on top. Dropping to 0.3
+              # makes the matte snappier — the model's internal
+              # recurrence still provides flicker resistance.
+              temporal_smooth_factor = 0.3;
+              # enable_image_similarity: if true, the plugin
+              # compares consecutive frames and skips inference
+              # when they're "similar enough" (PSNR-based,
+              # threshold default 35.0). Saves GPU but freezes
+              # the matte during subtle movements like head tilts.
+              # On a 5070 Ti, every-frame inference is cheap;
+              # disable the skip for maximum reactivity.
+              enable_image_similarity = false;
             };
             enabled = true;
           }

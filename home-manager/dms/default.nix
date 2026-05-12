@@ -140,7 +140,14 @@ in {
         spacing = 4;
         innerPadding = 4;
         bottomGap = 0;
-        transparency = 1.0;
+        # transparency = 0 makes the bar's painted Shape (BarCanvas's
+        # surfaceContainer-coloured rectangle) fully invisible. The
+        # widgets still draw on top, floating directly on the
+        # wallpaper, which provides the visual "platform" via the
+        # bar-zone elevation in the hexrain shader. widgetTransparency
+        # stays at 1 so the icons/text remain fully opaque against
+        # whatever the wallpaper happens to be underneath.
+        transparency = 0.0;
         widgetTransparency = 1.0;
         squareCorners = false;
         # Bar has no background of its own — widgets float directly over
@@ -199,12 +206,16 @@ in {
         #
         # Triadic synthwave palette (cyan + magenta + neon-green) chosen
         # to match the wallpaper's design intent.
-        # Mode selector for ChromeShader: "aurora" (drifting plasma veils),
-        # "hexrain" (matrix-rain through hex grid, matching wallpaper). Read
-        # at BarCanvas.qml via `barConfig?.shaderMode || "aurora"` — flipping
-        # this string is a one-line nix-config edit + rebuild, no DMS source
-        # change required.
-        shaderMode = "hexrain";
+        # Mode selector for ChromeShader. ChromeShader.qml's switch
+        # falls through to `return ""` for any unknown mode, which makes
+        # the ShaderEffect render nothing — exactly what we want here:
+        # the bar's own internal shader overlay is disabled, and the
+        # wallpaper underneath shows through, with the raised hex strip
+        # there providing the visual bar surface. The four shaderColor
+        # overrides below become no-ops in this mode but stay in place
+        # so flipping shaderMode back to "hexrain"/"aurora" later just
+        # works without re-pasting the palette.
+        shaderMode = "none";
         shaderHexSize = 14; # inradius per hex (cellSize); hex width = 2*this
 
         shaderPrimaryColor = "#5896E1"; # cyan band hue

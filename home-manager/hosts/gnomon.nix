@@ -9,6 +9,7 @@
     ../vesktop
     ../spicetify
     ../obs
+    ../qbittorrent
     inputs.lazycam.homeManagerModules.default
   ];
 
@@ -64,6 +65,24 @@
     # The -fhs variant wraps the Electron app in buildFHSEnv so MCP
     # servers can shell out to npx/uvx/docker as expected.
     inputs.claude-desktop.packages.${pkgs.system}.claude-desktop-fhs
+
+    # Obsidian — Markdown notes / vaults. The headless flavor on
+    # ultraviolet (hosts/ultraviolet/services/obsidian.nix) is a
+    # separate, Xvfb-driven daemon for Sync; this is the native
+    # GUI you actually click on.
+    obsidian
+
+    # Media players. mpv as the default (lightweight, plays anything,
+    # the only thing that handles HDR + 10-bit cleanly on Wayland-NVIDIA
+    # without ginger workarounds). VLC kept around for ad-hoc cases
+    # where mpv's defaults fight a particular container.
+    (mpv.override {
+      scripts = with pkgs.mpvScripts; [
+        uosc # modern OSC: bottom-bar timeline, sidebar menus
+        thumbfast # hover-preview thumbnails for the timeline
+      ];
+    })
+    vlc
   ];
 
   # Same signing key vermissian uses — single user identity across machines

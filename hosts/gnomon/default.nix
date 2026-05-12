@@ -12,6 +12,7 @@ in
   }: {
     imports = [
       ./disko.nix
+      ./qbittorrent-vpn.nix
       ../../modules/desktop/dms-niri.nix
       ../../modules/hardware/gpu-nvidia.nix
       ../../modules/services/keyd.nix

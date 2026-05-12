@@ -207,31 +207,46 @@
               # — empirically met the V1 epic's "DO NOT REVISIT
               # UNLESS CPU inference drops frames" clause.
               useGPU = "cuda";
-              blur_background = 0;
+              # blur_background: in-place Kawase blur strength (0-20).
+              # Setting > 0 disables alpha-output mode and instead
+              # produces a single composited frame with the user
+              # sharp + the room blurred. This is the "portrait
+              # mode" look most video-call apps deliver natively.
+              #
+              # NOTE: this deviates from the V1 epic's chosen
+              # alpha+layer architecture (epic anti-pattern: "NO
+              # blur_background > 0 in V1"). Done for visualization
+              # — flat-gray bg-layer made it hard to evaluate matte
+              # quality. To return to alpha+layer for V2's
+              # image/video/shader bg swap, flip this back to 0;
+              # the Active Background color_source_v3 is still in
+              # the scene and will become visible again.
+              blur_background = 15;
               # threshold: the plugin binarizes RVM's soft alpha at
               # this cutoff. RVM gives confident foreground pixels
               # an alpha of ~1.0 and ramps DOWN toward the silhouette
               # boundary; anything below the cutoff becomes
               # background. 0.1 is intentionally permissive — we'd
               # rather scoop in a bit of room behind the user's
-              # shoulders than ever cut INTO the body. The bg-layer
-              # is just neutral gray so the cost of "too much
-              # foreground" is just a soft rim of gray-tinted room,
-              # which is fine.
+              # shoulders than ever cut INTO the body.
               threshold = 0.1;
-              # mask_expansion grows the foreground mask outward by
-              # N pixels (range -30 to +30). +15 gives a comfortable
-              # margin around the silhouette so that body-internal
-              # cuts (the user observed it "intersecting" their body
-              # at +5) are physically impossible: the mask must
-              # extend at least 15 px beyond what RVM's alpha
-              # threshold decides is foreground.
-              mask_expansion = 15;
-              # feather: gaussian blur radius on the mask edge. Higher
-              # = softer transition. 0.15 is the visual sweet spot for
-              # this matting model — soft enough to feel natural,
-              # not so soft that the user looks blurry.
-              feather = 0.15;
+              # mask_expansion: grow the foreground mask outward by
+              # N pixels (range -30 to +30). +10 is the sweet spot —
+              # +15 was too generous (visible rim of room around
+              # shoulders), +5 occasionally cut into body.
+              mask_expansion = 10;
+              # feather: gaussian blur radius on the mask edge.
+              # 0.25 produces a noticeably softer rim than 0.15;
+              # the body-edge transition fades over a wider zone,
+              # which masks the discrete "snap to mask boundary"
+              # the human eye catches with sharp cutouts.
+              feather = 0.25;
+              # smooth_contour: how aggressively to smooth the
+              # mask's boundary polyline. Default 0.5; raising to
+              # 0.7 makes the silhouette ride along longer curves
+              # instead of tracking fine concavities, again helping
+              # the cut-out feel less surgical / more natural.
+              smooth_contour = 0.7;
             };
             enabled = true;
           }

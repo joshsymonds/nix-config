@@ -29,9 +29,30 @@ in {
 
     cudaArches = lib.mkOption {
       type = lib.types.listOf lib.types.str;
-      default = ["12.0"];
+      default = [];
       example = ["8.9" "12.0"];
-      description = "CUDA compute capabilities to build for. \"12.0\" = sm_120 (Blackwell, RTX 50 series).";
+      description = ''
+        Explicit CUDA compute capabilities to build CUDA packages for.
+
+        Empty (default) means "don't set nixpkgs.config.cudaCapabilities"
+        — each CUDA-supporting package uses its own upstream default,
+        which is typically a broad multi-arch list covering Turing
+        through Blackwell. This is the cache-friendly choice: the
+        binaries match what cache.nixos-cuda.org pre-builds (which also
+        uses broad targets), so onnxruntime / pytorch / ollama-cuda /
+        etc. download from cache instead of rebuilding for ~45 min
+        each.
+
+        Set to a narrow list (e.g. ["12.0"] for Blackwell-only) only if
+        you specifically want sm-targeted optimization — but
+        understand it WILL invalidate every CUDA package's cache hash
+        relative to the public CI builds, forcing local rebuilds.
+
+        For typical workloads (CNN inference, ML training on a single
+        consumer GPU) the broad-target build is functionally identical
+        to a narrow-target one on the runtime hardware; the only delta
+        is ~50-100 MB of unused PTX per package on disk.
+      '';
     };
   };
 
@@ -58,7 +79,13 @@ in {
 
     hardware.nvidia-container-toolkit.enable = cfg.containerToolkit;
 
-    nixpkgs.config.cudaCapabilities = cfg.cudaArches;
+    # Only pin cudaCapabilities when explicitly requested. Empty list
+    # (the default) leaves the global config unset so each CUDA
+    # package uses its own upstream default — matching what
+    # cache.nixos-cuda.org pre-builds, so we get cache hits instead
+    # of multi-hour local rebuilds for onnxruntime / pytorch / etc.
+    nixpkgs.config.cudaCapabilities = lib.mkIf (cfg.cudaArches != [])
+      cfg.cudaArches;
 
     services.xserver.videoDrivers = ["nvidia"];
 

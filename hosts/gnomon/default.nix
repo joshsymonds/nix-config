@@ -46,7 +46,14 @@ in
     hardware.gpu-nvidia = {
       enable = true;
       enable32Bit = true; # Steam/Proton, 32-bit Wine
-      cudaArches = ["12.0"]; # Blackwell sm_120 (RTX 50-series)
+      # cudaArches deliberately left at module default (empty list).
+      # Pinning to ["12.0"] (Blackwell-only) was technically tighter
+      # but every CUDA package's hash diverged from cache.nixos-cuda.org
+      # — forcing ~45-min local rebuilds for onnxruntime, pytorch,
+      # ollama-cuda, etc. on every bump. Broad targeting matches the
+      # public CI cache, so updates download instead of rebuilding.
+      # Runtime perf is identical on a single-arch system (the unused
+      # SMs just sit dead in the binary).
     };
 
     # ── Desktop session (niri + DMS, see modules/desktop/dms-niri.nix) ──

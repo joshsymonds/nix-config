@@ -331,6 +331,15 @@ in {
       Documentation = ["https://obsproject.com/"];
       PartOf = ["graphical-session.target"];
       After = ["graphical-session.target"];
+      # OBS occasionally needs a moment after the compositor is up
+      # before its EGL/Vulkan context can attach. Don't let an
+      # ExecStart that fails fast spin the restart counter. These
+      # directives belong to the [Unit] section per systemd.unit(5)
+      # — placing them under [Service] makes systemd silently ignore
+      # them and fall back to DefaultStartLimitIntervalSec=10s /
+      # DefaultStartLimitBurst=5 (ban after ~5 fast restarts).
+      StartLimitIntervalSec = 60;
+      StartLimitBurst = 3;
     };
     Service = {
       ExecStart =
@@ -340,11 +349,6 @@ in {
         + " --disable-missing-files-check";
       Restart = "on-failure";
       RestartSec = 5;
-      # OBS occasionally needs a moment after the compositor is up
-      # before its EGL/Vulkan context can attach. Don't let an
-      # ExecStart that fails fast spin the restart counter.
-      StartLimitIntervalSec = 60;
-      StartLimitBurst = 3;
     };
     Install = {
       WantedBy = ["graphical-session.target"];

@@ -61,6 +61,14 @@ in {
     # the app-id prefix that's already obvious from the visible window.
     settings.focusedWindowCompactMode = true;
 
+    # Widget pill chrome uses the darkest matugen-derived surface tone
+    # (surfaceContainerLowest) instead of the default surfaceContainerHigh,
+    # so each pill reads as a near-black palette-coherent chip against
+    # the wallpaper's raised hex platform. "scl" is a new switch entry
+    # added in Theme.qml on the chrome-shader fork — stock DMS only
+    # recognises "s" / "sc" / "sch" / "sth".
+    settings.widgetBackgroundColor = "scl";
+
     # Wallpaper, set declaratively. DMS persists this in
     # ~/.local/state/DankMaterialShell/session.json under wallpaperPath.
     # `session` is serialized verbatim by the DMS HM module

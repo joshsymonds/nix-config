@@ -98,36 +98,32 @@ in {
     shimmer = inputs.shimmer.packages.${final.stdenv.hostPlatform.system}.default;
   };
 
-  # ML overlay: rebuild `onnxruntime` with the CUDA execution provider so
-  # ML inference (obs-backgroundremoval's RVM, future models) offloads to
-  # the GPU instead of the CPU. Applied only on gnomon (see flake.nix) —
-  # CUDA toolkit + cuDNN are multi-GB and pull only one consumer in this
-  # config; headless hosts (ultraviolet/bluedesert/echelon, no GPU) skip
-  # the rebuild entirely.
+  # ML overlay: hand obs-backgroundremoval a CUDA-enabled onnxruntime
+  # without globally swapping `pkgs.onnxruntime` itself. The plugin
+  # uses `-DUSE_SYSTEM_ONNXRUNTIME=ON` and accepts `onnxruntime` as a
+  # callPackage argument — overriding ONLY that argument keeps the
+  # rest of the closure (notably Firefox, which carries onnxruntime
+  # as a ML-translation dependency) pointing at the cache.nixos.org
+  # CPU build and avoids invalidating their hashes.
   #
-  # cudaPackages explicitly pinned to cudaPackages_13_2 (CUDA Toolkit
-  # 13.2). nixpkgs's default `cudaPackages` alias still points at 12.9
-  # at the time of writing — we want the newer Blackwell-tuned CUDA
-  # kernels. The pre-built artifacts on cache.nixos-cuda.org
-  # (added to gnomon's nix.settings.extra-substituters) are produced
-  # from this same combination, so the upgrade is a cache hit rather
-  # than a 45-min local rebuild.
+  # Applied only on gnomon (see flake.nix) — headless hosts have no
+  # GPU and skip the CUDA closure entirely. Default `cudaPackages`
+  # alias (currently 12.9) is what cache.nixos-cuda.org pre-builds
+  # against, so this combination is a cache hit instead of a ~45-min
+  # local onnxruntime rebuild.
   #
   # cudaCapabilities = ["12.0"] is set system-wide by
-  # modules/hardware/gpu-nvidia.nix on gnomon — the override here picks
-  # that up automatically, so the resulting onnxruntime targets sm_120
-  # (Blackwell RTX 50-series) only.
-  #
-  # The plugin (`obs-studio-plugins.obs-backgroundremoval`) uses
-  # `-DUSE_SYSTEM_ONNXRUNTIME=ON` and links against `pkgs.onnxruntime`;
-  # overriding the dependency is sufficient, no plugin-level cudaSupport
-  # flag exists. Plugin CMake auto-detects CUDA EP availability through
-  # the linked onnxruntime symbols.
-  ml = final: prev: {
-    onnxruntime = prev.onnxruntime.override {
-      cudaSupport = true;
-      cudaPackages = final.cudaPackages_13_2;
-    };
+  # modules/hardware/gpu-nvidia.nix on gnomon — the override picks
+  # that up automatically, so the resulting onnxruntime targets
+  # sm_120 (Blackwell RTX 50-series) only.
+  ml = _final: prev: {
+    obs-studio-plugins =
+      prev.obs-studio-plugins
+      // {
+        obs-backgroundremoval = prev.obs-studio-plugins.obs-backgroundremoval.override {
+          onnxruntime = prev.onnxruntime.override {cudaSupport = true;};
+        };
+      };
   };
 
   # Gaming overlay: proton-cachyos + mesa-git from nix-gaming-edge, extended

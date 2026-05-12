@@ -113,7 +113,9 @@ in {
         # Right side: one combined system-monitor widget. Reads /proc
         # directly (no iostat sample), caches output for 4s, emits the full
         # styled pill string for cpu/ram/net/disk + failed-units alert.
-        set -g status-right "#(${tmuxStatus}/bin/tmux-status)"
+        # Linux-only: script reads /proc + calls systemctl, and pkgs.systemd
+        # (in runtimeInputs) has no aarch64-darwin support.
+        ${optionalString pkgs.stdenv.isLinux ''set -g status-right "#(${tmuxStatus}/bin/tmux-status)"''}
 
         # Pane borders — Catppuccin Mocha colors
         set -g pane-border-style "fg=#313244"

@@ -135,7 +135,13 @@
           device_id = "";
           input = -1;
           pixelformat = 1196444237;
-          framerate = -1;
+          # framerate encoded as v4l2 fraction packed into uint32:
+          # (numerator << 16) | denominator. 30/1 = (30 << 16) | 1 =
+          # 1966081. Pinning explicit 30fps because -1 (auto-pick)
+          # was sometimes locking onto 15fps depending on the
+          # camera's negotiation state — the C920 supports 30fps at
+          # 1080p MJPG comfortably, no reason to leave it ambiguous.
+          framerate = 1966081;
           resolution = -1;
           buffering = false;
         };
@@ -196,7 +202,21 @@
               # UNLESS CPU inference drops frames" clause.
               useGPU = "cuda";
               blur_background = 0;
-              feather = 0.05;
+              # threshold defaults to 0.5 — the plugin binarizes RVM's
+              # soft alpha at this cutoff, which is too aggressive
+              # and clips low-confidence regions (ears, hair wisps).
+              # 0.3 keeps more of the user.
+              threshold = 0.3;
+              # mask_expansion grows the foreground mask outward by N
+              # pixels (or fraction of canvas; range -30 to +30). +5
+              # restores the rim that low-threshold doesn't fully
+              # rescue, particularly around shoulders.
+              mask_expansion = 5;
+              # feather: gaussian blur radius on the mask edge. Higher
+              # = softer transition. 0.15 is the visual sweet spot for
+              # this matting model — soft enough to feel natural,
+              # not so soft that the user looks blurry.
+              feather = 0.15;
             };
             enabled = true;
           }

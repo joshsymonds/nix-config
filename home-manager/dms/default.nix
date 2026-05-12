@@ -143,7 +143,12 @@ in {
         transparency = 1.0;
         widgetTransparency = 1.0;
         squareCorners = false;
-        noBackground = false;
+        # Bar has no background of its own — widgets float directly over
+        # the wallpaper shader, which provides the visual "platform" via
+        # the bar-zone elevation: hexes under the bar are raised, their
+        # seams glow against the surrounding wallpaper hexes, and small
+        # cast shadows fall outward. See wallpaper.json:barZone* keys.
+        noBackground = true;
         maximizeWidgetIcons = false;
         maximizeWidgetText = false;
         removeWidgetPadding = false;

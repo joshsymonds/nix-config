@@ -30,6 +30,25 @@ in {
     inputs.dms.homeModules.niri
   ];
 
+  # Tell GTK we prefer dark colors. Electron on Linux derives
+  # `nativeTheme.shouldUseDarkColors` from GtkSettings'
+  # `gtk-application-prefer-dark-theme` property — there is no equivalent
+  # "template image" path on Linux, so apps that ship macOS-style monochrome
+  # tray icons (Claude Desktop's `TrayIconTemplate*.png`) only render
+  # legibly when they pick the "-Dark" white-on-transparent variant.
+  # aaddrick's claude-desktop-debian build already swaps to that variant
+  # when `shouldUseDarkColors` is true; setting this flag is what flips it.
+  # Other GTK apps inherit the preference too, which is the desired
+  # default — niri/DMS is a dark surface.
+  xdg.configFile."gtk-3.0/settings.ini".text = ''
+    [Settings]
+    gtk-application-prefer-dark-theme=1
+  '';
+  xdg.configFile."gtk-4.0/settings.ini".text = ''
+    [Settings]
+    gtk-application-prefer-dark-theme=1
+  '';
+
   home = {
     homeDirectory = "/home/joshsymonds";
 

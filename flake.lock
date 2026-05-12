@@ -347,15 +347,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1778204445,
-        "narHash": "sha256-h8ajxLp4E9On60yTajMJIlpbMLYeBFMbHKQhxex+mG4=",
-        "owner": "aaddrick",
+        "lastModified": 1778616090,
+        "narHash": "sha256-gJuxwhdJrMOlAgcodm2nYhMjq0Z3fiyyzhKBS+XPxQ8=",
+        "owner": "joshsymonds",
         "repo": "claude-desktop-debian",
-        "rev": "ab5636ef29147fc03649f65872ead82e76a2d689",
+        "rev": "5fdb83edc42f9089ce9ccd0a237c47d85cf51bea",
         "type": "github"
       },
       "original": {
-        "owner": "aaddrick",
+        "owner": "joshsymonds",
+        "ref": "joshsymonds/niri-quality-of-life",
         "repo": "claude-desktop-debian",
         "type": "github"
       }
@@ -1112,11 +1113,11 @@
         "nixpkgs-lib": "nixpkgs-lib"
       },
       "locked": {
-        "lastModified": 1777678872,
-        "narHash": "sha256-EPIFsulyon7Z1vLQq5Fk64GR8L7cQsT+IPhcsukVbgk=",
+        "lastModified": 1777988971,
+        "narHash": "sha256-qIoWPDs+0/8JecyYgE3gpKQxW/4bLW/gp45vow9ioCQ=",
         "owner": "hercules-ci",
         "repo": "flake-parts",
-        "rev": "5250617bffd85403b14dbf43c3870e7f255d2c16",
+        "rev": "0678d8986be1661af6bb555f3489f2fdfc31f6ff",
         "type": "github"
       },
       "original": {

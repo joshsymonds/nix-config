@@ -252,8 +252,19 @@
     # extracts the asar, applies a patch suite for Linux, and re-wraps
     # it. CI auto-bumps the URLs/SRI hashes on every upstream release,
     # so `nix flake update claude-desktop` is the bleeding-edge knob.
+    #
+    # Currently consumed via our fork (joshsymonds/claude-desktop-debian
+    # branch joshsymonds/niri-quality-of-life), which adds two patches on
+    # top of upstream main: orange-tray.sh (replaces macOS-template Tray
+    # PNGs with the orange Claude launcher icon — Linux StatusNotifierItem
+    # has no template-image concept, so the upstream monochrome silhouettes
+    # render as black/white blobs in DMS's tray) and quick-window-size.sh
+    # (shrinks the Quick Entry popup height from 420 → 80 to fit the input
+    # bar, eliminating the alpha=0 dead area below it that niri wraps in
+    # a focus-ring). When/if those land upstream, point this back at
+    # aaddrick/claude-desktop-debian.
     claude-desktop = {
-      url = "github:aaddrick/claude-desktop-debian";
+      url = "github:joshsymonds/claude-desktop-debian/joshsymonds/niri-quality-of-life";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

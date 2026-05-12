@@ -432,7 +432,7 @@ in {
     };
     "Alt+O" = {
       hotkey-overlay.title = "Focus or Launch Claude";
-      action.spawn = ["focus-or-spawn" "--app-id" "claude" "--" "claude-desktop"];
+      action.spawn = ["focus-or-spawn" "--app-id" "claude-desktop" "--" "claude-desktop"];
     };
     "Alt+W" = {
       hotkey-overlay.title = "Focus or Launch Firefox";

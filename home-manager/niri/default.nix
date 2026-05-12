@@ -743,6 +743,12 @@ in {
           y = 20;
           relative-to = "bottom-right";
         };
+        # `block-pointer-constraints true` for this rule is declared
+        # separately in `extras.kdl` (raw KDL) because niri-flake's
+        # typed schema doesn't know about this property yet — it's
+        # added by our josh/block-pointer-constraints patch. niri
+        # merges rules across the typed + raw config files, so the
+        # raw rule layers cleanly on top of this one.
       }
     ];
 
@@ -840,6 +846,21 @@ in {
               blur true
               xray false
           }
+      }
+
+      // Zoom annotate_toolbar pointer-lock suppression — companion to the
+      // corner-placement window-rule in the typed config above. Zoom spawns
+      // a 112x112 floating xdg_toplevel "annotate_toolbar" alongside the
+      // Meeting window; the surface requests zwp_pointer_constraints_v1
+      // (Locked variant) on cursor entry, pinning the cursor until focus
+      // moves away. block-pointer-constraints true short-circuits the
+      // activation inside niri (the protocol still binds and the request
+      // still arrives — niri just never calls .activate()), so the cursor
+      // stays free when crossing the toolbar. Downstream-only config from
+      // the josh/block-pointer-constraints patch (see INTEGRATION.md).
+      window-rule {
+          match app-id="^Zoom$" title="^annotate_toolbar$"
+          block-pointer-constraints true
       }
 
       // Vesktop — Discord client. Pairs with home-manager/vesktop's

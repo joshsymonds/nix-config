@@ -206,11 +206,43 @@
           id_counter = 1;
           custom_size = false;
           items = [
+            # Bounds-based scaling so the webcam fills the canvas
+            # centered regardless of the camera's native resolution.
+            # The C920 reports 1920x1080 in MJPG mode and 1280x720 in
+            # YUYV mode — raw scale.x/y values would give different
+            # on-canvas sizes per mode. bounds_type=3
+            # (OBS_BOUNDS_SCALE_OUTER) scales the source to cover the
+            # bounds rectangle while preserving aspect; the slight
+            # crop on the long axis is acceptable for a 16:9 webcam
+            # on a 16:9 canvas (no crop at all when modes match).
+            # SCALE_INNER (=2) would leave letterbox bars on the
+            # short axis — wrong for a face-fill framing.
+            #
+            # align=0 means CENTER (OBS's align is a bitmask:
+            # LEFT=1, RIGHT=2, TOP=4, BOTTOM=8; 0 = no flags = center
+            # in both axes). pos=(960,540) is canvas center, where
+            # the alignment anchor lands.
+            #
+            # scale_filter="bicubic" — smoother resize than the
+            # default "disable" (point sampling), which produces
+            # jagged edges when the bounds-resize stretches/shrinks
+            # the source.
             (defaultItemTransform
               // {
                 name = "Real Webcam";
                 source_uuid = uuid.webcam;
                 id = 1;
+                align = 0;
+                bounds_type = 3;
+                bounds = {
+                  x = 1920.0;
+                  y = 1080.0;
+                };
+                pos = {
+                  x = 960.0;
+                  y = 540.0;
+                };
+                scale_filter = "bicubic";
               })
           ];
         };
@@ -253,12 +285,27 @@
 in {
   home.packages = [wrappedObs];
 
+  # `force = true` on every OBS-managed file. OBS saves config via
+  # atomic rename-on-replace (write-temp-then-rename), which silently
+  # clobbers the nix-store symlink with a regular writable file. On
+  # the next `update`, home-manager would normally see the path is no
+  # longer the symlink it expects and rename the offender to
+  # `<path>.backup` — but if `.backup` already exists from a prior
+  # round, activation fails ("would clobber backup"). force=true tells
+  # home-manager to unconditionally overwrite without backing up,
+  # which matches this module's invariant: OBS owns nothing here, the
+  # config is reset to the declared state on every `update`. Any
+  # runtime state OBS would have written (window geometry, recent
+  # files, etc.) is intentionally not preserved.
+
   # Scene collection. Read-only symlink — any edit OBS attempts to
   # persist (e.g. shifting an item, picking a different default scene)
   # will fail at the OS level and be discarded. The right way to
   # change scenes is to edit this module and run `update`.
-  xdg.configFile."obs-studio/basic/scenes/lazycam.json".text =
-    builtins.toJSON lazycamSceneCollection;
+  xdg.configFile."obs-studio/basic/scenes/lazycam.json" = {
+    text = builtins.toJSON lazycamSceneCollection;
+    force = true;
+  };
 
   # user.ini is where OBS 30+ stores the active-profile + active-
   # scene-collection pointers (the legacy global.ini path silently
@@ -276,17 +323,20 @@ in {
   # Profile=Untitled because we don't ship a declarative profile yet
   # (see module top comment). OBS auto-creates ~/.config/obs-studio/
   # basic/profiles/Untitled/ as a writable dir on first launch.
-  xdg.configFile."obs-studio/user.ini".text = ''
-    [General]
-    FirstRun=false
-    ConfirmOnExit=false
+  xdg.configFile."obs-studio/user.ini" = {
+    text = ''
+      [General]
+      FirstRun=false
+      ConfirmOnExit=false
 
-    [Basic]
-    Profile=Untitled
-    ProfileDir=Untitled
-    SceneCollection=lazycam
-    SceneCollectionFile=lazycam.json
-  '';
+      [Basic]
+      Profile=Untitled
+      ProfileDir=Untitled
+      SceneCollection=lazycam
+      SceneCollectionFile=lazycam.json
+    '';
+    force = true;
+  };
 
   # obs-websocket config. Lives in plugin_config/, NOT global.ini's
   # legacy [WebsocketAPI] section. server_port matches what lazycam's
@@ -298,13 +348,16 @@ in {
   # alerts_enabled=false suppresses OBS's "WebSocket client
   # connected" popup; lazycam connects/reconnects often enough that
   # the popup is noise.
-  xdg.configFile."obs-studio/plugin_config/obs-websocket/config.json".text = builtins.toJSON {
-    server_enabled = true;
-    server_port = 4455;
-    auth_required = false;
-    server_password = "";
-    alerts_enabled = false;
-    first_load = false;
+  xdg.configFile."obs-studio/plugin_config/obs-websocket/config.json" = {
+    text = builtins.toJSON {
+      server_enabled = true;
+      server_port = 4455;
+      auth_required = false;
+      server_password = "";
+      alerts_enabled = false;
+      first_load = false;
+    };
+    force = true;
   };
 
   # Auto-launch OBS at graphical-session.target with the virtual

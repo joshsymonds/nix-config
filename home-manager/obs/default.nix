@@ -222,9 +222,11 @@
       }
     ];
 
-    # Top-level collection fields OBS expects. The version stamp matches
-    # the OBS 28+ scene-format generation; OBS will accept this as long
-    # as the JSON parses.
+    # Top-level collection fields OBS expects. We deliberately omit
+    # `format_version` — OBS emits `"format_version": 2` in its own
+    # saves but accepts files without it (the field is informational,
+    # not load-bearing for parse). Anything we don't declare here
+    # falls through to OBS's built-in defaults.
     saved_projectors = [];
     transitions = [];
     transition_duration = 300;

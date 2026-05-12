@@ -2352,11 +2352,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1778544707,
-        "narHash": "sha256-hSoR+CLUHOnhjJJ/P5ZsAuVwfEFvu510y546GaRQXZA=",
+        "lastModified": 1778546706,
+        "narHash": "sha256-K6cqgl/ddbh1MPWQIaQIHLUbT4kUObHFvIO1O9JeMnk=",
         "owner": "joshsymonds",
         "repo": "lazycam",
-        "rev": "70aea39c123d62b0ea3feb5884ce7e599f375dd0",
+        "rev": "c9f0e1c0db259504e85a2f61279621c070690256",
         "type": "github"
       },
       "original": {

@@ -180,7 +180,12 @@
             uuid = uuid.bgRemovalFilter;
             name = "Background Removal";
             settings = {
-              model_select = "models/rvm_mobilenetv3_fp32.with_runtime_opt.ort";
+              # Matches the obs-backgroundremoval MODEL_RVM constant
+              # which our ml overlay rewrites to "...fp32.onnx" (see
+              # overlays/default.nix). The .onnx variant dodges a
+              # CUDA EP SEGV in the bundled .ort flatbuffer's frozen
+              # graph optimization — full RFC in the overlay comment.
+              model_select = "models/rvm_mobilenetv3_fp32.onnx";
               # CUDA EP. The ml overlay rebuilds `onnxruntime` with
               # CUDA support (overlays/default.nix); the plugin links
               # against it via `-DUSE_SYSTEM_ONNXRUNTIME=ON` and the

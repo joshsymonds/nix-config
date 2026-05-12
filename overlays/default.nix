@@ -127,12 +127,25 @@ in {
   # ParseScalesData memmoves a CUDA device pointer as if it were host
   # memory and the kernel faults.
   #
-  # The `.onnx` (Protobuf) variant has not been pre-optimized — at
+  # The `.onnx` (Protobuf) variant hasn't been pre-optimized — at
   # session creation, ORT's MemcpyTransformer runs against the live
-  # EP set and correctly inserts the host-bound memcpy edges. ORT
-  # auto-detects format from the file's magic bytes, so dropping the
-  # `.onnx` blob at the `.ort` path is transparent to the plugin —
-  # no code change in obs-backgroundremoval needed.
+  # EP set and correctly inserts the host-bound memcpy edges. So we
+  # need the plugin to LOAD an `.onnx` file. ORT routes by file
+  # extension (not magic bytes), so we have to actually rename — a
+  # `.onnx` file at a `.ort` path goes through LoadOrtModelWithLoader
+  # and verification-fails on the protobuf content.
+  #
+  # The fix is two-part:
+  #   1. `substituteInPlace src/consts.h` so the plugin's MODEL_RVM
+  #      constant points at "models/rvm_mobilenetv3_fp32.onnx"
+  #      instead of "...with_runtime_opt.ort".
+  #   2. `install` the .onnx at the new path in $out.
+  #
+  # Our declarative scene file in home-manager/obs/default.nix also
+  # needs to match — the filter's model_select setting value must
+  # equal the new constant ("models/rvm_mobilenetv3_fp32.onnx"),
+  # otherwise the plugin won't recognize the saved selection on
+  # scene-collection load.
   #
   # RVM .onnx pulled from PeterL1n/RobustVideoMatting v1.0.0 release
   # (the canonical Sep 2021 upload, 14.3 MB, fp32).
@@ -150,11 +163,23 @@ in {
             onnxruntime = prev.onnxruntime.override {cudaSupport = true;};
           })
           .overrideAttrs (old: {
+            postPatch =
+              (old.postPatch or "")
+              + ''
+                substituteInPlace src/consts.h \
+                  --replace-fail \
+                    'models/rvm_mobilenetv3_fp32.with_runtime_opt.ort' \
+                    'models/rvm_mobilenetv3_fp32.onnx'
+              '';
             postFixup =
               (old.postFixup or "")
               + ''
                 install -m 0644 ${rvmOnnx} \
-                  $out/share/obs/obs-plugins/obs-backgroundremoval/models/rvm_mobilenetv3_fp32.with_runtime_opt.ort
+                  $out/share/obs/obs-plugins/obs-backgroundremoval/models/rvm_mobilenetv3_fp32.onnx
+                # Leave the original .with_runtime_opt.ort in place
+                # so other RVM-using paths (if any future code refers
+                # to it by name) don't 404; it's just no longer the
+                # plugin's selected MODEL_RVM target.
               '';
           });
       };

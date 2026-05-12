@@ -150,12 +150,17 @@ in {
         transparency = 0.0;
         widgetTransparency = 1.0;
         squareCorners = false;
-        # Bar has no background of its own — widgets float directly over
-        # the wallpaper shader, which provides the visual "platform" via
-        # the bar-zone elevation: hexes under the bar are raised, their
-        # seams glow against the surrounding wallpaper hexes, and small
-        # cast shadows fall outward. See wallpaper.json:barZone* keys.
-        noBackground = true;
+        # Keep widget chrome enabled — they need backgrounds to read as
+        # discrete chips against the wallpaper. Bar's OWN panel
+        # background is killed via `transparency = 0` + `shaderMode =
+        # "none"` below; the wallpaper's bar-zone elevation provides
+        # the visual platform underneath.
+        noBackground = false;
+        # Force widget backgrounds to true pill (capsule) shape — radius
+        # becomes min(width, height) / 2, so square widgets read as
+        # circles and wider ones as stadiums. Custom barConfig key
+        # added in DMS BasePill.qml on the chrome-shader fork.
+        widgetPill = true;
         maximizeWidgetIcons = false;
         maximizeWidgetText = false;
         removeWidgetPadding = false;

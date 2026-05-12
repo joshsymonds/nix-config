@@ -26,10 +26,15 @@
     JOURNAL=$(${pkgs.systemd}/bin/journalctl -u podman-inbox-zero-web \
       --since "10 minutes ago" --no-pager -o cat)
 
-    # Walk the journal: when we see the revocation string, capture the next
-    # "email" field that appears within the same error block (within 10 lines).
+    # Walk the journal: when we see a Gmail-scope refresh failure, capture the
+    # next "email" field that appears within the same error block (within
+    # 10 lines). Inbox Zero also logs Calendar-scope revocations ("Error
+    # refreshing Calendar access token") with the same "Token has been
+    # expired or revoked." descriptor, but those don't affect the inbox flow
+    # and aren't surfaced in the IZ frontend — so we match only the Gmail
+    # variant to avoid false positives.
     EMAILS=$(${pkgs.gawk}/bin/awk '
-      /Token has been expired or revoked/ { window = 10; next }
+      /Error refreshing Gmail access token/ { window = 10; next }
       window > 0 {
         if (match($0, /"email":[[:space:]]*"([^"]+)"/, arr)) {
           print arr[1]

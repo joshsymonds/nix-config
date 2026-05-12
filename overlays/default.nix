@@ -112,17 +112,51 @@ in {
   # against, so this combination is a cache hit instead of a ~45-min
   # local onnxruntime rebuild.
   #
-  # cudaCapabilities = ["12.0"] is set system-wide by
-  # modules/hardware/gpu-nvidia.nix on gnomon — the override picks
-  # that up automatically, so the resulting onnxruntime targets
-  # sm_120 (Blackwell RTX 50-series) only.
-  ml = _final: prev: {
+  # ── RVM `.ort` → `.onnx` replacement ───────────────────────────────
+  #
+  # obs-backgroundremoval bundles RobustVideoMatting as
+  # `rvm_mobilenetv3_fp32.with_runtime_opt.ort` — a FlatBuffers-format
+  # runtime-optimized model. Empirically, that file SIGSEGVs the ORT
+  # CUDA Execution Provider during first inference (in
+  # ParseScalesData → __memmove_avx512_unaligned_erms via
+  # cuda::Resize/Upsample::ComputeInternal). The root cause: the
+  # `.ort` flatbuffer freezes ORT's graph-optimization decisions at
+  # conversion time, which strips the `MemcpyToHost` nodes that the
+  # CUDA EP needs around Resize/Upsample to route the model's `scales`
+  # input from device → host memory. Without those memcpy edges,
+  # ParseScalesData memmoves a CUDA device pointer as if it were host
+  # memory and the kernel faults.
+  #
+  # The `.onnx` (Protobuf) variant has not been pre-optimized — at
+  # session creation, ORT's MemcpyTransformer runs against the live
+  # EP set and correctly inserts the host-bound memcpy edges. ORT
+  # auto-detects format from the file's magic bytes, so dropping the
+  # `.onnx` blob at the `.ort` path is transparent to the plugin —
+  # no code change in obs-backgroundremoval needed.
+  #
+  # RVM .onnx pulled from PeterL1n/RobustVideoMatting v1.0.0 release
+  # (the canonical Sep 2021 upload, 14.3 MB, fp32).
+  ml = _final: prev: let
+    rvmOnnx = prev.fetchurl {
+      url = "https://github.com/PeterL1n/RobustVideoMatting/releases/download/v1.0.0/rvm_mobilenetv3_fp32.onnx";
+      sha256 = "0a18pp5z10636vsd20iq75cybhmfcvszcq7xy9dmk3qijw957m48";
+    };
+  in {
     obs-studio-plugins =
       prev.obs-studio-plugins
       // {
-        obs-backgroundremoval = prev.obs-studio-plugins.obs-backgroundremoval.override {
-          onnxruntime = prev.onnxruntime.override {cudaSupport = true;};
-        };
+        obs-backgroundremoval =
+          (prev.obs-studio-plugins.obs-backgroundremoval.override {
+            onnxruntime = prev.onnxruntime.override {cudaSupport = true;};
+          })
+          .overrideAttrs (old: {
+            postFixup =
+              (old.postFixup or "")
+              + ''
+                install -m 0644 ${rvmOnnx} \
+                  $out/share/obs/obs-plugins/obs-backgroundremoval/models/rvm_mobilenetv3_fp32.with_runtime_opt.ort
+              '';
+          });
       };
   };
 

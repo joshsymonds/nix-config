@@ -11,6 +11,7 @@ in {
   imports = [
     ../modules/linux-base
     ../modules/nix/defaults.nix
+    ../modules/nix/substituters.nix
     ../modules/services/age-identity.nix
     ../modules/services/atticd-cache.nix
     ../modules/services/cleanup-stale-processes.nix

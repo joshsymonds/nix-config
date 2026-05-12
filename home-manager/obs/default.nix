@@ -44,6 +44,7 @@
     webcam = "33333333-3333-3333-3333-333333333333";
     standbyBackground = "44444444-4444-4444-4444-444444444444";
     activeBackground = "55555555-5555-5555-5555-555555555555";
+    bgRemovalFilter = "66666666-6666-6666-6666-666666666666";
   };
 
   # Default scene-item transform — top-left origin, scale 1.0, no
@@ -141,7 +142,52 @@
         sync = 0;
         muted = false;
         private_settings = {};
-        filters = [];
+        filters = [
+          # Background Removal filter — royshil/locaal-ai's
+          # obs-backgroundremoval plugin. Configured per V1 plan:
+          # alpha-output mode + RVM model + CPU inference +
+          # feathered edges.
+          #
+          # The model_select value MUST be the literal MODEL_RVM
+          # constant from upstream src/consts.h — the plugin maps
+          # this string to the actual ONNX file in
+          # data/models/. Display labels like "Robust Video Matting"
+          # would not work as the stored value.
+          # Source: https://github.com/locaal-ai/obs-backgroundremoval/blob/main/src/consts.h
+          #
+          # blur_background = 0 is the architectural pin: 0 means
+          # alpha-output (let the bg-layer source show through);
+          # >0 would in-place-blur the source and never expose
+          # alpha. V2's image/video/shader bg-swap requires alpha
+          # output — see the epic's "blur-output mode for V1
+          # REJECTED" approach.
+          #
+          # feather = 0.05 — deviates from the plugin default
+          # (0.0) to soften the alpha edges. Matches the "feathered
+          # and beautiful" V1 quality bar; user can dial up/down
+          # later if hair edges look too soft or too hard.
+          #
+          # All other settings deferred to the plugin's documented
+          # defaults (background_filter_defaults in
+          # src/background-filter.cpp): threshold=0.5,
+          # temporal_smooth_factor=0.85, mask_every_x_frames=1,
+          # stop_when_source_is_inactive=true (important — pauses
+          # the filter when Standby is the program scene so we
+          # don't burn CPU on hidden source).
+          {
+            id = "background_removal";
+            versioned_id = "background_removal";
+            uuid = uuid.bgRemovalFilter;
+            name = "Background Removal";
+            settings = {
+              model_select = "models/rvm_mobilenetv3_fp32.with_runtime_opt.ort";
+              useGPU = "cpu";
+              blur_background = 0;
+              feather = 0.05;
+            };
+            enabled = true;
+          }
+        ];
         hotkeys = {};
       }
 

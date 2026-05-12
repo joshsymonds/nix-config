@@ -38,11 +38,8 @@
     ../../modules/services/qbittorrent-vpn.nix
   ];
 
-  # Disabled until the agenix secrets above exist. The age.secrets block
-  # below is also gated on `enable` so flake-check passes in the meantime
-  # — flipping `enable` to true requires the .age files to be present.
   services.qbittorrent-vpn = {
-    enable = false;
+    enable = true;
 
     timezone = "America/Los_Angeles";
 

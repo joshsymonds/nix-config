@@ -713,6 +713,37 @@ in {
         open-floating = false;
         open-fullscreen = true;
       }
+      # Zoom annotation toolbar: a 112×112 floating xdg_toplevel Zoom
+      # spawns alongside the Meeting window when annotation is available
+      # (so participant pens can draw on a screen share, even when WE
+      # aren't sharing). By default Zoom opens it at center-screen,
+      # right where the cursor naturally crosses the Meeting tile —
+      # focus-follows-mouse lands on it and Zoom's set_cursor sprite
+      # gets sticky, producing the "cursor captured by an invisible
+      # button" symptom until a hard focus change (alt-tab) refreshes
+      # the cursor.
+      #
+      # The toolbar's value is real (you want to see participant pen
+      # marks), so we keep it open + functional. We just banish it to
+      # the bottom-right corner of the workspace where the cursor
+      # doesn't camp in normal use. Caveat: default-floating-position
+      # only applies at open time. If Zoom programmatically moves the
+      # toolbar later (not observed empirically, but possible), niri
+      # honors that move and the rule won't re-apply.
+      {
+        matches = [
+          {
+            app-id = "^Zoom$";
+            title = "^annotate_toolbar$";
+          }
+        ];
+        open-floating = true;
+        default-floating-position = {
+          x = 20;
+          y = 20;
+          relative-to = "bottom-right";
+        };
+      }
     ];
 
     # From dms/wpblur.kdl — DMS's wallpaper-blur layer surface should

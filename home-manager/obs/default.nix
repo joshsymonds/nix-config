@@ -43,6 +43,7 @@
     sceneActive = "22222222-2222-2222-2222-222222222222";
     webcam = "33333333-3333-3333-3333-333333333333";
     standbyBackground = "44444444-4444-4444-4444-444444444444";
+    activeBackground = "55555555-5555-5555-5555-555555555555";
   };
 
   # Default scene-item transform — top-left origin, scale 1.0, no
@@ -167,6 +168,36 @@
         hotkeys = {};
       }
 
+      # Active Background: the layer that sits BEHIND the webcam in
+      # the Active scene. V1 ships a neutral medium-dark gray solid
+      # color (0xFF404040 — gray at ~25% lightness, kind to colour
+      # grading and undistracting for video calls). V2 will swap
+      # this single source for an image / video / shader source
+      # without touching the rest of the pipeline — only the
+      # `color_source_v3` entry here changes, the scene composition
+      # stays identical.
+      #
+      # Currently invisible because the webcam's bounds-based
+      # transform fills the canvas; this layer becomes visible once
+      # background_removal runs in alpha-output mode and cuts the
+      # user out of the foreground.
+      {
+        id = "color_source_v3";
+        versioned_id = "color_source_v3";
+        uuid = uuid.activeBackground;
+        name = "Active Background";
+        settings = {
+          color = 4282400832;
+          width = 1920;
+          height = 1080;
+        };
+        sync = 0;
+        muted = false;
+        private_settings = {};
+        filters = [];
+        hotkeys = {};
+      }
+
       # Standby scene: only contains the color source.
       {
         id = "scene";
@@ -203,18 +234,36 @@
         uuid = uuid.sceneActive;
         name = "Active";
         settings = {
-          id_counter = 1;
+          # Two scene items, back-to-front render order:
+          # array[0] = Active Background (rendered FIRST, behind)
+          # array[1] = Real Webcam      (rendered SECOND, in front)
+          #
+          # The webcam covers the whole canvas via its bounds-based
+          # transform, so the bg is invisible today — it becomes
+          # visible once background_removal runs in alpha-output
+          # mode and cuts the user out, letting the bg show through.
+          id_counter = 3;
           custom_size = false;
           items = [
-            # Bounds-based scaling so the webcam fills the canvas
-            # centered regardless of the camera's native resolution.
-            # The C920 reports 1920x1080 in MJPG mode and 1280x720 in
-            # YUYV mode — raw scale.x/y values would give different
-            # on-canvas sizes per mode. bounds_type=3
-            # (OBS_BOUNDS_SCALE_OUTER) scales the source to cover the
-            # bounds rectangle while preserving aspect; the slight
-            # crop on the long axis is acceptable for a 16:9 webcam
-            # on a 16:9 canvas (no crop at all when modes match).
+            # Back-layer: Active Background color source.
+            # Default top-left transform is fine — the source is
+            # already 1920x1080 (canvas-sized), so no scaling needed.
+            (defaultItemTransform
+              // {
+                name = "Active Background";
+                source_uuid = uuid.activeBackground;
+                id = 2;
+              })
+
+            # Front-layer: Real Webcam with bounds-based scaling so
+            # it fills the canvas centered regardless of the
+            # camera's native resolution. The C920 reports 1920x1080
+            # in MJPG mode and 1280x720 in YUYV mode — raw scale.x/y
+            # values would give different on-canvas sizes per mode.
+            # bounds_type=3 (OBS_BOUNDS_SCALE_OUTER) scales the
+            # source to cover the bounds rectangle while preserving
+            # aspect; slight crop on the long axis is fine for 16:9
+            # webcam on 16:9 canvas (no crop when modes match).
             # SCALE_INNER (=2) would leave letterbox bars on the
             # short axis — wrong for a face-fill framing.
             #
@@ -224,9 +273,7 @@
             # the alignment anchor lands.
             #
             # scale_filter="bicubic" — smoother resize than the
-            # default "disable" (point sampling), which produces
-            # jagged edges when the bounds-resize stretches/shrinks
-            # the source.
+            # default "disable" (point sampling).
             (defaultItemTransform
               // {
                 name = "Real Webcam";

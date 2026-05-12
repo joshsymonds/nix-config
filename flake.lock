@@ -842,11 +842,11 @@
         "quickshell": "quickshell"
       },
       "locked": {
-        "lastModified": 1778604044,
-        "narHash": "sha256-kFQrMww7gM5SgHBDfmVt4S065pjU6bNGFKcwKLn5L3g=",
+        "lastModified": 1778606418,
+        "narHash": "sha256-5IgdIUw0ltXx3/kU8/i7cPpNoun17NYA68DYRT5vI4Y=",
         "owner": "joshsymonds",
         "repo": "DankMaterialShell",
-        "rev": "39ef82a1eeb492b07314ceed0743689e19de92bb",
+        "rev": "628af9d92a941316c94426ff09f0b3eb6684aade",
         "type": "github"
       },
       "original": {

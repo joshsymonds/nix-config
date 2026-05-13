@@ -642,11 +642,11 @@
     "dxvk-nvapi-josh": {
       "flake": false,
       "locked": {
-        "lastModified": 1778550326,
-        "narHash": "sha256-okCqVbBcxeOi9/u3ln6+WcPpHFOxXLLlWSkbrmtwXqc=",
+        "lastModified": 1778652132,
+        "narHash": "sha256-OchIy33e1c9f0o3k1WlhwoyMJiOmOKxmUD+HkgoqShg=",
         "ref": "josh/blackwell-streamline-stubs",
-        "rev": "f787d0af8c45775ce4b79901104216abf6fd875d",
-        "revCount": 1197,
+        "rev": "ef70f8732f70addcaf98dbb67d01e0a9303a5ed1",
+        "revCount": 1198,
         "submodules": true,
         "type": "git",
         "url": "https://github.com/joshsymonds/dxvk-nvapi.git"

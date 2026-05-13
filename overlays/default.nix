@@ -286,6 +286,17 @@ in {
           # boot. Patch makes the layer return VK_SUCCESS with zero
           # timings / a 60Hz fallback for unknown swapchains.
           ../pkgs/gamescope-patches/wsi-success-on-unknown-swapchain.patch
+
+          # paint_window_commit's w != scaleW branch (steamcompmgr.cpp:2123)
+          # used scaleW->GetGeometry() unconditionally, ignoring the actual
+          # committed buffer size. RE Engine titles (PRAGMATA) under Wine
+          # leave the X11 window at a 1×1 placeholder while the swapchain
+          # renders at native res via the gamescope_swapchain bypass layer
+          # — so composition collapsed to a 1×1 visible region (permanent
+          # black screen with audio + GPU activity). The Halo-Infinite
+          # comment two lines above already covers the w == scaleW case;
+          # this generalizes the same max() fix to the override-window case.
+          ../pkgs/gamescope-patches/scale-by-buffer-when-x11-geom-smaller.patch
         ];
       });
 

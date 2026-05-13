@@ -224,10 +224,11 @@
             };
             enabled = true;
           }
-          # Background Removal filter — royshil/locaal-ai's
-          # obs-backgroundremoval plugin. Configured per V1 plan:
-          # alpha-output mode + RVM model + CPU inference +
-          # feathered edges.
+          # Background Removal filter — locaal-ai's obs-backgroundremoval
+          # plugin (was royshil/, rename 2024). Runs in BLUR-OUTPUT mode:
+          # the filter composites a portrait-mode frame inline — sharp
+          # subject + Kawase-blurred background — rather than emitting
+          # alpha for a downstream bg-layer source.
           #
           # The model_select value MUST be the literal MODEL_RVM
           # constant from upstream src/consts.h — the plugin maps
@@ -236,25 +237,33 @@
           # would not work as the stored value.
           # Source: https://github.com/locaal-ai/obs-backgroundremoval/blob/main/src/consts.h
           #
-          # blur_background = 0 is the architectural pin: 0 means
-          # alpha-output (let the bg-layer source show through);
-          # >0 would in-place-blur the source and never expose
-          # alpha. V2's image/video/shader bg-swap requires alpha
-          # output — see the epic's "blur-output mode for V1
-          # REJECTED" approach.
+          # Model choice (RVM): the only model in v1.3.7 with recurrent
+          # temporal state (r1i-r4i tensors carry mask history across
+          # frames) — gives the least silhouette flicker on a video
+          # call. RMBG-1.4 has sharper per-frame edges but is stateless
+          # and additionally crashes on CUDA EP in this plugin version
+          # (see locaal-ai/obs-backgroundremoval#760 — maintainer
+          # explicitly disabled GPU inference for RMBG due to ORT × qint8
+          # incompatibility). Stay on RVM.
           #
-          # feather = 0.05 — deviates from the plugin default
-          # (0.0) to soften the alpha edges. Matches the "feathered
-          # and beautiful" V1 quality bar; user can dial up/down
-          # later if hair edges look too soft or too hard.
+          # Blur strategy: the filter's built-in Kawase pass (blur_background)
+          # combined with focal-blur (enable_focal_blur) gives a depth-of-
+          # field bokeh that varies by distance from focus plane. Two knobs
+          # to tune look: pass count (heaviness of blur) and focus depth
+          # (how aggressively blur ramps off). The matte-reconstruction
+          # pipeline below (threshold=1.0 seed + smooth+expand+feather)
+          # is tuned to keep hair edges generous so the blur doesn't
+          # halo around the silhouette.
           #
-          # All other settings deferred to the plugin's documented
-          # defaults (background_filter_defaults in
-          # src/background-filter.cpp): threshold=0.5,
-          # temporal_smooth_factor=0.85, mask_every_x_frames=1,
-          # stop_when_source_is_inactive=true (important — pauses
-          # the filter when Standby is the program scene so we
-          # don't burn CPU on hidden source).
+          # If blur quality ever caps out: switch to alpha-output mode
+          # (blur_background = 0) and put a separately-blurred copy of
+          # Real Webcam behind in the scene graph. That lets you use
+          # arbitrary blur filters (gaussian, box, custom shader) instead
+          # of just Kawase, and removes the blur-pass-count ceiling.
+          #
+          # All other settings (mask_every_x_frames, stop_when_source_is_inactive,
+          # etc.) are left at the plugin's documented defaults
+          # (background_filter_defaults in src/background-filter.cpp).
           {
             id = "background_removal";
             versioned_id = "background_removal";
@@ -282,13 +291,18 @@
               # window. Keep this on so the dialog stays useful.
               advanced = true;
               # blur_background: number of Kawase blur passes (0-20).
-              # When > 0 the filter composites a portrait-mode frame
-              # (sharp user + blurred room) rather than alpha-output;
-              # V2's image/video/shader background swap will require
-              # this back to 0 plus the Active Background color source
-              # taking over as the back layer. For V1 we use blur
-              # directly for the look.
-              blur_background = 9;
+              # Higher = heavier blur. Each pass roughly doubles the
+              # effective blur radius for ~constant per-pass GPU cost,
+              # so doubling pass count gives much more than 2x blur
+              # without ~2x cost. At 16 the room behind the user reads
+              # as a soft, defocused gradient — distinct shapes still
+              # legible but no identifiable detail. Below ~10 the blur
+              # is too subtle to hide a busy background; above ~18 the
+              # halo around hair edges starts to bleed onto the subject
+              # because the Kawase kernel reaches past the matte
+              # boundary. Tune in 2-step increments via the OBS UI;
+              # commit a final value here once the look is dialed in.
+              blur_background = 16;
               # enable_focal_blur + blur_focus_point/depth: switches
               # the blur shader from uniform Kawase to a focal-blur
               # variant that varies blur magnitude by distance from

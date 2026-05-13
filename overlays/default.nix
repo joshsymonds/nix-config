@@ -18,6 +18,7 @@ in {
     coder = final.callPackage ../pkgs/coder-cli {inherit (final) unzip;};
     invidious-companion = final.callPackage ../pkgs/invidious-companion {};
     newrelic-cli = final.callPackage ../pkgs/newrelic-cli {};
+    morgen-fetch = final.callPackage ../pkgs/morgen-fetch {};
     redlib-veraticus = final.callPackage ../pkgs/redlib-veraticus {
       inherit (inputs) crane;
       redlibSrc = inputs.redlib-fork.sourceInfo.outPath;
@@ -71,6 +72,30 @@ in {
     vaapiIntel = prev.vaapiIntel.override {
       enableHybridCodec = true;
     };
+
+    # Morgen ships with `app.disableHardwareAcceleration()` in its bundled
+    # main.js. On Wayland/NVIDIA that flips Chromium's GPU process fully
+    # off, and Sentry's electron integration then calls `app.getGPUInfo()`
+    # which rejects with "GPU access not allowed" — an unhandled promise
+    # rejection at the top of main, so BrowserWindow.show() never fires
+    # and the app runs as a window-less zombie process.
+    #
+    # Patch the minified call site to a no-op (`void 0`). Both the asar-
+    # pack invocation we splice into and the minified call string are
+    # specific to nixpkgs morgen-4.0.4 — `replaceStrings` + `--replace-
+    # fail` mean a future bump fails loudly here instead of silently
+    # producing a broken build. Reference: 0xpetersatoshi/nix-config.
+    morgen = prev.morgen.overrideAttrs (oldAttrs: {
+      installPhase =
+        builtins.replaceStrings
+        ["asar pack --unpack='{*.node,*.ftz,rect-overlay}' \"$TMP/work\" $out/opt/Morgen/resources/app.asar"]
+        [''
+          substituteInPlace $TMP/work/dist/main.js \
+            --replace-fail "zj&&ee.app.disableHardwareAcceleration()" "void 0"
+          asar pack --unpack='{*.node,*.ftz,rect-overlay}' "$TMP/work" $out/opt/Morgen/resources/app.asar
+        '']
+        oldAttrs.installPhase;
+    });
 
     # Stable packages available under pkgs.stable (if needed)
     stable = import inputs.nixpkgs-stable {

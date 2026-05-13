@@ -454,6 +454,17 @@ in {
       hotkey-overlay.title = "Focus or Launch Vesktop";
       action.spawn = ["focus-or-spawn" "--app-id" "vesktop" "--" "vesktop"];
     };
+    "Alt+I" = {
+      hotkey-overlay.title = "Focus or Launch Morgen";
+      action.spawn = ["focus-or-spawn" "--app-id" "Morgen" "--" "morgen"];
+    };
+    # Alt+1 → 1Password. The leading "1" of the app name is the mnemonic;
+    # nothing else here binds a digit, and niri's default workspace
+    # switching lives on Mod+1..9, so this doesn't shadow anything.
+    "Alt+1" = {
+      hotkey-overlay.title = "Focus or Launch 1Password";
+      action.spawn = ["focus-or-spawn" "--app-id" "1Password" "--" "1password"];
+    };
     # Zoom is special-cased because its app_id "Zoom" covers many
     # top-levels (hub "Zoom Workplace …", chat, settings, annotate
     # toolbar, screen-share controls). Tier the lookup:
@@ -760,6 +771,45 @@ in {
         # added by our josh/block-pointer-constraints patch. niri
         # merges rules across the typed + raw config files, so the
         # raw rule layers cleanly on top of this one.
+      }
+      # Zoom share-controls toolbar: appears when you're sharing your
+      # screen (mute, stop-share, annotate buttons). Pin to top-center
+      # so it lives in the same spot every meeting. `relative-to="top"`
+      # auto-centers horizontally; x=0 y=0 = flush against the top
+      # edge, perfectly centered. niri doesn't persist positions across
+      # window-lifetime, so without this rule Zoom respawns it at its
+      # own hard-coded default each meeting.
+      {
+        matches = [
+          {
+            app-id = "^Zoom$";
+            title = "^as_toolbar$";
+          }
+        ];
+        open-floating = true;
+        default-floating-position = {
+          x = 0;
+          y = 0;
+          relative-to = "top";
+        };
+      }
+      # Zoom gallery / picture-in-picture tile: spawned during a
+      # meeting to show the participant gallery as a small floating
+      # window (separate from the main Meeting tile). Pin to the
+      # upper-right with a 30px gutter from both edges.
+      {
+        matches = [
+          {
+            app-id = "^Zoom$";
+            title = "^zoom_linux_float_video_window$";
+          }
+        ];
+        open-floating = true;
+        default-floating-position = {
+          x = 30;
+          y = 30;
+          relative-to = "top-right";
+        };
       }
     ];
 

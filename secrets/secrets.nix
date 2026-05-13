@@ -10,6 +10,7 @@ in {
 
   # User secrets (home-manager agenix, all machines)
   "secrets/user/ntfy-url.age".publicKeys = keys.joshsymonds;
+  "secrets/user/morgen-api-key.age".publicKeys = keys.joshsymonds;
 
   # Host-specific secrets
   "secrets/hosts/ultraviolet/cloudflare-api-token.age".publicKeys = keys.ultraviolet;

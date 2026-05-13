@@ -6,6 +6,8 @@ result*
 .direnv/
 venv/
 .venv/
+__pycache__/
+.pytest_cache/
 .env
 .env.local
 .aider*

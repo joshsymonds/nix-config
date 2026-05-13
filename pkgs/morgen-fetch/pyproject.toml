@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "morgen-fetch"
+version = "0.1.0"
+description = "Poll Morgen's REST API and write events to a khal vdir"
+requires-python = ">=3.11"
+
+[project.scripts]
+morgen-fetch = "morgen_fetch:main_cli"
+
+[tool.setuptools]
+py-modules = ["morgen_fetch"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

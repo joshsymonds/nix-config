@@ -24,7 +24,14 @@ from zoneinfo import ZoneInfo
 API_BASE = "https://api.morgen.so/v3"
 DEFAULT_KEY_PATH = Path("~/.config/morgen-fetch/api-key").expanduser()
 DEFAULT_VDIR = Path("~/.local/share/vdirs/morgen/primary").expanduser()
+DEFAULT_JSON_PATH = Path("~/.local/share/morgen-fetch/upcoming-events.json").expanduser()
 DEFAULT_LOOKAHEAD = dt.timedelta(days=7)
+
+# ISO 8601 duration parser, restricted to the subset JSCalendar uses in
+# practice: PT<H>H<M>M<S>S. Multi-day events come back from Morgen with
+# an explicit end (or via showWithoutTime), not as P1D, so we don't need
+# to handle the calendar-date duration form.
+_DURATION_RE = re.compile(r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$")
 
 
 def die(msg: str, code: int = 1) -> NoReturn:
@@ -54,6 +61,89 @@ def to_utc_stamp(local_str: str, tz_name: str) -> str:
     naive = dt.datetime.fromisoformat(local_str)
     aware = naive.replace(tzinfo=ZoneInfo(tz_name or "UTC"))
     return aware.astimezone(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _to_iso_utc(local_str: str, tz_name: str) -> str:
+    """Same arithmetic as `to_utc_stamp` but emits ISO 8601 with colons
+    (`2024-01-15T10:00:00Z`) — the form upcoming-events.json consumers
+    expect (Quickshell's QML date parsers, Python's
+    datetime.fromisoformat, jq, etc.)."""
+    naive = dt.datetime.fromisoformat(local_str)
+    aware = naive.replace(tzinfo=ZoneInfo(tz_name or "UTC"))
+    return aware.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _parse_iso8601_duration(d: str) -> dt.timedelta:
+    """Parse an ISO 8601 duration string into a `timedelta`. Restricted
+    to the PT-prefixed time-only form JSCalendar emits in practice;
+    unparseable input (including the empty string and `None`) falls back
+    to 1 hour, mirroring `render_event`'s existing duration behavior so
+    the JSON output and the ICS files agree on end times."""
+    if not d:
+        return dt.timedelta(hours=1)
+    m = _DURATION_RE.match(d)
+    if not m or not any(m.groups()):
+        return dt.timedelta(hours=1)
+    hours = int(m.group(1) or 0)
+    minutes = int(m.group(2) or 0)
+    seconds = int(m.group(3) or 0)
+    return dt.timedelta(hours=hours, minutes=minutes, seconds=seconds)
+
+
+def extract_event_json(ev: dict, now: dt.datetime) -> dict | None:
+    """Project a Morgen JSCalendar event to the schema upcoming-events.json
+    emits: `{uid, title, start, end, url}` with all times in ISO 8601 UTC.
+
+    Returns `None` for:
+      - events without a stable identifier (`uid` or `id`)
+      - events whose start is in the past (≤ `now`)
+      - events whose `start` field is missing or unparseable
+
+    `url` is pulled from `morgen.so:derived.virtualRoom.url` and coerced
+    to `None` when absent OR empty string, so downstream consumers can
+    treat null-vs-non-null as the only branching condition without also
+    checking for empty strings."""
+    uid = ev.get("uid") or ev.get("id")
+    if not uid:
+        return None
+    start_local = ev.get("start")
+    if not start_local:
+        return None
+    tz = ev.get("timeZone") or "UTC"
+    try:
+        start_iso = _to_iso_utc(start_local, tz)
+    except (ValueError, KeyError):
+        return None
+    start_dt = dt.datetime.fromisoformat(start_iso.replace("Z", "+00:00"))
+    if start_dt <= now:
+        return None
+    duration = _parse_iso8601_duration(ev.get("duration") or "")
+    end_iso = (start_dt + duration).strftime("%Y-%m-%dT%H:%M:%SZ")
+    derived = ev.get("morgen.so:derived") or {}
+    vroom = derived.get("virtualRoom") or {}
+    raw_url = vroom.get("url")
+    url = raw_url if raw_url else None  # empty string → None
+    return {
+        "uid": uid,
+        "title": ev.get("title") or "(no title)",
+        "start": start_iso,
+        "end": end_iso,
+        "url": url,
+    }
+
+
+def render_upcoming_events_json(events: list, now: dt.datetime) -> list:
+    """Filter to future events, project each via `extract_event_json`,
+    sort by start ascending. Events that `extract_event_json` rejects
+    (no id, in the past, malformed) are silently skipped — better to
+    emit a smaller correct list than to fail the whole write."""
+    out = []
+    for ev in events:
+        rendered = extract_event_json(ev, now)
+        if rendered is not None:
+            out.append(rendered)
+    out.sort(key=lambda e: e["start"])
+    return out
 
 
 def render_event(ev: dict, dtstamp: str) -> tuple[str, str] | None:
@@ -169,7 +259,23 @@ def main(
         if f.name not in keep:
             f.unlink()
 
-    print(f"morgen-fetch: wrote {len(keep)} events", file=sys.stderr)
+    # Sibling JSON output: upcoming-events.json. Consumed by the meeting
+    # pill (for title/countdown/URL display) and the morgen-notifier (for
+    # T-10/T-2 alerts). Written AFTER the ICS pipeline so a failure here
+    # doesn't compromise khal's data; the .tmp + rename pattern makes
+    # the swap atomic on POSIX same-filesystem renames so consumers
+    # using FileView with watchChanges never observe a partial write.
+    upcoming = render_upcoming_events_json(events, now)
+    DEFAULT_JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = DEFAULT_JSON_PATH.with_suffix(".json.tmp")
+    tmp_path.write_text(json.dumps(upcoming, indent=2))
+    tmp_path.rename(DEFAULT_JSON_PATH)
+
+    print(
+        f"morgen-fetch: wrote {len(keep)} ICS events, "
+        f"{len(upcoming)} JSON upcoming",
+        file=sys.stderr,
+    )
     return 0
 
 

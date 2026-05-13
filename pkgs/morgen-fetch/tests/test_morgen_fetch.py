@@ -6,11 +6,18 @@ API surface drifts (Morgen changes a field name), the systemd unit fails
 loudly in journalctl and we'll know within minutes."""
 from __future__ import annotations
 
+import datetime as dt
 import os
 from pathlib import Path
 from unittest.mock import patch
 
-from morgen_fetch import escape_text, render_event, to_utc_stamp
+from morgen_fetch import (
+    escape_text,
+    extract_event_json,
+    render_event,
+    render_upcoming_events_json,
+    to_utc_stamp,
+)
 
 
 # ── env-var path resolution (main_cli wiring) ───────────────────────
@@ -226,3 +233,137 @@ def test_render_event_ics_uses_crlf_line_endings():
     for line in lines[:-1]:
         assert line
         assert "\n" not in line
+
+
+# ── extract_event_json ──────────────────────────────────────────────
+# Pure function: takes a JSCalendar event dict + a `now` datetime, returns
+# either None (past event / no id) or the dict shape upcoming-events.json
+# emits. URL handling is the headline addition: pull from
+# morgen.so:derived.virtualRoom.url, coerce empty/missing to None.
+
+# `now` for all these tests is 09:00 UTC on Jan 15, 2024. The _base_event
+# helper produces an event starting at 10:00 UTC the same day, so by
+# default it's in the future. Tests that need the past override `start`.
+NOW_2024 = dt.datetime(2024, 1, 15, 9, 0, 0, tzinfo=dt.timezone.utc)
+
+
+def _extract(ev: dict, now: dt.datetime = NOW_2024) -> dict:
+    """Test helper mirroring _render: happy-path tests know the event has
+    a UID and is in the future, so unwrap the Optional once and let the
+    None-return contract be tested by dedicated tests."""
+    result = extract_event_json(ev, now)
+    assert result is not None, "extract_event_json returned None unexpectedly"
+    return result
+
+
+def test_extract_event_json_basic():
+    result = _extract(_base_event())
+    assert result["uid"] == "abc-123"
+    assert result["title"] == "Test meeting"
+    assert result["start"] == "2024-01-15T10:00:00Z"
+    assert result["end"] == "2024-01-15T11:00:00Z"  # PT1H default duration
+    assert result["url"] is None  # no virtualRoom in _base_event
+
+
+def test_extract_event_json_skips_past_events():
+    ev = _base_event(start="2024-01-15T08:00:00")  # 1 hour before NOW_2024
+    assert extract_event_json(ev, NOW_2024) is None
+
+
+def test_extract_event_json_returns_none_without_uid_or_id():
+    ev = _base_event()
+    del ev["uid"]
+    # _base_event doesn't add an "id" field, so with uid removed there's
+    # no stable identifier; extract returns None for the same reason
+    # render_event does.
+    assert extract_event_json(ev, NOW_2024) is None
+
+
+def test_extract_event_json_falls_back_to_id_field():
+    # Mirrors render_event's behavior — Morgen returns `id` for events
+    # synced from some providers (notably M365).
+    ev = _base_event()
+    del ev["uid"]
+    ev["id"] = "fallback-123"
+    assert _extract(ev)["uid"] == "fallback-123"
+
+
+def test_extract_event_json_pulls_url_from_virtual_room():
+    ev: dict = _base_event()
+    ev["morgen.so:derived"] = {"virtualRoom": {"url": "https://zoom.us/j/123"}}
+    assert _extract(ev)["url"] == "https://zoom.us/j/123"
+
+
+def test_extract_event_json_url_is_none_when_empty_string():
+    # Morgen sometimes returns an empty-string URL for events the API
+    # couldn't extract a join link from. Downstream code expects None for
+    # "no URL"; coercing avoids the consumer having to special-case "".
+    ev: dict = _base_event()
+    ev["morgen.so:derived"] = {"virtualRoom": {"url": ""}}
+    assert _extract(ev)["url"] is None
+
+
+def test_extract_event_json_handles_missing_virtualRoom():
+    # `morgen.so:derived` present but `virtualRoom` absent — common for
+    # in-person events Morgen has classified but found no join link in.
+    ev: dict = _base_event()
+    ev["morgen.so:derived"] = {}
+    assert _extract(ev)["url"] is None
+
+
+def test_extract_event_json_handles_missing_derived_block_entirely():
+    ev = _base_event()
+    # _base_event already lacks "morgen.so:derived"; confirm extract is
+    # robust to the whole block being absent (not just sub-keys missing).
+    assert "morgen.so:derived" not in ev
+    assert _extract(ev)["url"] is None
+
+
+def test_extract_event_json_end_from_explicit_duration():
+    assert _extract(_base_event(duration="PT30M"))["end"] == "2024-01-15T10:30:00Z"
+
+
+def test_extract_event_json_end_falls_back_for_unparseable_duration():
+    # render_event's existing fallback is "default PT1H if duration is
+    # weird" — extract_event_json mirrors that so the two outputs stay
+    # consistent for the same event.
+    assert _extract(_base_event(duration="garbage"))["end"] == "2024-01-15T11:00:00Z"
+
+
+def test_extract_event_json_translates_local_time_to_utc():
+    # Same arithmetic as to_utc_stamp but emitted in ISO-with-colons form.
+    # Jan in LA is PST (UTC-8); 10:00 local → 18:00 UTC.
+    ev = _base_event(timeZone="America/Los_Angeles")
+    # Use a `now` early enough that the LA-translated start is still in
+    # the future when interpreted as UTC.
+    now = dt.datetime(2024, 1, 15, 0, 0, 0, tzinfo=dt.timezone.utc)
+    result = _extract(ev, now)
+    assert result["start"] == "2024-01-15T18:00:00Z"
+    assert result["end"] == "2024-01-15T19:00:00Z"
+
+
+# ── render_upcoming_events_json ─────────────────────────────────────
+
+
+def test_render_upcoming_events_json_filters_past_and_sorts():
+    events = [
+        _base_event(uid="future-late", start="2024-01-15T14:00:00"),
+        _base_event(uid="past", start="2024-01-15T08:00:00"),
+        _base_event(uid="future-early", start="2024-01-15T11:00:00"),
+    ]
+    result = render_upcoming_events_json(events, NOW_2024)
+    assert [e["uid"] for e in result] == ["future-early", "future-late"]
+
+
+def test_render_upcoming_events_json_empty_list():
+    assert render_upcoming_events_json([], NOW_2024) == []
+
+
+def test_render_upcoming_events_json_skips_events_without_id():
+    events = [
+        _base_event(uid="has-id", start="2024-01-15T11:00:00"),
+        {"title": "no uid", "start": "2024-01-15T12:00:00", "timeZone": "UTC"},
+    ]
+    result = render_upcoming_events_json(events, NOW_2024)
+    assert len(result) == 1
+    assert result[0]["uid"] == "has-id"

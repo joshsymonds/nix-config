@@ -2372,11 +2372,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1778546706,
-        "narHash": "sha256-K6cqgl/ddbh1MPWQIaQIHLUbT4kUObHFvIO1O9JeMnk=",
+        "lastModified": 1778631320,
+        "narHash": "sha256-95NrWk391QL5YgGs/Lf21EN8DdhwOPSJj5m9LtbSvrY=",
         "owner": "joshsymonds",
         "repo": "lazycam",
-        "rev": "c9f0e1c0db259504e85a2f61279621c070690256",
+        "rev": "36fa7aa4aeec470895bf670acc9064a3dd8bc840",
         "type": "github"
       },
       "original": {
@@ -3697,7 +3697,8 @@
         "sound-stage": "sound-stage",
         "spicetify-nix": "spicetify-nix",
         "targetprocess-mcp": "targetprocess-mcp",
-        "treefmt-nix": "treefmt-nix_4"
+        "treefmt-nix": "treefmt-nix_4",
+        "vkd3d-proton-josh": "vkd3d-proton-josh"
       }
     },
     "rust-overlay": {
@@ -4142,6 +4143,25 @@
         "owner": "numtide",
         "repo": "treefmt-nix",
         "type": "github"
+      }
+    },
+    "vkd3d-proton-josh": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778631249,
+        "narHash": "sha256-J72wt/DHXDtSUxFD50gzjYdSsqLCtcf4iHjiiU6mYa8=",
+        "ref": "josh/refuse-zero-swapchain-resize",
+        "rev": "f045e572f43321161fc33b94fd472c7a7c10c2f9",
+        "revCount": 6443,
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/joshsymonds/vkd3d-proton.git"
+      },
+      "original": {
+        "ref": "josh/refuse-zero-swapchain-resize",
+        "submodules": true,
+        "type": "git",
+        "url": "https://github.com/joshsymonds/vkd3d-proton.git"
       }
     },
     "websocketpp-src": {

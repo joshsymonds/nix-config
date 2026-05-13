@@ -45,7 +45,19 @@
     standbyBackground = "44444444-4444-4444-4444-444444444444";
     activeBackground = "55555555-5555-5555-5555-555555555555";
     bgRemovalFilter = "66666666-6666-6666-6666-666666666666";
+    faceTrackerFilter = "77777777-7777-7777-7777-777777777777";
   };
+
+  # Absolute store path to the dlib 5-point landmark predictor that
+  # `face_tracker_filter` loads when landmark_detection is enabled.
+  # pkgs/obs-face-tracker/default.nix installs the file at
+  # `<modelDir>/dlib_face_landmark_model/shape_predictor_5_face_landmarks.dat`
+  # (modelDir exposed via passthru). Could rely on the plugin's own
+  # obs_module_file() auto-discovery (which would also find this file
+  # since wrapOBS symlinks the plugin's share/ into the unified tree),
+  # but the explicit path is more debuggable from logs and OBS Properties.
+  faceLandmarkData =
+    "${pkgs.obs-face-tracker}/${pkgs.obs-face-tracker.passthru.modelDir}/dlib_face_landmark_model/shape_predictor_5_face_landmarks.dat";
 
   # Default scene-item transform — top-left origin, scale 1.0, no
   # crop or bounding. align=5 is OBS's ALIGN_LEFT|ALIGN_TOP.
@@ -155,6 +167,63 @@
         muted = false;
         private_settings = {};
         filters = [
+          # Face tracker filter — norihiro/obs-face-tracker. The "Center
+          # Stage" analog: detects the face with dlib, smooths a crop
+          # rect with a PI controller + low-pass filter, applies a GPU
+          # resample so the face stays roughly centered + auto-zoomed
+          # regardless of where the user is in frame.
+          #
+          # Filter ordering invariant: face_tracker_filter runs FIRST,
+          # background_removal runs SECOND. The face tracker produces a
+          # cropped/zoomed RGB frame; bg-removal then operates on that
+          # already-framed image. Reversing the order would have RVM
+          # segment the wide frame and then the tracker would crop the
+          # already-alphaed result — same matte quality but the
+          # tracker's detector runs on more pixels for no benefit.
+          {
+            id = "face_tracker_filter";
+            versioned_id = "face_tracker_filter";
+            uuid = uuid.faceTrackerFilter;
+            name = "Face Tracker";
+            settings = {
+              # detector_engine: 0 = dlib HOG, 1 = dlib CNN.
+              # HOG runs single-threaded on CPU and is what every other
+              # consumer-grade face tracker uses; ~3 ms/frame on a
+              # 9800X3D. CNN gives better small-face recall but ~50x
+              # the cost. V1 picks HOG — single face, full-frame, no
+              # need for the CNN's recall.
+              detector_engine = 0;
+              # detector_dlib_hog_model / detector_dlib_cnn_model
+              # are intentionally not set here. The plugin's update()
+              # path runs obs_module_file() against
+              # `dlib_hog_model/frontal_face_detector.dat` and sets
+              # those defaults from the resolved path
+              # (face-tracker-manager.cpp:459/466). Since wrapOBS
+              # symlinks our pkgs.obs-face-tracker share/ tree into
+              # the unified plugin data dir, obs_module_file() finds
+              # both .dat files automatically.
+
+              # landmark_detection: when enabled the filter runs dlib's
+              # 5-point shape predictor on each detected face and uses
+              # the landmarks (eye corners, nose tip) instead of the raw
+              # bbox center for the tracking target. Smoother and more
+              # stable than bbox-only tracking — bbox jitters by several
+              # px per frame as the HOG response surface shifts; landmarks
+              # are sub-pixel-stable.
+              landmark_detection = true;
+              landmark_detection_data = faceLandmarkData;
+
+              # Tracking dynamics + crop padding + image scale are
+              # left at the plugin's defaults (face-tracker.cpp:317-329
+              # and face-tracker-manager.cpp:451-457). These are the
+              # values upstream tuned over multiple releases — Kp=0.95
+              # / Ki=0.3 PI gains with Td=0.42 derivative + Tdlpf=2.0
+              # low-pass produces the characteristic "subject-following
+              # cinematographer" feel without lurching or overshoot.
+              # Re-tune here only when an empirical use case demands it.
+            };
+            enabled = true;
+          }
           # Background Removal filter — royshil/locaal-ai's
           # obs-backgroundremoval plugin. Configured per V1 plan:
           # alpha-output mode + RVM model + CPU inference +

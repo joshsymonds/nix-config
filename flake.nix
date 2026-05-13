@@ -212,6 +212,25 @@
       flake = false;
     };
 
+    # vkd3d-proton-josh — joshsymonds/vkd3d-proton fork, branch
+    # josh/refuse-zero-swapchain-resize. Forked from the cachyos-pinned
+    # commit (HK upstream 64f5776, "vkd3d: Add descriptor heap retain
+    # workaround for Ark Ascended" — proton-20260410 lineage + v3.0.1).
+    # Adds a single guard in dxgi_vk_swap_chain_ChangeProperties that
+    # refuses 0×0 ResizeBuffers when the previous swapchain dimensions
+    # were valid. On Wine + Wayland (xwayland-satellite) the resolved
+    # client area can transiently come back as 0 when a swapchain wrapper
+    # like NVIDIA Streamline DLSS-G tears down/recreates the HWND while
+    # the X11 surface mapping is still settling — vkd3d-proton would
+    # collapse the chain to 0×0 and the next Present would crash.
+    # PRAGMATA hits this in bare proton (no gamescope) with Streamline +
+    # Blackwell. See pkgs/vkd3d-proton/default.nix. Submodules required:
+    # dxil-spirv (and its transitive SPIRV-Cross/Tools/Headers).
+    vkd3d-proton-josh = {
+      url = "git+https://github.com/joshsymonds/vkd3d-proton.git?ref=josh/refuse-zero-swapchain-resize&submodules=1";
+      flake = false;
+    };
+
     # nix-cachyos-kernel — CachyOS kernel for gnomon, completing the
     # gaming-edge stack alongside proton-cachyos + mesa-git. Provides
     # the BORE-EEVDF scheduler + cachy patchset + BBR3 on top of the

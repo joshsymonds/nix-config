@@ -56,6 +56,10 @@
           name = "team-status";
           path = "/home/joshsymonds/.claude-work/team-status";
         }
+        {
+          name = "harvest-weekly";
+          path = "/home/joshsymonds/.claude-work/harvest-weekly";
+        }
       ]
     );
 in {

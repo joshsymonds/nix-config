@@ -4148,11 +4148,11 @@
     "vkd3d-proton-josh": {
       "flake": false,
       "locked": {
-        "lastModified": 1778631249,
-        "narHash": "sha256-J72wt/DHXDtSUxFD50gzjYdSsqLCtcf4iHjiiU6mYa8=",
+        "lastModified": 1778636146,
+        "narHash": "sha256-6pIn9MKjwjbKlNeae4a0IfpZ3eiauihmkciEqRPZS0Q=",
         "ref": "josh/refuse-zero-swapchain-resize",
-        "rev": "f045e572f43321161fc33b94fd472c7a7c10c2f9",
-        "revCount": 6443,
+        "rev": "1969044aa5ddec8ed02e4ac0bc718420864a154f",
+        "revCount": 6444,
         "submodules": true,
         "type": "git",
         "url": "https://github.com/joshsymonds/vkd3d-proton.git"

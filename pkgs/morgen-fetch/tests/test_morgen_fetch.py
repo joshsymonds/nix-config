@@ -6,7 +6,50 @@ API surface drifts (Morgen changes a field name), the systemd unit fails
 loudly in journalctl and we'll know within minutes."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+from unittest.mock import patch
+
 from morgen_fetch import escape_text, render_event, to_utc_stamp
+
+
+# ── env-var path resolution (main_cli wiring) ───────────────────────
+
+
+def _resolve_key_path() -> Path:
+    """Mirror the logic of main_cli's key-path resolution. Pulled out
+    so tests don't have to call main_cli (which calls sys.exit)."""
+    raw = os.environ.get("MORGEN_FETCH_KEY_FILE") or "~/.config/morgen-fetch/api-key"
+    return Path(os.path.expandvars(raw)).expanduser()
+
+
+def test_resolve_key_path_expands_xdg_runtime_dir():
+    # Home-manager agenix hands the systemd unit a path containing the
+    # literal `${XDG_RUNTIME_DIR}` placeholder. systemd's Environment=
+    # doesn't expand it; we have to. Without this, the service fails
+    # with "missing API key at ${XDG_RUNTIME_DIR}/agenix/..." which is
+    # exactly the regression that prompted this test.
+    with patch.dict(os.environ, {
+        "XDG_RUNTIME_DIR": "/run/user/1000",
+        "MORGEN_FETCH_KEY_FILE": "${XDG_RUNTIME_DIR}/agenix/morgen-api-key",
+    }, clear=False):
+        assert _resolve_key_path() == Path("/run/user/1000/agenix/morgen-api-key")
+
+
+def test_resolve_key_path_passes_through_already_resolved_path():
+    with patch.dict(os.environ, {
+        "MORGEN_FETCH_KEY_FILE": "/run/user/1000/agenix/morgen-api-key",
+    }, clear=False):
+        assert _resolve_key_path() == Path("/run/user/1000/agenix/morgen-api-key")
+
+
+def test_resolve_key_path_expands_tilde_in_fallback():
+    with patch.dict(os.environ, {}, clear=True):
+        # No env var set → fall back to ~/.config/morgen-fetch/api-key,
+        # which must expand to an absolute path under $HOME.
+        result = _resolve_key_path()
+        assert result.is_absolute()
+        assert str(result).endswith("/.config/morgen-fetch/api-key")
 
 
 # ── escape_text ─────────────────────────────────────────────────────

@@ -179,11 +179,15 @@ def main_cli() -> None:
     Honors $MORGEN_FETCH_KEY_FILE so the systemd unit can point us at an
     agenix-decrypted file under /run/user/$UID/agenix/ instead of a
     plaintext file in $HOME. Falls back to ~/.config/morgen-fetch/api-key
-    for local/dev runs."""
-    key_path = Path(
-        os.environ.get("MORGEN_FETCH_KEY_FILE")
-        or "~/.config/morgen-fetch/api-key"
-    ).expanduser()
+    for local/dev runs.
+
+    Home-manager agenix produces .path values containing literal
+    `${XDG_RUNTIME_DIR}` placeholders so the same Nix-evaluated string
+    works across different UIDs; systemd's `Environment=` doesn't expand
+    those, so we run expandvars + expanduser ourselves here. A bare path
+    or an already-expanded path roundtrips through both calls unchanged."""
+    raw = os.environ.get("MORGEN_FETCH_KEY_FILE") or "~/.config/morgen-fetch/api-key"
+    key_path = Path(os.path.expandvars(raw)).expanduser()
     sys.exit(main(key_path=key_path))
 
 

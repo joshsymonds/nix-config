@@ -8,9 +8,7 @@
     ../desktop-x86_64-linux.nix
     ../vesktop
     ../spicetify
-    ../obs
     ../qbittorrent
-    inputs.lazycam.homeManagerModules.default
   ];
 
   home.packages = with pkgs; [
@@ -33,14 +31,6 @@
     # bypass ZoomLauncher entirely and exec /app/extra/zoom/zoom directly,
     # which lets Qt auto-pick libqwayland-generic and works cleanly.
 
-    # OBS Studio + lazycam-related scenes live in ../obs (imported
-    # above) — that module ships the wrapped OBS package, the
-    # declarative scene collection, and the WebSocket server config.
-    # Don't add pkgs.obs-studio here.
-    #
-    # The "Real Webcam" v4l2_input source starts with device_id="";
-    # lazycam fills it in on Activate via SetInputSettings. See the
-    # services.lazycam block below.
     # spotify is provided by ../spicetify (a wrapped Spotify with the
     # comfy theme + transparency snippet baked in at build time). Don't
     # add pkgs.spotify here — the wrapper IS the spotify package.
@@ -368,51 +358,4 @@
     X-Flatpak=us.zoom.Zoom
   '';
 
-  # lazycam — on-demand v4l2loopback producer gating. Daemon watches
-  # /dev/video10 (the v4l2loopback device declared in
-  # hosts/gnomon/default.nix) and asks OBS to switch scenes via
-  # WebSocket v5 (127.0.0.1:4455) when consumers attach/detach. The
-  # privacy payoff is the hardware LED: OBS only holds /dev/video0
-  # while the "Active" scene is the program scene, so leaving Zoom /
-  # Meet / etc. genuinely releases the camera and turns the LED off.
-  #
-  # Requires a one-time OBS scene-collection setup: two scenes named
-  # "Active" (containing a Video Capture Device source against
-  # /dev/video0) and "Standby" (no camera source — image, color, or
-  # placeholder). OBS WebSocket server enabled in Tools → WebSocket
-  # Server Settings → Enable.
-  services.lazycam = {
-    enable = true;
-    # cameraSource names the OBS input that lazycam gates via
-    # SetInputSettings device_id. The OBS module ships this source
-    # with an empty device_id so OBS launches in the LED-off state;
-    # lazycam fills it in on Activate and clears it on Deactivate,
-    # which is the only reliable way to make the v4l2_input plugin
-    # release the camera fd (and the hardware LED with it).
-    cameraSource = "Real Webcam";
-    # cameraDevice defaults to /dev/video0 — gnomon's C920 lives
-    # there. If the device path ever shifts we'd set it here.
-
-    # OBS auto-starts at graphical-session.target with --startvirtualcam
-    # (see ../obs/default.nix), which opens /dev/video10 as a producer.
-    # Without this exclusion, lazycam would treat that producer-side
-    # open as a consumer attachment and pin itself in the Active state
-    # for the entire OBS lifetime — LED on whenever the user is logged
-    # in. Filter OBS out by comm so only real consumers (Zoom, Meet,
-    # ffmpeg, ...) count toward the ref-count.
-    #
-    # `.obs-wrapped` is the comm string the kernel reports for the
-    # nix-wrapped OBS process; verify on this host with:
-    #     cat /proc/$(pgrep -f obs | head -1)/comm
-    excludeComms = [".obs-wrapped"];
-
-    # All other options take their module defaults:
-    # - device      = /dev/video10
-    # - obsUrl      = ws://127.0.0.1:4455
-    # - sceneActive = "Active"
-    # - sceneStandby= "Standby"
-    # - stateSocket = null → daemon picks $XDG_RUNTIME_DIR/lazycam.sock
-    # - dryRun      = false (genuinely contact OBS)
-    # - debug       = false
-  };
 }

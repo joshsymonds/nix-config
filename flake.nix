@@ -107,18 +107,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # lazycam — on-demand v4l2loopback producer gating. Go daemon that
-    # watches /dev/video10 with inotify, ref-counts consumers, and asks
-    # OBS WebSocket v5 to switch between an "Active" scene (real camera
-    # source, hardware LED on) and "Standby" scene (no camera source,
-    # LED off). Lets the webcam LED honestly reflect "something is
-    # actually using me" instead of staying lit whenever OBS holds the
-    # device handle. Source at ~/Personal/lazycam (joshsymonds/lazycam).
-    lazycam = {
-      url = "github:joshsymonds/lazycam";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     # CC-Tools - Claude Code smart hooks
     cc-tools.url = "github:joshsymonds/cc-tools";
 

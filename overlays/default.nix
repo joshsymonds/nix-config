@@ -18,12 +18,6 @@ in {
     coder = final.callPackage ../pkgs/coder-cli {inherit (final) unzip;};
     invidious-companion = final.callPackage ../pkgs/invidious-companion {};
     newrelic-cli = final.callPackage ../pkgs/newrelic-cli {};
-    obs-face-tracker = final.callPackage ../pkgs/obs-face-tracker {};
-    # lazycam is built from its own flake (~/Personal/lazycam, exposed
-    # via inputs.lazycam). Surfacing it here means home-manager modules
-    # can reference `pkgs.lazycam` without consumers having to know it's
-    # not in nixpkgs.
-    lazycam = inputs.lazycam.packages.${final.stdenv.hostPlatform.system}.default;
     redlib-veraticus = final.callPackage ../pkgs/redlib-veraticus {
       inherit (inputs) crane;
       redlibSrc = inputs.redlib-fork.sourceInfo.outPath;

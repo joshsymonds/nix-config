@@ -9,6 +9,7 @@
     ../vesktop
     ../spicetify
     ../qbittorrent
+    ../calendar
   ];
 
   home.packages = with pkgs; [

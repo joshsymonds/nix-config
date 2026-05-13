@@ -16,6 +16,7 @@ in
       ../../modules/desktop/dms-niri.nix
       ../../modules/hardware/gpu-nvidia.nix
       ../../modules/services/keyd.nix
+      ../../modules/services/yubikey-auth.nix
       inputs.lanzaboote.nixosModules.lanzaboote
       inputs.nix-flatpak.nixosModules.nix-flatpak
     ];
@@ -30,6 +31,12 @@ in
       enable = true;
       users = ["joshsymonds"];
     };
+
+    # ── YubiKey auth: sudo / polkit / greetd login / DMS lock ──────────
+    # Touch the key plugged into the monitor's left-bezel Quick Access
+    # USB-A to authenticate. Password remains as fallback. See
+    # modules/services/yubikey-auth.nix for enrollment instructions.
+    services.yubikey-auth.enable = true;
 
     # ── Performance profile ─────────────────────────────────────────────
     performance.profile = "dev";
@@ -287,6 +294,14 @@ in
       "usb_storage"
       "sd_mod"
     ];
+
+    # ── LUKS: FIDO2 unlock fallback ────────────────────────────────────
+    # systemd-initrd auto-tries enrolled tokens in order: systemd-tpm2 first
+    # (silent, normal boot), then systemd-fido2 (touch the YubiKey), then
+    # the passphrase prompt. fido2-device=auto makes the FIDO2 attempt
+    # explicit so a future systemd change can't quietly drop it. Both
+    # YubiKeys are enrolled via `systemd-cryptenroll --fido2-device=auto`.
+    boot.initrd.luks.devices.cryptroot.crypttabExtraOpts = ["fido2-device=auto"];
 
     # ── Networking: static IP via systemd-networkd, wildcard interface match ──
     # Same pattern as ultraviolet/vermissian — no hardcoded interface name.

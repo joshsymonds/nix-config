@@ -270,6 +270,21 @@ def test_extract_event_json_skips_past_events():
     assert extract_event_json(ev, NOW_2024) is None
 
 
+def test_extract_event_json_skips_all_day_events():
+    # Morgen flags all-day events with `showWithoutTime: true` and a null
+    # timeZone. Without an explicit guard, extract_event_json's UTC
+    # fallback would stamp "2024-01-15T00:00:00" as midnight UTC and the
+    # pill would countdown to that — wrong for a 24-hour day-context
+    # entry like Eurovision or a holiday. Drop them.
+    ev = _base_event(
+        start="2024-01-16T00:00:00",
+        timeZone=None,
+        showWithoutTime=True,
+        duration="PT24H",
+    )
+    assert extract_event_json(ev, NOW_2024) is None
+
+
 def test_extract_event_json_returns_none_without_uid_or_id():
     ev = _base_event()
     del ev["uid"]

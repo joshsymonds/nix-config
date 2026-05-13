@@ -674,11 +674,11 @@
     "dms-meeting-pill": {
       "flake": false,
       "locked": {
-        "lastModified": 1778710574,
-        "narHash": "sha256-lAkcu01IyOfLTFdaM7u6FJOoM19LG3OkstKc0mg5dh8=",
+        "lastModified": 1778716495,
+        "narHash": "sha256-+aP4piX5/23mBZqOFRJps2g1OF8Ea1xG4OXKNI3Bis0=",
         "owner": "joshsymonds",
         "repo": "dms-meeting-pill",
-        "rev": "799d4a950fbb1984f67c4cf579023694aee583af",
+        "rev": "652000377819cf3a30dbf2f3ddf2511b6ce95ed8",
         "type": "github"
       },
       "original": {

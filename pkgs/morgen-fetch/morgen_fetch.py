@@ -106,6 +106,15 @@ def extract_event_json(ev: dict, now: dt.datetime) -> dict | None:
     uid = ev.get("uid") or ev.get("id")
     if not uid:
         return None
+    # All-day events (Morgen sends `showWithoutTime: true` and `timeZone:
+    # null` — they're dates, not datetimes) aren't meetings to count down
+    # to; they're day context. Skip them entirely so the upcoming pill
+    # doesn't show e.g. "Eurovision Semifinal 2 — 9m" when the user has
+    # an all-day calendar entry that morgen-fetch would otherwise stamp
+    # as midnight UTC. The ICS render path already special-cases these
+    # (line ~165, DTSTART;VALUE=DATE) so the JSON path mirrors that.
+    if ev.get("showWithoutTime"):
+        return None
     start_local = ev.get("start")
     if not start_local:
         return None

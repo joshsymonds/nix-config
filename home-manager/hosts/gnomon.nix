@@ -349,7 +349,18 @@
       ${stickyDaemon} -app-id '^Zoom$' -allow-moving-to-foreign-monitors 2>/dev/null &
       STICKY_PID=$!
       trap 'kill $STICKY_PID 2>/dev/null || true' EXIT
+      # Force Qt onto native Wayland (default Zoom flatpak honors $XDG_SESSION_TYPE
+      # via QT_QPA_PLATFORM only if the env var actually reaches inside the sandbox,
+      # and flatpak's bwrap swallows host env unless explicitly forwarded with --env=).
+      # GDK_BACKEND covers Zoom's embedded Chromium-shell (ZoomWebviewHost). Cursor
+      # behavior is materially better on Wayland: the XWayland path through
+      # xwayland-satellite has a cursor-warp pathway we haven't isolated that
+      # captures the cursor near floating Zoom helpers (annotate_toolbar etc.);
+      # native Wayland sidesteps it. Screen-share still works via the Wayland
+      # screencast portal (xdp + josh/zoom-screencast-fix's SHM fallback).
       flatpak run \
+        --env=QT_QPA_PLATFORM=wayland \
+        --env=GDK_BACKEND=wayland \
         --branch=stable \
         --arch=x86_64 \
         --command=sh \

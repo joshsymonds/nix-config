@@ -193,14 +193,28 @@ in {
     };
   };
 
-  # NFS mounts. `nofail` keeps a failed network mount from stalling boot at
-  # remote-fs.target → emergency mode. Bluedesert isn't authorized for the
-  # `creative` share on the NAS (per export ACL), so it gets the other three only.
+  # NFS mounts. Lazy/on-demand via systemd automount: nothing is mounted at
+  # boot; the kernel autofs intercepts the first access and triggers the
+  # actual mount then. A dead NAS therefore costs zero boot time (instead
+  # of the previous ~1m30s NFS mount-unit timeout per share), and only the
+  # process actually touching the share pays the latency — capped at 10s
+  # by x-systemd.mount-timeout so a stale process gives up fast. Shares
+  # idle-unmount after 10 minutes so a transient NAS reboot self-heals on
+  # the next access. `nofail` stays as belt-and-suspenders (with automount,
+  # remote-fs.target doesn't gate boot anyway, but the flag is harmless).
+  # Bluedesert isn't authorized for the `creative` share on the NAS (per
+  # export ACL), so it gets the other three only.
   fileSystems = let
     nfs = device: {
       device = device;
       fsType = "nfs";
-      options = ["nofail"];
+      options = [
+        "nofail"
+        "noauto"
+        "x-systemd.automount"
+        "x-systemd.mount-timeout=10s"
+        "x-systemd.idle-timeout=600"
+      ];
     };
   in
     lib.mkMerge [

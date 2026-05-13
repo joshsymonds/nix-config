@@ -118,7 +118,14 @@ in
       };
     };
 
-    systemd.network.wait-online.anyInterface = true;
+    # Wired LAN comes up in 1-3s when the link is live; cap the wait so a
+    # missing cable or dead switch doesn't hold network-online.target for
+    # the full 120s default. Bounds the cold-boot stall for everything
+    # downstream (cloudflare-tunnel, gluetun, atticd push, etc.).
+    systemd.network.wait-online = {
+      anyInterface = true;
+      timeout = 10;
+    };
     systemd.network.networks."10-lan" = {
       matchConfig.Name = "en*";
       address = ["${self.ip}/${toString subnet.prefixLength}"];

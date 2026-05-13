@@ -317,7 +317,16 @@ in
 
     environment.systemPackages = with pkgs; [sbctl tailscale];
 
-    systemd.network.wait-online.anyInterface = true;
+    # Wired LAN comes up in 1-3s when the cable is live; without this cap,
+    # systemd-networkd-wait-online holds network-online.target for the full
+    # 120s default if the link is unplugged or the switch is down. 10s is
+    # generous for the healthy case and bounds the cold-boot stall for
+    # everything that depends on network-online (gluetun, NFS-via-network,
+    # tailscale, etc.) when the network really is gone.
+    systemd.network.wait-online = {
+      anyInterface = true;
+      timeout = 10;
+    };
     systemd.network.networks."10-lan" = {
       matchConfig.Name = "en*";
       address = ["${self.ip}/${toString subnet.prefixLength}"];

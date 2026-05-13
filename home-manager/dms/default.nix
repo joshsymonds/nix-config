@@ -142,9 +142,9 @@ in {
         # Fallback: if DP-2 disconnects and only one screen remains,
         # show the bar on whatever's left rather than vanishing entirely.
         showOnLastDisplay = true;
-        leftWidgets = ["claudeCodeUsage" "systemTray"];
+        leftWidgets = ["claudeCodeUsage" "cpuUsage" "memUsage" "gpuPill" "bandwidthPill"];
         centerWidgets = ["music" "clock" "meetingPill"];
-        rightWidgets = ["cpuUsage" "memUsage" "gpuPill" "bandwidthPill" "controlCenterButton"];
+        rightWidgets = ["systemTray" "controlCenterButton"];
         spacing = 4;
         innerPadding = 0;
         bottomGap = 0;

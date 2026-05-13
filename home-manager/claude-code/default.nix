@@ -39,7 +39,9 @@
   # Skills dir as a linkFarm derivation: nix-managed skills + the
   # team-status skill at an out-of-store writable path so iteration
   # on team-status does not require a rebuild. New skills added under
-  # ./skills/ are picked up automatically.
+  # ./skills/ are picked up automatically. Per-host opt-in skills go
+  # in programs.claudeCode.extraSkills (host-skills/ on disk, named
+  # so they're discoverable but not auto-included on every host).
   skillsDir = let
     nixSkills = lib.attrNames (
       lib.filterAttrs (_: t: t == "directory") (builtins.readDir ./skills)
@@ -51,6 +53,11 @@
           path = ./skills + "/${n}";
         })
         nixSkills)
+      ++ (lib.mapAttrsToList (n: p: {
+          name = n;
+          path = p;
+        })
+        cfg.extraSkills)
       ++ [
         {
           name = "team-status";
@@ -71,6 +78,18 @@ in {
       then imported from CLAUDE.md via @host.md. Used to ground agents about
       which physical machine they're running on (hardware, role, capabilities).
       Empty string produces an empty file; the @-import is harmless in that case.
+    '';
+  };
+
+  options.programs.claudeCode.extraSkills = lib.mkOption {
+    type = lib.types.attrsOf lib.types.path;
+    default = {};
+    description = ''
+      Per-host opt-in skills, merged into the skills linkFarm under
+      ~/.claude/skills/<name>. Use for skills whose trigger surface only
+      exists on one host (e.g., debugging-linux-games on the gaming
+      machine) and shouldn't load on hosts where they'd be dead weight.
+      Map entries: name → directory containing SKILL.md.
     '';
   };
 

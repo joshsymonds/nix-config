@@ -84,6 +84,17 @@
   # Same signing key vermissian uses — single user identity across machines
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
 
+  # Gnomon-only Claude skill: research-first methodology for Steam-on-Linux
+  # debugging. Born from the PRAGMATA debacle (commit 6251c4c) where ~10
+  # hours of fork patches turned out to be unnecessary; the actual fix was
+  # a game CLI flag findable in 15 minutes of community research. The
+  # skill enforces the 6-source checklist before any shim patching. Lives
+  # in host-skills/ rather than skills/ because the trigger surface (Steam
+  # games on Linux) only exists on gnomon — no point loading it on the
+  # mac, headless servers, or vermissian.
+  programs.claudeCode.extraSkills.debugging-linux-games =
+    ../claude-code/host-skills/debugging-linux-games;
+
   programs.claudeCode.hostContext = ''
     # Host: gnomon (Linux NixOS, x86_64)
 

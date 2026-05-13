@@ -297,6 +297,20 @@ in {
           # comment two lines above already covers the w == scaleW case;
           # this generalizes the same max() fix to the override-window case.
           ../pkgs/gamescope-patches/scale-by-buffer-when-x11-geom-smaller.patch
+
+          # win_is_useless (steamcompmgr.cpp:3259) marked any 1×1 X11 window
+          # as "useless" and excluded it from focusable windows entirely.
+          # The original AoE2-DE-Xbox-Login fix is correct for *secondary*
+          # 1×1 overlays, but RE Engine titles (PRAGMATA) leave their MAIN
+          # X11 window at 1×1 for DXGI exclusive fullscreen and render via
+          # the bypass layer. Excluding them means paint_window_commit is
+          # never called for them — the swapchain is bound, frames present,
+          # but nothing composes; the game black-screens despite full GPU
+          # activity. Patch exempts 1×1 windows that have an active
+          # content_override (i.e. a gamescope_swapchain.override_window_-
+          # content has bound a real swapchain to them); the AoE2 case is
+          # preserved because the login overlay has no content_override.
+          ../pkgs/gamescope-patches/win-is-useless-respect-content-override.patch
         ];
       });
 

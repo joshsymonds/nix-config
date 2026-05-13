@@ -863,6 +863,22 @@ in {
           block-pointer-constraints true
       }
 
+      // Zoom helper windows — `as_toolbar` (share-controls bar),
+      // `zoom_linux_float_video_window` (gallery / picture-in-picture
+      // thumbnail), `annotate_toolbar` (already matched above for
+      // pointer-lock), and any future Zoom secondary windows. Promotes
+      // them to render ABOVE fullscreen windows so they stay visible
+      // AND clickable when the user fullscreens another app (which is
+      // the common pattern: share screen, fullscreen the shared app,
+      // need to reach the toolbar). The rule is a no-op for tiled
+      // windows, so the main Zoom Workplace window is unaffected.
+      // Downstream-only config from the josh/render-above-fullscreen
+      // patch (see INTEGRATION.md).
+      window-rule {
+          match app-id="^Zoom$"
+          render-above-fullscreen true
+      }
+
       // Vesktop — Discord client. Pairs with home-manager/vesktop's
       // activation script that flips Vencord's `transparent: true`. With
       // that flag set, Vesktop's BrowserWindow opens with Electron

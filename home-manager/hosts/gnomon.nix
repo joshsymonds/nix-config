@@ -377,5 +377,4 @@
     run ${pkgs.xdg-utils}/bin/xdg-mime default us.zoom.Zoom.desktop x-scheme-handler/zoommtg
     run ${pkgs.xdg-utils}/bin/xdg-mime default us.zoom.Zoom.desktop x-scheme-handler/zoomus
   '';
-
 }

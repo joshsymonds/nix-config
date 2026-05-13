@@ -469,9 +469,20 @@ in {
     "Alt+Z" = {
       hotkey-overlay.title = "Focus or Launch Zoom";
       action.spawn = [
-        "focus-or-spawn" "--app-id" "Zoom" "--title-regex" "^Meeting$" "--"
-        "focus-or-spawn" "--app-id" "Zoom" "--title-regex" "^Zoom Workplace" "--"
-        "${pkgs.gtk3}/bin/gtk-launch" "us.zoom.Zoom"
+        "focus-or-spawn"
+        "--app-id"
+        "Zoom"
+        "--title-regex"
+        "^Meeting$"
+        "--"
+        "focus-or-spawn"
+        "--app-id"
+        "Zoom"
+        "--title-regex"
+        "^Zoom Workplace"
+        "--"
+        "${pkgs.gtk3}/bin/gtk-launch"
+        "us.zoom.Zoom"
       ];
     };
 

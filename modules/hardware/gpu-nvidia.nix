@@ -84,7 +84,8 @@ in {
     # package uses its own upstream default — matching what
     # cache.nixos-cuda.org pre-builds, so we get cache hits instead
     # of multi-hour local rebuilds for onnxruntime / pytorch / etc.
-    nixpkgs.config.cudaCapabilities = lib.mkIf (cfg.cudaArches != [])
+    nixpkgs.config.cudaCapabilities =
+      lib.mkIf (cfg.cudaArches != [])
       cfg.cudaArches;
 
     services.xserver.videoDrivers = ["nvidia"];

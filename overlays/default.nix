@@ -231,7 +231,7 @@ in {
       # black. Flip the build option on so the layer is available
       # system-wide. The layer auto-activates only inside a gamescope
       # session via env-var presence, so it's a no-op outside gamescope.
-      gamescope = prev.gamescope.override { enableWsi = true; };
+      gamescope = prev.gamescope.override {enableWsi = true;};
 
       proton-cachyos-x86_64-v3 = prev.proton-cachyos-x86_64-v3.overrideAttrs (old: {
         # Drop libvpx.so.9 into proton's bundled lib dir. proton-cachyos's
@@ -255,10 +255,12 @@ in {
         # SLR sniper's working classic SDL2, then sdl2-compat's runtime
         # dlopen of libSDL3 failed inside the sniper. Wine's winebus uses
         # the sniper's SDL2 fine when we stay out of its way.
-        postFixup = (old.postFixup or "") + ''
-          install -m 0644 ${libvpxLibPath}/lib/libvpx.so.9 \
-            $steamcompattool/files/lib/x86_64-linux-gnu/libvpx.so.9
-        '';
+        postFixup =
+          (old.postFixup or "")
+          + ''
+            install -m 0644 ${libvpxLibPath}/lib/libvpx.so.9 \
+              $steamcompattool/files/lib/x86_64-linux-gnu/libvpx.so.9
+          '';
       });
       proton-gamescope = _final.callPackage ../pkgs/proton-gamescope {};
     })

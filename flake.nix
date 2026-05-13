@@ -65,13 +65,15 @@
     # DankMaterialShell — Quickshell-based desktop shell for niri (and others).
     # Provides notifications, launcher, lockscreen, polkit agent, idle, login greeter
     # as cohesive Quickshell modules, replacing the typical mako/fuzzel/swaylock stitchwork.
-    # Tracking a personal fork on the `josh/chrome-shader` branch — long-lived
-    # branch rebased onto upstream master when picking up new DMS releases.
-    # Source lives in ~/Personal/DankMaterialShell with `upstream` remote
-    # pointing at AvengeMedia; refresh with
-    # `git fetch upstream && git rebase upstream/master && git push -f`.
+    # Tracks `josh/integration` on a personal fork: an octopus-merge of the
+    # currently-deployed patch branches (chrome-shader, wider-pills, …) +
+    # a tooling commit (CLAUDE.md, INTEGRATION.md). Source lives at
+    # ~/Personal/DankMaterialShell — see its CLAUDE.md / INTEGRATION.md
+    # for the branch model and the re-derivation recipe. To bump after
+    # adding a patch branch: re-derive integration in that repo, push -f,
+    # then `nix flake update dank-material-shell` here.
     dms = {
-      url = "github:joshsymonds/DankMaterialShell/josh/chrome-shader";
+      url = "github:joshsymonds/DankMaterialShell/josh/integration";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

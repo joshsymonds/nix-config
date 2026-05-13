@@ -146,7 +146,7 @@ in {
         centerWidgets = ["music" "clock" "weather"];
         rightWidgets = ["systemTray" "clipboard" "cpuUsage" "memUsage" "notificationButton" "battery" "controlCenterButton"];
         spacing = 4;
-        innerPadding = 4;
+        innerPadding = 0;
         bottomGap = 0;
         # transparency = 0 makes the bar's painted Shape (BarCanvas's
         # surfaceContainer-coloured rectangle) fully invisible. The
@@ -169,8 +169,15 @@ in {
         # circles and wider ones as stadiums. Custom barConfig key
         # added in DMS BasePill.qml on the chrome-shader fork.
         widgetPill = true;
-        maximizeWidgetIcons = false;
-        maximizeWidgetText = false;
+        # With josh/wider-pills pushing widgetThickness to 36 (in a 40px
+        # bar), the default icon sizing — `(barThickness/48) * (24-6)`
+        # ≈ 15px — is too small for the now-chunkier pills.
+        # maximizeWidgetIcons swaps the base from iconSize (24) to
+        # iconSizeLarge (32); maximizeWidgetText multiplies text by 1.5.
+        # See Theme.qml barIconSize / barTextSize. iconScale/fontScale are
+        # available as further multipliers if needed.
+        maximizeWidgetIcons = true;
+        maximizeWidgetText = true;
         removeWidgetPadding = false;
         widgetPadding = 8;
         gothCornersEnabled = false;

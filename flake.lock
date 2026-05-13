@@ -626,11 +626,11 @@
     "dms-bandwidth-pill": {
       "flake": false,
       "locked": {
-        "lastModified": 1778703358,
-        "narHash": "sha256-iChGJPSao4Yj9Mh7Z7QCgxWXJNQqL15sD+MdhnWqcTk=",
+        "lastModified": 1778704889,
+        "narHash": "sha256-Zg6tmofUqEHTvR3wZGL/YX70ZsfAe5q7J/L2f6GmTsk=",
         "owner": "joshsymonds",
         "repo": "dms-bandwidth-pill",
-        "rev": "7da243e959867e1e728e5d0b3664b465b4e561ff",
+        "rev": "aaf78c4c3ae47b817ff0d8a49edba87e86c6dbb5",
         "type": "github"
       },
       "original": {
@@ -668,6 +668,22 @@
       "original": {
         "owner": "joshsymonds",
         "repo": "dms-gpu-pill",
+        "type": "github"
+      }
+    },
+    "dms-meeting-pill": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778705202,
+        "narHash": "sha256-8cGIR0BLg3RLyuViWnY4AjeUdiBNrJsqU028rUEqbWA=",
+        "owner": "joshsymonds",
+        "repo": "dms-meeting-pill",
+        "rev": "8aa18089d5b35ade1c755cddb46899367b9b4325",
+        "type": "github"
+      },
+      "original": {
+        "owner": "joshsymonds",
+        "repo": "dms-meeting-pill",
         "type": "github"
       }
     },
@@ -2687,6 +2703,7 @@
         "dms-bandwidth-pill": "dms-bandwidth-pill",
         "dms-claudecode": "dms-claudecode",
         "dms-gpu-pill": "dms-gpu-pill",
+        "dms-meeting-pill": "dms-meeting-pill",
         "flake-parts": "flake-parts_4",
         "gambit": "gambit",
         "googleworkspace-cli": "googleworkspace-cli",

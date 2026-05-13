@@ -143,7 +143,7 @@ in {
         # show the bar on whatever's left rather than vanishing entirely.
         showOnLastDisplay = true;
         leftWidgets = ["claudeCodeUsage" "systemTray"];
-        centerWidgets = ["music" "clock"];
+        centerWidgets = ["music" "clock" "meetingPill"];
         rightWidgets = ["cpuUsage" "memUsage" "gpuPill" "bandwidthPill" "controlCenterButton"];
         spacing = 4;
         innerPadding = 0;
@@ -276,6 +276,11 @@ in {
     # nvidia-smi (ships with the proprietary driver on gnomon). Works
     # only with NVIDIA cards; AMD users want a different plugin.
     plugins.gpuPill.src = inputs.dms-gpu-pill;
+
+    # Next-meeting countdown pill. Reads khal (which we already pull
+    # in via enableCalendarEvents) → the vdir morgen-fetch populates
+    # → Morgen API. Glance widget: icon + "12m" / "2h" / "2d".
+    plugins.meetingPill.src = inputs.dms-meeting-pill;
   };
 
   # Promote DMS modals (spotlight, settings, etc.) to the wlr-layer-shell

@@ -142,6 +142,15 @@
       flake = false;
     };
 
+    # dms-meeting-pill — DMS plugin showing the countdown to your next
+    # upcoming calendar event (read via khal, which DMS already brings
+    # in for enableCalendarEvents). Paired with morgen-fetch (pkgs/
+    # morgen-fetch) the pipeline is: Morgen API → vdir → khal → pill.
+    dms-meeting-pill = {
+      url = "github:joshsymonds/dms-meeting-pill";
+      flake = false;
+    };
+
     # Gambit — Claude Code skills marketplace (consumed as a directory
     # source; deployed into both ~/.claude and ~/.claude-work).
     gambit.url = "github:joshsymonds/gambit";

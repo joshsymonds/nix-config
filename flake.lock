@@ -609,17 +609,33 @@
         "quickshell": "quickshell"
       },
       "locked": {
-        "lastModified": 1778699192,
-        "narHash": "sha256-C7pKGAbijEGlVrphta8tIMkRCCgS4OKGzoY3U07Jq/0=",
+        "lastModified": 1778704274,
+        "narHash": "sha256-UxOrSW/BfbHDGP45srrKK69h7RnjYpYFG6LdApsClGg=",
         "owner": "joshsymonds",
         "repo": "DankMaterialShell",
-        "rev": "c34f37ca79de6a36baba0faf0c93160cfe3a74e1",
+        "rev": "e0faac860d86ddc253c88a77975f0e4cff8d4913",
         "type": "github"
       },
       "original": {
         "owner": "joshsymonds",
         "ref": "josh/integration",
         "repo": "DankMaterialShell",
+        "type": "github"
+      }
+    },
+    "dms-bandwidth-pill": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778703358,
+        "narHash": "sha256-iChGJPSao4Yj9Mh7Z7QCgxWXJNQqL15sD+MdhnWqcTk=",
+        "owner": "joshsymonds",
+        "repo": "dms-bandwidth-pill",
+        "rev": "7da243e959867e1e728e5d0b3664b465b4e561ff",
+        "type": "github"
+      },
+      "original": {
+        "owner": "joshsymonds",
+        "repo": "dms-bandwidth-pill",
         "type": "github"
       }
     },
@@ -636,6 +652,22 @@
       "original": {
         "owner": "joshsymonds",
         "repo": "dms-claudecode",
+        "type": "github"
+      }
+    },
+    "dms-gpu-pill": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778704560,
+        "narHash": "sha256-g/rlpCPukqAtg8MtfrJKmdzbGycODpsLgl/kXgU9cew=",
+        "owner": "joshsymonds",
+        "repo": "dms-gpu-pill",
+        "rev": "694b47c68a8a693ce3f2c26ed7598044d6d4e9c2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "joshsymonds",
+        "repo": "dms-gpu-pill",
         "type": "github"
       }
     },
@@ -2652,7 +2684,9 @@
         "devenv": "devenv",
         "disko": "disko",
         "dms": "dms",
+        "dms-bandwidth-pill": "dms-bandwidth-pill",
         "dms-claudecode": "dms-claudecode",
+        "dms-gpu-pill": "dms-gpu-pill",
         "flake-parts": "flake-parts_4",
         "gambit": "gambit",
         "googleworkspace-cli": "googleworkspace-cli",

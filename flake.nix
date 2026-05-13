@@ -122,6 +122,26 @@
       flake = false;
     };
 
+    # dms-bandwidth-pill — DMS plugin showing instantaneous network
+    # throughput (RX/TX) from /proc/net/dev. Public repo; same
+    # consume-as-source pattern as dms-claudecode (plugin.json + QML
+    # at the repo root, DMS's plugin loader picks them up directly).
+    # The repo's own flake.nix exposes a `packages.default` derivation
+    # for non-NixOS-flake consumers; we don't need it here because the
+    # source layout is already what DMS expects.
+    dms-bandwidth-pill = {
+      url = "github:joshsymonds/dms-bandwidth-pill";
+      flake = false;
+    };
+
+    # dms-gpu-pill — DMS plugin showing NVIDIA GPU utilization + VRAM
+    # via nvidia-smi. Same consume-as-source pattern as the bandwidth
+    # pill above.
+    dms-gpu-pill = {
+      url = "github:joshsymonds/dms-gpu-pill";
+      flake = false;
+    };
+
     # Gambit — Claude Code skills marketplace (consumed as a directory
     # source; deployed into both ~/.claude and ~/.claude-work).
     gambit.url = "github:joshsymonds/gambit";

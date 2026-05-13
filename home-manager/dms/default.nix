@@ -142,9 +142,9 @@ in {
         # Fallback: if DP-2 disconnects and only one screen remains,
         # show the bar on whatever's left rather than vanishing entirely.
         showOnLastDisplay = true;
-        leftWidgets = ["claudeCodeUsage" "focusedWindow"];
-        centerWidgets = ["music" "clock" "weather"];
-        rightWidgets = ["systemTray" "clipboard" "cpuUsage" "memUsage" "notificationButton" "battery" "controlCenterButton"];
+        leftWidgets = ["claudeCodeUsage" "systemTray"];
+        centerWidgets = ["music" "clock"];
+        rightWidgets = ["cpuUsage" "memUsage" "gpuPill" "bandwidthPill" "controlCenterButton"];
         spacing = 4;
         innerPadding = 0;
         bottomGap = 0;
@@ -170,14 +170,15 @@ in {
         # added in DMS BasePill.qml on the chrome-shader fork.
         widgetPill = true;
         # With josh/wider-pills pushing widgetThickness to 36 (in a 40px
-        # bar), the default icon sizing — `(barThickness/48) * (24-6)`
-        # ≈ 15px — is too small for the now-chunkier pills.
-        # maximizeWidgetIcons swaps the base from iconSize (24) to
-        # iconSizeLarge (32); maximizeWidgetText multiplies text by 1.5.
-        # See Theme.qml barIconSize / barTextSize. iconScale/fontScale are
-        # available as further multipliers if needed.
+        # bar), the default sizing is anemic against the chunkier pills.
+        # Icons: maximizeWidgetIcons swaps the icon base from iconSize
+        # (24) to iconSizeLarge (32), putting icons at ~22px.
+        # Text: instead of maximizeWidgetText (which multiplies by 1.5 →
+        # 18px, too aggressive), use fontScale alone for finer control.
+        # fontScale=1.4 → fontSizeSmall (12) × 1.4 ≈ 17px, one or two
+        # pixels below the maximize result. See Theme.qml barTextSize.
         maximizeWidgetIcons = true;
-        maximizeWidgetText = true;
+        maximizeWidgetText = false;
         removeWidgetPadding = false;
         widgetPadding = 8;
         gothCornersEnabled = false;
@@ -191,7 +192,7 @@ in {
         widgetOutlineColor = "primary";
         widgetOutlineOpacity = 1.0;
         widgetOutlineThickness = 1;
-        fontScale = 1.0;
+        fontScale = 1.3;
         iconScale = 1.0;
         autoHide = false;
         autoHideDelay = 250;
@@ -263,6 +264,18 @@ in {
     # titeya/dms-claudecode. Picks up token burn from ~/.claude/projects
     # and rate-window state from the OAuth token in ~/.claude/.credentials.json.
     plugins.claudeCodeUsage.src = inputs.dms-claudecode;
+
+    # Network bandwidth pill (RX/TX from /proc/net/dev). Source repo at
+    # ~/Personal/dms-bandwidth-pill / github:joshsymonds/dms-bandwidth-pill.
+    # Auto-detects the first non-lo interface with traffic; if you want a
+    # specific NIC, set `settings.interface = "eno1";` here.
+    plugins.bandwidthPill.src = inputs.dms-bandwidth-pill;
+
+    # NVIDIA GPU pill (utilization % + VRAM %). Source repo at
+    # ~/Personal/dms-gpu-pill / github:joshsymonds/dms-gpu-pill. Uses
+    # nvidia-smi (ships with the proprietary driver on gnomon). Works
+    # only with NVIDIA cards; AMD users want a different plugin.
+    plugins.gpuPill.src = inputs.dms-gpu-pill;
   };
 
   # Promote DMS modals (spotlight, settings, etc.) to the wlr-layer-shell

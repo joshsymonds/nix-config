@@ -183,35 +183,18 @@ in {
       };
   };
 
-  # Gaming overlay: proton-cachyos + mesa-git from nix-gaming-edge, extended
-  # with the local proton-gamescope wrapper (a Steam compatibility tool that
-  # auto-wraps every Proton game in gamescope) and a libvpx.so.9 patch for
-  # proton-cachyos's bundled ffmpeg. Applied only on gnomon (see flake.nix)
-  # — keeps the bleeding-edge mesa-git rebuild and the tokidoki cache out
-  # of headless servers' eval graphs.
+  # Gaming overlay: proton-cachyos from nix-gaming-edge, extended with the
+  # local proton-gamescope wrapper (a Steam compatibility tool that auto-
+  # wraps every Proton game in gamescope when opted in) and a libvpx.so.9
+  # patch for proton-cachyos's bundled ffmpeg. Applied only on gnomon (see
+  # flake.nix) — keeps the tokidoki cache out of headless servers' eval
+  # graphs.
   #
   # composeManyExtensions threads the upstream overlay first, so
   # proton-gamescope's callPackage scope can see proton-cachyos-x86_64-v3.
-  #
-  # ── Outstanding issues to chase later ────────────────────────────────────
-  # 1. (addressed) 0×0 DXGI ResizeBuffers crash from Streamline DLSS-G's
-  #    swapchain wrapper is now patched in vkd3d-proton via
-  #    inputs.vkd3d-proton-josh (joshsymonds/vkd3d-proton @
-  #    josh/refuse-zero-swapchain-resize). The pkgs/vkd3d-proton
-  #    derivation cross-compiles d3d12.dll + d3d12core.dll from that
-  #    fork, and the proton-cachyos postFixup below drops them over the
-  #    bundled DLLs. Verification pending — if it works, the per-game
-  #    PROTON_GAMESCOPE_DISABLE=1 mitigation can come off.
-  #
-  # 2. DXVK-NVAPI Blackwell/Streamline private IDs are addressed by
-  #    inputs.dxvk-nvapi-josh (joshsymonds/dxvk-nvapi @ josh/blackwell-
-  #    streamline-stubs). The pkgs/dxvk-nvapi derivation cross-compiles
-  #    nvapi64.dll + nvapi.dll from that fork, and the proton-cachyos
-  #    postFixup below drops them over the bundled DLLs. Verification
-  #    pending — if it works, this comment + TODO can be removed.
   gaming = inputs.nixpkgs.lib.composeManyExtensions [
     inputs.nix-gaming-edge.overlays.default
-    (final: prev: let
+    (_final: prev: let
       # libvpx 1.14.1 (SOVERSION 9). proton-cachyos's bundled
       # libavcodec.so.61.19.101 has a hard NEEDED on libvpx.so.9, but
       # nix-gaming-edge doesn't bundle libvpx, the SLR sniper container
@@ -236,27 +219,6 @@ in {
       # on the first try (observed via `nix derivation show`). lib.getOutput
       # is the canonical accessor that unambiguously selects an output.
       libvpxLibPath = inputs.nixpkgs.lib.getOutput "out" libvpxForProton;
-
-      # Cross-compile our forked dxvk-nvapi for both Wine target architectures.
-      # The fork adds 5 NVIDIA-internal NVAPI function ID stubs (Blackwell +
-      # Streamline 2.x DLSS-G + NGX runtime). See pkgs/dxvk-nvapi/default.nix.
-      dxvkNvapi64 = final.pkgsCross.mingwW64.callPackage ../pkgs/dxvk-nvapi {
-        src = inputs.dxvk-nvapi-josh;
-      };
-      dxvkNvapi32 = final.pkgsCross.mingw32.callPackage ../pkgs/dxvk-nvapi {
-        src = inputs.dxvk-nvapi-josh;
-      };
-
-      # Cross-compile our forked vkd3d-proton for both Wine target architectures.
-      # The fork adds a 20-line guard that refuses 0×0 DXGI ResizeBuffers when
-      # the previous swapchain dimensions were valid (Streamline DLSS-G crash
-      # mitigation). See pkgs/vkd3d-proton/default.nix.
-      vkd3dProton64 = final.pkgsCross.mingwW64.callPackage ../pkgs/vkd3d-proton {
-        src = inputs.vkd3d-proton-josh;
-      };
-      vkd3dProton32 = final.pkgsCross.mingw32.callPackage ../pkgs/vkd3d-proton {
-        src = inputs.vkd3d-proton-josh;
-      };
     in {
       # gamescope ships a Vulkan implicit layer (VkLayer_FROG_gamescope_wsi)
       # that proxies WSI surface creation to gamescope, surfacing present
@@ -269,44 +231,7 @@ in {
       # black. Flip the build option on so the layer is available
       # system-wide. The layer auto-activates only inside a gamescope
       # session via env-var presence, so it's a no-op outside gamescope.
-      gamescope = (prev.gamescope.override { enableWsi = true; }).overrideAttrs (old: {
-        patches = (old.patches or []) ++ [
-          # Wine's winevulkan thunks assert on non-VK_SUCCESS returns from
-          # vkGetPastPresentationTimingEXT / vkGetRefreshCycleDurationGOOGLE.
-          # The WSI layer returned VK_ERROR_SURFACE_LOST_KHR for swapchains it
-          # didn't create itself — which is the case under NVIDIA Streamline /
-          # DLSS-FG, where the swapchain the game holds is opaque to the
-          # layer. PRAGMATA hit this as an "Assertion failed!" dialog at
-          # boot. Patch makes the layer return VK_SUCCESS with zero
-          # timings / a 60Hz fallback for unknown swapchains.
-          ../pkgs/gamescope-patches/wsi-success-on-unknown-swapchain.patch
-
-          # paint_window_commit's w != scaleW branch (steamcompmgr.cpp:2123)
-          # used scaleW->GetGeometry() unconditionally, ignoring the actual
-          # committed buffer size. RE Engine titles (PRAGMATA) under Wine
-          # leave the X11 window at a 1×1 placeholder while the swapchain
-          # renders at native res via the gamescope_swapchain bypass layer
-          # — so composition collapsed to a 1×1 visible region (permanent
-          # black screen with audio + GPU activity). The Halo-Infinite
-          # comment two lines above already covers the w == scaleW case;
-          # this generalizes the same max() fix to the override-window case.
-          ../pkgs/gamescope-patches/scale-by-buffer-when-x11-geom-smaller.patch
-
-          # win_is_useless (steamcompmgr.cpp:3259) marked any 1×1 X11 window
-          # as "useless" and excluded it from focusable windows entirely.
-          # The original AoE2-DE-Xbox-Login fix is correct for *secondary*
-          # 1×1 overlays, but RE Engine titles (PRAGMATA) leave their MAIN
-          # X11 window at 1×1 for DXGI exclusive fullscreen and render via
-          # the bypass layer. Excluding them means paint_window_commit is
-          # never called for them — the swapchain is bound, frames present,
-          # but nothing composes; the game black-screens despite full GPU
-          # activity. Patch exempts 1×1 windows that have an active
-          # content_override (i.e. a gamescope_swapchain.override_window_-
-          # content has bound a real swapchain to them); the AoE2 case is
-          # preserved because the login overlay has no content_override.
-          ../pkgs/gamescope-patches/win-is-useless-respect-content-override.patch
-        ];
-      });
+      gamescope = prev.gamescope.override { enableWsi = true; };
 
       proton-cachyos-x86_64-v3 = prev.proton-cachyos-x86_64-v3.overrideAttrs (old: {
         # Drop libvpx.so.9 into proton's bundled lib dir. proton-cachyos's
@@ -333,77 +258,9 @@ in {
         postFixup = (old.postFixup or "") + ''
           install -m 0644 ${libvpxLibPath}/lib/libvpx.so.9 \
             $steamcompattool/files/lib/x86_64-linux-gnu/libvpx.so.9
-
-          # Replace bundled jp7677/dxvk-nvapi with our forked build that has
-          # the 5 Blackwell/Streamline-private NVAPI ID stubs. proton-cachyos
-          # ships the same DLL twice (legacy + new wine layout); overwrite
-          # both copies so whichever path Wine resolves wins.
-          for dst in \
-            $steamcompattool/files/lib/wine/nvapi/x86_64-windows/nvapi64.dll \
-            $steamcompattool/files/lib/wine/nvidia-libs/nvapi/x86_64-windows/nvapi64.dll
-          do
-            install -m 0644 ${dxvkNvapi64}/nvapi64.dll "$dst"
-          done
-          for dst in \
-            $steamcompattool/files/lib/wine/nvapi/i386-windows/nvapi.dll \
-            $steamcompattool/files/lib/wine/nvidia-libs/nvapi/i386-windows/nvapi.dll
-          do
-            install -m 0644 ${dxvkNvapi32}/nvapi.dll "$dst"
-          done
-
-          # Replace bundled vkd3d-proton with our patched build that refuses
-          # 0×0 DXGI ResizeBuffers (Streamline DLSS-G swapchain crash fix).
-          # proton-cachyos ships these in two trees: vkd3d-proton/ (current
-          # layout used at runtime) and the parallel x86_64-windows/ +
-          # i386-windows/ trees that the prefix's syswow64/system32 link
-          # resolution can also fall through to. Overwrite all of them so
-          # whichever path Wine picks gets the patch. Skip vkd3d-bratan/
-          # (the legacy 2.x copy proton-cachyos keeps for older games) —
-          # current games go through vkd3d-proton/.
-          for dst in \
-            $steamcompattool/files/lib/wine/vkd3d-proton/x86_64-windows/d3d12.dll \
-            $steamcompattool/files/lib/wine/x86_64-windows/d3d12.dll
-          do
-            install -m 0644 ${vkd3dProton64}/d3d12.dll "$dst"
-          done
-          for dst in \
-            $steamcompattool/files/lib/wine/vkd3d-proton/x86_64-windows/d3d12core.dll \
-            $steamcompattool/files/lib/wine/x86_64-windows/d3d12core.dll
-          do
-            install -m 0644 ${vkd3dProton64}/d3d12core.dll "$dst"
-          done
-          for dst in \
-            $steamcompattool/files/lib/wine/vkd3d-proton/i386-windows/d3d12.dll \
-            $steamcompattool/files/lib/wine/i386-windows/d3d12.dll
-          do
-            install -m 0644 ${vkd3dProton32}/d3d12.dll "$dst"
-          done
-          for dst in \
-            $steamcompattool/files/lib/wine/vkd3d-proton/i386-windows/d3d12core.dll \
-            $steamcompattool/files/lib/wine/i386-windows/d3d12core.dll
-          do
-            install -m 0644 ${vkd3dProton32}/d3d12core.dll "$dst"
-          done
-
-          # Also drop into the default_pfx so freshly-created prefixes get
-          # the patched DLLs. (PRAGMATA's existing prefix already has DLLs,
-          # but Proton's `proton` script copies/symlinks d3d12.dll from the
-          # compat tool's lib/wine into the prefix on every launch via
-          # dist_setup, so the runtime file in $WINEPREFIX gets refreshed
-          # to point at our patched version.)
-          if [ -e $steamcompattool/files/share/default_pfx/drive_c/windows/system32/d3d12.dll ]; then
-            install -m 0644 ${vkd3dProton64}/d3d12.dll \
-              $steamcompattool/files/share/default_pfx/drive_c/windows/system32/d3d12.dll
-            install -m 0644 ${vkd3dProton64}/d3d12core.dll \
-              $steamcompattool/files/share/default_pfx/drive_c/windows/system32/d3d12core.dll
-            install -m 0644 ${vkd3dProton32}/d3d12.dll \
-              $steamcompattool/files/share/default_pfx/drive_c/windows/syswow64/d3d12.dll
-            install -m 0644 ${vkd3dProton32}/d3d12core.dll \
-              $steamcompattool/files/share/default_pfx/drive_c/windows/syswow64/d3d12core.dll
-          fi
         '';
       });
-      proton-gamescope = final.callPackage ../pkgs/proton-gamescope {};
+      proton-gamescope = _final.callPackage ../pkgs/proton-gamescope {};
     })
   ];
 }

@@ -44,6 +44,12 @@
     # are functionally equivalent; nixpkgs only carries the Electron one.
     todoist-electron
 
+    # Morgen — unified calendar across Google Workspace + Microsoft 365
+    # business accounts. Native Linux binary (Electron, but real), talks
+    # Microsoft Graph + Entra ID directly so no DavMail bridge needed.
+    # 14-day full-feature trial; paid after.
+    morgen
+
     # Firefox is the daily driver; chromium is here for WebHID-only sites
     # (gaming-mouse configurators, etc.) since Firefox doesn't implement it.
     chromium
@@ -356,6 +362,20 @@
     StartupWMClass=zoom
     X-Flatpak-Tags=proprietary;
     X-Flatpak=us.zoom.Zoom
+  '';
+
+  # Register the shadowed us.zoom.Zoom.desktop as the default handler for
+  # zoommtg:// and zoomus:// URL schemes. Both the flatpak's exported entry
+  # and our shadowing one declare these MimeTypes, so xdg-open can't pick
+  # without an explicit default in mimeapps.list — `xdg-mime query default`
+  # returns empty and Firefox's "Open Zoom?" prompt does nothing. Slack
+  # works without this because only one slack.desktop declares its scheme.
+  # The desktop-file lookup resolves "us.zoom.Zoom.desktop" to ~/.local/
+  # share/applications/ first (per XDG precedence), so it points at the
+  # zoomLauncher wrapper above, not the Flatpak's broken ZoomLauncher.
+  home.activation.zoomMimeDefaults = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    run ${pkgs.xdg-utils}/bin/xdg-mime default us.zoom.Zoom.desktop x-scheme-handler/zoommtg
+    run ${pkgs.xdg-utils}/bin/xdg-mime default us.zoom.Zoom.desktop x-scheme-handler/zoomus
   '';
 
 }

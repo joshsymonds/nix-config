@@ -15,23 +15,16 @@ GAMESCOPE="@gamescope@"
 # (or whatever host compositor) — no Xwayland in the path, no 1×1 X11
 # placeholder window, no DXGI-exclusive-fullscreen-vs-X11-window-size
 # fight, no nested-compositor handshake races. Empirically this is the
-# only path that actually renders in PRAGMATA / RE Engine 4 titles on
-# our stack; the X11-mode path black-screens despite our patch stack
-# (vkd3d-proton 0×0 ResizeBuffers refusal + bail-out fix, gamescope
-# win_is_useless content-override exemption + paint_window_commit max()
-# generalization). Those patches are still useful for other titles that
-# don't have a working winewayland.drv path, but for this default the
-# wayland-direct route is what works.
+# only path that reliably renders in PRAGMATA / RE Engine 4 titles on
+# our stack.
 #
 # NVAPI exposure is needed for DLSS / DLSS-RR / RT/PT menu items in RE
 # Engine titles (PRAGMATA, RE4R, MH Wilds, DD2). Default proton hides
 # the NVIDIA GPU from NVAPI probes to dodge driver-version checks that
 # misbehave on old titles; proton-cachyos handles those checks fine.
-# Our fork of dxvk-nvapi (joshsymonds/dxvk-nvapi @ josh/blackwell-
-# streamline-stubs, deployed via the gaming overlay's proton-cachyos
-# postFixup) further stubs 5 NVIDIA-internal NVAPI function IDs that
-# Streamline 2.x queries on Blackwell — without them the proton log
-# fills with "Unknown function ID" entries.
+# Some RE Engine titles further gate RT/PT/DLSS-RR behind a game-side
+# Wine detection check — pass `/WineDetectionEnabled:False` in the
+# game's Steam launch options to disable it (PRAGMATA confirmed).
 #
 # `${VAR:-default}` form: per-game launch options can flip any of these
 # off when needed (e.g. `PROTON_USE_WAYLAND=0 %command%` for a title

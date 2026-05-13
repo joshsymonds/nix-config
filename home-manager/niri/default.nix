@@ -803,7 +803,7 @@ in {
       // here (not in typed settings) because niri-flake's schema doesn't
       // know `edge-deadzone` yet.
       input {
-          focus-follows-mouse edge-deadzone=30
+          focus-follows-mouse edge-deadzone=100
       }
 
       // recent-windows: alt-tab overlay styling. From dms/alttab.kdl

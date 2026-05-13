@@ -639,25 +639,6 @@
         "type": "github"
       }
     },
-    "dxvk-nvapi-josh": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1778652132,
-        "narHash": "sha256-OchIy33e1c9f0o3k1WlhwoyMJiOmOKxmUD+HkgoqShg=",
-        "ref": "josh/blackwell-streamline-stubs",
-        "rev": "ef70f8732f70addcaf98dbb67d01e0a9303a5ed1",
-        "revCount": 1198,
-        "submodules": true,
-        "type": "git",
-        "url": "https://github.com/joshsymonds/dxvk-nvapi.git"
-      },
-      "original": {
-        "ref": "josh/blackwell-streamline-stubs",
-        "submodules": true,
-        "type": "git",
-        "url": "https://github.com/joshsymonds/dxvk-nvapi.git"
-      }
-    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -2672,7 +2653,6 @@
         "disko": "disko",
         "dms": "dms",
         "dms-claudecode": "dms-claudecode",
-        "dxvk-nvapi-josh": "dxvk-nvapi-josh",
         "flake-parts": "flake-parts_4",
         "gambit": "gambit",
         "googleworkspace-cli": "googleworkspace-cli",
@@ -2694,8 +2674,7 @@
         "sound-stage": "sound-stage",
         "spicetify-nix": "spicetify-nix",
         "targetprocess-mcp": "targetprocess-mcp",
-        "treefmt-nix": "treefmt-nix_3",
-        "vkd3d-proton-josh": "vkd3d-proton-josh"
+        "treefmt-nix": "treefmt-nix_3"
       }
     },
     "rust-overlay": {
@@ -3064,25 +3043,6 @@
         "owner": "numtide",
         "repo": "treefmt-nix",
         "type": "github"
-      }
-    },
-    "vkd3d-proton-josh": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1778637138,
-        "narHash": "sha256-3tyoBMJoH9gIwvyhTwui3aYfg/03Drg0AQn88NJjIWs=",
-        "ref": "josh/refuse-zero-swapchain-resize",
-        "rev": "5d6d8264bab3938665537dc9b5e903f8a4d08e8b",
-        "revCount": 6445,
-        "submodules": true,
-        "type": "git",
-        "url": "https://github.com/joshsymonds/vkd3d-proton.git"
-      },
-      "original": {
-        "ref": "josh/refuse-zero-swapchain-resize",
-        "submodules": true,
-        "type": "git",
-        "url": "https://github.com/joshsymonds/vkd3d-proton.git"
       }
     },
     "websocketpp-src": {

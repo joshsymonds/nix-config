@@ -80,6 +80,15 @@
       ];
     })
     vlc
+
+    # GUI file manager. cosmic-files (System76, iced/libcosmic) — Wayland-
+    # native, no GNOME/KDE deps, distinctive Pop-style look. Picked over
+    # Nautilus (drags in the GNOME platform; FileChooser portal is already
+    # pinned to gtk in modules/desktop/niri.nix so we don't need it) and
+    # Thunar (lighter but visually dated GTK3). Lives in nixpkgs proper —
+    # the upstream lilyinstarlight/nixos-cosmic flake is stale (last touch
+    # July 2025, still ships pre-stable alpha.6) so we don't use it.
+    cosmic-files
   ];
 
   # Same signing key vermissian uses — single user identity across machines

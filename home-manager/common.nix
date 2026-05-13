@@ -73,7 +73,7 @@ in {
         ]
         ++ lib.optionals (!stdenv.isDarwin) [parted]
         ++ [
-          ranger
+          yazi
           ripgrep
           shellcheck
           shellspec

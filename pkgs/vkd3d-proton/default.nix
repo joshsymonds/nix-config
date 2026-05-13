@@ -35,6 +35,20 @@ stdenv.mkDerivation {
   # perl: a couple of header-generation scripts in subprojects use it.
   nativeBuildInputs = [ meson ninja glslang wineForWidl perl ];
 
+  # nixpkgs's mingw-w64 cross GCC is built against mcfgthread, not
+  # winpthreads, and doesn't translate -pthread → -lmcfgthread, so the
+  # bare `dependency('threads')` from meson.build line 90 ends up emitting
+  # `-pthread` which then resolves to the missing `-lpthread`. Replace the
+  # threads dependency with a direct find_library('mcfgthread'); the C++
+  # std::thread implementation in libstdc++ is built on top of mcfgthread
+  # so the symbols match.
+  postPatch = ''
+    substituteInPlace meson.build \
+      --replace-fail \
+        "threads_dep = dependency('threads')" \
+        "threads_dep = vkd3d_compiler.find_library('mcfgthread')"
+  '';
+
   mesonFlags =
     if stdenv.hostPlatform.is64bit
     then [ "--cross-file=build-win64.txt" ]

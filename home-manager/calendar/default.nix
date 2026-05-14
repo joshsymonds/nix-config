@@ -108,6 +108,16 @@ in {
     Unit.Description = "Run morgen-notifier every 60 seconds";
     Timer = {
       OnCalendar = "minutely";
+      # AccuracySec=1s preserves the ±30 s tolerance band documented
+      # above. systemd's default AccuracySec=1min lets consecutive fires
+      # of a minutely timer drift up to 60 s within their respective
+      # slots, so the gap between two ticks can reach ~120 s — wider
+      # than the notifier's ±30 s window, leaving room for a T-10 / T-2
+      # instant to fall in the gap and never fire. 1 s costs nothing on
+      # this workload (one JSON read + a stat check per tick) and keeps
+      # consecutive fires within ~61 s, so coverage is effectively
+      # gap-free.
+      AccuracySec = "1s";
       Unit = "morgen-notifier.service";
     };
     Install.WantedBy = ["timers.target"];

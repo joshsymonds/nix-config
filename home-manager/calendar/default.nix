@@ -74,4 +74,39 @@ in {
     };
     Install.WantedBy = ["timers.target"];
   };
+
+  # morgen-notifier fires notify-send at T-10 min and T-2 min for each
+  # upcoming meeting from upcoming-events.json. 60-second timer cadence
+  # is the maximum that still hits every threshold (the tool uses a
+  # ±30 s tolerance band; widening the cadence would let notifications
+  # slip between ticks). Persistent=true so a missed run (laptop asleep)
+  # doesn't silently drop a notification — though if we slept through
+  # the actual T-10 instant the notification will fire late on resume,
+  # which is the intended behavior for a daemon whose job is to remind.
+  #
+  # No Environment= needed: morgen-notifier reads upcoming-events.json
+  # from the user's data dir and writes its dedup state to the user's
+  # cache dir; no secrets, no per-user paths to inject.
+  systemd.user.services.morgen-notifier = {
+    Unit = {
+      Description = "Fire notify-send at T-10 and T-2 for upcoming Morgen meetings";
+      Documentation = "https://github.com/joshsymonds/nix-config/tree/main/pkgs/morgen-notifier";
+      After = ["morgen-fetch.service"];
+    };
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.morgen-notifier}/bin/morgen-notifier";
+    };
+  };
+
+  systemd.user.timers.morgen-notifier = {
+    Unit.Description = "Run morgen-notifier every 60 seconds";
+    Timer = {
+      OnBootSec = "1m";
+      OnUnitActiveSec = "60s";
+      Unit = "morgen-notifier.service";
+      Persistent = true;
+    };
+    Install.WantedBy = ["timers.target"];
+  };
 }

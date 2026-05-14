@@ -19,6 +19,7 @@ in {
     invidious-companion = final.callPackage ../pkgs/invidious-companion {};
     newrelic-cli = final.callPackage ../pkgs/newrelic-cli {};
     morgen-fetch = final.callPackage ../pkgs/morgen-fetch {};
+    morgen-notifier = final.callPackage ../pkgs/morgen-notifier {};
     redlib-veraticus = final.callPackage ../pkgs/redlib-veraticus {
       inherit (inputs) crane;
       redlibSrc = inputs.redlib-fork.sourceInfo.outPath;

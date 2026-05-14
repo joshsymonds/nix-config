@@ -20,6 +20,7 @@ in
     invidious-companion = pkgs.callPackage ./invidious-companion {};
     newrelic-cli = pkgs.callPackage ./newrelic-cli {};
     morgen-fetch = pkgs.callPackage ./morgen-fetch {};
+    morgen-notifier = pkgs.callPackage ./morgen-notifier {};
     # proton-gamescope lives in overlays/default.nix's `gaming` overlay
     # (gnomon-only). It depends on proton-cachyos-x86_64-v3 from
     # nix-gaming-edge, which isn't in the perSystem pkgs scope used here.

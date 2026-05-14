@@ -940,6 +940,26 @@ in {
           render-above-fullscreen true
       }
 
+      // Zoom "Leave meeting panel" — Zoom's leave-confirmation dialog
+      // opens as a floating xdg_toplevel that doesn't call set_parent,
+      // so without this rule niri places it at working-area center
+      // where it straddles tile boundaries. PositionFrame::Window from
+      // the josh/relative-to-window-config patch anchors it inside the
+      // Meeting tile's render rectangle: relative-to="top" centers it
+      // horizontally inside the target, y=80 leaves a small gap from
+      // the top edge. If no Meeting window is currently mapped (the
+      // resolver returns no candidate), niri falls back to working-area
+      // positioning and logs at debug! — matches the existing default.
+      // Downstream-only config from the josh/relative-to-window-config
+      // patch (see INTEGRATION.md).
+      window-rule {
+          match app-id="^Zoom$" title="^Leave meeting panel$"
+          open-floating true
+          default-floating-position x=0 y=80 relative-to="top" {
+              in-window-of app-id="^Zoom$" title="^Meeting$"
+          }
+      }
+
       // Vesktop — Discord client. Pairs with home-manager/vesktop's
       // activation script that flips Vencord's `transparent: true`. With
       // that flag set, Vesktop's BrowserWindow opens with Electron

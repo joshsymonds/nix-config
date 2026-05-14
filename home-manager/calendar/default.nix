@@ -11,7 +11,6 @@
   # morgen-fetch tool below writes there, and the path is also the `path`
   # we hand khal in its config so both ends agree.
   vdirPath = "${dataHome}/vdirs/morgen";
-
   # morgen-fetch is a real package now (pkgs/morgen-fetch/) — see overlay
   # `morgen-fetch` entry. It polls Morgen's REST API and writes ICS files
   # into a vdir; tests live next to its source.
@@ -47,11 +46,13 @@ in {
     firstweekday = 0
   '';
 
-  # 5-minute timer. OnBootSec=30s so the bar lights up shortly after login
-  # rather than waiting a full 5 min for the first poll. Persistent=true
-  # makes a missed run (laptop asleep) fire on next wake instead of
-  # silently skipping. Oneshot service so `systemctl status` shows the
-  # last run's exit code — handy for debugging API auth failures.
+  # 5-minute timer on the wall clock (:00, :05, …). OnCalendar+Persistent
+  # catches up missed runs after sleep/reboot: if the last successful run
+  # was >5 min ago, systemd fires once on next activation. Do NOT swap
+  # back to OnUnitActiveSec — monotonic timers + Persistent across reboots
+  # leave NextElapseUSecMonotonic=infinity (the wedge that prompted this:
+  # fetcher silently stopped for 19h, pill displayed past events as "now").
+  # Oneshot service so `systemctl status` shows the last run's exit code.
   systemd.user.services.morgen-fetch = {
     Unit = {
       Description = "Fetch upcoming events from Morgen API into khal vdir";
@@ -67,8 +68,7 @@ in {
   systemd.user.timers.morgen-fetch = {
     Unit.Description = "Poll Morgen API every 5 minutes";
     Timer = {
-      OnBootSec = "30s";
-      OnUnitActiveSec = "5m";
+      OnCalendar = "*:0/5";
       Unit = "morgen-fetch.service";
       Persistent = true;
     };
@@ -81,14 +81,13 @@ in {
   # ±30 s tolerance band; widening the cadence would let notifications
   # slip between ticks).
   #
-  # Suspend / resume note: `Persistent=` only applies to `OnCalendar=`
-  # timers (see `man systemd.timer`), so it's omitted here — it would
-  # have been a no-op on a monotonic `OnUnitActiveSec=` timer anyway.
-  # The practical consequence: if the laptop sleeps through a meeting's
-  # T-10 instant, that notification is simply lost (the meeting pill
-  # still shows the correct urgency-colored countdown on resume). This
-  # is acceptable: notifications are the secondary path; the pill is
-  # the primary at-a-glance signal.
+  # Suspend / resume note: Persistent= is intentionally omitted even
+  # though this is now an OnCalendar= timer. Burst-firing missed T-10
+  # and T-2 notifications on wake would be worse than dropping them —
+  # the user does not want 12 stacked "meeting in 10 min" toasts for
+  # meetings they slept through. The pill (still showing correct
+  # urgency-colored countdown on resume) is the primary at-a-glance
+  # signal; the notifier is secondary and may drop missed instants.
   #
   # No Environment= needed: morgen-notifier reads upcoming-events.json
   # from the user's data dir and writes its dedup state to the user's
@@ -108,8 +107,7 @@ in {
   systemd.user.timers.morgen-notifier = {
     Unit.Description = "Run morgen-notifier every 60 seconds";
     Timer = {
-      OnBootSec = "1m";
-      OnUnitActiveSec = "60s";
+      OnCalendar = "minutely";
       Unit = "morgen-notifier.service";
     };
     Install.WantedBy = ["timers.target"];

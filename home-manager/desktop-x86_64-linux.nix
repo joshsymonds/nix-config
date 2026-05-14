@@ -72,6 +72,8 @@ in {
       # the grim → slurp → satty pipeline (region pick → draw → copy/save).
       # grim/slurp/wl-clipboard are installed system-side in modules/desktop/niri.nix.
       satty
+
+      libreoffice-fresh
     ];
   };
 

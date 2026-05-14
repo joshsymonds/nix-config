@@ -487,6 +487,16 @@
         system,
         ...
       }: {
+        # Override flake-parts' default `pkgs` with an allowUnfree-enabled
+        # instance so `nix flake check` doesn't refuse evaluating packages
+        # that carry meta.license = unfree (claude-code-cli is one). The
+        # mkNixos / mkHome paths set this themselves; perSystem doesn't
+        # inherit it by default.
+        _module.args.pkgs = import nixpkgs {
+          inherit system;
+          config.allowUnfree = true;
+        };
+
         packages =
           (import ./pkgs {inherit pkgs;})
           // lib.optionalAttrs (system == "x86_64-linux") {

@@ -83,6 +83,6 @@ in {
 
     # udev rules so the unprivileged user can talk to the YubiKey
     # (required for pamu2fcfg and ykman without sudo).
-    services.udev.packages = [ pkgs.yubikey-personalization ];
+    services.udev.packages = [pkgs.yubikey-personalization];
   };
 }

@@ -51,6 +51,18 @@ DEFAULT_STATE_PATH = Path.home() / ".cache/morgen-notifier/fired.json"
 # that lands halfway between windows could miss the notification entirely.
 _TOLERANCE_S = 30
 
+# 10 s ceiling on notify-send invocations. If the dbus daemon hangs, we
+# want the systemd oneshot to fail this tick rather than wedge the unit
+# and block every future tick. The retry on the next 60 s cycle is the
+# recovery path.
+_NOTIFY_SEND_TIMEOUT_S = 10
+
+# 1 MiB ceiling on upcoming-events.json. Defensive: morgen-fetch caps
+# what it writes via the 7-day lookahead and Morgen API constraints, so
+# a file this large indicates a bug upstream. Fail fast with a clear
+# error rather than burning CPU parsing the runaway.
+_MAX_EVENTS_FILE_BYTES = 1 * 1024 * 1024
+
 
 def threshold_minutes() -> list[tuple[str, int]]:
     """Canonical (state_key, minutes) pairs. Ordered so the 10-min
@@ -122,7 +134,24 @@ def prune_fired_state(fired_state: dict, current_uids: set) -> dict:
 def _read_events(path: Path) -> list[dict] | None:
     """Returns the events list, or None when the file doesn't exist yet
     (cold start — morgen-fetch hasn't written its first JSON). Other
-    parse errors bubble up so systemd's status reports them."""
+    parse errors bubble up so systemd's status reports them.
+
+    Note the asymmetry with `_read_state` below: we deliberately let
+    `JSONDecodeError` propagate here because a malformed events file
+    means morgen-fetch broke its own output contract, which the user
+    needs to see in `systemctl status`. `_read_state` swallows the same
+    error because its purpose is dedup, not correctness — losing dedup
+    once is acceptable, crashing the daemon every tick isn't."""
+    try:
+        size = path.stat().st_size
+    except FileNotFoundError:
+        return None
+    if size > _MAX_EVENTS_FILE_BYTES:
+        print(
+            f"morgen-notifier: {path} is {size} bytes (cap {_MAX_EVENTS_FILE_BYTES}); refusing to parse",
+            file=sys.stderr,
+        )
+        return None
     try:
         raw = path.read_text()
     except FileNotFoundError:
@@ -159,7 +188,17 @@ def _read_state(path: Path) -> dict:
         return {}
     try:
         parsed = json.loads(raw)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        # Loud log because this is the recovery path that re-fires every
+        # active threshold on the NEXT tick that finds events in the
+        # ±30 s window. Should essentially never happen given the atomic
+        # `.tmp` + rename pattern — but if it does, journalctl is the
+        # only signal the user gets that a notification flurry is about
+        # to follow.
+        print(
+            f"morgen-notifier: {path} parse failed ({e}); resetting dedup state",
+            file=sys.stderr,
+        )
         return {}
     return parsed if isinstance(parsed, dict) else {}
 
@@ -178,17 +217,25 @@ def _fire_notification(title: str, body: str, urgency: str) -> None:
     """One-shot notify-send call. Stderr is left attached to the
     daemon's stderr so failures show in journalctl. Non-zero exit
     propagates as a CalledProcessError — main_cli catches it and
-    keeps processing remaining events instead of crashing the whole tick."""
+    keeps processing remaining events instead of crashing the whole tick.
+
+    The `--` separator between options and positionals defangs argv
+    flag-injection: if a calendar event title is `--icon=/etc/passwd`,
+    GLib's option parser would otherwise honor it as an icon override.
+    With `--` in place, everything after is treated strictly as
+    positional args."""
     subprocess.run(
         [
             "notify-send",
             "--app-name=morgen-notifier",
             f"--urgency={urgency}",
             "--icon=appointment-soon",
+            "--",
             title,
             body,
         ],
         check=True,
+        timeout=_NOTIFY_SEND_TIMEOUT_S,
     )
 
 
@@ -212,6 +259,10 @@ def main_cli() -> int:
     due = events_due_for_notification(events, now_ms, fired)
     for ev, state_key, minutes in due:
         urgency = "critical" if minutes <= 2 else "normal"
+        # Singular branch is presently unreachable — threshold_minutes()
+        # returns only 2 and 10, neither equals 1. Kept against the day
+        # someone adds a 1-min threshold; cheaper than the comment
+        # explaining its absence would be.
         title = f"Meeting in {minutes} minute{'s' if minutes != 1 else ''}"
         body_parts = [ev.get("title") or "(no title)"]
         url = ev.get("url")
@@ -219,17 +270,34 @@ def main_cli() -> int:
             # URL on its own line keeps DMS's auto-detect tidy; users
             # who copy-paste see one neat link below the title.
             body_parts.append(url)
+        uid = ev["uid"]
         try:
             _fire_notification(title, "\n".join(body_parts), urgency)
         except FileNotFoundError:
             print("morgen-notifier: notify-send not on PATH", file=sys.stderr)
             return 1
+        except subprocess.TimeoutExpired:
+            # dbus hang or libnotify deadlock — most likely transient.
+            # Log only the uid (no event content) so journalctl stays
+            # clean of attacker-controllable strings, then retry next
+            # tick (state intentionally NOT updated).
+            print(
+                f"morgen-notifier: notify-send timeout (>{_NOTIFY_SEND_TIMEOUT_S}s) for uid={uid!r}",
+                file=sys.stderr,
+            )
+            continue
         except subprocess.CalledProcessError as e:
-            print(f"morgen-notifier: notify-send failed: {e}", file=sys.stderr)
+            # `str(e)` would include the full argv (title + body), which
+            # leaks calendar content to journalctl. Log only the
+            # returncode and uid.
+            print(
+                f"morgen-notifier: notify-send exit {e.returncode} for uid={uid!r}",
+                file=sys.stderr,
+            )
             # Don't update state — we'll retry next tick (still inside
             # the tolerance window for most failure modes).
             continue
-        fired = update_fired_state(fired, ev["uid"], state_key)
+        fired = update_fired_state(fired, uid, state_key)
 
     current_uids = {ev["uid"] for ev in events if ev.get("uid")}
     fired = prune_fired_state(fired, current_uids)

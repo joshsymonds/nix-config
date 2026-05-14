@@ -123,6 +123,24 @@ def test_events_due_handles_two_events_simultaneously():
     assert {e["uid"] for e, _, _ in due} == {"a", "b"}
 
 
+def test_events_due_skips_events_missing_uid():
+    # Defensive guard: _read_events should never feed us an event
+    # without a uid (it filters those out), but events_due_for_notification
+    # double-checks. A regression that removes the guard would crash
+    # later in update_fired_state's ev["uid"] access.
+    now = 1_700_000_000_000
+    events = [{"title": "no uid", "start": now + 10 * 60 * 1000}]
+    assert events_due_for_notification(events, now, {}) == []
+
+
+def test_events_due_skips_events_missing_start():
+    # Same as above but for start. Without the guard, event_threshold_due
+    # would receive None and raise TypeError on the arithmetic.
+    now = 1_700_000_000_000
+    events = [{"uid": "no-start", "title": "x"}]
+    assert events_due_for_notification(events, now, {}) == []
+
+
 # ── update_fired_state ──────────────────────────────────────────────
 
 

@@ -79,10 +79,16 @@ in {
   # upcoming meeting from upcoming-events.json. 60-second timer cadence
   # is the maximum that still hits every threshold (the tool uses a
   # ±30 s tolerance band; widening the cadence would let notifications
-  # slip between ticks). Persistent=true so a missed run (laptop asleep)
-  # doesn't silently drop a notification — though if we slept through
-  # the actual T-10 instant the notification will fire late on resume,
-  # which is the intended behavior for a daemon whose job is to remind.
+  # slip between ticks).
+  #
+  # Suspend / resume note: `Persistent=` only applies to `OnCalendar=`
+  # timers (see `man systemd.timer`), so it's omitted here — it would
+  # have been a no-op on a monotonic `OnUnitActiveSec=` timer anyway.
+  # The practical consequence: if the laptop sleeps through a meeting's
+  # T-10 instant, that notification is simply lost (the meeting pill
+  # still shows the correct urgency-colored countdown on resume). This
+  # is acceptable: notifications are the secondary path; the pill is
+  # the primary at-a-glance signal.
   #
   # No Environment= needed: morgen-notifier reads upcoming-events.json
   # from the user's data dir and writes its dedup state to the user's
@@ -105,7 +111,6 @@ in {
       OnBootSec = "1m";
       OnUnitActiveSec = "60s";
       Unit = "morgen-notifier.service";
-      Persistent = true;
     };
     Install.WantedBy = ["timers.target"];
   };

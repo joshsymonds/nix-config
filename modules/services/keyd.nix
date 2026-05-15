@@ -169,16 +169,29 @@ in {
         };
 
         # Composite layer that activates when both Cmd and Shift are held.
-        # We don't bind anything here at the system level — it exists only
-        # so per-app overrides in ~/.config/keyd/app.conf can target it
-        # (e.g. Firefox's `meta+shift.rightbrace = C-tab` for Mac-style
-        # tab cycling). keyd refuses dynamic binds against an undeclared
-        # composite layer ("meta+shift is not a valid layer"), so we
-        # register it once here. Composite layers MUST be declared after
-        # their component layers; both [meta] and [shift] are keyd
-        # built-ins, so order is fine.
+        #
+        # 3/4/5 → Super+Shift+digit: niri's Mac-style screenshot binds
+        # (Super+Shift+3 monitor, +4 picker, +5 satty annotate) expect a
+        # genuine Super-held chord. Without these, Cmd+Shift+3 falls
+        # through the (otherwise empty) composite layer to [meta]'s
+        # `3 = C-3` and reaches niri as Ctrl+Shift+3 — which has no bind,
+        # so the screenshot keys do nothing. keyd composite layers fall
+        # through to their component layers on unbound keys, so the
+        # passthrough has to be stated explicitly here; an empty
+        # [meta+shift] does NOT mean "emit raw Super+Shift+key".
+        #
+        # The bare `[meta+shift]` declaration also lets per-app overrides
+        # in ~/.config/keyd/app.conf target the layer (e.g. Firefox's
+        # `meta+shift.rightbrace = C-tab`). keyd refuses dynamic binds
+        # against an undeclared composite layer ("meta+shift is not a
+        # valid layer"). Composite layers MUST be declared after their
+        # component layers; both [meta] and [shift] are keyd built-ins,
+        # so order is fine.
         extraConfig = ''
           [meta+shift]
+          3 = M-S-3
+          4 = M-S-4
+          5 = M-S-5
         '';
       };
     };

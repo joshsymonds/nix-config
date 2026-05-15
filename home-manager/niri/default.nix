@@ -909,19 +909,29 @@ in {
           }
       }
 
-      // Zoom annotate_toolbar pointer-lock suppression — companion to the
+      // Zoom annotate_toolbar cursor-capture suppression — companion to the
       // corner-placement window-rule in the typed config above. Zoom spawns
       // a 112x112 floating xdg_toplevel "annotate_toolbar" alongside the
-      // Meeting window; the surface requests zwp_pointer_constraints_v1
-      // (Locked variant) on cursor entry, pinning the cursor until focus
-      // moves away. block-pointer-constraints true short-circuits the
-      // activation inside niri (the protocol still binds and the request
-      // still arrives — niri just never calls .activate()), so the cursor
-      // stays free when crossing the toolbar. Downstream-only config from
-      // the josh/block-pointer-constraints patch (see INTEGRATION.md).
+      // Meeting window and captures the cursor through two independent
+      // mechanisms:
+      //   1. zwp_pointer_constraints_v1 (Locked variant) on cursor entry,
+      //      pinning the cursor until focus moves away. block-pointer-
+      //      constraints true short-circuits the activation inside niri
+      //      (the protocol still binds and the request still arrives —
+      //      niri just never calls .activate()). Downstream-only config
+      //      from josh/block-pointer-constraints.
+      //   2. xdg_activation_v1.activate() at ~30Hz, which routes through
+      //      Niri::move_cursor_to_focused_tile and snaps the cursor to
+      //      the toolbar's (56, 56) center every time the user tries to
+      //      move the mouse during screen-share-with-annotation. block-
+      //      focus-cursor-warp true short-circuits the warp at that
+      //      single chokepoint (covers both maybe_warp_cursor_to_focus
+      //      and maybe_warp_cursor_to_focus_centered). Downstream-only
+      //      config from josh/block-focus-cursor-warp. See INTEGRATION.md.
       window-rule {
           match app-id="^Zoom$" title="^annotate_toolbar$"
           block-pointer-constraints true
+          block-focus-cursor-warp true
       }
 
       // Zoom helper windows — `as_toolbar` (share-controls bar),

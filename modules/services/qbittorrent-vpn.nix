@@ -221,6 +221,12 @@ in {
             "--cap-add=NET_ADMIN"
             "--device=/dev/net/tun"
             "--sysctl=net.ipv4.conf.all.src_valid_mark=1"
+            # gluetun is stateless (its only volume is a server-list
+            # cache); nothing it holds is worth a graceful drain. It also
+            # owns the netns + /dev/net/tun + the podman0 bridge — exactly
+            # the teardown that wedges systemd-shutdown's post-journald
+            # phase. So give podman stop a 1s SIGTERM grace, then SIGKILL.
+            "--stop-timeout=1"
           ];
 
           # The host port maps to 8080 inside the netns — where qbittorrent's
@@ -251,7 +257,17 @@ in {
           ];
 
           dependsOn = ["gluetun-qbittorrent"];
-          extraOptions = ["--network=container:gluetun-qbittorrent"];
+          extraOptions = [
+            "--network=container:gluetun-qbittorrent"
+            # qBittorrent is the one container with state worth
+            # protecting: on SIGTERM qbittorrent-nox flushes .fastresume
+            # / session into /config (sub-second normally). Give it a
+            # real—but short—10s grace so that flush completes; a
+            # zero-grace kill would only cost a force-recheck of any
+            # in-flight torrent (downloaded data in /downloads is already
+            # safe), but the flush is cheap insurance.
+            "--stop-timeout=10"
+          ];
 
           autoStart = true;
         };
@@ -263,5 +279,18 @@ in {
       "d ${cfg.configDir} 0755 ${toString cfg.puid} ${toString cfg.pgid} -"
       "d ${cfg.downloadsDir} 0755 ${toString cfg.puid} ${toString cfg.pgid} -"
     ];
+
+    # Backstop for the --stop-timeout values above. `podman stop` honours
+    # the container's own stop-timeout, but if podman itself wedges (the
+    # actual failure mode behind the shutdown hang), systemd must not idle
+    # the default 90s waiting on it and feed the post-journald stall.
+    # These caps sit just above each container's stop-timeout so the
+    # graceful path always wins when podman is healthy, and the unit is
+    # SIGKILLed promptly when it isn't. Generated unit names are
+    # `podman-<container>.service`. mkForce because virtualisation.oci-
+    # containers already pins these units to TimeoutStopSec=120, which is
+    # precisely the over-long wait we are here to shorten.
+    systemd.services."podman-gluetun-qbittorrent".serviceConfig.TimeoutStopSec = lib.mkForce 10;
+    systemd.services."podman-qbittorrent".serviceConfig.TimeoutStopSec = lib.mkForce 20;
   };
 }

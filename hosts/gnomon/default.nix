@@ -13,6 +13,7 @@ in
     imports = [
       ./disko.nix
       ./qbittorrent-vpn.nix
+      ./shutdown-hardening.nix
       ../../modules/desktop/dms-niri.nix
       ../../modules/hardware/gpu-nvidia.nix
       ../../modules/services/keyd.nix
@@ -114,14 +115,18 @@ in
     #     PROTON_GAMESCOPE_FORCE_GRAB=1  force pointer lock (buggy FPS games)
     #     PROTON_ENABLE_NVAPI=0          hide NVIDIA GPU again (rare)
     #
-    # gamescopeSession.enable below adds a separate "Steam (Gamescope)"
-    # greetd login session for Big Picture mode — unrelated to the
-    # per-game wrapping that proton-gamescope provides.
+    # NOTE: programs.steam.gamescopeSession is deliberately NOT enabled.
+    # It installs a second wayland-sessions entry (steam.desktop); with
+    # gnomon's impermanence wiping DankGreeter's memory.json every boot,
+    # the greeter's no-saved-session fallback is a nondeterministic race
+    # for session index 0, so an enabled Steam session randomly hijacks
+    # login. The Big Picture session is also black on this NVIDIA GPU
+    # anyway (see the gamescope WSI note below). Per-game gamescope
+    # wrapping via proton-gamescope is independent and unaffected.
     programs.steam = {
       enable = true;
       remotePlay.openFirewall = true;
       dedicatedServer.openFirewall = false;
-      gamescopeSession.enable = true;
       extraCompatPackages = with pkgs; [
         proton-cachyos-x86_64-v3
         proton-gamescope
@@ -131,8 +136,7 @@ in
 
     # gamescope module installs the binary + sets cap_sys_nice (needed for
     # gamescope's input-thread scheduling; without it gamescope warns and
-    # cursor capture is flaky). Distinct from gamescopeSession above which
-    # only adds the "boot to Steam Big Picture" session entry.
+    # cursor capture is flaky).
     programs.gamescope = {
       enable = true;
       capSysNice = true;

@@ -458,6 +458,10 @@ in {
       hotkey-overlay.title = "Focus or Launch Morgen";
       action.spawn = ["focus-or-spawn" "--app-id" "Morgen" "--" "morgen"];
     };
+    "Alt+N" = {
+      hotkey-overlay.title = "Focus or Launch Obsidian";
+      action.spawn = ["focus-or-spawn" "--app-id" "obsidian" "--" "obsidian"];
+    };
     # Alt+1 → 1Password. The leading "1" of the app name is the mnemonic;
     # nothing else here binds a digit, and niri's default workspace
     # switching lives on Mod+1..9, so this doesn't shadow anything.
@@ -515,10 +519,6 @@ in {
 
     # Aerospace-style Option shortcuts (no Mac convention for these
     # features, so they live alongside the WM binds on Alt).
-    "Alt+N" = {
-      hotkey-overlay.title = "Toggle Notification Center";
-      action.spawn = ["dms" "ipc" "call" "notifications" "toggle"];
-    };
     "Alt+P" = {
       hotkey-overlay.title = "Toggle Notepad";
       action.spawn = ["dms" "ipc" "call" "notepad" "toggle"];

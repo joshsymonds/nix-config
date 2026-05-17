@@ -94,6 +94,28 @@ in {
         #   tab, grave   — niri recent-windows (Cmd+Tab / Cmd+`)
         #   space, comma — niri DMS spotlight / settings (Cmd+Space, Cmd+,)
         #   F-keys, escape — no Mac convention worth translating
+        # Neutralize a *lone* Alt tap. The physical Alt key is "Option" in
+        # Mac mode and every binding we care about (niri Alt+H/J/K/L, the
+        # Alt+<letter> focus-or-spawn launchers, Alt+Shift WM ops) is a
+        # *held* chord. A solo press-and-release of Alt, by contrast, is
+        # never wanted: GTK/Qt interpret it as "focus the app menubar"
+        # (the toolkit behavior macOS deliberately lacks — macOS uses
+        # Ctrl+F2, never a bare modifier). overload(alt, noop) keeps Alt
+        # fully live as the held modifier layer while making the tap emit
+        # nothing, so the menubar never steals a half-typed chord. F10
+        # remains the explicit GTK menubar accel when a menu is actually
+        # wanted (the real analog of Mac's Ctrl+F2).
+        #
+        # This is a static [main] rebind of the activating key, NOT an
+        # app.conf dynamic override of a predefined layer's internal
+        # translations — so the "[main] rebind is a silent no-op" caveat
+        # documented for the meta layer below does not apply here; this is
+        # keyd's canonical modifier-without-tap idiom.
+        settings.main = {
+          leftalt = "overload(alt, noop)";
+          rightalt = "overload(alt, noop)";
+        };
+
         settings.meta = {
           # Letters: Cmd+letter → Ctrl+letter (copy/paste/new-tab/close-
           # tab/quit/find/save/etc., the universal Linux GUI idiom).

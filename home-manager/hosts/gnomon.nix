@@ -69,17 +69,25 @@
     # GUI you actually click on.
     obsidian
 
-    # Media players. mpv as the default (lightweight, plays anything,
-    # the only thing that handles HDR + 10-bit cleanly on Wayland-NVIDIA
-    # without ginger workarounds). VLC kept around for ad-hoc cases
-    # where mpv's defaults fight a particular container.
+    # Video player. mpv only — lightweight, plays anything, and the one
+    # thing that handles HDR + 10-bit cleanly on Wayland-NVIDIA without
+    # ginger workarounds. VLC was kept as an "ad-hoc fallback" but both
+    # decode through libavcodec, so VLC almost never plays what mpv can't;
+    # the real fix for a stubborn file is an mpv flag, not a second player.
+    # `nix shell nixpkgs#vlc` covers the rare disc/IPTV case on demand.
     (mpv.override {
       scripts = with pkgs.mpvScripts; [
         uosc # modern OSC: bottom-bar timeline, sidebar menus
         thumbfast # hover-preview thumbnails for the timeline
       ];
     })
-    vlc
+
+    # Image viewer. qimgv (Qt) — true gallery: thumbnail panel + folder
+    # navigation + smooth zoom. Without this, image/* falls through to
+    # chromium (no explicit default → browser wins by sort order), which
+    # is what cosmic-files was handing pictures to. video/* stays on mpv;
+    # the xdg.mimeApps block below only claims image types for qimgv.
+    qimgv
 
     # GUI file manager. cosmic-files (System76, iced/libcosmic) — Wayland-
     # native, no GNOME/KDE deps, distinctive Pop-style look. Picked over
@@ -396,17 +404,32 @@
     X-Flatpak=us.zoom.Zoom
   '';
 
-  # Register the shadowed us.zoom.Zoom.desktop as the default handler for
-  # zoommtg:// and zoomus:// URL schemes. Both the flatpak's exported entry
-  # and our shadowing one declare these MimeTypes, so xdg-open can't pick
-  # without an explicit default in mimeapps.list — `xdg-mime query default`
-  # returns empty and Firefox's "Open Zoom?" prompt does nothing. Slack
-  # works without this because only one slack.desktop declares its scheme.
-  # The desktop-file lookup resolves "us.zoom.Zoom.desktop" to ~/.local/
-  # share/applications/ first (per XDG precedence), so it points at the
-  # zoomLauncher wrapper above, not the Flatpak's broken ZoomLauncher.
-  home.activation.zoomMimeDefaults = lib.hm.dag.entryAfter ["writeBoundary"] ''
+  # MIME defaults, poked imperatively into ~/.config/mimeapps.list. That
+  # file is a live, app-written surface — Firefox, claude-cli, vesktop,
+  # perimeter81 etc. register their own handlers there via "set as
+  # default" flows. Home-manager's declarative xdg.mimeApps would replace
+  # the whole file with a read-only store symlink, regressing every
+  # handler not re-declared and freezing out app self-registration. So we
+  # only poke the specific keys we own and leave the file writable.
+  #
+  # Zoom: the shadowed us.zoom.Zoom.desktop handles zoommtg:// and
+  # zoomus://. Both the flatpak's exported entry and our shadowing one
+  # declare these MimeTypes, so xdg-open can't pick without an explicit
+  # default — `xdg-mime query default` returns empty and Firefox's "Open
+  # Zoom?" prompt does nothing. Slack works without this because only one
+  # slack.desktop declares its scheme. Desktop-file lookup resolves
+  # "us.zoom.Zoom.desktop" to ~/.local/share/applications/ first (XDG
+  # precedence), so it points at the zoomLauncher wrapper above, not the
+  # Flatpak's broken ZoomLauncher.
+  #
+  # Images: qimgv for the raster set it actually decodes well — mirrors
+  # qimgv.desktop's declared MimeType list (minus video/webm, mpv keeps
+  # video) plus tiff. Without this, image/* falls through to chromium.
+  # SVG is left alone so it stays with the browser.
+  home.activation.mimeDefaults = lib.hm.dag.entryAfter ["writeBoundary"] ''
     run ${pkgs.xdg-utils}/bin/xdg-mime default us.zoom.Zoom.desktop x-scheme-handler/zoommtg
     run ${pkgs.xdg-utils}/bin/xdg-mime default us.zoom.Zoom.desktop x-scheme-handler/zoomus
+    run ${pkgs.xdg-utils}/bin/xdg-mime default qimgv.desktop \
+      image/jpeg image/png image/gif image/bmp image/webp image/tiff
   '';
 }

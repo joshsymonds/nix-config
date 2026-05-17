@@ -462,6 +462,14 @@ in {
       hotkey-overlay.title = "Focus or Launch Obsidian";
       action.spawn = ["focus-or-spawn" "--app-id" "obsidian" "--" "obsidian"];
     };
+    # E = filEs/Explorer (Alt+F is Fullscreen). cosmic-files takes no
+    # path arg — its Exec is `cosmic-files %U`, so bare launch opens the
+    # last/home dir. app_id is the libcosmic default; if a launch ever
+    # fails to refocus, check `niri msg --json windows | jq '.[].app_id'`.
+    "Alt+E" = {
+      hotkey-overlay.title = "Focus or Launch Files";
+      action.spawn = ["focus-or-spawn" "--app-id" "com.system76.CosmicFiles" "--" "cosmic-files"];
+    };
     # Alt+1 → 1Password. The leading "1" of the app name is the mnemonic;
     # nothing else here binds a digit, and niri's default workspace
     # switching lives on Mod+1..9, so this doesn't shadow anything.

@@ -426,10 +426,19 @@
   # qimgv.desktop's declared MimeType list (minus video/webm, mpv keeps
   # video) plus tiff. Without this, image/* falls through to chromium.
   # SVG is left alone so it stays with the browser.
+  #
+  # Video: mpv. Unlike Firefox (which self-asserts as default browser on
+  # launch and so is self-healing), mpv has no "set as default" flow and
+  # never self-registers — without this pin, a fresh install or a wiped
+  # mimeapps.list drops video/* through to chromium, the same latent bug
+  # images had. Firefox's scheme/html defaults are deliberately NOT pinned
+  # here: the app owns them and codifying would just be drift-prone dupe.
   home.activation.mimeDefaults = lib.hm.dag.entryAfter ["writeBoundary"] ''
     run ${pkgs.xdg-utils}/bin/xdg-mime default us.zoom.Zoom.desktop x-scheme-handler/zoommtg
     run ${pkgs.xdg-utils}/bin/xdg-mime default us.zoom.Zoom.desktop x-scheme-handler/zoomus
     run ${pkgs.xdg-utils}/bin/xdg-mime default qimgv.desktop \
       image/jpeg image/png image/gif image/bmp image/webp image/tiff
+    run ${pkgs.xdg-utils}/bin/xdg-mime default mpv.desktop \
+      video/mp4 video/x-matroska video/webm video/quicktime video/x-msvideo
   '';
 }

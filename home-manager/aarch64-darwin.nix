@@ -34,5 +34,4 @@ in {
   ];
 
   programs.go.enable = true;
-  programs.kitty.font.size = 13;
 }

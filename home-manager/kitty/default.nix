@@ -3,6 +3,7 @@
     enable = true;
 
     font.name = "Maple Mono NF CN";
+    font.size = 13;
     themeFile = "Catppuccin-Mocha";
 
     keybindings = {

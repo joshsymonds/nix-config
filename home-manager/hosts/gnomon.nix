@@ -57,12 +57,10 @@
     chromium
 
     # Claude Desktop (the chat app — separate from Claude Code).
-    # Sourced from the claude-desktop flake input, which tracks
-    # upstream Anthropic releases via daily CI auto-bumps. Use
-    # `nix flake update claude-desktop` to pull a newer version.
-    # The -fhs variant wraps the Electron app in buildFHSEnv so MCP
-    # servers can shell out to npx/uvx/docker as expected.
-    inputs.claude-desktop.packages.${pkgs.system}.claude-desktop-fhs
+    # Packaging (flake-input sourcing, fhs wrap, scroll-anchoring fix)
+    # lives in overlays/default.nix; this is just the per-host opt-in.
+    # `nix flake update claude-desktop` still pulls a newer upstream.
+    claude-desktop
 
     # Obsidian — Markdown notes / vaults. The headless flavor on
     # ultraviolet (hosts/ultraviolet/services/obsidian.nix) is a

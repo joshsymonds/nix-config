@@ -6,6 +6,39 @@
 in {
   default = final: prev: let
     devenvPkg = inputs.devenv.packages.${final.stdenv.hostPlatform.system}.devenv;
+
+    # Append `--disable-blink-features=ScrollAnchoring` to an Electron app's
+    # launcher, and re-point its desktop entry at the wrapped binary.
+    #
+    # Why this is a package-level fix and not a per-host preference: niri,
+    # per xdg-shell, sends an activation-only `xdg_toplevel.configure` on
+    # *every* keyboard-focus change (same size, only the `Activated` state
+    # toggles — confirmed via WAYLAND_DEBUG: Claude Desktop's toplevel#46
+    # got `configure(1274,1432, array[16/20])` on focus loss/gain, size
+    # byte-identical). Chromium wrongly runs a layout pass on that no-op
+    # configure; CSS scroll anchoring then re-latches to a mid-list element,
+    # knocking bottom-pinned chat views (Claude Desktop, Slack, Discord,
+    # Signal) partway up. These apps JS-pin to the bottom on new content,
+    # so disabling Blink's scroll anchoring removes the bad re-latch with
+    # no downside. An app installed on a niri box without this is simply
+    # broken — so it belongs with the package, inherited by every host.
+    #
+    # `overrideAttrs` + `postFixup` is the right tool for nixpkgs Electron
+    # apps: their `.desktop` Exec is generated against `$out` (Slack hard-
+    # codes the store path), so the wrapper must live in the same
+    # derivation or GUI launches bypass it. The FHS-env claude-desktop is
+    # handled separately below (its builder runs no postFixup, and its
+    # desktop entry is bare-name/PATH-resolved).
+    electronNoScrollAnchoring = pkg: exe:
+      pkg.overrideAttrs (o: {
+        nativeBuildInputs = (o.nativeBuildInputs or []) ++ [final.makeWrapper];
+        postFixup =
+          (o.postFixup or "")
+          + ''
+            wrapProgram "$out/bin/${exe}" \
+              --add-flags "--disable-blink-features=ScrollAnchoring"
+          '';
+      });
   in {
     devenv = devenvPkg;
     myCaddy = final.callPackage ../pkgs/caddy {};
@@ -100,6 +133,36 @@ in {
         ]
         oldAttrs.installPhase;
     });
+
+    # Electron chat apps, scroll-anchoring fix baked in (see
+    # electronNoScrollAnchoring above). Per-host package lists reference
+    # these by bare name and transparently get the fix.
+    slack = electronNoScrollAnchoring prev.slack "slack";
+    signal-desktop = electronNoScrollAnchoring prev.signal-desktop "signal-desktop";
+    vesktop = electronNoScrollAnchoring prev.vesktop "vesktop";
+
+    # Claude Desktop: sourced from the claude-desktop flake input (daily
+    # CI auto-bumps upstream Anthropic releases; `nix flake update
+    # claude-desktop` pulls newer). The -fhs variant wraps the Electron
+    # app in buildFHSEnv so MCP servers can shell out to npx/uvx/docker.
+    # That builder runs no postFixup, but its desktop Exec is bare
+    # `claude-desktop` (PATH-resolved), so a symlinkJoin that replaces
+    # only the bin with a flag-injecting wrapper is sufficient and cheap
+    # (no app rebuild) — the desktop entry resolves to the wrapper via
+    # PATH without needing a rewrite.
+    claude-desktop = let
+      base = inputs.claude-desktop.packages.${final.stdenv.hostPlatform.system}.claude-desktop-fhs;
+    in
+      final.symlinkJoin {
+        name = "claude-desktop-noscrollanchor";
+        paths = [base];
+        nativeBuildInputs = [final.makeWrapper];
+        postBuild = ''
+          rm "$out/bin/claude-desktop"
+          makeWrapper "${base}/bin/claude-desktop" "$out/bin/claude-desktop" \
+            --add-flags "--disable-blink-features=ScrollAnchoring"
+        '';
+      };
 
     # Stable packages available under pkgs.stable (if needed)
     stable = import inputs.nixpkgs-stable {

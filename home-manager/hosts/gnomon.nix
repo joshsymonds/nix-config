@@ -97,6 +97,18 @@
     # the upstream lilyinstarlight/nixos-cosmic flake is stale (last touch
     # July 2025, still ships pre-stable alpha.6) so we don't use it.
     cosmic-files
+
+    # Trash reaper. cosmic-files has no "delete permanently" / disable-trash
+    # config (only Shift+Delete), so plain Delete silently accumulates in
+    # ~/.local/share/Trash forever — there is no DE here to age it out. The
+    # freedesktop trash spec mandates no daemon and no retention; that's a
+    # per-DE bolt-on we don't get on bare niri. gtrash (Go, single static
+    # binary, actively maintained — picked over the dormant Python autotrash
+    # and the slow Python trash-cli) does spec-correct age/size pruning. Run
+    # from the systemd user timer at the bottom of this file. No `rm` alias:
+    # cosmic-files stays the only thing that trashes; the terminal still
+    # deletes for real.
+    gtrash
   ];
 
   # Same signing key vermissian uses — single user identity across machines
@@ -441,4 +453,35 @@
     run ${pkgs.xdg-utils}/bin/xdg-mime default mpv.desktop \
       video/mp4 video/x-matroska video/webm video/quicktime video/x-msvideo
   '';
+
+  # Trash retention: prune anything trashed >7 days ago, once a day. 7 (vs
+  # the GNOME/KDE-conventional 30) because nothing here cares about the
+  # trash — a tighter bound keeps silent disk use low and the recovery
+  # window short by intent. `prune --day` reads each entry's .trashinfo
+  # DeletionDate, so it's correct regardless of which tool trashed it.
+  # `-f` is belt-and-suspenders: gtrash already skips the confirm prompt
+  # when stdin isn't a TTY (i.e. under systemd), but stating it is clearer
+  # than relying on that. Oneshot so `systemctl --user status` surfaces
+  # the last run's exit code.
+  systemd.user.services.gtrash-prune = {
+    Unit.Description = "Prune freedesktop trash entries older than 7 days";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.gtrash}/bin/gtrash prune --day 7 -f";
+    };
+  };
+
+  # OnCalendar+Persistent (not a monotonic OnUnitActiveSec timer): gnomon
+  # sleeps/powers off, so a missed daily run must catch up on next boot
+  # rather than silently never firing — same reasoning as the morgen-fetch
+  # timer in home-manager/calendar.
+  systemd.user.timers.gtrash-prune = {
+    Unit.Description = "Daily freedesktop trash prune";
+    Timer = {
+      OnCalendar = "daily";
+      Unit = "gtrash-prune.service";
+      Persistent = true;
+    };
+    Install.WantedBy = ["timers.target"];
+  };
 }

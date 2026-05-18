@@ -215,24 +215,33 @@ resolve_host() {
 # session name is the last resort. Empty when none apply (e.g. a bare
 # shell) so assemble_context just drops the segment.
 resolve_devspace() {
-    if [[ -n "${DEV_CONTEXT:-}" ]]; then
-        if [[ -n "${DEV_CONTEXT_ICON:-}" ]]; then
-            echo "${DEV_CONTEXT_ICON} ${DEV_CONTEXT}"
-        else
-            echo "${DEV_CONTEXT}"
-        fi
-        return 0
+    # Only the tmux session name counts. DEV_CONTEXT is deliberately
+    # ignored for the name: the shell sets it to the hostname when
+    # *not* in a devspace, so it can't tell "real devspace" from
+    # "bare shell". A genuine tmux session does. DEV_CONTEXT_ICON (the
+    # planet glyph, e.g. ☿) is a pure prefix when present.
+    [[ -n "${TMUX:-}" ]] && command -v tmux >/dev/null 2>&1 || { echo ""; return 0; }
+    local sess
+    sess=$(tmux display-message -p '#S' 2>/dev/null || echo "")
+    [[ -z "$sess" ]] && { echo ""; return 0; }
+    if [[ -n "${DEV_CONTEXT_ICON:-}" ]]; then
+        echo "${DEV_CONTEXT_ICON} ${sess}"
+    else
+        echo "$sess"
     fi
-    if [[ -n "${TMUX_DEVSPACE:-}" ]]; then
-        echo "${TMUX_DEVSPACE}"
-        return 0
-    fi
-    if [[ -n "${TMUX:-}" ]] && command -v tmux >/dev/null 2>&1; then
-        local s
-        s=$(tmux display-message -p '#S' 2>/dev/null || echo "")
-        [[ -n "$s" ]] && { echo "$s"; return 0; }
-    fi
-    echo ""
+}
+
+# The Claude session's working title, cleaned for a notification.
+# Claude names the tmux window "claude" and sets the pane title to
+# "<activity-spinner> <task>", so get_terminal_title yields e.g.
+# "claude - ✳ Review handoff and plan gambit brainstorming". Strip the
+# literal word "claude" wherever it appears, then drop the leading
+# run of separators / spinner glyphs (every byte before the first
+# ASCII alphanumeric), collapse internal whitespace, and trim — what
+# remains is the task text.
+claude_title() {
+    get_terminal_title \
+        | sed -E 's/[Cc][Ll][Aa][Uu][Dd][Ee]//g; s/^[^A-Za-z0-9]+//; s/[[:space:]]{2,}/ /g; s/[[:space:]]+$//'
 }
 
 # Join non-empty segments with " · ". Never emits a leading, trailing,
@@ -250,21 +259,18 @@ assemble_context() {
 # where the agent finished (e.g. "vermissian · ☿ mercury · savecraft.gg").
 # Falls back to the cwd basename when no terminal title is available so
 # the last segment is never empty.
+# "<place> · <task>", two segments. Place is the tmux session name
+# (icon-prefixed) when in a real devspace — which is always vermissian,
+# so the host is redundant and omitted — otherwise the host. Task is
+# the cleaned Claude title, falling back to the cwd basename when
+# there's no terminal title (e.g. a bare local shell).
 get_context() {
-    local host devspace last
-    host=$(resolve_host)
-    devspace=$(resolve_devspace)
-    # Drop the devspace segment when it adds nothing over the host:
-    # outside a real tmux devspace the shell sets DEV_CONTEXT to the
-    # hostname as a fallback, which would render "gnomon · gnomon · …".
-    # Compare the bare label (icon prefix stripped) case-insensitively.
-    local ds_bare="${devspace##* }"
-    if [[ -n "$devspace" && "${ds_bare,,}" == "${host,,}" ]]; then
-        devspace=""
-    fi
-    last=$(get_terminal_title)
+    local place last
+    place=$(resolve_devspace)
+    [[ -z "$place" ]] && place=$(resolve_host)
+    last=$(claude_title)
     [[ -z "$last" ]] && last=$(basename "$PWD")
-    assemble_context "$host" "$devspace" "$last"
+    assemble_context "$place" "$last"
 }
 
 # Function to send notification with retry

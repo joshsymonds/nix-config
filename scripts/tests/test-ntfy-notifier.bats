@@ -80,30 +80,33 @@ teardown() { rm -rf "$FIXTURE"; }
   [ "$output" = "earth" ]
 }
 
-# ---- resolve_devspace: env precedence ----
+# ---- resolve_devspace: tmux session name only, icon-prefixed ----
 
-@test "resolve_devspace prefers DEV_CONTEXT with icon" {
-  DEV_CONTEXT="mercury" DEV_CONTEXT_ICON="☿" run resolve_devspace
+@test "resolve_devspace returns icon + tmux session name in a real session" {
+  TMUX="/tmp/fake" TMUX_STUB_SESSION="mercury" DEV_CONTEXT_ICON="☿" \
+    run resolve_devspace
   [ "$output" = "☿ mercury" ]
 }
 
-@test "resolve_devspace uses DEV_CONTEXT alone when no icon" {
-  DEV_CONTEXT="mercury" run resolve_devspace
-  [ "$output" = "mercury" ]
-}
-
-@test "resolve_devspace falls back to TMUX_DEVSPACE" {
-  TMUX_DEVSPACE="earth" run resolve_devspace
-  [ "$output" = "earth" ]
-}
-
-@test "resolve_devspace falls back to tmux session name" {
+@test "resolve_devspace returns the bare session name when no icon" {
   TMUX="/tmp/fake" TMUX_STUB_SESSION="mars" run resolve_devspace
   [ "$output" = "mars" ]
 }
 
-@test "resolve_devspace is empty when nothing is set and no tmux" {
+@test "resolve_devspace ignores DEV_CONTEXT when not in a tmux session" {
+  # The shell sets DEV_CONTEXT to the hostname outside a devspace;
+  # that must NOT be treated as a devspace (this was the gnomon·gnomon bug).
+  DEV_CONTEXT="gnomon" DEV_CONTEXT_ICON="☿" run resolve_devspace
+  [ "$output" = "" ]
+}
+
+@test "resolve_devspace is empty with no tmux at all" {
   run resolve_devspace
+  [ "$output" = "" ]
+}
+
+@test "resolve_devspace is empty when tmux has no session name" {
+  TMUX="/tmp/fake" TMUX_STUB_SESSION="" run resolve_devspace
   [ "$output" = "" ]
 }
 
@@ -138,45 +141,59 @@ teardown() { rm -rf "$FIXTURE"; }
   [ "$output" = "savecraft.gg - nvim" ]
 }
 
-# ---- end-to-end get_context ----
+# ---- claude_title: strip "claude" + leading spinner/separators ----
 
-@test "get_context assembles host · icon devspace · window end to end" {
-  HOSTNAME="vermissian.lan" \
-  DEV_CONTEXT="mercury" DEV_CONTEXT_ICON="☿" \
+@test "claude_title strips the claude window name and spinner glyph" {
   TERM_PROGRAM="tmux" TMUX="/tmp/fake" \
-  TMUX_STUB_WINDOW="working on savecraft.gg" TMUX_STUB_PANE="working on savecraft.gg" \
-    run get_context
-  [ "$output" = "vermissian · ☿ mercury · working on savecraft.gg" ]
+    TMUX_STUB_WINDOW="claude" \
+    TMUX_STUB_PANE="✳ Review handoff and plan gambit brainstorming" \
+    run claude_title
+  [ "$output" = "Review handoff and plan gambit brainstorming" ]
 }
 
-@test "get_context falls back to cwd basename when no window title" {
+@test "claude_title handles a braille spinner glyph too" {
+  TERM_PROGRAM="tmux" TMUX="/tmp/fake" \
+    TMUX_STUB_WINDOW="claude" \
+    TMUX_STUB_PANE="⠂ Analyze user activity and acquisition metrics" \
+    run claude_title
+  [ "$output" = "Analyze user activity and acquisition metrics" ]
+}
+
+@test "claude_title leaves a claude-free title intact" {
+  TERM_PROGRAM="tmux" TMUX="/tmp/fake" \
+    TMUX_STUB_WINDOW="savecraft.gg" TMUX_STUB_PANE="savecraft.gg" \
+    run claude_title
+  [ "$output" = "savecraft.gg" ]
+}
+
+@test "claude_title is empty when the title is only 'claude'" {
+  TERM_PROGRAM="tmux" TMUX="/tmp/fake" \
+    TMUX_STUB_WINDOW="claude" TMUX_STUB_PANE="claude" \
+    run claude_title
+  [ "$output" = "" ]
+}
+
+# ---- end-to-end get_context: two segments ----
+
+@test "get_context is 'icon session · task' inside a devspace (host omitted)" {
+  HOSTNAME="vermissian.lan" \
+  DEV_CONTEXT_ICON="☿" \
+  TERM_PROGRAM="tmux" TMUX="/tmp/fake" \
+  TMUX_STUB_SESSION="mercury" \
+  TMUX_STUB_WINDOW="claude" \
+  TMUX_STUB_PANE="✳ Review handoff and plan gambit brainstorming" \
+    run get_context
+  [ "$output" = "☿ mercury · Review handoff and plan gambit brainstorming" ]
+}
+
+@test "get_context uses the host (not DEV_CONTEXT fallback) when not in tmux" {
+  cd "$FIXTURE"
+  HOSTNAME="gnomon" DEV_CONTEXT="gnomon" DEV_CONTEXT_ICON="☿" run get_context
+  [ "$output" = "gnomon · $(basename "$FIXTURE")" ]
+}
+
+@test "get_context falls back to cwd basename when no terminal title" {
   cd "$FIXTURE"
   HOSTNAME="gnomon" run get_context
   [ "$output" = "gnomon · $(basename "$FIXTURE")" ]
-}
-
-@test "get_context drops devspace when it equals the host (DEV_CONTEXT host fallback)" {
-  cd "$FIXTURE"
-  HOSTNAME="gnomon" DEV_CONTEXT="gnomon" run get_context
-  [ "$output" = "gnomon · $(basename "$FIXTURE")" ]
-}
-
-@test "get_context drops devspace equal to host even with an icon prefix" {
-  cd "$FIXTURE"
-  HOSTNAME="gnomon" DEV_CONTEXT="gnomon" DEV_CONTEXT_ICON="" run get_context
-  [ "$output" = "gnomon · $(basename "$FIXTURE")" ]
-}
-
-@test "get_context devspace-vs-host comparison is case-insensitive" {
-  cd "$FIXTURE"
-  HOSTNAME="Gnomon" DEV_CONTEXT="gnomon" run get_context
-  [ "$output" = "Gnomon · $(basename "$FIXTURE")" ]
-}
-
-@test "get_context keeps a real devspace that differs from the host" {
-  HOSTNAME="vermissian.lan" DEV_CONTEXT="mercury" DEV_CONTEXT_ICON="☿" \
-  TERM_PROGRAM="tmux" TMUX="/tmp/fake" \
-  TMUX_STUB_WINDOW="savecraft.gg" TMUX_STUB_PANE="savecraft.gg" \
-    run get_context
-  [ "$output" = "vermissian · ☿ mercury · savecraft.gg" ]
 }

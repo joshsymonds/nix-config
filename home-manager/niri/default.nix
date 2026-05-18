@@ -625,6 +625,32 @@ in {
       allow-when-locked = true;
       action.spawn = ["dms" "ipc" "call" "audio" "micmute"];
     };
+
+    # Media transport: route through DMS's mpris IPC so the on-screen
+    # OSD shows track/state, exactly like the audio binds above. DMS
+    # talks MPRIS to whatever player is active (mpv, Spotify, browser).
+    # XF86AudioPlay and XF86AudioPause both toggle: some keyboards emit
+    # one, some the other, some alternate — playPause is correct for all.
+    "XF86AudioPlay" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "mpris" "playPause"];
+    };
+    "XF86AudioPause" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "mpris" "playPause"];
+    };
+    "XF86AudioNext" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "mpris" "next"];
+    };
+    "XF86AudioPrev" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "mpris" "previous"];
+    };
+    "XF86AudioStop" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "mpris" "stop"];
+    };
     "XF86MonBrightnessUp" = {
       allow-when-locked = true;
       action.spawn = ["dms" "ipc" "call" "brightness" "increment" "5" ""];

@@ -154,3 +154,29 @@ teardown() { rm -rf "$FIXTURE"; }
   HOSTNAME="gnomon" run get_context
   [ "$output" = "gnomon · $(basename "$FIXTURE")" ]
 }
+
+@test "get_context drops devspace when it equals the host (DEV_CONTEXT host fallback)" {
+  cd "$FIXTURE"
+  HOSTNAME="gnomon" DEV_CONTEXT="gnomon" run get_context
+  [ "$output" = "gnomon · $(basename "$FIXTURE")" ]
+}
+
+@test "get_context drops devspace equal to host even with an icon prefix" {
+  cd "$FIXTURE"
+  HOSTNAME="gnomon" DEV_CONTEXT="gnomon" DEV_CONTEXT_ICON="" run get_context
+  [ "$output" = "gnomon · $(basename "$FIXTURE")" ]
+}
+
+@test "get_context devspace-vs-host comparison is case-insensitive" {
+  cd "$FIXTURE"
+  HOSTNAME="Gnomon" DEV_CONTEXT="gnomon" run get_context
+  [ "$output" = "Gnomon · $(basename "$FIXTURE")" ]
+}
+
+@test "get_context keeps a real devspace that differs from the host" {
+  HOSTNAME="vermissian.lan" DEV_CONTEXT="mercury" DEV_CONTEXT_ICON="☿" \
+  TERM_PROGRAM="tmux" TMUX="/tmp/fake" \
+  TMUX_STUB_WINDOW="savecraft.gg" TMUX_STUB_PANE="savecraft.gg" \
+    run get_context
+  [ "$output" = "vermissian · ☿ mercury · savecraft.gg" ]
+}

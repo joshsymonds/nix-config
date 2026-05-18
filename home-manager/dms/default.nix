@@ -97,6 +97,18 @@ in {
     # Logic at NotificationPopup.qml:178-180.
     settings.notificationOverlayEnabled = true;
 
+    # Auto-dismiss critical-urgency popups after 15 s. DMS defaults
+    # notificationTimeoutCritical to 0, which it treats as "never auto-
+    # dismiss" (NotificationService.qml:725 timer + _initWrapperPersistence),
+    # so Critical popups otherwise sit on screen until manually cleared.
+    # Both the ntfy "needs-you" popups (sent -u critical) and the T-2-min
+    # morgen-notifier meeting alert (also -u critical) ride this. Low/
+    # normal already auto-dismiss at the 5 s default. The notification
+    # still goes to the notification center; this only bounds on-screen
+    # dwell. Global to all Critical notifications, but effectively only
+    # those two sources send Critical here.
+    settings.notificationTimeoutCritical = 15000;
+
     # Compositor-driven background blur. Master toggle for the
     # ext-background-effect-v1 path: when on, every WindowBlur instance
     # in DMS (BlurService.qml:18 gates on this) sets a per-surface

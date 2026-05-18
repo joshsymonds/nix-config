@@ -254,6 +254,14 @@ get_context() {
     local host devspace last
     host=$(resolve_host)
     devspace=$(resolve_devspace)
+    # Drop the devspace segment when it adds nothing over the host:
+    # outside a real tmux devspace the shell sets DEV_CONTEXT to the
+    # hostname as a fallback, which would render "gnomon · gnomon · …".
+    # Compare the bare label (icon prefix stripped) case-insensitively.
+    local ds_bare="${devspace##* }"
+    if [[ -n "$devspace" && "${ds_bare,,}" == "${host,,}" ]]; then
+        devspace=""
+    fi
     last=$(get_terminal_title)
     [[ -z "$last" ]] && last=$(basename "$PWD")
     assemble_context "$host" "$devspace" "$last"

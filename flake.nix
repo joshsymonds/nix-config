@@ -44,8 +44,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Ephemeral root + selective persistence (paired with disko)
-    impermanence.url = "github:nix-community/impermanence";
+    # Ephemeral root + selective persistence (paired with disko).
+    # PINNED to the post-bindfs-migration HEAD (real systemd bind mounts).
+    # Explicit rev so the input can't silently float and re-regress.
+    impermanence.url = "github:nix-community/impermanence/7b1d382faf603b6d264f58627330f9faa5cba149";
 
     # Declarative Flatpak management. Adds `services.flatpak.packages` so the
     # system's Flatpak install set is reconciled on activation (install missing,

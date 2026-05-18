@@ -44,6 +44,10 @@
       # persistent natively).
       "/var/lib/gluetun"
       "/var/lib/qbittorrent"
+      # NOTE: /var/lib/comfyui is intentionally NOT here — it needs
+      # user-owned persist backing for rootless podman, so it's declared
+      # in hosts/gnomon/default.nix via impermanence's native
+      # per-directory ownership instead of this listOf-str path.
     ];
 
     persistFiles = [

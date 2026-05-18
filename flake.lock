@@ -1625,6 +1625,7 @@
       "original": {
         "owner": "nix-community",
         "repo": "impermanence",
+        "rev": "7b1d382faf603b6d264f58627330f9faa5cba149",
         "type": "github"
       }
     },

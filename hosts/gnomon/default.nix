@@ -22,6 +22,23 @@ in
       inputs.nix-flatpak.nixosModules.nix-flatpak
     ];
 
+    # creative-lab model/training store. Persisted (survives @root-blank
+    # rollback) AND owned by the invoking user so rootless podman can write
+    # storageDir -> the container's /workspace (devenv.nix). The wrapper's
+    # persistDirectories is listOf str → impermanence creates the persist
+    # backing root:root and a tmpfiles chown can't win the bind-mount
+    # ordering race. So this entry is declared directly with impermanence's
+    # native per-directory ownership (post-bindfs-migration submodule), and
+    # /var/lib/comfyui is intentionally absent from persistDirectories.
+    environment.persistence."/persist".directories = [
+      {
+        directory = "/var/lib/comfyui";
+        user = "joshsymonds";
+        group = "joshsymonds";
+        mode = "0755";
+      }
+    ];
+
     # ── Keyboard: Mac-style Cmd modifier on the Q6 HE ───────────────────
     # leftmeta/rightmeta (physical Cmd in Mac mode) act as Ctrl globally,
     # so Cmd+C/V/T/W/etc. fire the Linux Ctrl+letter shortcuts in Firefox,

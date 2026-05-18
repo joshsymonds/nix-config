@@ -1,4 +1,33 @@
-{pkgs, ...}: {
+{
+  pkgs,
+  lib,
+  ...
+}: let
+  # Forces silent session restore on every launch. Firefox on niri does not
+  # reliably shut down cleanly: closing the window with Alt+Q (close-window →
+  # xdg_toplevel.close) starts the quit, but the relaunch keybind
+  # (focus-or-spawn) races it — the new `firefox` attaches to the still-dying
+  # instance, aborting the session final-write so no clean sessionstore.jsonlz4
+  # is produced. (Historically there was also a Wayland-disconnect MOZ_CRASH;
+  # that class is gone since the niri 1 MiB wl_display buffer fix.) Either way
+  # Firefox concludes it crashed and shows "Could not restore your previous
+  # session" every start.
+  #
+  # browser.startup.page=3 makes SessionStartup take the RESUME_SESSION branch
+  # *before* the crash/recover branch is evaluated (verified in
+  # SessionStartup.sys.mjs), so recovery.jsonlz4 — rewritten every ~15s and
+  # always current — is restored silently regardless of how the prior instance
+  # died. It does not mask real crashes: the crash reporter (about:crashes /
+  # Breakpad) is a separate subsystem.
+  #
+  # Delivered as user.js (local-only, never Sync'd) rather than
+  # programs.firefox so the synced default profile stays the source of truth
+  # (see the home.packages comment below).
+  userJs = pkgs.writeText "firefox-user.js" ''
+    // Managed by nix-config (home-manager/firefox/default.nix). Do not edit.
+    user_pref("browser.startup.page", 3);
+  '';
+in {
   # Tridactyl native messenger + tridactylrc.
   #
   # We deliberately do NOT use `programs.firefox` here. That module manages
@@ -72,5 +101,39 @@
     " straight `colourscheme` — most others (the cmdline, completions)
     " ride along automatically.
     colourscheme dark
+  '';
+
+  # Resolve the active profile from profiles.ini (the synced profile name is
+  # not knowable here) and drop user.js into it. Handles both ~/.mozilla and
+  # the XDG (~/.config/mozilla) layout; prefers an [Install*] Default= entry,
+  # else the [Profile*] with Default=1, else the first profile.
+  home.activation.firefoxUserJs = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    firefoxRoot=""
+    for d in "$HOME/.mozilla/firefox" "''${XDG_CONFIG_HOME:-$HOME/.config}/mozilla/firefox"; do
+      if [ -f "$d/profiles.ini" ]; then firefoxRoot="$d"; break; fi
+    done
+    if [ -z "$firefoxRoot" ]; then
+      echo "firefox user.js: no profiles.ini found — skipping" >&2
+    else
+      profilePath=$(${pkgs.gawk}/bin/awk '
+        /^\[/        { isInstall = ($0 ~ /^\[Install/); isProfile = ($0 ~ /^\[Profile/); pdef = 0; ppath = "" }
+        /^Default=/  { v = substr($0, 9);
+                       if (isInstall) installDefault = v;
+                       if (isProfile && v == "1") { pdef = 1; if (ppath != "") chosen = ppath } }
+        /^Path=/     { v = substr($0, 6); ppath = v;
+                       if (isProfile && pdef == 1) chosen = v;
+                       if (firstPath == "") firstPath = v }
+        END          { print (installDefault != "" ? installDefault : (chosen != "" ? chosen : firstPath)) }
+      ' "$firefoxRoot/profiles.ini")
+      case "$profilePath" in
+        /*) profileDir="$profilePath" ;;
+        *)  profileDir="$firefoxRoot/$profilePath" ;;
+      esac
+      if [ -n "$profilePath" ] && [ -d "$profileDir" ]; then
+        $DRY_RUN_CMD install -m0644 ${userJs} "$profileDir/user.js"
+      else
+        echo "firefox user.js: profile dir not found (root=$firefoxRoot path=$profilePath) — skipping" >&2
+      fi
+    fi
   '';
 }

@@ -10,6 +10,7 @@
     ../spicetify
     ../qbittorrent
     ../calendar
+    ../ntfy-notify
   ];
 
   home.packages = with pkgs; [

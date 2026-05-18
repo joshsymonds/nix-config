@@ -20,6 +20,7 @@ in {
     newrelic-cli = final.callPackage ../pkgs/newrelic-cli {};
     morgen-fetch = final.callPackage ../pkgs/morgen-fetch {};
     morgen-notifier = final.callPackage ../pkgs/morgen-notifier {};
+    claude-notify-sounds = final.callPackage ../pkgs/claude-notify-sounds {};
     redlib-veraticus = final.callPackage ../pkgs/redlib-veraticus {
       inherit (inputs) crane;
       redlibSrc = inputs.redlib-fork.sourceInfo.outPath;

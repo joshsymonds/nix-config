@@ -33,25 +33,7 @@ set -euo pipefail
 # CONFIGURATION
 # ============================================================================
 
-# Parse command line arguments
 DEBUG=false
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --debug)
-            DEBUG=true
-            shift
-            ;;
-        *)
-            # Ignore any other arguments
-            shift
-            ;;
-    esac
-done
-
-# Use CLAUDE_HOOKS_DEBUG environment variable or command line flag
-if [[ "${CLAUDE_HOOKS_DEBUG:-0}" == "1" ]] || [[ "$DEBUG" == "true" ]]; then
-    DEBUG=true
-fi
 
 # Debug logging function
 log_debug() {
@@ -60,86 +42,104 @@ log_debug() {
     fi
 }
 
-# Check if notifications are disabled (enabled by default)
-if [[ "${CLAUDE_HOOKS_NTFY_DISABLED:-}" == "true" ]]; then
-    log_debug "ntfy notifications disabled (CLAUDE_HOOKS_NTFY_DISABLED == true)"
-    exit 0
-fi
-
-# Load URL from file if CLAUDE_HOOKS_NTFY_URL is not set
-if [[ -z "${CLAUDE_HOOKS_NTFY_URL:-}" ]] && [[ -n "${CLAUDE_HOOKS_NTFY_URL_FILE:-}" ]]; then
-    if [[ -f "$CLAUDE_HOOKS_NTFY_URL_FILE" ]]; then
-        CLAUDE_HOOKS_NTFY_URL=$(cat "$CLAUDE_HOOKS_NTFY_URL_FILE")
-        export CLAUDE_HOOKS_NTFY_URL
-        log_debug "Loaded URL from $CLAUDE_HOOKS_NTFY_URL_FILE"
-    else
-        log_debug "URL file not found: $CLAUDE_HOOKS_NTFY_URL_FILE"
+# Parse CLI args + env into DEBUG. Called by main(); kept out of the
+# top level so the script is sourceable (for tests) without consuming
+# the caller's argv.
+_parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --debug) DEBUG=true; shift ;;
+            *) shift ;;
+        esac
+    done
+    if [[ "${CLAUDE_HOOKS_DEBUG:-0}" == "1" ]] || [[ "$DEBUG" == "true" ]]; then
+        DEBUG=true
     fi
-fi
+}
 
-# Try to read configuration from file if CLAUDE_HOOKS_NTFY_URL is not set
-if [[ -z "${CLAUDE_HOOKS_NTFY_URL:-}" ]]; then
-    CONFIG_FILE="$HOME/.config/claude-code-ntfy/config.yaml"
-    if [[ -f "$CONFIG_FILE" ]]; then
-        # Extract ntfy_server and ntfy_topic from config file
-        NTFY_SERVER=$(grep "^ntfy_server:" "$CONFIG_FILE" 2>/dev/null | sed 's/^ntfy_server:[ ]*//' | tr -d '"' || true)
-        NTFY_TOPIC=$(grep "^ntfy_topic:" "$CONFIG_FILE" 2>/dev/null | sed 's/^ntfy_topic:[ ]*//' | tr -d '"' || true)
-        
-        if [[ -n "$NTFY_SERVER" ]] && [[ -n "$NTFY_TOPIC" ]]; then
-            export CLAUDE_HOOKS_NTFY_URL="${NTFY_SERVER}/${NTFY_TOPIC}"
-            log_debug "Loaded ntfy config from $CONFIG_FILE"
-            log_debug "Server: $NTFY_SERVER, Topic: $NTFY_TOPIC"
+# Resolve ntfy URL/token from env, *_FILE paths, or the config.yaml
+# fallback, and verify curl is present. Returns non-zero (instead of
+# the old top-level `exit 0`) when notifications should be skipped, so
+# callers stay in control of process exit.
+_load_ntfy_config() {
+    if [[ "${CLAUDE_HOOKS_NTFY_DISABLED:-}" == "true" ]]; then
+        log_debug "ntfy notifications disabled (CLAUDE_HOOKS_NTFY_DISABLED == true)"
+        return 1
+    fi
+
+    if [[ -z "${CLAUDE_HOOKS_NTFY_URL:-}" ]] && [[ -n "${CLAUDE_HOOKS_NTFY_URL_FILE:-}" ]]; then
+        if [[ -f "$CLAUDE_HOOKS_NTFY_URL_FILE" ]]; then
+            CLAUDE_HOOKS_NTFY_URL=$(cat "$CLAUDE_HOOKS_NTFY_URL_FILE")
+            export CLAUDE_HOOKS_NTFY_URL
+            log_debug "Loaded URL from $CLAUDE_HOOKS_NTFY_URL_FILE"
+        else
+            log_debug "URL file not found: $CLAUDE_HOOKS_NTFY_URL_FILE"
         fi
     fi
-fi
 
-# Load token from file if CLAUDE_HOOKS_NTFY_TOKEN is not set
-if [[ -z "${CLAUDE_HOOKS_NTFY_TOKEN:-}" ]] && [[ -n "${CLAUDE_HOOKS_NTFY_TOKEN_FILE:-}" ]]; then
-    if [[ -f "$CLAUDE_HOOKS_NTFY_TOKEN_FILE" ]]; then
-        CLAUDE_HOOKS_NTFY_TOKEN=$(cat "$CLAUDE_HOOKS_NTFY_TOKEN_FILE")
-        export CLAUDE_HOOKS_NTFY_TOKEN
-        log_debug "Loaded token from $CLAUDE_HOOKS_NTFY_TOKEN_FILE"
-    else
-        log_debug "Token file not found: $CLAUDE_HOOKS_NTFY_TOKEN_FILE"
+    if [[ -z "${CLAUDE_HOOKS_NTFY_URL:-}" ]]; then
+        local CONFIG_FILE="$HOME/.config/claude-code-ntfy/config.yaml"
+        if [[ -f "$CONFIG_FILE" ]]; then
+            local NTFY_SERVER NTFY_TOPIC
+            NTFY_SERVER=$(grep "^ntfy_server:" "$CONFIG_FILE" 2>/dev/null | sed 's/^ntfy_server:[ ]*//' | tr -d '"' || true)
+            NTFY_TOPIC=$(grep "^ntfy_topic:" "$CONFIG_FILE" 2>/dev/null | sed 's/^ntfy_topic:[ ]*//' | tr -d '"' || true)
+            if [[ -n "$NTFY_SERVER" ]] && [[ -n "$NTFY_TOPIC" ]]; then
+                export CLAUDE_HOOKS_NTFY_URL="${NTFY_SERVER}/${NTFY_TOPIC}"
+                log_debug "Loaded ntfy config from $CONFIG_FILE"
+                log_debug "Server: $NTFY_SERVER, Topic: $NTFY_TOPIC"
+            fi
+        fi
     fi
-fi
 
-# Check configuration
-if [[ -z "${CLAUDE_HOOKS_NTFY_URL:-}" ]]; then
-    log_debug "CLAUDE_HOOKS_NTFY_URL not configured"
-    echo "CLAUDE_HOOKS_NTFY_URL not configured" >&2
-    exit 0
-fi
-
-# Check if curl is available
-if ! command -v curl >/dev/null 2>&1; then
-    log_debug "curl not found"
-    echo "curl not found" >&2
-    exit 0
-fi
-
-if [[ "$DEBUG" == "true" ]]; then
-    log_debug "ntfy is enabled"
-    log_debug "URL: ${CLAUDE_HOOKS_NTFY_URL}"
-    if [[ -n "${CLAUDE_HOOKS_NTFY_TOKEN:-}" ]]; then
-        log_debug "Token: [configured]"
+    if [[ -z "${CLAUDE_HOOKS_NTFY_TOKEN:-}" ]] && [[ -n "${CLAUDE_HOOKS_NTFY_TOKEN_FILE:-}" ]]; then
+        if [[ -f "$CLAUDE_HOOKS_NTFY_TOKEN_FILE" ]]; then
+            CLAUDE_HOOKS_NTFY_TOKEN=$(cat "$CLAUDE_HOOKS_NTFY_TOKEN_FILE")
+            export CLAUDE_HOOKS_NTFY_TOKEN
+            log_debug "Loaded token from $CLAUDE_HOOKS_NTFY_TOKEN_FILE"
+        else
+            log_debug "Token file not found: $CLAUDE_HOOKS_NTFY_TOKEN_FILE"
+        fi
     fi
-fi
 
-# Rate limiting - prevent notification spam
+    if [[ -z "${CLAUDE_HOOKS_NTFY_URL:-}" ]]; then
+        log_debug "CLAUDE_HOOKS_NTFY_URL not configured"
+        echo "CLAUDE_HOOKS_NTFY_URL not configured" >&2
+        return 1
+    fi
+
+    if ! command -v curl >/dev/null 2>&1; then
+        log_debug "curl not found"
+        echo "curl not found" >&2
+        return 1
+    fi
+
+    if [[ "$DEBUG" == "true" ]]; then
+        log_debug "ntfy is enabled"
+        log_debug "URL: ${CLAUDE_HOOKS_NTFY_URL}"
+        if [[ -n "${CLAUDE_HOOKS_NTFY_TOKEN:-}" ]]; then
+            log_debug "Token: [configured]"
+        fi
+    fi
+    return 0
+}
+
+# One notification per 2 seconds. Returns non-zero when the caller
+# should skip (too soon since the last send); records "now" otherwise.
 RATE_LIMIT_FILE="/tmp/.claude-ntfy-rate-limit"
-if [[ -f "$RATE_LIMIT_FILE" ]]; then
-    LAST_NOTIFICATION=$(cat "$RATE_LIMIT_FILE" 2>/dev/null) || LAST_NOTIFICATION="0"
-    CURRENT_TIME=$(date +%s)
-    TIME_DIFF=$((CURRENT_TIME - LAST_NOTIFICATION))
-    
-    # Limit to one notification per 2 seconds
-    if [[ $TIME_DIFF -lt 2 ]]; then
-        log_debug "Rate limit: skipping notification (last was ${TIME_DIFF}s ago)"
-        exit 0
+_check_rate_limit() {
+    if [[ -f "$RATE_LIMIT_FILE" ]]; then
+        local LAST_NOTIFICATION CURRENT_TIME TIME_DIFF
+        LAST_NOTIFICATION=$(cat "$RATE_LIMIT_FILE" 2>/dev/null) || LAST_NOTIFICATION="0"
+        CURRENT_TIME=$(date +%s)
+        TIME_DIFF=$((CURRENT_TIME - LAST_NOTIFICATION))
+        if [[ $TIME_DIFF -lt 2 ]]; then
+            log_debug "Rate limit: skipping notification (last was ${TIME_DIFF}s ago)"
+            return 1
+        fi
     fi
-fi
-date +%s > "$RATE_LIMIT_FILE"
+    date +%s > "$RATE_LIMIT_FILE"
+    return 0
+}
 
 # ============================================================================
 # HELPER FUNCTIONS
@@ -202,35 +202,86 @@ get_terminal_title() {
     clean_terminal_title "$title"
 }
 
-# Get context information
-get_context() {
-    local cwd_basename
-    cwd_basename=$(basename "$PWD")
-    local term_title
-    term_title=$(get_terminal_title)
-    
-    local context="Claude Code: $cwd_basename"
-    if [[ -n "$term_title" ]]; then
-        context="$context - $term_title"
+# Short hostname (the server the agent ran on). Strips any domain.
+resolve_host() {
+    local h="${HOSTNAME:-}"
+    [[ -z "$h" ]] && h="$(uname -n 2>/dev/null || echo "")"
+    echo "${h%%.*}"
+}
+
+# Devspace label (the planetary tmux context, e.g. "☿ mercury").
+# Precedence: DEV_CONTEXT (+ DEV_CONTEXT_ICON) is the canonical signal
+# set by tmux-devspace; TMUX_DEVSPACE is the legacy var; the tmux
+# session name is the last resort. Empty when none apply (e.g. a bare
+# shell) so assemble_context just drops the segment.
+resolve_devspace() {
+    if [[ -n "${DEV_CONTEXT:-}" ]]; then
+        if [[ -n "${DEV_CONTEXT_ICON:-}" ]]; then
+            echo "${DEV_CONTEXT_ICON} ${DEV_CONTEXT}"
+        else
+            echo "${DEV_CONTEXT}"
+        fi
+        return 0
     fi
-    echo "$context"
+    if [[ -n "${TMUX_DEVSPACE:-}" ]]; then
+        echo "${TMUX_DEVSPACE}"
+        return 0
+    fi
+    if [[ -n "${TMUX:-}" ]] && command -v tmux >/dev/null 2>&1; then
+        local s
+        s=$(tmux display-message -p '#S' 2>/dev/null || echo "")
+        [[ -n "$s" ]] && { echo "$s"; return 0; }
+    fi
+    echo ""
+}
+
+# Join non-empty segments with " · ". Never emits a leading, trailing,
+# or doubled separator, and never errors on empty input.
+assemble_context() {
+    local out="" seg
+    for seg in "$@"; do
+        [[ -z "$seg" ]] && continue
+        if [[ -z "$out" ]]; then out="$seg"; else out="$out · $seg"; fi
+    done
+    echo "$out"
+}
+
+# "<host> · <devspace> · <window/pane title>" — the at-a-glance hint of
+# where the agent finished (e.g. "vermissian · ☿ mercury · savecraft.gg").
+# Falls back to the cwd basename when no terminal title is available so
+# the last segment is never empty.
+get_context() {
+    local host devspace last
+    host=$(resolve_host)
+    devspace=$(resolve_devspace)
+    last=$(get_terminal_title)
+    [[ -z "$last" ]] && last=$(basename "$PWD")
+    assemble_context "$host" "$devspace" "$last"
 }
 
 # Function to send notification with retry
 send_notification() {
     local title="$1"
     local message="$2"
+    # priority/tags classify the event so both the phone (ntfy app
+    # priority + emoji) and gnomon's ntfy subscriber (which picks the
+    # chime by the `question` tag) can tell "done" from "needs you".
+    # Defaults match a plain Stop.
+    local priority="${3:-3}"
+    local tags="${4:-white_check_mark}"
     local max_retries=2
     local retry_count=0
-    
-    log_debug "send_notification called with title: $title, message: $message"
-    
+
+    log_debug "send_notification called with title: $title, message: $message, priority: $priority, tags: $tags"
+
     while [[ $retry_count -lt $max_retries ]]; do
         local curl_args=(-s --max-time 5 -X POST)
-        
+
         # Add title header
         curl_args+=(-H "Title: $title")
-        
+        curl_args+=(-H "Priority: $priority")
+        curl_args+=(-H "Tags: $tags")
+
         # Add authentication if token is configured
         if [[ -n "${CLAUDE_HOOKS_NTFY_TOKEN:-}" ]]; then
             curl_args+=(-H "Authorization: Bearer ${CLAUDE_HOOKS_NTFY_TOKEN}")
@@ -322,6 +373,11 @@ format_notification() {
 # MAIN LOGIC
 # ============================================================================
 
+main() {
+    _parse_args "$@"
+    _load_ntfy_config || exit 0
+    _check_rate_limit || exit 0
+
 # Check if we have JSON input (hook mode)
 if [[ ! -t 0 ]]; then
     # Read JSON input
@@ -370,7 +426,10 @@ if [[ ! -t 0 ]]; then
             # Handle Notification events
             MESSAGE=$(echo "$JSON_INPUT" | jq -r '.message // "Notification"' 2>/dev/null)
             log_debug "Processing Notification event: $MESSAGE"
-            send_notification "$CONTEXT" "$MESSAGE"
+            # Claude is parked waiting on the user: max priority so the
+            # phone buzzes hard, `question` tag so gnomon plays the
+            # ascending "needs-you" triple instead of the done chime.
+            send_notification "$CONTEXT" "$MESSAGE" 5 question
         else
             log_debug "Ignoring unknown event: $EVENT"
             exit 0
@@ -392,3 +451,8 @@ fi
 
 # Clean up old rate limit files (older than 1 hour)
 find /tmp -name ".claude-ntfy-rate-limit" -mmin +60 -delete 2>/dev/null || true
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    main "$@"
+fi

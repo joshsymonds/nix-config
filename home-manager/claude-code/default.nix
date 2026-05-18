@@ -97,6 +97,17 @@ in {
     file = ../../secrets/user/ntfy-url.age;
   };
 
+  # ntfy.sh API token for the paid account. Publishing with this as a
+  # Bearer token attributes messages to the account so the paid daily
+  # limits apply instead of the anonymous per-IP free quota (the whole
+  # fleet looping through one topic exhausts the free quota by mid-morning
+  # and every publish then 429s — silently, since the hook never checked
+  # HTTP status). The topic stays a public, unauthenticated-read topic so
+  # iOS Firebase push keeps full message content; only publish is authed.
+  config.age.secrets."ntfy-token" = {
+    file = ../../secrets/user/ntfy-token.age;
+  };
+
   config.home = {
     # Install Node.js to enable npm
     packages =
@@ -125,6 +136,7 @@ in {
       CLAUDE_CODE_NO_FLICKER = "1";
       CLAUDE_CODE_TMUX_TRUECOLOR = "1";
       CLAUDE_HOOKS_NTFY_URL_FILE = config.age.secrets."ntfy-url".path;
+      CLAUDE_HOOKS_NTFY_TOKEN_FILE = config.age.secrets."ntfy-token".path;
       # The only reliable way to disable auto-updates for native installs.
       # settings.json autoUpdater.disabled is cosmetic; ~/.claude.json autoUpdates
       # is bypassed by autoUpdatesProtectedForNative for native installMethod.

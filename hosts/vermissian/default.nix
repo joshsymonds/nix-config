@@ -225,6 +225,7 @@ in
       };
 
       savecraftDataRefresh.enable = true;
+      savecraftDataRefresh.enableDatagen = true;
     };
 
     # Host-specific SSH settings

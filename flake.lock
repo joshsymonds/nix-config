@@ -2820,11 +2820,11 @@
         "nixpkgs": "nixpkgs_14"
       },
       "locked": {
-        "lastModified": 1779133199,
-        "narHash": "sha256-gO1geaGTASCPXqUK20l2OEgT90feXDJIMNqAXHxv2zc=",
+        "lastModified": 1779134227,
+        "narHash": "sha256-95vP3ZwG3ocpltPL301rmtaXhxARaAOR9haZKNSxmoA=",
         "owner": "joshsymonds",
         "repo": "savecraft.gg",
-        "rev": "124adfd7ac55eb6a56f4cbac0631e424fae6fa8d",
+        "rev": "876afb2ff5590273cebda4f1aa5bad04c301a398",
         "type": "github"
       },
       "original": {

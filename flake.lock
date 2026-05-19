@@ -2389,11 +2389,11 @@
     },
     "nixpkgs_15": {
       "locked": {
-        "lastModified": 1768564909,
-        "narHash": "sha256-Kell/SpJYVkHWMvnhqJz/8DqQg2b6PguxVWOuadbHCc=",
+        "lastModified": 1778869304,
+        "narHash": "sha256-30sZNZoA1cqF5JNO9fVX+wgiQYjB7HJqqJ4ztCDeBZE=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "e4bae1bd10c9c57b2cf517953ab70060a828ee6f",
+        "rev": "d233902339c02a9c334e7e593de68855ad26c4cb",
         "type": "github"
       },
       "original": {
@@ -2839,11 +2839,11 @@
         "nixpkgs": "nixpkgs_15"
       },
       "locked": {
-        "lastModified": 1776147878,
-        "narHash": "sha256-FoBe3a5SRsznNOiR5x26goFpvfDjvft/f8emXqOK/iU=",
+        "lastModified": 1779150721,
+        "narHash": "sha256-p728O94jK+rDvOA5E3WE+q8iWLwQXy2NSRNxbUywBQs=",
         "ref": "refs/heads/main",
-        "rev": "285602ec85c968fc650a16efe1f9f57656e724f6",
-        "revCount": 41,
+        "rev": "022f56c3ff83b35d3b6746b4eb14a7fd8fd24a28",
+        "revCount": 45,
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/shimmer.git"
       },

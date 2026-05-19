@@ -49,10 +49,25 @@
   settingsJsonPersonal = mkSettingsJson "personal" {};
 
   settingsJsonWork = mkSettingsJson "work" {
+    # Bedrock model IDs need the Bedrock region prefix (`us.` for the US
+    # cross-region inference profile). The `[1m]` suffix opts into the 1M
+    # context window on Bedrock the same way it does on the Anthropic API
+    # (per code.claude.com/docs/en/amazon-bedrock).
+    #
+    # The base settings.json's `claude-opus-4-7[1m]` was missing the `us.`
+    # prefix and would be sent verbatim to the Bedrock Invoke API and
+    # rejected. We override the model on the work-profile only; personal
+    # profile keeps the Anthropic-API-style ID.
+    model = "us.anthropic.claude-opus-4-7[1m]";
     env = {
       CLAUDE_CODE_USE_BEDROCK = "1";
       AWS_REGION = "us-east-1";
       AWS_PROFILE = "attain";
+      # Alias-resolution targets for opus/sonnet/haiku in /model. The HAIKU
+      # entry also doubles as the small/fast background-task model on
+      # Bedrock (title generation, auto-compaction summaries). Per Bedrock
+      # docs, ANTHROPIC_SMALL_FAST_MODEL is deprecated -- ANTHROPIC_DEFAULT_
+      # HAIKU_MODEL covers both slots when set.
       ANTHROPIC_DEFAULT_OPUS_MODEL = "us.anthropic.claude-opus-4-7";
       ANTHROPIC_DEFAULT_SONNET_MODEL = "us.anthropic.claude-sonnet-4-6";
       ANTHROPIC_DEFAULT_HAIKU_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0";

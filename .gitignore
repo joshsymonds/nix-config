@@ -24,3 +24,4 @@ vendor/
 reference/
 .reference/
 .terraform/
+.worktrees/

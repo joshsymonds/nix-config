@@ -57,10 +57,15 @@
     # ANTHROPIC_MODEL in the env block to avoid embedding the AWS account
     # ID in nix-config (which is a public repo).
     #
-    # Opus 4.7 is 1M-context NATIVELY on Bedrock per the model card -- no
-    # `[1m]` suffix needed. The suffix is only for older models that have
-    # 200K default with 1M opt-in (Opus 4.6, Sonnet 4.6); on Opus 4.7 it
-    # triggers `400 invalid beta flag`. (See claude-code issue #49238.)
+    # 1M context on Bedrock requires the `[1m]` suffix on the model ID. The
+    # suffix is parsed and stripped client-side before the request reaches
+    # Bedrock, but it tells Claude Code to budget context against 1M tokens
+    # instead of the default 200k. Without it, /context shows N/200k and
+    # auto-compaction kicks in around ~167k regardless of what Bedrock would
+    # actually accept on the wire. Verified empirically 2026-05-19: bare ID
+    # gives 200k denominator; `[1m]` suffix invokes successfully (no `400
+    # invalid beta flag` despite earlier folklore). Haiku 4.5 has no 1M
+    # variant, so no suffix there.
     env = {
       CLAUDE_CODE_USE_BEDROCK = "1";
       # us-east-2 matches the attain AWS profile's default region and where
@@ -73,14 +78,14 @@
       AWS_PROFILE = "attain";
       # Primary model. Bare inference profile ID is what ANTHROPIC_MODEL
       # accepts (settings.json `model` field would want a full ARN).
-      ANTHROPIC_MODEL = "us.anthropic.claude-opus-4-7";
+      ANTHROPIC_MODEL = "us.anthropic.claude-opus-4-7[1m]";
       # Alias-resolution targets for opus/sonnet/haiku in /model. The HAIKU
       # entry also doubles as the small/fast background-task model on
       # Bedrock (title generation, auto-compaction summaries). Per Bedrock
       # docs, ANTHROPIC_SMALL_FAST_MODEL is deprecated -- ANTHROPIC_DEFAULT_
       # HAIKU_MODEL covers both slots when set.
-      ANTHROPIC_DEFAULT_OPUS_MODEL = "us.anthropic.claude-opus-4-7";
-      ANTHROPIC_DEFAULT_SONNET_MODEL = "us.anthropic.claude-sonnet-4-6";
+      ANTHROPIC_DEFAULT_OPUS_MODEL = "us.anthropic.claude-opus-4-7[1m]";
+      ANTHROPIC_DEFAULT_SONNET_MODEL = "us.anthropic.claude-sonnet-4-6[1m]";
       ANTHROPIC_DEFAULT_HAIKU_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
     };
   };

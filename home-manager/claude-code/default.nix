@@ -49,16 +49,25 @@
   settingsJsonPersonal = mkSettingsJson "personal" {};
 
   settingsJsonWork = mkSettingsJson "work" {
-    # Bedrock model IDs need the Bedrock region prefix (`us.` for the US
-    # cross-region inference profile). The `[1m]` suffix opts into the 1M
-    # context window on Bedrock the same way it does on the Anthropic API
-    # (per code.claude.com/docs/en/amazon-bedrock).
+    # Bedrock model IDs use the cross-region inference profile form, e.g.
+    # `us.anthropic.claude-opus-4-7` (`us.` for the US Geo profile).
     #
-    # The base settings.json's `claude-opus-4-7[1m]` was missing the `us.`
-    # prefix and would be sent verbatim to the Bedrock Invoke API and
-    # rejected. We override the model on the work-profile only; personal
-    # profile keeps the Anthropic-API-style ID.
-    model = "us.anthropic.claude-opus-4-7[1m]";
+    # Opus 4.7 is 1M-context NATIVELY on Bedrock per the model card -- there
+    # is no separate 1M variant, and the `[1m]` suffix Claude Code uses for
+    # models that have 200K-default-with-1M-opt-in (Opus 4.6, Sonnet 4.6)
+    # triggers `400 invalid_request_error: invalid beta flag` on Opus 4.7
+    # because it attaches a `context-1m-2025-08-07` beta header the model
+    # rejects. So: no `[1m]` suffix for Opus 4.7. The 1M context comes for
+    # free with the base profile ID. (See claude-code issue #49238.)
+    #
+    # Same reasoning for the Sonnet entry below -- accepting 200K context
+    # for the rarely-used sonnet alias rather than risking the beta-flag
+    # error. If Sonnet 1M is needed later, revisit after confirming the
+    # AWS-side fix has rolled out in our region.
+    #
+    # Personal profile keeps the Anthropic-API-style ID inherited from the
+    # base settings.json (which expects `claude-opus-4-7[1m]` syntax).
+    model = "us.anthropic.claude-opus-4-7";
     env = {
       CLAUDE_CODE_USE_BEDROCK = "1";
       AWS_REGION = "us-east-1";

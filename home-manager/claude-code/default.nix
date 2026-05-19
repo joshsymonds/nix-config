@@ -63,7 +63,13 @@
     # triggers `400 invalid beta flag`. (See claude-code issue #49238.)
     env = {
       CLAUDE_CODE_USE_BEDROCK = "1";
-      AWS_REGION = "us-east-1";
+      # us-east-2 matches the attain AWS profile's default region and where
+      # the rest of the Klover AWS stuff lives. The us.* prefix on the model
+      # IDs is a Geo cross-region inference profile that theoretically
+      # routes across us-east-1/2/west-2 regardless of source region, but
+      # in practice Opus 4.7 model-access propagation differs by region;
+      # us-east-2 is where it's actually live for this account.
+      AWS_REGION = "us-east-2";
       AWS_PROFILE = "attain";
       # Primary model. Bare inference profile ID is what ANTHROPIC_MODEL
       # accepts (settings.json `model` field would want a full ARN).

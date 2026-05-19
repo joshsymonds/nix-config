@@ -19,8 +19,14 @@
   # time, pointing at the Nix store path. Keeps a single source of truth
   # between settings.json's extraKnownMarketplaces and the runtime
   # known_marketplaces.json populated by activation.
+  #
+  # Two variants get built: a vanilla one for the personal profile
+  # (~/.claude) and one with the AWS Bedrock env overlay for the work
+  # profile (~/.claude-work). Work-profile sessions route through the
+  # Attain AWS account; personal sessions stay on Anthropic OAuth.
   settingsJsonBase = builtins.fromJSON (builtins.readFile ./settings.json);
-  settingsJson = pkgs.writeText "claude-settings.json" (builtins.toJSON (
+
+  settingsJsonWithGambit =
     settingsJsonBase
     // {
       extraKnownMarketplaces =
@@ -33,8 +39,25 @@
             };
           };
         };
-    }
-  ));
+    };
+
+  mkSettingsJson = name: overlay:
+    pkgs.writeText "claude-settings-${name}.json" (builtins.toJSON (
+      lib.recursiveUpdate settingsJsonWithGambit overlay
+    ));
+
+  settingsJsonPersonal = mkSettingsJson "personal" {};
+
+  settingsJsonWork = mkSettingsJson "work" {
+    env = {
+      CLAUDE_CODE_USE_BEDROCK = "1";
+      AWS_REGION = "us-east-1";
+      AWS_PROFILE = "attain";
+      ANTHROPIC_DEFAULT_OPUS_MODEL = "us.anthropic.claude-opus-4-7";
+      ANTHROPIC_DEFAULT_SONNET_MODEL = "us.anthropic.claude-sonnet-4-6";
+      ANTHROPIC_DEFAULT_HAIKU_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
+    };
+  };
 
   # Skills dir as a linkFarm derivation: nix-managed skills + the
   # team-status skill at an out-of-store writable path so iteration
@@ -169,7 +192,7 @@ in {
           @fleet.md
         '';
 
-      mkClaudeFiles = dir: let
+      mkClaudeFiles = dir: settings: let
         commandFileAttrs =
           lib.mapAttrs' (
             name: _: lib.nameValuePair "${dir}/commands/${name}" {source = ./commands/${name};}
@@ -179,7 +202,7 @@ in {
         lib.mkMerge [
           commandFileAttrs
           {
-            "${dir}/settings.json".source = settingsJson;
+            "${dir}/settings.json".source = settings;
             "${dir}/CLAUDE.md".text = claudeMdText;
             "${dir}/host.md".text = cfg.hostContext;
             "${dir}/fleet.md".source = ./fleet.md;
@@ -201,8 +224,8 @@ in {
         ];
     in
       lib.mkMerge [
-        (mkClaudeFiles ".claude")
-        (mkClaudeFiles ".claude-work")
+        (mkClaudeFiles ".claude" settingsJsonPersonal)
+        (mkClaudeFiles ".claude-work" settingsJsonWork)
       ];
 
     # Unify stateful dirs (transcripts, memories, task lists, file history, etc.)

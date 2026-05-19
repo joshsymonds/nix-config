@@ -162,7 +162,10 @@
     };
 
     # Wait for the local listener before applying serve config so the unit
-    # doesn't race shimmer-tailnet's startup.
+    # doesn't race shimmer-tailnet's startup. `serve reset` first so the
+    # config is idempotent across port/target changes (a prior mapping on a
+    # different port would otherwise linger). shimmer is the only serve
+    # consumer on this node, so a full reset is safe.
     script = ''
       for i in $(seq 1 30); do
         if ${pkgs.iproute2}/bin/ss -ltn 2>/dev/null | grep -q '127.0.0.1:8001'; then
@@ -170,6 +173,7 @@
         fi
         sleep 1
       done
+      ${pkgs.tailscale}/bin/tailscale serve reset
       exec ${pkgs.tailscale}/bin/tailscale serve --bg --https=8443 8001
     '';
   };

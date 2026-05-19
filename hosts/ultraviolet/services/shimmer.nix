@@ -97,4 +97,79 @@
       exec ${pkgs.shimmer}/bin/shimmer-server
     '';
   };
+
+  # Second, independent ingress for the tailnet (Claude Code / Bedrock).
+  # Auth is the tailscale-serve-injected Tailscale-User-Login header checked
+  # against SHIMMER_TAILNET_ALLOWLIST. Bound to localhost only so the header
+  # is reachable solely via `tailscale serve` (un-spoofable). Separate
+  # failure domain from the OIDC `shimmer` service above.
+  systemd.services.shimmer-tailnet = {
+    description = "Shimmer MCP Server - tailnet ingress (Tailscale identity auth)";
+    after = ["network.target" "redlib.service"];
+    wants = ["redlib.service"];
+    wantedBy = ["multi-user.target"];
+
+    environment = {
+      REDLIB_URL = "http://localhost:8091";
+      MCP_SERVER_HOST = "127.0.0.1";
+      MCP_TAILNET_PORT = "8001";
+      SHIMMER_TAILNET_ALLOWLIST = "josh@joshsymonds.com";
+    };
+
+    restartTriggers = [
+      config.age.secrets."shimmer-env".file
+    ];
+
+    serviceConfig = {
+      Type = "simple";
+      User = "shimmer";
+      Group = "shimmer";
+      Restart = "always";
+      RestartSec = "5s";
+
+      # Upstream service creds (MONARCH_*, GITHUB_TOKEN, etc.). No ACCESS_*.
+      EnvironmentFile = config.age.secrets."shimmer-env".path;
+
+      StateDirectory = "shimmer-tailnet";
+
+      # Security hardening
+      PrivateTmp = true;
+      NoNewPrivileges = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+    };
+
+    script = ''
+      export HOME=/var/lib/shimmer-tailnet
+      exec ${pkgs.shimmer}/bin/shimmer-tailnet-server
+    '';
+  };
+
+  # Idempotently front the tailnet service with `tailscale serve` (HTTPS,
+  # the default serve mode) -> 127.0.0.1:8001. NEVER `tailscale funnel`
+  # (that would expose it publicly). Re-running serve with the same target
+  # is idempotent.
+  systemd.services.shimmer-tailnet-serve = {
+    description = "Tailscale serve front for shimmer-tailnet";
+    after = ["tailscaled.service" "shimmer-tailnet.service"];
+    requires = ["tailscaled.service" "shimmer-tailnet.service"];
+    wantedBy = ["multi-user.target"];
+
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+
+    # Wait for the local listener before applying serve config so the unit
+    # doesn't race shimmer-tailnet's startup.
+    script = ''
+      for i in $(seq 1 30); do
+        if ${pkgs.iproute2}/bin/ss -ltn 2>/dev/null | grep -q '127.0.0.1:8001'; then
+          break
+        fi
+        sleep 1
+      done
+      exec ${pkgs.tailscale}/bin/tailscale serve --bg 8001
+    '';
+  };
 }

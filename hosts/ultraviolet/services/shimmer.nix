@@ -145,10 +145,11 @@
     '';
   };
 
-  # Idempotently front the tailnet service with `tailscale serve` (HTTPS,
-  # the default serve mode) -> 127.0.0.1:8001. NEVER `tailscale funnel`
-  # (that would expose it publicly). Re-running serve with the same target
-  # is idempotent.
+  # Idempotently front the tailnet service with `tailscale serve` ->
+  # 127.0.0.1:8001. HTTPS on port 8443 (NOT 443: Caddy binds *:443 on all
+  # interfaces, including the tailscale IP, which would shadow serve's
+  # listener). NEVER `tailscale funnel` (that would expose it publicly).
+  # Re-running serve with the same target is idempotent.
   systemd.services.shimmer-tailnet-serve = {
     description = "Tailscale serve front for shimmer-tailnet";
     after = ["tailscaled.service" "shimmer-tailnet.service"];
@@ -169,7 +170,7 @@
         fi
         sleep 1
       done
-      exec ${pkgs.tailscale}/bin/tailscale serve --bg 8001
+      exec ${pkgs.tailscale}/bin/tailscale serve --bg --https=8443 8001
     '';
   };
 }

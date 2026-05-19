@@ -16,7 +16,6 @@
     "BASH_MAX_TIMEOUT_MS": "600000",
     "DISABLE_AUTOUPDATER": "1"
   },
-  "mcpServers": {},
   "statusLine": {
     "type": "command",
     "command": "~/.claude/bin/cc-tools-statusline",

@@ -312,6 +312,31 @@ in {
       done
     '';
 
+    # Shimmer as a default user-scope MCP server in BOTH profiles. Claude
+    # Code reads user-scope MCP from .claude.json's top-level `mcpServers`
+    # (NOT settings.json, which only gates MCP permissions) — verified
+    # against `claude mcp add -s user` on 2.1.x. Personal config is
+    # $HOME/.claude.json (CLAUDE_CONFIG_DIR unset); work is
+    # $HOME/.claude-work/.claude.json. These files are runtime-mutable
+    # (OAuth, caches), so we MERGE (never overwrite) and only rewrite when
+    # the entry differs — idempotent, preserves any other servers.
+    # Reachable only from tailnet machines authed as your Tailscale user;
+    # off-tailnet hosts just show it unavailable (harmless).
+    activation.claudeShimmerMcp = lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
+      set -euo pipefail
+      SHIMMER_MCP='{"type":"http","url":"https://ultraviolet.tail82223.ts.net:8443/mcp"}'
+      for prefs in "$HOME/.claude.json" "$HOME/.claude-work/.claude.json"; do
+        mkdir -p "$(dirname "$prefs")"
+        [ -f "$prefs" ] || echo '{}' > "$prefs"
+        if ! ${pkgs.jq}/bin/jq -e --argjson s "$SHIMMER_MCP" \
+            '.mcpServers.shimmer == $s' "$prefs" >/dev/null 2>&1; then
+          ${pkgs.jq}/bin/jq --argjson s "$SHIMMER_MCP" \
+            '.mcpServers = ((.mcpServers // {}) + {shimmer: $s})' \
+            "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
+        fi
+      done
+    '';
+
     # Declaratively install gambit into both profile dirs. Rather than shell
     # out to `claude plugin install` (which wants to modify settings.json —
     # not possible when it's a read-only Nix store symlink), we populate the

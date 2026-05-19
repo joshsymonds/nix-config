@@ -431,8 +431,11 @@ if [[ ! -t 0 ]]; then
                 log_debug "Ignoring tool: $TOOL_NAME"
                 exit 0
             fi
-        elif [[ "$EVENT" == "Stop" ]] || [[ "$EVENT" == "SubagentStop" ]]; then
-            # Handle Stop events
+        elif [[ "$EVENT" == "Stop" ]]; then
+            # Top-level turn finished — the signal the user acts on.
+            # SubagentStop is deliberately not handled here: a subagent
+            # finishing is not actionable and just burns ntfy quota, so
+            # it falls through to the ignored-event branch below.
             log_debug "Processing Stop event: $EVENT"
             MESSAGE="Claude finished responding"
             send_notification "$CONTEXT" "$MESSAGE"

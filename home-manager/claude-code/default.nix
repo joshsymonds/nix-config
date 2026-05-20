@@ -240,6 +240,7 @@ in {
             "${dir}/agents".source = ./agents;
             "${dir}/skills".source = skillsDir;
             "${dir}/bin/cc-tools-statusline".source = "${cc-tools}/bin/cc-tools-statusline";
+            "${dir}/bin/cc-tools".source = "${cc-tools}/bin/cc-tools";
             "${dir}/hooks/ntfy-notifier.sh" = {
               source = ./hooks/ntfy-notifier.sh;
               executable = true;

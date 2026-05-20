@@ -22,6 +22,10 @@
     "padding": 0,
     "refreshInterval": 5
   },
+  "subagentStatusLine": {
+    "type": "command",
+    "command": "~/.claude/bin/cc-tools subagent-statusline"
+  },
   "hooks": {
     "Stop": [
       {

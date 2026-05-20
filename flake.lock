@@ -227,11 +227,11 @@
         "nixpkgs": "nixpkgs"
       },
       "locked": {
-        "lastModified": 1779297494,
-        "narHash": "sha256-7+NVQOxTIQ9chCTYqNcjxvBxH9Dw0xzecECRQxj1Rs8=",
+        "lastModified": 1779302701,
+        "narHash": "sha256-1rLFx5QjI8j5yWihSBc75EkvkcbMvPAKve69w5srhXQ=",
         "owner": "joshsymonds",
         "repo": "cc-tools",
-        "rev": "896c56ea2ea3f2e4be13cb130cf9db5a461735ed",
+        "rev": "af235237f44a970565f992580bd3f29ac4a70fb5",
         "type": "github"
       },
       "original": {

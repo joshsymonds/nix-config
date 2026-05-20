@@ -22,6 +22,7 @@ in {
     ./zsh
     ./starship
     ./statusline-aliases
+    inputs.cc-tools.homeManagerModules.cc-tools
   ];
 
   config = {
@@ -123,6 +124,16 @@ in {
         package = pkgs.htop;
         settings.show_program_path = true;
       };
+    };
+
+    # Terminal-width detection daemon. Caches the min width across
+    # attached tmux clients + raw SSH TTYs to /dev/shm/cc-tools/parent-width
+    # so headless Claude Code subagents (which have no TTY of their own
+    # and aren't passed COLUMNS) can render the statusline at a real
+    # width instead of the 200 fallback.
+    services.cc-tools-width-daemon = {
+      enable = true;
+      package = inputs.cc-tools.packages.${pkgs.stdenv.hostPlatform.system}.default;
     };
 
     # Agenix identity for home-manager secret decryption

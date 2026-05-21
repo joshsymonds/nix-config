@@ -279,6 +279,92 @@
     fi
   '';
 
+  # Spotify private sink. Spotify on Linux is wired so its in-app
+  # volume slider also moves the system's default sink — and the
+  # natural counter (pipewire-pulse's `block-sink-volume` quirk) was
+  # tested on PipeWire 1.6.3 here and didn't block the path this
+  # spicetify-Comfy build uses. Static `context.modules` declarations
+  # would work but require restarting pipewire.service to load, which
+  # hard-crashed Zoom (and would break any other live audio session).
+  #
+  # Instead: run pw-loopback as a userspace systemd service. It
+  # creates a virtual sink "spotify-sink" with `media.class=Audio/Sink`
+  # and bridges it to whatever the current default sink is — same
+  # graph topology as the module-loopback approach but loaded into
+  # its own process, so starting/stopping it doesn't touch any
+  # other client's connection.
+  #
+  # Routing Spotify to spotify-sink is done one-time via
+  # `wpctl set-target <spotify-stream-id> <spotify-sink-id>`;
+  # wireplumber's stream-restore persists that target in
+  # ~/.local/state/wireplumber so it survives reboots and Spotify
+  # restarts. No declarative routing rule because every declarative
+  # alternative requires either a pipewire-pulse restart (disrupts
+  # all other pulse clients) or a wireplumber restart at a bad time.
+  #
+  # The loopback's playback side has no node.target → follows whatever
+  # sink is default, so switching from Katana to HDMI to DualSense
+  # Just Works without touching this config.
+  systemd.user.services.pw-loopback-spotify = let
+    runLoopback = pkgs.writeShellScript "pw-loopback-spotify" ''
+      exec ${pkgs.pipewire}/bin/pw-loopback \
+        --channel-map='[FL,FR]' \
+        --capture-props='node.name=spotify-sink node.description="Spotify" media.class=Audio/Sink' \
+        --playback-props='node.name=spotify-sink-loopback node.description="Spotify → Default"'
+    '';
+  in {
+    Unit = {
+      Description = "Spotify private sink (loopback to default output)";
+      After = ["wireplumber.service"];
+      Requires = ["wireplumber.service"];
+    };
+    Service = {
+      ExecStart = "${runLoopback}";
+      Restart = "on-failure";
+      RestartSec = 3;
+    };
+    Install.WantedBy = ["default.target"];
+  };
+
+  # Hide the SB Katana V2X's "capture" source from PipeWire. The Katana
+  # V2X is a USB soundbar — its capture endpoint is a loopback of the
+  # internal mix, not a real microphone. WirePlumber was picking it as
+  # the default source, so Zoom (and any "use default" app) was treating
+  # the soundbar's own playback as the mic input. Symptoms: voice was
+  # ghostly-quiet, and the echo canceller (correctly seeing speaker
+  # output on the mic) suppressed it entirely whenever anyone else
+  # spoke. With this source hidden, the C920 webcam mic becomes the
+  # only real default-source candidate (DualSense controller mic is
+  # rarely connected and lower priority).
+  #
+  # node.name regex matches any Katana V2X analog source regardless of
+  # the serial-number suffix in the alsa-USB id, so this rule survives
+  # a replacement unit without manual fixup. Only the source side is
+  # affected — the matching playback sink (Katana speakers) is
+  # untouched and stays the default output.
+  #
+  # No activation-restart of wireplumber here: bouncing the audio
+  # stack mid-session breaks active streams (Zoom, browser, etc.).
+  # Takes effect on next login / reboot, or run
+  # `systemctl --user restart wireplumber.service` manually when not
+  # on a call.
+  xdg.configFile."wireplumber/wireplumber.conf.d/50-disable-katana-source.conf".text = ''
+    monitor.alsa.rules = [
+      {
+        matches = [
+          {
+            node.name = "~^alsa_input\\.usb-Creative_Technology_Ltd_SB_Katana_V2X_.*"
+          }
+        ]
+        actions = {
+          update-props = {
+            node.disabled = true
+          }
+        }
+      }
+    ]
+  '';
+
   # Monitor positions. Two identical Dell U2724D side-by-side, distinguished
   # only by serial in the EDID name. Niri needs explicit positions when
   # there's no other signal, otherwise it picks an arbitrary side-by-side

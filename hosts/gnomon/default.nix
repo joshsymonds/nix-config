@@ -112,6 +112,20 @@ in
     # so a future re-enable just needs flipping this back to true.
     hardware.bluetooth.enable = false;
 
+    # i2c-dev for DDC/CI brightness control over the external Dell U2724Ds.
+    # DMS's Go backend (core/internal/server/brightness/ddc.go in the
+    # DankMaterialShell flake input) talks i2c directly via /dev/i2c-* — no
+    # ddcutil binary needed. `hardware.i2c.enable` loads the i2c-dev kernel
+    # module, creates the i2c group, and installs udev rules giving the
+    # group rw on /dev/i2c-*.
+    #
+    # One-time manual step per monitor: enable DDC/CI in the Dell U2724D's
+    # on-screen menu (Display Settings → DDC/CI → On). Without that, the
+    # /dev/i2c-* nodes exist but no monitor responds, so DMS shows the
+    # brightness OSD but slider drags do nothing.
+    hardware.i2c.enable = true;
+    users.users.joshsymonds.extraGroups = ["i2c"];
+
     # ── Gaming ──────────────────────────────────────────────────────────
     # Two Proton tools in Steam → Settings → Compatibility:
     #

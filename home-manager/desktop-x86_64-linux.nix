@@ -40,13 +40,29 @@ in {
   # when `shouldUseDarkColors` is true; setting this flag is what flips it.
   # Other GTK apps inherit the preference too, which is the desired
   # default — niri/DMS is a dark surface.
+  #
+  # gtk-enable-mnemonics=0 disables the Alt-as-menubar-accelerator and the
+  # underline-letter visual that goes with it. The keyd layer already
+  # neutralizes a *lone* Alt tap (overload(alt, noop) in modules/services/
+  # keyd.nix), but two cases still trigger GTK's menubar focus:
+  #   1. Alt+letter chords that niri intercepts (e.g. Alt+H at the leftmost
+  #      column — niri runs focus-column-or-monitor-left, consumes the key,
+  #      and the focused GTK app sees Alt depressed → Alt released with no
+  #      intervening key event, which is GTK's exact trigger for menubar.
+  #   2. Unbound Alt+letter chords that fall through to the app — GTK opens
+  #      the menubar on Alt-release when no mnemonic matched.
+  # Both are downstream of keyd; this setting is the one knob that covers
+  # both. Tradeoff: Alt+<underlined letter> dialog mnemonics stop working —
+  # acceptable since every Alt+letter we reach for is a niri WM bind.
   xdg.configFile."gtk-3.0/settings.ini".text = ''
     [Settings]
     gtk-application-prefer-dark-theme=1
+    gtk-enable-mnemonics=0
   '';
   xdg.configFile."gtk-4.0/settings.ini".text = ''
     [Settings]
     gtk-application-prefer-dark-theme=1
+    gtk-enable-mnemonics=0
   '';
 
   home = {

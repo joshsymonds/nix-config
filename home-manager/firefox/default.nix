@@ -23,9 +23,17 @@
   # Delivered as user.js (local-only, never Sync'd) rather than
   # programs.firefox so the synced default profile stays the source of truth
   # (see the home.packages comment below).
+  # ui.key.menuAccessKey=0 disables Firefox's Alt-as-menubar-accelerator.
+  # Firefox ignores GTK's gtk-enable-mnemonics here (it implements its own
+  # accel handling), so the GTK-wide knob in desktop-x86_64-linux.nix
+  # doesn't cover Firefox. Setting the keycode to 0 means "no key" — neither
+  # bare-Alt-release nor any Alt+letter focuses the menubar or activates
+  # mnemonics. Matches the rationale documented over there: every Alt+letter
+  # we reach for is a niri WM bind, so killing Firefox's grab is pure win.
   userJs = pkgs.writeText "firefox-user.js" ''
     // Managed by nix-config (home-manager/firefox/default.nix). Do not edit.
     user_pref("browser.startup.page", 3);
+    user_pref("ui.key.menuAccessKey", 0);
   '';
 in {
   # Tridactyl native messenger + tridactylrc.

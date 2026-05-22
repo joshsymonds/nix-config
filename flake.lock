@@ -1932,11 +1932,11 @@
     "niri-unstable": {
       "flake": false,
       "locked": {
-        "lastModified": 1779387928,
-        "narHash": "sha256-MtTy55PxjY+sHC1lquPudq/dB0J91UOmdY0/kYClud0=",
+        "lastModified": 1779470991,
+        "narHash": "sha256-9f7aGgfCmPwFlKVbfCup9jLlJpo/YUHVjCk2BCBNTzw=",
         "owner": "joshsymonds",
         "repo": "niri",
-        "rev": "2f60589d323af1686d5776097051c2b0ca090760",
+        "rev": "b6a4017ed729df2c1c7cb0cfa529abb7c20bc559",
         "type": "github"
       },
       "original": {

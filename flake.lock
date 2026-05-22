@@ -2717,11 +2717,11 @@
         "rust-overlay": "rust-overlay_3"
       },
       "locked": {
-        "lastModified": 1768860788,
-        "narHash": "sha256-2FoamrnvqmPix6ZBxbaADsk6cY7rzp3O9wVE6z4NJBs=",
+        "lastModified": 1779472252,
+        "narHash": "sha256-fzcDN9wdnJrrBJCEiZKKrdzT0hACF9NV52A/RStq5j4=",
         "owner": "joshsymonds",
         "repo": "redlib",
-        "rev": "f6fa80dad7bc992fdf465f8bc10d0163f1179531",
+        "rev": "40ec238a311aa427f58f56d57380d25a805e1413",
         "type": "github"
       },
       "original": {

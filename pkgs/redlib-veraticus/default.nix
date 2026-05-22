@@ -7,9 +7,7 @@
   lib ? pkgs.lib,
 }: let
   pkgsWithRust = pkgs.extend (import rustOverlay);
-  rustToolchain = pkgsWithRust.rust-bin.stable."1.83.0".default.override {
-    targets = ["x86_64-unknown-linux-musl"];
-  };
+  rustToolchain = pkgsWithRust.rust-bin.stable.latest.default;
   craneLib = (crane.mkLib pkgsWithRust).overrideToolchain rustToolchain;
   cleanedSrc = lib.cleanSourceWith {
     src = craneLib.path redlibSrc;
@@ -27,8 +25,18 @@ in
     strictDeps = true;
     doCheck = false;
 
-    CARGO_BUILD_TARGET = "x86_64-unknown-linux-musl";
-    CARGO_BUILD_RUSTFLAGS = "-C target-feature=+crt-static";
+    nativeBuildInputs = [
+      pkgs.pkg-config
+      pkgs.cmake
+      pkgs.perl
+      pkgs.libclang
+      pkgs.git
+    ];
+
+    LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+    BINDGEN_EXTRA_CLANG_ARGS =
+      "-isystem ${pkgs.glibc.dev}/include "
+      + "-isystem ${pkgs.libclang.lib}/lib/clang/${lib.versions.major pkgs.libclang.version}/include";
 
     meta = {
       description = "Private Reddit front-end (joshsymonds fork)";

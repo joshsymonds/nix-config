@@ -71,8 +71,8 @@ in {
         ''}
       '';
 
-      matchBlocks."*" = {
-        addKeysToAgent = "yes"; # Automatically add keys to agent when used
+      settings."*" = {
+        AddKeysToAgent = "yes"; # Automatically add keys to agent when used
       };
     };
 

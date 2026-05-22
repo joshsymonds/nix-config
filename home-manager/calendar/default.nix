@@ -27,6 +27,14 @@ in {
     file = ../../secrets/user/morgen-api-key.age;
   };
 
+  # The HTTP trigger URL for the morgen-mirror-workflow Custom
+  # Workflow (https://github.com/joshsymonds/morgen-mirror-workflow).
+  # Anyone with this URL can fire the workflow against Josh's
+  # account, so it's agenix-encrypted alongside the API key.
+  age.secrets."morgen-mirror-trigger-url" = {
+    file = ../../secrets/user/morgen-mirror-trigger-url.age;
+  };
+
   # khal config. `type = discover` walks subdirectories of `path` and treats
   # each as a collection — morgen-fetch writes everything into a single
   # `primary/` subdirectory, so we get one collection containing all of the
@@ -70,6 +78,45 @@ in {
     Timer = {
       OnCalendar = "*:0/5";
       Unit = "morgen-fetch.service";
+      Persistent = true;
+    };
+    Install.WantedBy = ["timers.target"];
+  };
+
+  # morgen-mirror-workflow runs on Morgen's V8 isolate but doesn't
+  # self-trigger — Morgen exposes a per-workflow HTTP trigger URL we
+  # poke on a schedule. GET on the URL runs the workflow
+  # synchronously and returns logs; we discard stdout (logs are
+  # available via the API if we need them, and surfacing them on
+  # every cron run would spam systemd-journal).
+  systemd.user.services.morgen-mirror-trigger = {
+    Unit = {
+      Description = "Fire the n-way-busy-mirror workflow on Morgen";
+      Documentation = "https://github.com/joshsymonds/morgen-mirror-workflow";
+    };
+    Service = {
+      Type = "oneshot";
+      # config.age.secrets.<name>.path emits a literal
+      # `''${XDG_RUNTIME_DIR}/agenix/<name>` string that systemd does
+      # NOT shell-expand in Environment= — references to it in a
+      # bash $VAR substitution come back unexpanded. Reference
+      # XDG_RUNTIME_DIR directly in the script (it's already in the
+      # user manager's env) rather than threading through the
+      # placeholder.
+      ExecStart = pkgs.writeShellScript "morgen-mirror-trigger" ''
+        set -eu
+        URL="$(cat "$XDG_RUNTIME_DIR/agenix/morgen-mirror-trigger-url")"
+        ${pkgs.curl}/bin/curl --silent --show-error --max-time 180 \
+          --request GET --output /dev/null --fail "$URL"
+      '';
+    };
+  };
+
+  systemd.user.timers.morgen-mirror-trigger = {
+    Unit.Description = "Trigger the n-way-busy-mirror workflow every 5 minutes";
+    Timer = {
+      OnCalendar = "*:0/5";
+      Unit = "morgen-mirror-trigger.service";
       Persistent = true;
     };
     Install.WantedBy = ["timers.target"];

@@ -27,6 +27,26 @@ DEFAULT_VDIR = Path("~/.local/share/vdirs/morgen/primary").expanduser()
 DEFAULT_JSON_PATH = Path("~/.local/share/morgen-fetch/upcoming-events.json").expanduser()
 DEFAULT_LOOKAHEAD = dt.timedelta(days=7)
 
+# Marker prefix written into the description of every event produced by
+# the N-way busy mirror workflow (morgen-mirror-workflow). Source of
+# truth: src/lib/marker.ts in that repo; Morgen's own client uses the
+# same "Calendar Propagation" sentinel to recognize a propagated event,
+# so reusing it here means our filter stays consistent with however
+# Morgen surfaces these in its own UI. Mirrors must be filtered from
+# both the ICS vdir (khal / bar widget) and upcoming-events.json (pill,
+# notifier) so the user only ever sees the SOURCE event for any
+# meeting that's been propagated across calendars.
+MIRROR_MARKER = "Calendar Propagation:"
+
+
+def is_mirror_event(ev: dict) -> bool:
+    """True when the event was produced by the N-way busy mirror
+    workflow. The marker substring may sit anywhere in the description
+    — Morgen-side propagated events sometimes prepend the user's note —
+    so we substring-match rather than prefix-match."""
+    desc = ev.get("description") or ""
+    return MIRROR_MARKER in desc
+
 # ISO 8601 duration parser, restricted to the subset JSCalendar uses in
 # practice: PT<H>H<M>M<S>S. Multi-day events come back from Morgen with
 # an explicit end (or via showWithoutTime), not as P1D, so we don't need
@@ -106,6 +126,8 @@ def extract_event_json(ev: dict, now: dt.datetime) -> dict | None:
     uid = ev.get("uid") or ev.get("id")
     if not uid:
         return None
+    if is_mirror_event(ev):
+        return None
     # All-day events (Morgen sends `showWithoutTime: true` and `timeZone:
     # null` — they're dates, not datetimes) aren't meetings to count down
     # to; they're day context. Skip them entirely so the upcoming pill
@@ -166,6 +188,8 @@ def render_event(ev: dict, dtstamp: str) -> tuple[str, str] | None:
     khal/calendars match it correctly across runs."""
     uid = ev.get("uid") or ev.get("id")
     if not uid:
+        return None
+    if is_mirror_event(ev):
         return None
     title = escape_text(ev.get("title") or "(no title)")
     tz = ev.get("timeZone") or "UTC"

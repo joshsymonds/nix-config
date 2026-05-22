@@ -199,6 +199,20 @@ def test_render_event_all_day_uses_value_date():
     assert "DTSTART:" not in ics.replace("DTSTART;", "")
 
 
+def test_render_event_skips_mirror_events():
+    # The N-way busy mirror workflow (morgen-mirror-workflow) creates
+    # `[Busy]` events on other calendars. Their description carries the
+    # marker "Calendar Propagation: Ref-Group-Id <id>#" — the same prefix
+    # Morgen's own client uses to merge duplicates. Without filtering, the
+    # khal vdir picks them up and the bar widget shows `[Busy]` as the
+    # next meeting instead of the real source event.
+    ev = _base_event(
+        title="[Busy]",
+        description="Calendar Propagation: Ref-Group-Id abc123#",
+    )
+    assert render_event(ev, DTSTAMP) is None
+
+
 def test_render_event_sanitizes_filename_but_preserves_uid_in_body():
     # Real Morgen UIDs sometimes contain slashes and colons that aren't
     # legal in POSIX filenames — only the filename gets scrubbed.
@@ -267,6 +281,18 @@ def test_extract_event_json_basic():
 
 def test_extract_event_json_skips_past_events():
     ev = _base_event(start="2024-01-15T08:00:00")  # 1 hour before NOW_2024
+    assert extract_event_json(ev, NOW_2024) is None
+
+
+def test_extract_event_json_skips_mirror_events():
+    # Companion to test_render_event_skips_mirror_events. The JSON path
+    # feeds the meeting pill AND morgen-notifier; if mirrors leak through
+    # here, the pill shows `[Busy]` and the user gets T-10/T-2 desktop
+    # notifications for an event that's just an opaque busy block.
+    ev = _base_event(
+        title="[Busy]",
+        description="Calendar Propagation: Ref-Group-Id abc123#",
+    )
     assert extract_event_json(ev, NOW_2024) is None
 
 

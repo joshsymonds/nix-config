@@ -452,7 +452,7 @@
     # touch Zoom's own popups, never other apps. `-allow-moving-to-foreign-
     # monitors` is what makes the "follow me when I switch monitors" part
     # actually work (without it, sticky windows stay on their birth monitor).
-    stickyDaemon = "${inputs.niri-float-sticky.packages.${pkgs.system}.default}/bin/niri-float-sticky";
+    stickyDaemon = "${inputs.niri-float-sticky.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/niri-float-sticky";
     zoomLauncher = pkgs.writeShellScript "zoom-bypass-zoomlauncher" ''
       # Spawn the sticky daemon in the background, then run Zoom in the
       # foreground. When Zoom (`flatpak run`) exits, the EXIT trap kills

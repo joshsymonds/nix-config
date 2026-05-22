@@ -108,18 +108,31 @@ in {
       enableHybridCodec = true;
     };
 
-    # Morgen ships with `app.disableHardwareAcceleration()` in its bundled
-    # main.js. On Wayland/NVIDIA that flips Chromium's GPU process fully
-    # off, and Sentry's electron integration then calls `app.getGPUInfo()`
-    # which rejects with "GPU access not allowed" — an unhandled promise
-    # rejection at the top of main, so BrowserWindow.show() never fires
-    # and the app runs as a window-less zombie process.
-    #
-    # Patch the minified call site to a no-op (`void 0`). Both the asar-
-    # pack invocation we splice into and the minified call string are
-    # specific to nixpkgs morgen-4.0.4 — `replaceStrings` + `--replace-
-    # fail` mean a future bump fails loudly here instead of silently
+    # Morgen patches, applied by splicing into the upstream asar-pack
+    # invocation. Both anchors are exact-string `--replace-fail` matches
+    # so a future morgen bump fails loudly here instead of silently
     # producing a broken build. Reference: 0xpetersatoshi/nix-config.
+    #
+    # (1) main.js: `app.disableHardwareAcceleration()` → no-op.
+    # On Wayland/NVIDIA that call flips Chromium's GPU process fully
+    # off, and Sentry's electron integration then calls
+    # `app.getGPUInfo()` which rejects with "GPU access not allowed" —
+    # an unhandled promise rejection at the top of main, so
+    # BrowserWindow.show() never fires and the app runs as a
+    # window-less zombie process.
+    #
+    # (2) app.js: merged-event color → primary calendar only.
+    # When "Merge Duplicate Events" combines an event with mirrors
+    # (the N→N calendar-propagation workflow lives in this repo's
+    # Morgen Custom Workflow), the renderer builds a gradient of
+    # every merged event's calendar color. Patch the color-array
+    # to single-element {primary's calendar color}; the `[Busy]`
+    # mirrors carry "Calendar Propagation" + a `Ref-Group-Id`
+    # description marker, which combine to give them ~100× the
+    # priority factor of the source, so `D` (= `L[0]` after
+    # priority sort) is always the source event. Result: merged
+    # block shows the source calendar's color and title, mirrors
+    # contribute busy-block visibility without polluting the view.
     morgen = prev.morgen.overrideAttrs (oldAttrs: {
       installPhase =
         builtins.replaceStrings
@@ -128,6 +141,8 @@ in {
           ''
             substituteInPlace $TMP/work/dist/main.js \
               --replace-fail "zj&&ee.app.disableHardwareAcceleration()" "void 0"
+            substituteInPlace $TMP/work/dist/app.js \
+              --replace-fail "N.map(e=>A.calendarById\$[e]?.mtColor)" "[A.calendarById\$[D?.mtCalendarId]?.mtColor]"
             asar pack --unpack='{*.node,*.ftz,rect-overlay}' "$TMP/work" $out/opt/Morgen/resources/app.asar
           ''
         ]

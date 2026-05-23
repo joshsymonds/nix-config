@@ -78,6 +78,11 @@ in {
     home = "/home/joshsymonds";
     isNormalUser = true;
     extraGroups = ["wheel" config.users.groups.keys.name];
+    # Keep user systemd manager alive across SSH disconnects so tmux.service
+    # (and its tmux-spawn-*.scope panes) survive when the last login session
+    # ends. Without this, a transient SSH drop tears down tmux and every
+    # process inside it.
+    linger = true;
   };
 
   # Security

@@ -59,6 +59,22 @@ in {
       description = "Open the atticd listen port (8081) in the firewall.";
     };
 
+    gcInterval = lib.mkOption {
+      type = lib.types.str;
+      default = "12 hours";
+      description = "How often atticd runs garbage collection. Accepts expressions like \"12 hours\", \"1 day\".";
+    };
+
+    gcRetentionPeriod = lib.mkOption {
+      type = lib.types.str;
+      default = "14 days";
+      description = ''
+        Default retention period applied to caches without their own setting.
+        Entries last accessed/created longer ago than this are deleted on the next GC run.
+        Set to "0" to retain forever.
+      '';
+    };
+
     consumer = {
       # Enabling this adds the cache's public key to nix.settings.extra-trusted-public-keys
       # globally. That key can then sign ANY store path the daemon will accept — standard
@@ -127,6 +143,10 @@ in {
           storage = {
             type = "local";
             path = cfg.storagePath;
+          };
+          garbage-collection = {
+            interval = cfg.gcInterval;
+            default-retention-period = cfg.gcRetentionPeriod;
           };
         };
       };

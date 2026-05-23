@@ -260,6 +260,7 @@ in
       enable = true;
       environmentFile = config.age.secrets."atticd-env".path;
       apiEndpoint = "http://ultraviolet:8081/";
+      gcInterval = "5 minutes";
     };
 
     services.savecraftPobServer = {

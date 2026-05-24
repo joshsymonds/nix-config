@@ -67,12 +67,13 @@ if [ -n "$LABEL" ]; then
     echo -e "${GREEN}✓ Created labeled backup link: labeled-${SAFE_LABEL}${NC}"
 fi
 
-# Clean up old backups (keep last 14 days of automatic backups)
+# Clean up old backups (keep last 14 days of automatic backups).
+# Automatic backups are exactly YYYYMMDD-HHMMSS; labeled backups have an
+# additional -LABEL suffix and are preserved indefinitely.
 echo "Cleaning up old automatic backups..."
-find "$BACKUP_BASE" -maxdepth 1 -type d -name "20*" ! -name "*-*" -mtime +14 -exec rm -rf {} \; 2>/dev/null || true
-
-# Keep all labeled backups (they have dashes after the timestamp)
-echo "Keeping all labeled backups..."
+find "$BACKUP_BASE" -mindepth 1 -maxdepth 1 -type d \
+    -regextype posix-extended -regex '.*/[0-9]{8}-[0-9]{6}' \
+    -mtime +14 -exec rm -rf {} + 2>/dev/null || true
 
 # Show backup summary
 BACKUP_SIZE=$(du -sh "$BACKUP_PATH" | cut -f1)

@@ -10,6 +10,7 @@
     ../spicetify
     ../qbittorrent
     ../calendar
+    ../claude-code/transcripts.nix
     ../ntfy-notify
   ];
 

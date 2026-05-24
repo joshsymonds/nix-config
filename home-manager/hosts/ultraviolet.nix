@@ -1,6 +1,7 @@
 {pkgs, ...}: {
   imports = [
     ../headless-x86_64-linux.nix
+    ../claude-code/transcripts.nix
   ];
 
   home.packages = with pkgs; [

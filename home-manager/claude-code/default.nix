@@ -284,6 +284,10 @@ in {
         echo "claudeUnifiedState: ${hostname} out of scope; skipping." >&2
       ''
       else ''
+        # Subshell: ensures any `exit` inside this activation phase only
+        # terminates the phase, not the entire HM activation script
+        # (which would skip linkGeneration / reloadSystemd / etc.).
+        (
         set -euo pipefail
 
         BUCKET="/mnt/claude/${hostname}"
@@ -412,6 +416,7 @@ in {
           ensure_linked "$HOME/$base/file-history" "$LOCAL/file-history" local
           ensure_linked "$HOME/$base/shell-snapshots" "$LOCAL/shell-snapshots" local
         done
+        )
       '');
 
     activation.claudeDirectoryPermissions = lib.hm.dag.entryAfter ["writeBoundary" "claudeUnifiedState"] ''

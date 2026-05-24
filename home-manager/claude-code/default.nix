@@ -1,5 +1,6 @@
 {
   config,
+  hostname,
   inputs,
   lib,
   pkgs,
@@ -260,45 +261,168 @@ in {
         (mkClaudeFiles ".claude-work" settingsJsonWork)
       ];
 
-    # Unify stateful dirs (transcripts, memories, task lists, file history, etc.)
-    # across personal and work profiles. Both profiles see the same session
-    # history and auto-memory state — only billing / OAuth / MCP servers stay
-    # per-profile. Runs before claudeDirectoryPermissions so chmod targets the
-    # symlinked shared dir rather than racing with real-dir creation.
+    # Unify stateful dirs across personal and work profiles AND across hosts.
+    # Transcripts (projects, sessions, todos, tasks) live on NFS at
+    # /mnt/claude/${HOSTNAME}/{personal,work}/, so each host owns its bucket
+    # and gnomon can read every host's transcripts for the DMS bar widget.
+    # High-churn small-file state (file-history, shell-snapshots) stays
+    # LOCAL at ~/.claude-local/ to spare the NAS btrfs metadata storm.
     #
-    # Defensive: if a profile dir already exists as a real directory with
-    # content, the symlink is skipped and a warning is logged. The one-time
-    # migration from real dirs → shared + symlinks is done by hand; this
-    # activation maintains the structure on fresh machines and after rebuilds.
-    activation.claudeUnifiedState = lib.hm.dag.entryBefore ["claudeDirectoryPermissions"] ''
-      set -euo pipefail
-      SHARED="$HOME/.claude-shared"
-      mkdir -p "$SHARED"
-      for d in projects todos tasks sessions file-history shell-snapshots; do
-        mkdir -p "$SHARED/$d"
-        for base in ".claude" ".claude-work"; do
-          target="$HOME/$base/$d"
-          if [ -L "$target" ]; then
-            cur="$(readlink "$target")"
-            if [ "$cur" != "$SHARED/$d" ]; then
-              rm "$target"
-              ln -s "$SHARED/$d" "$target"
-            fi
-          elif [ ! -e "$target" ]; then
-            mkdir -p "$HOME/$base"
-            ln -s "$SHARED/$d" "$target"
-          elif [ -d "$target" ]; then
-            echo "claudeUnifiedState: $target is a real dir with data; skipping. Move to $SHARED/$d manually." >&2
-          fi
+    # Scoped to the three hosts that actually run Claude Code (gnomon,
+    # ultraviolet, vermissian). Out-of-scope hosts skip this activation
+    # entirely and keep whatever layout they have.
+    #
+    # One-shot migration: if a pre-NFS ~/.claude-shared/ exists with real
+    # data and the per-host .migrated marker is absent, rsync into the
+    # bucket, then rename ~/.claude-shared/ to .bak-<date> (no destructive
+    # delete). Idempotent thereafter.
+    activation.claudeUnifiedState = lib.hm.dag.entryBefore ["claudeDirectoryPermissions"] (let
+      inScope = builtins.elem hostname ["gnomon" "ultraviolet" "vermissian"];
+    in
+      if !inScope
+      then ''
+        echo "claudeUnifiedState: ${hostname} out of scope; skipping." >&2
+      ''
+      else ''
+        set -euo pipefail
+
+        BUCKET="/mnt/claude/${hostname}"
+        LOCAL="$HOME/.claude-local"
+        SHARED="$HOME/.claude-shared"
+        MARKER="$BUCKET/personal/.migrated"
+
+        # NAS reachability — try to trigger automount, then verify. Refuse
+        # to touch symlinks if the NAS is unreachable so we don't leave
+        # the user with dangling targets.
+        ${pkgs.coreutils}/bin/ls /mnt/claude >/dev/null 2>&1 || true
+        if ! ${pkgs.util-linux}/bin/mountpoint -q /mnt/claude; then
+          echo "claudeUnifiedState: /mnt/claude not mounted (NAS down?). Refusing to touch ~/.claude symlinks." >&2
+          exit 1
+        fi
+
+        # Always ensure bucket and local-state directories exist (cheap,
+        # idempotent).
+        for profile in personal work; do
+          for d in projects sessions todos tasks; do
+            ${pkgs.coreutils}/bin/mkdir -p "$BUCKET/$profile/$d"
+          done
         done
-      done
-    '';
+        ${pkgs.coreutils}/bin/mkdir -p "$LOCAL/file-history" "$LOCAL/shell-snapshots"
+
+        # Helper: report whether a path is a non-empty directory.
+        has_content() {
+          [ -d "$1" ] && [ -n "$(${pkgs.findutils}/bin/find "$1" -mindepth 1 -print -quit 2>/dev/null)" ]
+        }
+
+        # Detect whether any pre-NFS data needs rescuing. Two sources:
+        #  (a) the old ~/.claude-shared/ unified dir (when it has real data
+        #      and the marker is absent — the original layout on gnomon), or
+        #  (b) any ~/.claude{,-work}/{projects,sessions,todos,tasks} that is
+        #      itself a real directory with content (the layout on hosts
+        #      that never went through the .claude-shared intermediate step,
+        #      e.g. ultraviolet, vermissian).
+        needs_rescue=false
+        if [ -d "$SHARED" ] && [ ! -L "$SHARED" ] && [ ! -f "$MARKER" ]; then
+          has_content "$SHARED" && needs_rescue=true || true
+        fi
+        if [ "$needs_rescue" = false ]; then
+          for base in .claude .claude-work; do
+            for d in projects sessions todos tasks file-history shell-snapshots; do
+              tgt="$HOME/$base/$d"
+              if [ -d "$tgt" ] && [ ! -L "$tgt" ] && has_content "$tgt"; then
+                needs_rescue=true
+                break 2
+              fi
+            done
+          done
+        fi
+
+        # If a rescue would run AND an active Claude Code process is holding
+        # JSONL files open under the about-to-be-rewritten paths, abort
+        # quietly: don't fail the rebuild, just no-op so the existing
+        # layout stays valid until the user stops claude.
+        if [ "$needs_rescue" = true ]; then
+          if ${pkgs.procps}/bin/pgrep -u "$USER" -fa 'claude' 2>/dev/null \
+              | ${pkgs.gnugrep}/bin/grep -qE '(^| )claude( |$)|/claude( |$)'; then
+            echo "claudeUnifiedState: pre-NFS data still present and an active 'claude' process was detected on ${hostname}." >&2
+            echo "claudeUnifiedState: stop all Claude Code sessions, then re-run 'update' to complete the migration." >&2
+            echo "claudeUnifiedState: bucket dirs were created but no symlinks were touched (in-flight writes preserved)." >&2
+            exit 0
+          fi
+        fi
+
+        # Rescue the legacy ~/.claude-shared/ layout into the bucket + local.
+        if [ -d "$SHARED" ] && [ ! -L "$SHARED" ] && [ ! -f "$MARKER" ]; then
+          if has_content "$SHARED"; then
+            echo "claudeUnifiedState: migrating $SHARED -> $BUCKET/personal + $LOCAL" >&2
+            for d in projects sessions todos tasks; do
+              [ -d "$SHARED/$d" ] && ${pkgs.rsync}/bin/rsync -a "$SHARED/$d/" "$BUCKET/personal/$d/" || true
+            done
+            for d in file-history shell-snapshots; do
+              [ -d "$SHARED/$d" ] && ${pkgs.rsync}/bin/rsync -a "$SHARED/$d/" "$LOCAL/$d/" || true
+            done
+            BAK="$HOME/.claude-shared.bak-$(${pkgs.coreutils}/bin/date +%Y%m%d-%H%M%S)"
+            ${pkgs.coreutils}/bin/mv "$SHARED" "$BAK" || true
+            echo "claudeUnifiedState: previous ~/.claude-shared moved to $BAK" >&2
+          else
+            ${pkgs.coreutils}/bin/rm -rf "$SHARED" || true
+          fi
+          ${pkgs.coreutils}/bin/touch "$MARKER"
+        fi
+
+        # Symlink + per-dir rescue. For each target:
+        #  - if it's already the right symlink, leave it alone;
+        #  - if it's a real dir with data, rsync into the destination
+        #    (bucket dirs refuse a merge when both sides have data; local
+        #    dirs always merge because file-history/shell-snapshots are
+        #    naturally union-by-session-id), then delete and symlink;
+        #  - if it's missing or an empty dir, just symlink.
+        ensure_linked() {
+          local target="$1" want="$2" mode="$3"  # mode: bucket | local
+          if [ -L "$target" ]; then
+            cur="$(${pkgs.coreutils}/bin/readlink "$target")"
+            if [ "$cur" != "$want" ]; then
+              ${pkgs.coreutils}/bin/rm "$target"
+              ${pkgs.coreutils}/bin/ln -s "$want" "$target"
+            fi
+            return
+          fi
+          if [ -d "$target" ]; then
+            if has_content "$target"; then
+              if [ "$mode" = "bucket" ] && has_content "$want"; then
+                echo "claudeUnifiedState: BOTH $target and $want have data; leaving as-is. Resolve manually." >&2
+                return
+              fi
+              echo "claudeUnifiedState: rescuing $target -> $want" >&2
+              ${pkgs.rsync}/bin/rsync -a "$target/" "$want/" || true
+            fi
+            ${pkgs.coreutils}/bin/rm -rf "$target"
+          fi
+          ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$target")"
+          ${pkgs.coreutils}/bin/ln -s "$want" "$target"
+        }
+
+        for base in .claude .claude-work; do
+          profile="personal"
+          [ "$base" = ".claude-work" ] && profile="work"
+          ${pkgs.coreutils}/bin/mkdir -p "$HOME/$base"
+          for d in projects sessions todos tasks; do
+            ensure_linked "$HOME/$base/$d" "$BUCKET/$profile/$d" bucket
+          done
+          ensure_linked "$HOME/$base/file-history" "$LOCAL/file-history" local
+          ensure_linked "$HOME/$base/shell-snapshots" "$LOCAL/shell-snapshots" local
+        done
+      '');
 
     activation.claudeDirectoryPermissions = lib.hm.dag.entryAfter ["writeBoundary" "claudeUnifiedState"] ''
       set -euo pipefail
       for base in ".claude" ".claude-work"; do
         for dir in "$base" "$base/bin" "$base/commands" "$base/hooks" "$base/projects" "$base/statsig" "$base/todos"; do
-          if [ -d "$HOME/$dir" ]; then
+          # Skip symlinks: post-NFS rollout, projects/todos point at the
+          # NFS bucket which is owned by anonuid=1024 (all_squash). User
+          # can't chmod those, and the share permissions are governed
+          # Synology-side anyway.
+          if [ -d "$HOME/$dir" ] && [ ! -L "$HOME/$dir" ]; then
             chmod 755 "$HOME/$dir"
           fi
         done

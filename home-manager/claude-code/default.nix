@@ -355,11 +355,43 @@ in {
           fi
         fi
 
+        # Project-dir classifier. The Claude Code project dir name is
+        # the cwd with / replaced by -, so /home/joshsymonds/Work/attain
+        # becomes -home-joshsymonds-Work-attain (and -attain-* for subdirs).
+        # Only ~/Work/attain is Bedrock-billed work; every other Work/
+        # subdir is side projects on the personal Max sub.
+        is_work_dir() {
+          case "$1" in
+            -home-joshsymonds-Work-attain|-home-joshsymonds-Work-attain-*) return 0 ;;
+            *) return 1 ;;
+          esac
+        }
+
+        # Split projects/ by classifier into personal/ and work/.
+        # Caller passes the source dir; we walk its immediate subdirs.
+        split_projects() {
+          local src="$1"
+          [ -d "$src" ] || return 0
+          for proj in "$src"/*; do
+            [ -d "$proj" ] || continue
+            local name
+            name="$(${pkgs.coreutils}/bin/basename "$proj")"
+            local dest_profile=personal
+            is_work_dir "$name" && dest_profile=work
+            ${pkgs.rsync}/bin/rsync -a "$proj/" "$BUCKET/$dest_profile/projects/$name/" || true
+          done
+        }
+
         # Rescue the legacy ~/.claude-shared/ layout into the bucket + local.
+        # projects/ gets split by is_work_dir; everything else goes to
+        # personal/ since sessions/todos/tasks are by sessionId and we
+        # can't recover the originating profile from name alone (and
+        # they're small, and personal is the safe default).
         if [ -d "$SHARED" ] && [ ! -L "$SHARED" ] && [ ! -f "$MARKER" ]; then
           if has_content "$SHARED"; then
-            echo "claudeUnifiedState: migrating $SHARED -> $BUCKET/personal + $LOCAL" >&2
-            for d in projects sessions todos tasks; do
+            echo "claudeUnifiedState: migrating $SHARED -> $BUCKET (projects split by ~/Work/attain rule)" >&2
+            split_projects "$SHARED/projects"
+            for d in sessions todos tasks; do
               [ -d "$SHARED/$d" ] && ${pkgs.rsync}/bin/rsync -a "$SHARED/$d/" "$BUCKET/personal/$d/" || true
             done
             for d in file-history shell-snapshots; do

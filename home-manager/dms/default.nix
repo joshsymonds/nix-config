@@ -275,7 +275,17 @@ in {
     # ~/Personal/dms-claudecode (flake input `dms-claudecode`); upstream is
     # titeya/dms-claudecode. Picks up token burn from ~/.claude/projects
     # and rate-window state from the OAuth token in ~/.claude/.credentials.json.
-    plugins.claudeCodeUsage.src = inputs.dms-claudecode;
+    #
+    # settings.* land in ~/.config/DankMaterialShell/plugin_settings.json,
+    # which under managePluginSettings = true is a read-only symlink to a
+    # store path — toggles in the DMS plugin settings UI silently no-op,
+    # so any non-default value MUST be declared here. The plugin's
+    # ToggleSetting widget reads pluginData.<key> via SettingsData, so the
+    # name must match the QML settingKey exactly.
+    plugins.claudeCodeUsage = {
+      src = inputs.dms-claudecode;
+      settings.showWorkCostPill = true; # appends today's work spend after the rings
+    };
 
     # Network bandwidth pill (RX/TX from /proc/net/dev). Source repo at
     # ~/Personal/dms-bandwidth-pill / github:joshsymonds/dms-bandwidth-pill.

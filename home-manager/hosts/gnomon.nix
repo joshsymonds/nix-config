@@ -11,6 +11,7 @@
     ../qbittorrent
     ../calendar
     ../claude-code/transcripts.nix
+    ../claude-code/aggregator.nix
     ../ntfy-notify
   ];
 

@@ -662,11 +662,11 @@
     "dms-claudecode": {
       "flake": false,
       "locked": {
-        "lastModified": 1779595299,
-        "narHash": "sha256-k/OdmuEqsgqZDzf6vHl/dRURdvWGOiNMpXppsZdlf3A=",
+        "lastModified": 1779604354,
+        "narHash": "sha256-fdL9nsU8QoD606jBBTjnKCDWSeBd0zBgjBr5xVXMWPQ=",
         "owner": "joshsymonds",
         "repo": "dms-claudecode",
-        "rev": "a97f276fdf974cac8669a5f3c3f09decefbd40c2",
+        "rev": "9264acd57124ab3af238473d73af0ae218a73769",
         "type": "github"
       },
       "original": {

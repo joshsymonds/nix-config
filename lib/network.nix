@@ -37,6 +37,9 @@
         backup = "/volume1/backup";
         creative = "/volume1/creative";
         atticd = "/volume1/atticd";
+        # Claude Code transcripts (per-host buckets under /mnt/claude/${HOST}/{personal,work}/).
+        # Exported only to gnomon, ultraviolet, vermissian (see /etc/exports on blackbox).
+        claude = "/volume1/claude";
       };
     };
     sonos-move = {

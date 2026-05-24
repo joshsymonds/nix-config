@@ -231,6 +231,24 @@ in {
       (lib.mkIf (!builtins.elem config.networking.hostName ["bluedesert" "echelon"]) {
         "/mnt/creative" = nfs "${nas.ip}:${nas.shares.creative}";
       })
+      # Claude Code transcripts. Only the three hosts I actually run Claude on
+      # mount this; the share isn't exported to the others either. Idle-timeout
+      # is bumped to 1 hour (vs 10 min on the media shares) because the
+      # cache-warm timer + active Claude sessions hit this every few minutes,
+      # so frequent remount-thrash would be wasteful.
+      (lib.mkIf (builtins.elem config.networking.hostName ["gnomon" "ultraviolet" "vermissian"]) {
+        "/mnt/claude" = {
+          device = "${nas.ip}:${nas.shares.claude}";
+          fsType = "nfs";
+          options = [
+            "nofail"
+            "noauto"
+            "x-systemd.automount"
+            "x-systemd.mount-timeout=10s"
+            "x-systemd.idle-timeout=3600"
+          ];
+        };
+      })
     ];
 
   services.openssh.settings.AcceptEnv = lib.mkBefore ["TERM" "COLORTERM" "TERM_PROGRAM" "TERM_PROGRAM_VERSION"];

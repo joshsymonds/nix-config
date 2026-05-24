@@ -278,6 +278,30 @@ in
       "amd_pstate=active"
       "mitigations=auto"
       "acpi_enforce_resources=lax"
+      # ── Quiet boot (Layer A) ──────────────────────────────────────────
+      # Suppress the kernel/initramfs text that scrolls between the
+      # firmware logo ending and DM/Plymouth/halmasuit taking over the
+      # framebuffer. The firmware-painted pixels stay on screen because
+      # simpledrm inherits the firmware framebuffer; nothing overwrites
+      # them until userspace does. To re-enable boot diagnostics on a
+      # one-off basis, remove "quiet" and "loglevel=3" via the
+      # systemd-boot editor (press 'e' at the boot menu); the journal
+      # always retains the messages regardless of console visibility.
+      "quiet"
+      "loglevel=3"
+      "rd.systemd.show_status=false"
+      "systemd.show_status=false"
+      "vt.global_cursor_default=0"
+      "fbcon=nodefer"
+      # ── Boot at panel native (Layer B) ────────────────────────────────
+      # Hint the kernel to set the simpledrm framebuffer at the monitor's
+      # native mode (2560x1440 — both DP-2 and DP-3 are connected at
+      # this resolution). When firmware GOP honors the hint, the
+      # subsequent simpledrm → nvidia-drm modeset is a no-op (same
+      # pixel clock, same timings, no monitor re-sync blank). If the
+      # firmware GOP can't satisfy it, this param is a no-op — falls
+      # back to whatever mode firmware actually exposed; no harm done.
+      "video=2560x1440"
     ];
 
     # ── it87 fan tach / PWM (out-of-tree) ───────────────────────────────

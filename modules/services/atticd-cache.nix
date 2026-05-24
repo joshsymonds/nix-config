@@ -109,7 +109,7 @@ in {
 
       publicKey = lib.mkOption {
         type = lib.types.str;
-        default = "nix-config:oFasWpcTwQxVGCxSBTLw8gGNZNjhRLZsnWnZQIyU4HY=";
+        default = "nix-config:ohee3Ue/5Mw2k1KHLUW26FpngXv/bg3YRtnFk0aMHZs=";
         description = "Cache signing public key (from `attic cache info`). Public keys are not secret.";
       };
     };
@@ -195,13 +195,25 @@ in {
 
       services.atticd.group = "users";
 
-      systemd.services.atticd.serviceConfig = {
-        DynamicUser = lib.mkForce false;
-        # PrivateUsers wraps the unit in its own user namespace, which prevents
-        # uid=cfg.nfsStorage.uid from being our actual uid as far as NFS sees it.
-        PrivateUsers = lib.mkForce false;
-        User = lib.mkForce "atticd";
-        Group = lib.mkForce "users";
+      systemd.services.atticd = {
+        # RequiresMountsFor pulls in mnt-atticd.mount before atticd starts;
+        # without it atticd can race the NFS mount on boot.
+        unitConfig.RequiresMountsFor = [cfg.storagePath];
+        serviceConfig = {
+          DynamicUser = lib.mkForce false;
+          # PrivateUsers wraps the unit in its own user namespace, which prevents
+          # uid=cfg.nfsStorage.uid from being our actual uid as far as NFS sees it.
+          PrivateUsers = lib.mkForce false;
+          User = lib.mkForce "atticd";
+          Group = lib.mkForce "users";
+          # `+` runs as root outside the unit's locked-down namespace, so we
+          # can create the storage dir before systemd tries to bind-mount it
+          # for the namespaced atticd process (NAMESPACE failure otherwise).
+          ExecStartPre = [
+            "+${pkgs.coreutils}/bin/mkdir -p ${cfg.storagePath}"
+            "+${pkgs.coreutils}/bin/chown ${toString cfg.nfsStorage.uid}:${toString cfg.nfsStorage.gid} ${cfg.storagePath}"
+          ];
+        };
       };
     })
 

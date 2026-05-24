@@ -24,7 +24,7 @@ in {
 
       publicKey = lib.mkOption {
         type = lib.types.str;
-        default = "nix-config:oFasWpcTwQxVGCxSBTLw8gGNZNjhRLZsnWnZQIyU4HY=";
+        default = "nix-config:ohee3Ue/5Mw2k1KHLUW26FpngXv/bg3YRtnFk0aMHZs=";
         description = "Cache signing public key (from `attic cache info`). Public keys are not secret.";
       };
     };

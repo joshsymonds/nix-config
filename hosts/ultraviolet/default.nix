@@ -70,6 +70,14 @@ in
       options = ["x-systemd.automount" "noauto" "x-systemd.idle-timeout=60"];
     };
 
+    # NFS-backed storage for atticd binary cache (always mounted; atticd reads
+    # and writes continuously, so no idle-unmount).
+    fileSystems."/mnt/atticd" = {
+      device = "${network.infra.nas.ip}:${network.infra.nas.shares.atticd}";
+      fsType = "nfs";
+      options = ["nfsvers=3" "noatime" "async" "_netdev" "bg"];
+    };
+
     # Hardware setup
     hardware = {
       cpu = {
@@ -260,7 +268,11 @@ in
       enable = true;
       environmentFile = config.age.secrets."atticd-env".path;
       apiEndpoint = "http://ultraviolet:8081/";
-      gcInterval = "5 minutes";
+      storagePath = "/mnt/atticd/storage";
+      nfsStorage.enable = true;
+      # Storage is now on the 13 TB NAS — be generous so cached builds aren't
+      # rotated out before the next time we substitute against them.
+      gcRetentionPeriod = "1 year";
     };
 
     services.savecraftPobServer = {

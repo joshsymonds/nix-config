@@ -75,6 +75,26 @@ in {
       '';
     };
 
+    nfsStorage = {
+      # Switches the atticd service from systemd's DynamicUser model to a fixed
+      # uid/gid that matches the NAS NFS export's `all_squash` target. Required
+      # when `storagePath` lives on an NFS mount, because DynamicUser-allocated
+      # uids cannot read back files squashed to a fixed uid on the server.
+      enable = lib.mkEnableOption "back atticd storage with an NFS mount (uid-pinned)";
+
+      uid = lib.mkOption {
+        type = lib.types.int;
+        default = 1024;
+        description = "Static uid for the atticd user. Must match the NFS export's anonuid.";
+      };
+
+      gid = lib.mkOption {
+        type = lib.types.int;
+        default = 100;
+        description = "Static gid for the atticd user. Must match the NFS export's anongid (100 = 'users' on NixOS).";
+      };
+    };
+
     consumer = {
       # Enabling this adds the cache's public key to nix.settings.extra-trusted-public-keys
       # globally. That key can then sign ANY store path the daemon will accept — standard
@@ -158,6 +178,31 @@ in {
       };
 
       networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [8081];
+    })
+
+    (lib.mkIf (cfg.enable && cfg.nfsStorage.enable) {
+      # Pin atticd to a static uid/gid matching the NFS export's squash target.
+      # NFS exports with `all_squash,anonuid=N,anongid=M` rewrite all client uids
+      # to (N, M) on the server. The service must read back its own writes, so
+      # the running uid has to match — DynamicUser allocates a different uid per
+      # boot and cannot satisfy this.
+      users.users.atticd = {
+        isSystemUser = true;
+        uid = cfg.nfsStorage.uid;
+        group = "users";
+        home = "/var/lib/atticd";
+      };
+
+      services.atticd.group = "users";
+
+      systemd.services.atticd.serviceConfig = {
+        DynamicUser = lib.mkForce false;
+        # PrivateUsers wraps the unit in its own user namespace, which prevents
+        # uid=cfg.nfsStorage.uid from being our actual uid as far as NFS sees it.
+        PrivateUsers = lib.mkForce false;
+        User = lib.mkForce "atticd";
+        Group = lib.mkForce "users";
+      };
     })
 
     (lib.mkIf cfg.consumer.enable {

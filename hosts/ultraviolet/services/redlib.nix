@@ -16,6 +16,7 @@ in {
       REDLIB_DEFAULT_THEME = "catppuccinMocha";
       REDLIB_DEFAULT_LAYOUT = "clean";
       REDLIB_DEFAULT_WIDE = true;
+      REDLIB_HOME_FROM_COLLECTIONS = "on";
     };
   };
 

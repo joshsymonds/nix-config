@@ -18,7 +18,6 @@ in
       ../../modules/hardware/gpu-nvidia.nix
       ../../modules/services/inference-stack.nix
       ../../modules/services/keyd.nix
-      ../../modules/services/ollama-modelfiles.nix
       ../../modules/services/yubikey-auth.nix
       inputs.lanzaboote.nixosModules.lanzaboote
       inputs.nix-flatpak.nixosModules.nix-flatpak
@@ -84,31 +83,71 @@ in
       # SMs just sit dead in the binary).
     };
 
-    # ── Local LLM stack (Ollama-CUDA + Open-WebUI) ──────────────────────
-    # Successor to stygianlibrary's inference workload. Both services bind
-    # to 127.0.0.1 by default (override `host` to expose); state lives in
-    # /var/lib/ollama (models, ~tens of GB) and /var/lib/open-webui (chat
-    # history + RAG index) — both persisted via disko.nix so reboots don't
-    # wipe them. CUDA binary cache (cache.nixos-cuda.org) is auto-wired by
-    # the module so ollama-cuda + closure download instead of rebuilding.
+    # ── Local LLM stack (llama-swap + llama-server + Open-WebUI) ────────
+    # Successor to stygianlibrary's inference workload, migrated off Ollama
+    # because Ollama doesn't expose llama.cpp's MoE-aware `--n-cpu-moe` /
+    # `--fit on` flags — and on a 16 GB card with Gemma 4 26B-A4B those
+    # flags are the difference between 14 tok/s (Ollama partial-layer
+    # offload) and 80-100 tok/s (llama.cpp expert-only offload).
     #
-    # Open-WebUI ships on 8081 here because gluetun-qbittorrent's WebUI
-    # holds the inference-stack default 8080 (see qbittorrent-vpn.nix).
+    # GGUFs land in /var/lib/llama-models (persisted via disko.nix).
+    # Open-WebUI talks to llama-swap over the OpenAI-compatible endpoint
+    # so all the multi-model UX (picker, persona-per-model) still works;
+    # llama-swap auto-spawns/evicts llama-server backends per model on
+    # demand. Open-WebUI ships on 8081 because gluetun-qbittorrent holds
+    # 8080 (see qbittorrent-vpn.nix).
+    #
+    # Sources: nohurry/gemma-4-26B-A4B-it-heretic-GUFF (Unsloth-imatrix
+    # quants of coder3101's Heretic-abliterated Gemma 4 26B-A4B-it).
+    # Pulls from nohurry here because llama.cpp reads them fine — the
+    # Ollama 400 we hit before was Ollama's manifest parser, not the
+    # GGUFs themselves.
+    #
+    # Flags follow the marlang r/LocalLLaMA recipe (5070 Ti + 9800X3D,
+    # same hardware): --fit on auto-probes VRAM and picks MoE offload
+    # depth; -np 1 drops recurrent state for single-user; -fa on +
+    # q8_0 KV cache halves KV memory; -ub 2048 raises prefill
+    # throughput; --mlock pins RAM pages so partial-offload doesn't
+    # page-fault.
     services.inference-stack = {
       enable = true;
       openWebUI.port = 8081;
-    };
-
-    # Declared Modelfiles get materialized under /etc/ollama/modelfiles/
-    # and `ollama create`'d after ollama.service is reachable. Personas /
-    # system prompts intentionally NOT here — those live in Open-WebUI's
-    # "Models" feature so they stay out of git. See scriptorium README
-    # for the design and quant rationale.
-    services.ollama-modelfiles = {
-      enable = true;
-      modelfiles = {
-        gemma4-heretic-q5 = "${inputs.scriptorium}/modelfiles/gemma4-heretic-q5";
-        gemma4-heretic-iq4xs = "${inputs.scriptorium}/modelfiles/gemma4-heretic-iq4xs";
+      models = let
+        base = "https://huggingface.co/nohurry/gemma-4-26B-A4B-it-heretic-GUFF/resolve/main";
+        # Sampling params from Google's Gemma 4 partner recommendation
+        # (model card + Unsloth docs).
+        samplerFlags = [
+          "--temp" "1.0"
+          "--top-p" "0.95"
+          "--top-k" "64"
+          "--min-p" "0.0"
+        ];
+        # Common runtime flags. --fit on auto-picks the offload split.
+        # --mlock + --no-mmap forces all weight pages resident in RAM,
+        # which matters for the CPU-side experts in MoE partial offload.
+        commonFlags =
+          [
+            "--fit" "on"
+            "--fit-target" "256"
+            "-np" "1"
+            "-fa" "on"
+            "--mlock"
+            "--no-mmap"
+            "-b" "2048"
+            "-ub" "2048"
+            "-ctk" "q8_0"
+            "-ctv" "q8_0"
+          ]
+          ++ samplerFlags;
+      in {
+        "gemma4-heretic-iq4xs" = {
+          ggufUrl = "${base}/gemma-4-26b-a4b-it-heretic.iq4_xs.gguf";
+          flags = commonFlags ++ ["--fit-ctx" "16384"];
+        };
+        "gemma4-heretic-q5" = {
+          ggufUrl = "${base}/gemma-4-26b-a4b-it-heretic.q5_k_m.gguf";
+          flags = commonFlags ++ ["--fit-ctx" "32768"];
+        };
       };
     };
 

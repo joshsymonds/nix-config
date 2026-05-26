@@ -2,43 +2,101 @@
   config,
   lib,
   pkgs,
+  inputs,
   ...
 }: let
   cfg = config.services.inference-stack;
   caches = import ../../lib/caches.nix;
+
+  # Bleeding-edge llama-cpp + llama-swap from nixpkgs-inference (a dedicated
+  # side-channel input pinned to unstable HEAD; see flake.nix). The inference
+  # toolchain (llama.cpp upstream) ships new model arches and perf flags on
+  # a weekly cadence — riding the edge here decouples those bumps from the
+  # main nixpkgs lock (which would trigger 200+ package rebuilds).
+  inferencePkgs = import inputs.nixpkgs-inference {
+    system = pkgs.stdenv.hostPlatform.system;
+    config = {
+      allowUnfree = true;
+      cudaSupport = true;
+    };
+  };
+  llamaCpp = inferencePkgs.llama-cpp;
+  llamaSwap = inferencePkgs.llama-swap;
+  llamaServer = "${llamaCpp}/bin/llama-server";
+
+  modelsDir = "/var/lib/llama-models";
+
+  # Per-model spec consumed by llama-swap. ggufUrl is the direct HF
+  # `resolve/main/<file>.gguf` URL — fetched by fetch-llama-models.service
+  # at activation time and stashed under modelsDir. `flags` is whatever
+  # extra llama-server flags this model wants (sampling, KV cache, fit,
+  # ubatch, etc.). The Modelfile abstraction is gone; this is the
+  # llama-swap replacement.
+  modelType = lib.types.submodule {
+    options = {
+      ggufUrl = lib.mkOption {
+        type = lib.types.str;
+        description = ''
+          Direct download URL for the GGUF file. Typically a HuggingFace
+          `resolve/main/<file>.gguf` URL. Fetched once at activation if
+          the local file is missing.
+        '';
+      };
+
+      flags = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        description = "Extra `llama-server` flags for this model (sampling, cache, fit, etc.).";
+        example = lib.literalExpression ''
+          [
+            "--fit" "on" "--fit-ctx" "16384" "--fit-target" "256"
+            "-np" "1" "-fa" "on" "--mlock" "--no-mmap"
+            "-b" "2048" "-ub" "2048"
+            "-ctk" "q8_0" "-ctv" "q8_0"
+            "--temp" "1.0" "--top-p" "0.95" "--top-k" "64" "--min-p" "0.0"
+          ]
+        '';
+      };
+    };
+  };
 in {
   options.services.inference-stack = {
-    enable = lib.mkEnableOption "Ollama + Open-WebUI inference stack with CUDA binary cache";
+    enable = lib.mkEnableOption "llama-swap + llama-server inference stack with Open-WebUI frontend";
 
-    ollama = {
-      package = lib.mkOption {
-        type = lib.types.package;
-        default = pkgs.ollama-cuda;
-        defaultText = lib.literalExpression "pkgs.ollama-cuda";
-        description = "Ollama package. Default is the CUDA build.";
-      };
+    swap = {
       host = lib.mkOption {
         type = lib.types.str;
         default = "127.0.0.1";
-        description = "Host/interface Ollama listens on. Default is localhost; widen to 0.0.0.0 for LAN access.";
+        description = "Host/interface llama-swap listens on. Open-WebUI talks to this.";
       };
       port = lib.mkOption {
         type = lib.types.port;
         default = 11434;
-        description = "Port Ollama listens on.";
+        description = "Port llama-swap listens on (OpenAI-compatible endpoint).";
       };
+    };
+
+    models = lib.mkOption {
+      type = lib.types.attrsOf modelType;
+      default = {};
+      description = ''
+        Attrset of model name → spec. Each entry becomes an llama-swap
+        backend; the model name is what shows up in Open-WebUI's picker
+        and in the OpenAI `model` field. GGUFs are fetched to
+        `${modelsDir}/<name>.gguf` from `ggufUrl` if missing.
+      '';
     };
 
     openWebUI = {
       enable = lib.mkOption {
         type = lib.types.bool;
         default = true;
-        description = "Run the Open-WebUI frontend pointed at Ollama.";
+        description = "Run the Open-WebUI frontend pointed at llama-swap.";
       };
       host = lib.mkOption {
         type = lib.types.str;
         default = "127.0.0.1";
-        description = "Host/interface Open-WebUI listens on. Default is localhost; widen to 0.0.0.0 for LAN access.";
+        description = "Host/interface Open-WebUI listens on.";
       };
       port = lib.mkOption {
         type = lib.types.port;
@@ -56,91 +114,140 @@ in {
     openFirewall = lib.mkOption {
       type = lib.types.bool;
       default = false;
-      description = "Open firewall ports for Ollama and (if enabled) Open-WebUI. Default off; opt in for LAN exposure.";
+      description = "Open firewall ports for llama-swap and (if enabled) Open-WebUI.";
     };
   };
 
   config = lib.mkIf cfg.enable (lib.mkMerge [
     {
-      services.ollama = {
+      # ── llama-swap ──────────────────────────────────────────────────────
+      # Hands `${PORT}` to llama-swap; llama-swap substitutes a free port
+      # at spawn time and routes accordingly. Each model command launches
+      # a llama-server bound to that port serving exactly one model. With
+      # MAX_LOADED_MODELS implicit-1 semantics (default), swapping models
+      # in Open-WebUI kills the previous llama-server and spawns the new.
+      services.llama-swap = {
         enable = true;
-        package = cfg.ollama.package;
-        host = cfg.ollama.host;
-        port = cfg.ollama.port;
-        user = "ollama";
-        group = "ollama";
+        package = llamaSwap;
+        port = cfg.swap.port;
+        settings = {
+          # Drop idle backends to free VRAM after some inactivity. 5 min
+          # mirrors what Ollama's OLLAMA_KEEP_ALIVE defaulted to.
+          healthCheckTimeout = 60;
+          models = lib.mapAttrs (name: m: {
+            cmd = lib.concatStringsSep " " ([
+              llamaServer
+              "--host" cfg.swap.host
+              "--port" "\${PORT}"
+              "-m" "${modelsDir}/${name}.gguf"
+            ] ++ m.flags);
+            # llama-swap kills idle backends after ttl seconds. 300s = 5m.
+            ttl = 300;
+          }) cfg.models;
+        };
       };
 
-      # Upstream `services.ollama` hard-codes DynamicUser = true even when
-      # cfg.user/cfg.group are set explicitly. DynamicUser pushes the
-      # StateDirectory through systemd's /var/lib/private/<name> bind-mount
-      # indirection, which collides with our impermanence bind mount on
-      # /var/lib/ollama (visible as "Failed to set up special execution
-      # directory in /var/lib: Device or resource busy"). Force it off so
-      # the static "ollama" user (which the upstream module already declares
-      # under users.users.ollama when staticUser is true) is what actually
-      # runs the daemon. Same pattern is applied to Open-WebUI below for
-      # the same reason.
-      systemd.services.ollama.serviceConfig = {
-        DynamicUser = lib.mkForce false;
-        User = "ollama";
-        Group = "ollama";
+      # Override the upstream llama-swap unit's ProtectHome=true so it can
+      # read GGUFs from modelsDir (under /var/lib, not /home, so technically
+      # unaffected — but explicit ReadOnlyPaths anchors the model dir for
+      # the runner subprocesses spawned via execve).
+      systemd.services.llama-swap.serviceConfig = {
+        # llama-swap forks llama-server, which inherits the unit's sandbox.
+        # llama-server needs to mlock the GGUF (we pass --mlock), which is
+        # blocked by default sandbox; widen capabilities.
+        AmbientCapabilities = ["CAP_IPC_LOCK"];
+        CapabilityBoundingSet = ["CAP_IPC_LOCK"];
+        # Loosen MemoryDenyWriteExecute — CUDA runtime JIT-compiles kernels
+        # and needs PROT_EXEC on anonymous mappings. Without this the first
+        # llama-server invocation segfaults inside libcuda.
+        MemoryDenyWriteExecute = lib.mkForce false;
+        # llama-server writes to its own stderr/stdout, no filesystem state.
+        ReadOnlyPaths = [modelsDir];
+        # Pass through CUDA env required by NVIDIA driver discovery.
+        PrivateDevices = lib.mkForce false;
       };
 
-      # KV cache quantization + flash attention. Gemma 4 has unusually fat
-      # KV cache (500 MB-3 GB per context checkpoint per upstream reports),
-      # which on a 16 GB card pushes even a 14 GB weight model into partial
-      # CPU offload at modest context lengths. q8_0 cuts KV memory ~50%
-      # with minimal quality impact; flash attention is its prerequisite.
-      # Both are daemon-wide knobs (not Modelfile params), so they live
-      # here.
-      #
-      # MAX_LOADED_MODELS=1: with multiple large quants that individually
-      # eat most of the 16 GB card, the default scheduler tries to keep
-      # both resident in parallel — switching from IQ4_XS to Q5_K_M within
-      # OLLAMA_KEEP_ALIVE (5m) leaves 169 MiB free for a 19 GB load attempt
-      # and the llama runner panics with exit status 2. Forcing a single
-      # loaded model evicts the previous one before loading the new one,
-      # which is the right policy for single-GPU + multi-quant.
-      systemd.services.ollama.environment = {
-        OLLAMA_FLASH_ATTENTION = "1";
-        OLLAMA_KV_CACHE_TYPE = "q8_0";
-        OLLAMA_MAX_LOADED_MODELS = "1";
-      };
-
-      # systemd's StateDirectory only creates dirs that don't already
-      # exist — but impermanence pre-creates /var/lib/ollama (root-owned),
-      # so StateDirectory leaves it alone and the ollama daemon can't
-      # write to it. cfg.models defaults to ${home}/models, and
-      # ReadWritePaths in the upstream unit references both; without the
-      # models subdir existing, mount namespacing fails with
-      # "Failed to set up mount namespacing: /var/lib/ollama/models:
-      # No such file or directory". tmpfiles fixes both: chowns the
-      # existing top-level dir and creates the models subdir under it.
+      # ── GGUF fetcher ────────────────────────────────────────────────────
+      # llama.cpp has no `pull` equivalent; we curl GGUFs directly from HF
+      # to modelsDir on activation. Resumable (`curl -C -`) so a partial
+      # download survives a reboot. Type=exec so activation doesn't block
+      # on multi-GB downloads — first chat request to a not-yet-downloaded
+      # model will fail with "model file missing" until the fetcher
+      # finishes for that one.
       systemd.tmpfiles.rules = [
-        "d ${config.services.ollama.home} 0755 ollama ollama - -"
-        "d ${config.services.ollama.models} 0755 ollama ollama - -"
+        "d ${modelsDir} 0755 root root - -"
       ];
 
+      systemd.services.fetch-llama-models = {
+        description = "Fetch GGUFs declared by services.inference-stack.models";
+        after = ["network-online.target"];
+        wants = ["network-online.target"];
+        wantedBy = ["multi-user.target"];
+        # Don't block llama-swap startup — fetcher runs in parallel.
+        before = [];
+
+        path = [pkgs.curl pkgs.coreutils];
+
+        script = let
+          fetchOne = name: m: ''
+            target="${modelsDir}/${name}.gguf"
+            if [ -s "$target" ] && [ "$(stat -c%s "$target")" -gt 1000000 ]; then
+              echo "✓ ${name}: already present ($(du -h "$target" | cut -f1))"
+            else
+              echo "▶ ${name}: fetching from ${m.ggufUrl}"
+              curl -L -C - --fail --retry 3 --retry-delay 5 \
+                --output "$target.partial" \
+                "${m.ggufUrl}"
+              mv "$target.partial" "$target"
+              echo "✓ ${name}: fetched ($(du -h "$target" | cut -f1))"
+            fi
+          '';
+        in
+          lib.concatStringsSep "\n" (lib.mapAttrsToList fetchOne cfg.models);
+
+        serviceConfig = {
+          Type = "exec";
+          # Runs as root because modelsDir lives under /var/lib; tmpfiles
+          # created it root:root. Kept simple — GGUFs are public, no auth.
+          User = "root";
+          Group = "root";
+          # Tens of GB on first run; don't time out.
+          TimeoutStartSec = "infinity";
+        };
+      };
+
       networking.firewall.allowedTCPPorts =
-        lib.optionals cfg.openFirewall [cfg.ollama.port]
+        lib.optionals cfg.openFirewall [cfg.swap.port]
         ++ lib.optionals (cfg.openFirewall && cfg.openWebUI.enable) [cfg.openWebUI.port];
     }
 
+    # ── CUDA cache ────────────────────────────────────────────────────────
     (lib.mkIf cfg.cudaCache {
       nix.settings.extra-substituters = [caches.cuda.url];
       nix.settings.extra-trusted-public-keys = [caches.cuda.publicKey];
     })
 
+    # ── Open-WebUI pointing at llama-swap ────────────────────────────────
     (lib.mkIf cfg.openWebUI.enable {
       services.open-webui = {
         enable = true;
         host = cfg.openWebUI.host;
         port = cfg.openWebUI.port;
-        environment.OLLAMA_API_BASE_URL = "http://127.0.0.1:${toString cfg.ollama.port}";
+        environment = {
+          # llama-swap exposes an OpenAI-compatible endpoint at /v1/.
+          # Open-WebUI's OpenAI client adds /v1 to whatever's configured
+          # via the *_URLS env vars itself when the value already ends
+          # in /v1 it doesn't double up. Pass it explicitly for clarity.
+          OPENAI_API_BASE_URLS = "http://${cfg.swap.host}:${toString cfg.swap.port}/v1";
+          # llama-swap doesn't require auth. Open-WebUI requires SOMETHING
+          # in the keys list; supply a placeholder.
+          OPENAI_API_KEYS = "sk-llama-swap-no-auth";
+          # Hide the (now-removed) Ollama tab.
+          ENABLE_OLLAMA_API = "False";
+        };
       };
 
-      # Open-WebUI persists chat history + uploaded models in /var/lib/open-webui;
+      # Open-WebUI persists chat history + RAG + personas in /var/lib/open-webui;
       # DynamicUser would rotate the UID and break ownership of that state.
       systemd.services.open-webui.serviceConfig = {
         DynamicUser = lib.mkForce false;

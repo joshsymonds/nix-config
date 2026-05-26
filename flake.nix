@@ -6,6 +6,16 @@
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.11"; # Keep stable available if needed
 
+    # Side-channel nixpkgs pinned to current unstable HEAD, used by the
+    # inference-stack module (modules/services/inference-stack.nix) for
+    # llama-cpp + llama-swap only. Decoupled from the main `nixpkgs`
+    # input so the inference toolchain can ride the edge (new model
+    # arches, MoE-offload flags, perf fixes land in llama.cpp on a
+    # weekly cadence) without dragging a 200-package rebuild every time
+    # the main lock bumps. Update independently via
+    # `nix flake update nixpkgs-inference`.
+    nixpkgs-inference.url = "github:nixos/nixpkgs/nixos-unstable";
+
     # Flake-parts - modular flake outputs
     flake-parts = {
       url = "github:hercules-ci/flake-parts";

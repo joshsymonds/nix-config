@@ -2229,6 +2229,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-inference": {
+      "locked": {
+        "lastModified": 1779560665,
+        "narHash": "sha256-tpyBcxPpcQb8ukyNF7DoCwfSY3VPsxHoYwj00Cayv5o=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "64c08a7ca051951c8eae34e3e3cb1e202fe36786",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs-lib": {
       "locked": {
         "lastModified": 1777168982,
@@ -2758,6 +2774,7 @@
         "nix-flatpak": "nix-flatpak",
         "nix-gaming-edge": "nix-gaming-edge",
         "nixpkgs": "nixpkgs_9",
+        "nixpkgs-inference": "nixpkgs-inference",
         "nixpkgs-stable": "nixpkgs-stable_2",
         "redlib-fork": "redlib-fork",
         "rust-overlay": "rust-overlay_4",

@@ -91,7 +91,13 @@ in
     # history + RAG index) — both persisted via disko.nix so reboots don't
     # wipe them. CUDA binary cache (cache.nixos-cuda.org) is auto-wired by
     # the module so ollama-cuda + closure download instead of rebuilding.
-    services.inference-stack.enable = true;
+    #
+    # Open-WebUI ships on 8081 here because gluetun-qbittorrent's WebUI
+    # holds the inference-stack default 8080 (see qbittorrent-vpn.nix).
+    services.inference-stack = {
+      enable = true;
+      openWebUI.port = 8081;
+    };
 
     # Declared Modelfiles get materialized under /etc/ollama/modelfiles/
     # and `ollama create`'d after ollama.service is reachable. Personas /

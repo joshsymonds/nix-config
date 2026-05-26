@@ -2898,11 +2898,11 @@
     "scriptorium": {
       "flake": false,
       "locked": {
-        "lastModified": 1779816942,
-        "narHash": "sha256-V9d6vnBuIbE9cttV/J0L5+qlaOsa2/LMi4T4KPE5rJc=",
+        "lastModified": 1779818613,
+        "narHash": "sha256-WI5z6PWUMuNMgMYRgiXZAfQtN61zJXBi+2m4AohxOm0=",
         "ref": "refs/heads/main",
-        "rev": "96bb510a5a24f910126be81411618789f52e34d3",
-        "revCount": 1,
+        "rev": "60479d040bebe60952cd1c30513bceacf32a2d61",
+        "revCount": 2,
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/scriptorium.git"
       },

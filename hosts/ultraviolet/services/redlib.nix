@@ -4,8 +4,6 @@
   ...
 }: let
   port = 8091;
-  collectionsEnvFile = "/run/redlib/collections.env";
-  collectionsSecret = config.age.secrets."redlib-collections".path;
 in {
   services.redlib = {
     enable = true;
@@ -20,20 +18,13 @@ in {
     };
   };
 
+  # The redlib-collections secret is an env file (KEY=VALUE per line) holding
+  # REDLIB_COLLECTIONS and any other settings we don't want surfaced in this
+  # public repo — e.g. REDLIB_HOME_EXCLUDED_COLLECTIONS. agenix decrypts it
+  # to a root-owned 0400 path; systemd reads it before dropping to DynamicUser.
   systemd.services.redlib = {
-    path = [pkgs.coreutils pkgs.gnused];
-    serviceConfig.EnvironmentFile = ["-${collectionsEnvFile}"];
+    serviceConfig.EnvironmentFile = config.age.secrets."redlib-collections".path;
     restartTriggers = [config.age.secrets."redlib-collections".file];
-    preStart = ''
-      mkdir -p /run/redlib
-      if [ -s ${collectionsSecret} ]; then
-        collections=$(${pkgs.gnused}/bin/sed '/^\s*$/d' ${collectionsSecret} | ${pkgs.coreutils}/bin/tr '\n' ';' | ${pkgs.gnused}/bin/sed 's/;*$//')
-      else
-        collections=""
-      fi
-      printf 'REDLIB_COLLECTIONS=%s\n' "$collections" > ${collectionsEnvFile}
-      chmod 600 ${collectionsEnvFile}
-    '';
   };
 
   # Cloudflare Tunnel handles public exposure (redlib.husbuddies.gay) directly,

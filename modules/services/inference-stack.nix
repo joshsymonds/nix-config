@@ -87,6 +87,20 @@ in {
         Group = "ollama";
       };
 
+      # systemd's StateDirectory only creates dirs that don't already
+      # exist — but impermanence pre-creates /var/lib/ollama (root-owned),
+      # so StateDirectory leaves it alone and the ollama daemon can't
+      # write to it. cfg.models defaults to ${home}/models, and
+      # ReadWritePaths in the upstream unit references both; without the
+      # models subdir existing, mount namespacing fails with
+      # "Failed to set up mount namespacing: /var/lib/ollama/models:
+      # No such file or directory". tmpfiles fixes both: chowns the
+      # existing top-level dir and creates the models subdir under it.
+      systemd.tmpfiles.rules = [
+        "d ${config.services.ollama.home} 0755 ollama ollama - -"
+        "d ${config.services.ollama.models} 0755 ollama ollama - -"
+      ];
+
       networking.firewall.allowedTCPPorts =
         lib.optionals cfg.openFirewall [cfg.ollama.port]
         ++ lib.optionals (cfg.openFirewall && cfg.openWebUI.enable) [cfg.openWebUI.port];

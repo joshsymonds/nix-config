@@ -94,9 +94,18 @@ in {
       # with minimal quality impact; flash attention is its prerequisite.
       # Both are daemon-wide knobs (not Modelfile params), so they live
       # here.
+      #
+      # MAX_LOADED_MODELS=1: with multiple large quants that individually
+      # eat most of the 16 GB card, the default scheduler tries to keep
+      # both resident in parallel — switching from IQ4_XS to Q5_K_M within
+      # OLLAMA_KEEP_ALIVE (5m) leaves 169 MiB free for a 19 GB load attempt
+      # and the llama runner panics with exit status 2. Forcing a single
+      # loaded model evicts the previous one before loading the new one,
+      # which is the right policy for single-GPU + multi-quant.
       systemd.services.ollama.environment = {
         OLLAMA_FLASH_ATTENTION = "1";
         OLLAMA_KV_CACHE_TYPE = "q8_0";
+        OLLAMA_MAX_LOADED_MODELS = "1";
       };
 
       # systemd's StateDirectory only creates dirs that don't already

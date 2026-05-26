@@ -16,7 +16,9 @@ in
       ./shutdown-hardening.nix
       ../../modules/desktop/dms-niri.nix
       ../../modules/hardware/gpu-nvidia.nix
+      ../../modules/services/inference-stack.nix
       ../../modules/services/keyd.nix
+      ../../modules/services/ollama-modelfiles.nix
       ../../modules/services/yubikey-auth.nix
       inputs.lanzaboote.nixosModules.lanzaboote
       inputs.nix-flatpak.nixosModules.nix-flatpak
@@ -80,6 +82,28 @@ in
       # public CI cache, so updates download instead of rebuilding.
       # Runtime perf is identical on a single-arch system (the unused
       # SMs just sit dead in the binary).
+    };
+
+    # ── Local LLM stack (Ollama-CUDA + Open-WebUI) ──────────────────────
+    # Successor to stygianlibrary's inference workload. Both services bind
+    # to 127.0.0.1 by default (override `host` to expose); state lives in
+    # /var/lib/ollama (models, ~tens of GB) and /var/lib/open-webui (chat
+    # history + RAG index) — both persisted via disko.nix so reboots don't
+    # wipe them. CUDA binary cache (cache.nixos-cuda.org) is auto-wired by
+    # the module so ollama-cuda + closure download instead of rebuilding.
+    services.inference-stack.enable = true;
+
+    # Declared Modelfiles get materialized under /etc/ollama/modelfiles/
+    # and `ollama create`'d after ollama.service is reachable. Personas /
+    # system prompts intentionally NOT here — those live in Open-WebUI's
+    # "Models" feature so they stay out of git. See scriptorium README
+    # for the design and quant rationale.
+    services.ollama-modelfiles = {
+      enable = true;
+      modelfiles = {
+        gemma4-heretic-q5 = "${inputs.scriptorium}/modelfiles/gemma4-heretic-q5";
+        gemma4-heretic-iq4xs = "${inputs.scriptorium}/modelfiles/gemma4-heretic-iq4xs";
+      };
     };
 
     # ── Desktop session (niri + DMS, see modules/desktop/dms-niri.nix) ──

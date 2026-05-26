@@ -44,6 +44,15 @@
       # persistent natively).
       "/var/lib/gluetun"
       "/var/lib/qbittorrent"
+      # services.inference-stack — Ollama model store + Open-WebUI state.
+      # Ollama lives under /var/lib/ollama (services.ollama.home default;
+      # models land in $home/models). Open-WebUI persists chat history,
+      # RAG embeddings, and uploaded files under /var/lib/open-webui.
+      # Both are system-owned (no per-directory ownership needed) so
+      # plain listOf-str entries work. Models are big (~15-25 GB each);
+      # without persistence every reboot would re-pull from hf.co.
+      "/var/lib/ollama"
+      "/var/lib/open-webui"
       # NOTE: /var/lib/comfyui is intentionally NOT here — it needs
       # user-owned persist backing for rootless podman, so it's declared
       # in hosts/gnomon/default.nix via impermanence's native

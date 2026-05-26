@@ -2762,6 +2762,7 @@
         "redlib-fork": "redlib-fork",
         "rust-overlay": "rust-overlay_4",
         "savecraft": "savecraft",
+        "scriptorium": "scriptorium",
         "shimmer": "shimmer",
         "sound-stage": "sound-stage",
         "spicetify-nix": "spicetify-nix",
@@ -2892,6 +2893,22 @@
         "owner": "joshsymonds",
         "repo": "savecraft.gg",
         "type": "github"
+      }
+    },
+    "scriptorium": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779816942,
+        "narHash": "sha256-V9d6vnBuIbE9cttV/J0L5+qlaOsa2/LMi4T4KPE5rJc=",
+        "ref": "refs/heads/main",
+        "rev": "96bb510a5a24f910126be81411618789f52e34d3",
+        "revCount": 1,
+        "type": "git",
+        "url": "ssh://git@github.com/joshsymonds/scriptorium.git"
+      },
+      "original": {
+        "type": "git",
+        "url": "ssh://git@github.com/joshsymonds/scriptorium.git"
       }
     },
     "shimmer": {

@@ -170,6 +170,19 @@
     # Shimmer - Unified MCP server (Reddit, Monarch Money, GitHub)
     shimmer.url = "git+ssh://git@github.com/joshsymonds/shimmer.git";
 
+    # scriptorium — gnomon's local-LLM workspace (Modelfiles, eval scripts,
+    # chat-template source). Private repo because personas/system prompts
+    # *could* end up here, even though right now they live in Open-WebUI's
+    # SQLite. Consumed as source (flake = false) — the ollama-modelfiles
+    # module references ${inputs.scriptorium}/modelfiles/<name>.
+    # Excluded from the nix registry in hosts/common.nix for the same
+    # reason shimmer is: hosts without ssh credentials to this repo (the
+    # installer VM test, fresh installs) would fail flake-fetch otherwise.
+    scriptorium = {
+      url = "git+ssh://git@github.com/joshsymonds/scriptorium.git";
+      flake = false;
+    };
+
     # Redlib fork for customizations
     redlib-fork = {
       url = "github:joshsymonds/redlib";

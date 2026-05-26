@@ -188,22 +188,31 @@ in {
 
         path = [pkgs.curl pkgs.coreutils];
 
+        # All declared models fetch in parallel — HuggingFace throttles
+        # per connection (~13 MB/s sustained per stream), so two parallel
+        # downloads finish in ~half the wall time of running them
+        # sequentially. `wait` at the end joins all of them.
         script = let
           fetchOne = name: m: ''
-            target="${modelsDir}/${name}.gguf"
-            if [ -s "$target" ] && [ "$(stat -c%s "$target")" -gt 1000000 ]; then
-              echo "✓ ${name}: already present ($(du -h "$target" | cut -f1))"
-            else
-              echo "▶ ${name}: fetching from ${m.ggufUrl}"
-              curl -L -C - --fail --retry 3 --retry-delay 5 \
-                --output "$target.partial" \
-                "${m.ggufUrl}"
-              mv "$target.partial" "$target"
-              echo "✓ ${name}: fetched ($(du -h "$target" | cut -f1))"
-            fi
+            (
+              target="${modelsDir}/${name}.gguf"
+              if [ -s "$target" ] && [ "$(stat -c%s "$target")" -gt 1000000 ]; then
+                echo "✓ ${name}: already present ($(du -h "$target" | cut -f1))"
+              else
+                echo "▶ ${name}: fetching from ${m.ggufUrl}"
+                curl -L -C - --fail --retry 3 --retry-delay 5 \
+                  --output "$target.partial" \
+                  "${m.ggufUrl}"
+                mv "$target.partial" "$target"
+                echo "✓ ${name}: fetched ($(du -h "$target" | cut -f1))"
+              fi
+            ) &
           '';
-        in
-          lib.concatStringsSep "\n" (lib.mapAttrsToList fetchOne cfg.models);
+        in ''
+          ${lib.concatStringsSep "\n" (lib.mapAttrsToList fetchOne cfg.models)}
+          wait
+          echo "✓ all model fetches complete"
+        '';
 
         serviceConfig = {
           Type = "exec";

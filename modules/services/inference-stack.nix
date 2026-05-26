@@ -71,6 +71,22 @@ in {
         group = "ollama";
       };
 
+      # Upstream `services.ollama` hard-codes DynamicUser = true even when
+      # cfg.user/cfg.group are set explicitly. DynamicUser pushes the
+      # StateDirectory through systemd's /var/lib/private/<name> bind-mount
+      # indirection, which collides with our impermanence bind mount on
+      # /var/lib/ollama (visible as "Failed to set up special execution
+      # directory in /var/lib: Device or resource busy"). Force it off so
+      # the static "ollama" user (which the upstream module already declares
+      # under users.users.ollama when staticUser is true) is what actually
+      # runs the daemon. Same pattern is applied to Open-WebUI below for
+      # the same reason.
+      systemd.services.ollama.serviceConfig = {
+        DynamicUser = lib.mkForce false;
+        User = "ollama";
+        Group = "ollama";
+      };
+
       networking.firewall.allowedTCPPorts =
         lib.optionals cfg.openFirewall [cfg.ollama.port]
         ++ lib.optionals (cfg.openFirewall && cfg.openWebUI.enable) [cfg.openWebUI.port];

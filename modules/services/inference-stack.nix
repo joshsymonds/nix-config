@@ -87,6 +87,18 @@ in {
         Group = "ollama";
       };
 
+      # KV cache quantization + flash attention. Gemma 4 has unusually fat
+      # KV cache (500 MB-3 GB per context checkpoint per upstream reports),
+      # which on a 16 GB card pushes even a 14 GB weight model into partial
+      # CPU offload at modest context lengths. q8_0 cuts KV memory ~50%
+      # with minimal quality impact; flash attention is its prerequisite.
+      # Both are daemon-wide knobs (not Modelfile params), so they live
+      # here.
+      systemd.services.ollama.environment = {
+        OLLAMA_FLASH_ATTENTION = "1";
+        OLLAMA_KV_CACHE_TYPE = "q8_0";
+      };
+
       # systemd's StateDirectory only creates dirs that don't already
       # exist — but impermanence pre-creates /var/lib/ollama (root-owned),
       # so StateDirectory leaves it alone and the ollama daemon can't

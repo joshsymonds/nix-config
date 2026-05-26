@@ -200,7 +200,15 @@ in {
                 echo "✓ ${name}: already present ($(du -h "$target" | cut -f1))"
               else
                 echo "▶ ${name}: fetching from ${m.ggufUrl}"
-                curl -L -C - --fail --retry 3 --retry-delay 5 \
+                # HuggingFace occasionally truncates a connection mid-stream
+                # ("end of response with N bytes missing"); --retry-all-errors
+                # makes curl retry on that class of failure too, not just
+                # connection setup. Without it the GGUF stays at .partial
+                # and the parent service exits "successfully" — a silent
+                # broken-state we hit on the first run. Retry 10× with
+                # exponential-ish backoff via --retry-delay floor.
+                curl -L -C - --fail --retry 10 --retry-all-errors \
+                  --retry-delay 5 --retry-max-time 0 \
                   --output "$target.partial" \
                   "${m.ggufUrl}"
                 mv "$target.partial" "$target"

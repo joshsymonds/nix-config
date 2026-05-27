@@ -2899,11 +2899,11 @@
         "nixpkgs": "nixpkgs_14"
       },
       "locked": {
-        "lastModified": 1779222393,
-        "narHash": "sha256-xubknqvqkRSWXf+GiC4EIWL/U6cYNw+pLz+NDcP/CTU=",
+        "lastModified": 1779643750,
+        "narHash": "sha256-znz6Z5yRTZE7gdHzV7AEHltzE8WIzSGnKSpp4xXLXP8=",
         "owner": "joshsymonds",
         "repo": "savecraft.gg",
-        "rev": "35c72b16458cb120c7488c98fbd3049a2aa5565c",
+        "rev": "5c51460bdbb68c19c76d59c0abac19caa63d6ce5",
         "type": "github"
       },
       "original": {

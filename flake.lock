@@ -1602,7 +1602,7 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "narHash": "sha256-DUYqBLaALdIMUNJhaY10jOZuy7AHbw9KF1UdOUiTQpY=",
+        "narHash": "sha256-CmU28BrNS2rrXOI1C5t4l6G/QKtqlf7LiUOFJ0wHp6M=",
         "path": "/home/joshsymonds/Personal/halmasuit",
         "type": "path"
       },

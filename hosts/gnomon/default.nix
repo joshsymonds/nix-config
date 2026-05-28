@@ -309,6 +309,15 @@ in
     boot.lanzaboote = {
       enable = true;
       pkiBundle = "/var/lib/sbctl";
+      # ESP is only 1 GiB (modules/disko/btrfs-impermanence.nix
+      # hardcodes that — fleet-wide default sized for pre-halmasuit
+      # initramfs sizes ~120 MiB). Halmasuit Phase B's NVIDIA-bearing
+      # initramfs is ~370 MiB per distinct hash, so the conventional
+      # 8-generation retention overflows. 4 retained generations is
+      # the realistic ceiling on this ESP: ~2 distinct initramfs
+      # hashes alongside 4 UKI stubs + kernel + bootloader files
+      # leaves enough room for one in-flight rebuild.
+      configurationLimit = 4;
     };
 
     # ── Kernel: CachyOS latest (generic march) ──────────────────────────

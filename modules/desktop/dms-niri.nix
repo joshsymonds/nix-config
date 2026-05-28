@@ -18,20 +18,33 @@ in {
   imports = [
     inputs.niri-flake.nixosModules.niri
     inputs.dms.nixosModules.dank-material-shell
-    inputs.dms.nixosModules.greeter
+    # DMS's greeter NixOS module was the upstream-greetd-based login
+    # path. On gnomon the halmasuit module (modules/desktop/halmasuit.nix)
+    # replaces it — halmasuit IS the display manager and forks
+    # DankGreeter directly as its Wayland client; there is no
+    # greetd daemon and no nested niri compositor for the greeter.
+    # Hosts using dms-niri but NOT halmasuit can re-add this import
+    # locally.
     ./niri.nix
   ];
 
   options.desktop.dms-niri = {
-    enable = lib.mkEnableOption "niri (via niri-flake) + DankMaterialShell + DankGreeter desktop session";
+    enable = lib.mkEnableOption "niri (via niri-flake) + DankMaterialShell post-login session";
 
+    # The `greeter` sub-option was the toggle for DMS's
+    # nixosModules.greeter integration. With that module no longer
+    # imported (replaced by halmasuit on gnomon), the option is
+    # vestigial; keep the eval-compatible shape so existing host
+    # configs setting `desktop.dms-niri.greeter.enable = true` don't
+    # break, but the option is now a no-op.
     greeter.enable = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = false;
       description = ''
-        Whether to enable DankGreeter (the Material You-style login screen via greetd).
-        Disable if you want to fall back to a plain tty login. The tty escape hatch
-        is always available via Ctrl+Alt+F2 even when this is enabled.
+        DEPRECATED no-op. DMS's greeter NixOS module is no longer
+        imported by this module; the greeter path is handled by
+        modules/desktop/halmasuit.nix. This option is kept for eval
+        compatibility and may be removed in a future revision.
       '';
     };
   };
@@ -79,29 +92,12 @@ in {
       systemd.user.services.niri-flake-polkit.enable = lib.mkForce false;
     }
 
-    # DankGreeter — graphical login. Recovery escape hatch is the tty
-    # (Ctrl+Alt+F2 → standard NixOS console login).
-    (lib.mkIf cfg.greeter.enable {
-      programs.dank-material-shell.greeter = {
-        enable = true;
-        compositor.name = "niri";
-        # DankGreeter gates its FIDO/U2F login flow behind the DMS setting
-        # greeterEnableU2f, which defaults to false (GreetdSettings.qml).
-        # With it false, maybeAutoStartExternalAuth() early-returns and the
-        # greeter only ever shows the password field — even though
-        # /etc/pam.d/greetd already has pam_u2f sufficient+first (via
-        # services.yubikey-auth) and the key is enrolled. Feed a
-        # Nix-generated settings.json turning it on so the greeter
-        # auto-starts the touch prompt at login and falls back to password.
-        # greetd.preStart copies each configFiles entry into the greeter's
-        # cache dir by basename, so the path must end in /settings.json —
-        # writeTextDir gives a store dir containing exactly that name.
-        configFiles = [
-          "${pkgs.writeTextDir "settings.json" (builtins.toJSON {
-            greeterEnableU2f = true;
-          })}/settings.json"
-        ];
-      };
-    })
+    # NOTE: the greeter sub-option used to gate
+    # programs.dank-material-shell.greeter.enable (DMS's greetd-
+    # based login) here. With halmasuit replacing greetd on gnomon
+    # (modules/desktop/halmasuit.nix), the greeter path is
+    # halmasuit-owned and that wiring lives in halmasuit.nix.
+    # The greeter option remains for eval compatibility but is now
+    # a no-op (see options.desktop.dms-niri.greeter.enable above).
   ]);
 }

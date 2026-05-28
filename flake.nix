@@ -199,6 +199,22 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # halmasuit — the Linux system compositor that replaces greetd on
+    # gnomon (Phase B from-initrd deployment; eliminates kernel-handoff,
+    # greeter→session, and shutdown flashes). Consumed via
+    # nixosModules.halmasuit + overlays.default; the gnomon-shaped
+    # wiring lives in modules/desktop/halmasuit.nix.
+    #
+    # `path:` for now while the gnomon integration epic is in flight;
+    # switch to `github:joshsymonds/halmasuit` once stable. halmasuit's
+    # own flake declares dms + niri-flake as direct inputs (not via
+    # nix-config), so consuming halmasuit here doesn't create a
+    # flake-input cycle.
+    halmasuit = {
+      url = "path:/home/joshsymonds/Personal/halmasuit";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     crane.url = "github:ipetkov/crane";
 
     rust-overlay = {
@@ -430,6 +446,11 @@
             nixpkgs.overlays = [
               outputs.overlays.gaming
               outputs.overlays.ml
+              # halmasuit-replaces-greetd integration; the new
+              # modules/desktop/halmasuit.nix on gnomon imports
+              # services.halmasuit.* whose package defaults
+              # resolve through this overlay.
+              inputs.halmasuit.overlays.default
             ];
           })
         ];

@@ -267,10 +267,45 @@ in
       serviceConfig = {
         Type            = "oneshot";
         RemainAfterExit = true;
-        # Run as root so it can read joshsymonds' state files; the
-        # destination chown'ing happens at the end.
+        # Runs as root because it reads joshsymonds' state files and
+        # chowns the destination to halmasuit-greeter. The sandbox
+        # directives below confine root to "read the three DMS state
+        # dirs, write the cache dir, talk to no devices, see no
+        # other processes."
         User  = "root";
         Group = "root";
+
+        # Defense-in-depth sandboxing (review S-1). The unit's job is
+        # bounded: read up to three well-known paths under joshsymonds'
+        # home, write to /var/lib/halmasuit-greeter/. Without these
+        # directives the root oneshot has full filesystem authority.
+        NoNewPrivileges       = true;
+        ProtectSystem         = "strict";
+        # ProtectHome=true + explicit BindReadOnlyPaths is tighter
+        # than ProtectHome=read-only (review S-3): the unit sees only
+        # the three DMS state dirs, not joshsymonds' home as a whole.
+        # An accidentally-mis-pathed jq value can't reach anything
+        # outside those three dirs because they're not present in the
+        # unit's filesystem namespace.
+        ProtectHome           = true;
+        BindReadOnlyPaths     = [
+          "/home/joshsymonds/.config/DankMaterialShell"
+          "/home/joshsymonds/.local/state/DankMaterialShell"
+          "/home/joshsymonds/.cache/DankMaterialShell"
+        ];
+        PrivateTmp            = true;
+        PrivateDevices        = true;
+        ProtectKernelLogs     = true;
+        ProtectKernelTunables = true;
+        ProtectKernelModules  = true;
+        ProtectControlGroups  = true;
+        LockPersonality       = true;
+        RestrictNamespaces    = true;
+        RestrictSUIDSGID      = true;
+        RestrictRealtime      = true;
+        # Only the cache dir is writable; ProtectSystem=strict +
+        # ProtectHome=true cover everything else.
+        ReadWritePaths        = [ cacheDir ];
       };
 
       path = [ pkgs.jq pkgs.coreutils ];
@@ -279,9 +314,27 @@ in
         set -eu
         cd ${cacheDir}
 
-        # Copy joshsymonds' session/settings/colors if present.
-        # Each input is best-effort — fresh installs may not have
-        # all three.
+        # Reject paths outside joshsymonds' DMS state dirs (review
+        # S-2). The wallpaperPath/customThemeFile values are
+        # user-controlled JSON content; without a prefix guard, root
+        # would dereference an attacker-supplied symlink (`/etc/shadow`
+        # or a chain that ends there) and widen its content to the
+        # halmasuit-greeter system user.
+        is_under_home() {
+          case "$1" in
+            /home/joshsymonds/.config/DankMaterialShell/*) return 0 ;;
+            /home/joshsymonds/.local/state/DankMaterialShell/*) return 0 ;;
+            /home/joshsymonds/.cache/DankMaterialShell/*) return 0 ;;
+            *) return 1 ;;
+          esac
+        }
+
+        # Copy joshsymonds' session/settings/colors if present. Use
+        # `cp -L` here is fine — these paths are NOT user-supplied
+        # (they're hard-coded above and prefix-checked by
+        # is_under_home). Symlinks INTO the DMS dir tree are honored;
+        # symlinks pointing OUT escape the read-only ProtectHome
+        # bind anyway, so root reads nothing it shouldn't.
         for f in /home/joshsymonds/.config/DankMaterialShell/settings.json \
                  /home/joshsymonds/.local/state/DankMaterialShell/session.json \
                  /home/joshsymonds/.cache/DankMaterialShell/dms-colors.json ; do
@@ -290,16 +343,28 @@ in
           fi
         done
 
-        # If session.json references a wallpaper file outside the
-        # cache dir, copy it in and rewrite the path. Mirrors the
-        # DMS greeter module's preStart copy_wallpaper helper.
+        # If session.json references a wallpaper file under DMS's
+        # state dirs, copy it in and rewrite the path. Mirrors the
+        # DMS greeter module's preStart copy_wallpaper helper, with
+        # the prefix guard added.
         if [ -f session.json ]; then
           copy_wallpaper() {
             local key=$1 dest=$2
             local src
             src=$(jq -r ".''${key} // empty" session.json)
+            if [ -z "$src" ]; then
+              return 0
+            fi
+            if ! is_under_home "$src"; then
+              echo "halmasuit-greeter-setup: refusing $key=$src (outside DMS state dirs)" >&2
+              return 0
+            fi
+            if [ -L "$src" ]; then
+              echo "halmasuit-greeter-setup: refusing $key=$src (symlink)" >&2
+              return 0
+            fi
             if [ -f "$src" ]; then
-              cp "$src" "$dest"
+              cp -P "$src" "$dest"
               jq ".''${key} = \"${cacheDir}/$dest\"" session.json > session.tmp
               mv session.tmp session.json
             fi
@@ -310,14 +375,19 @@ in
         fi
 
         # Custom-theme file referenced by settings.json — same
-        # rewrite pattern as DMS's preStart.
+        # rewrite pattern, same prefix guard.
         if [ -f settings.json ]; then
           theme_file=$(jq -r '.customThemeFile // empty' settings.json)
-          if [ -f "$theme_file" ] && [ -r "$theme_file" ]; then
-            cp "$theme_file" custom-theme.json
+          if [ -n "$theme_file" ] \
+             && is_under_home "$theme_file" \
+             && [ ! -L "$theme_file" ] \
+             && [ -f "$theme_file" ] && [ -r "$theme_file" ]; then
+            cp -P "$theme_file" custom-theme.json
             mv settings.json settings.orig.json
             jq '.customThemeFile = "${cacheDir}/custom-theme.json"' \
               settings.orig.json > settings.json
+          elif [ -n "$theme_file" ] && ! is_under_home "$theme_file"; then
+            echo "halmasuit-greeter-setup: refusing customThemeFile=$theme_file (outside DMS state dirs)" >&2
           fi
         fi
 

@@ -210,6 +210,19 @@ in
         ];
       };
 
+      # PCI BDF of the RTX 5070 Ti. gnomon has multiple DRM devices —
+      # simpledrm (firmware framebuffer wrapper) + chipset-side DRM at
+      # 0000:74:00.0 + NVIDIA at 0000:01:00.0. Without this, halmasuit
+      # would auto-discover and possibly pick the chipset card (which
+      # has no connected monitors), or hit a kernel-probe-order race.
+      # Resolving by PCI BDF is stable across reboots regardless of how
+      # the kernel orders DRM driver loading.
+      #
+      # Also: the module adds Wants=/After=systemd-udev-settle.service
+      # so halmasuit waits for udev's device-node creation to complete
+      # — the race that bit us during the first deploy attempt.
+      drmDevice = "pci:0000:01:00.0";
+
       # Cursor theme + size — propagated through the broker's
       # session-leader env allowlist so the child compositor (niri)
       # renders the same theme.

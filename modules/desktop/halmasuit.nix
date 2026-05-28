@@ -73,28 +73,33 @@ let
       -p ${dmsShell}/share/quickshell/dms
   '';
 
-  # Wallpaper uniforms — match the bar config in
-  # home-manager/dms/default.nix's shaderPrimaryColor etc. so the
-  # greeter wallpaper visually matches the post-login wallpaper.
-  # Vec4 values include alpha=1.0 in the .a slot. The set tracks
-  # chrome_hexrain.frag's declared uniforms; defaults are taken from
-  # DankMaterialShell's scenes/wallpaper.json shipped values.
+  # Wallpaper uniforms — synced from the user's live DMS dark palette
+  # at ~/.cache/DankMaterialShell/dms-colors.json (the "colors.dark"
+  # block) so the Phase B greeter wallpaper visually matches the
+  # post-login DMS shell. Vec4 values include alpha=1.0 in the .a
+  # slot. The set tracks chrome_hexrain.frag's declared uniforms.
+  #
+  # MANUAL SYNC: when the DMS palette changes, re-derive these from
+  # dms-colors.json by hand. A runtime-override mechanism (halmasuit
+  # reading a dynamic uniforms JSON populated by halmasuit-greeter-
+  # setup from DMS state) is a future epic — not implemented yet.
+  # Last synced: 2026-05-28 against gnomon's dms-colors.json.
   wallpaperUniforms = {
     intensity = 1.0;
     cellSize  = 14.0;
 
-    colorPrimary          = [ 0.345 0.588 0.882 1.0 ];  # #5896E1 (cyan band)
-    colorSecondary        = [ 0.717 0.067 0.859 1.0 ];  # #B711DB (magenta)
-    colorPrimaryContainer = [ 0.090 0.043 0.333 1.0 ];  # #170B55 (deep purple base)
-    colorTertiary         = [ 0.224 1.0   0.600 1.0 ];  # #39FF99 (neon green)
+    colorPrimary          = [ 0.741 0.761 1.000 1.0 ];  # #bdc2ff (DMS primary)
+    colorSecondary        = [ 0.769 0.773 0.867 1.0 ];  # #c4c5dd (DMS secondary)
+    colorPrimaryContainer = [ 0.235 0.259 0.475 1.0 ];  # #3c4279 (DMS primary_container)
+    colorTertiary         = [ 0.906 0.725 0.839 1.0 ];  # #e7b9d6 (DMS tertiary)
 
     # Same "Next" palette as current (no flip animation by default —
     # flipStartTime is held far in the future so per-hex flip phase
     # clamps to 0 everywhere).
-    colorPrimaryNext          = [ 0.345 0.588 0.882 1.0 ];
-    colorSecondaryNext        = [ 0.717 0.067 0.859 1.0 ];
-    colorPrimaryContainerNext = [ 0.090 0.043 0.333 1.0 ];
-    colorTertiaryNext         = [ 0.224 1.0   0.600 1.0 ];
+    colorPrimaryNext          = [ 0.741 0.761 1.000 1.0 ];
+    colorSecondaryNext        = [ 0.769 0.773 0.867 1.0 ];
+    colorPrimaryContainerNext = [ 0.235 0.259 0.475 1.0 ];
+    colorTertiaryNext         = [ 0.906 0.725 0.839 1.0 ];
     flipOriginX    = 0.0;
     flipOriginY    = 0.0;
     flipStartTime  = 1.0e9;  # far future — flip wave inert
@@ -268,6 +273,24 @@ in
         user  = "halmasuit-greeter";
         group = "halmasuit-greeter";
         mode  = "0750";
+      };
+      # XDG_RUNTIME_DIR for the greeter. The greeterCmd wrapper above
+      # exports XDG_RUNTIME_DIR=/run/halmasuit-greeter; without this
+      # dir present, Quickshell SEGVs in QsPaths::linkRunDir on
+      # startup (gen 392, 2026-05-28 strace). Mode 0700 per XDG Base
+      # Directory Spec; owned by the greeter user. Cannot use
+      # systemd's RuntimeDirectory= idiom because the halmasuit unit
+      # that would own it is the Phase B initramfs-survival unit, and
+      # RuntimeDirectory= makes that unit eligible for the post-pivot
+      # initrd-cleanup.service SIGTERM sweep — breaking
+      # SurviveFinalKillSignal. See halmasuit nix/module.nix:1505 for
+      # the full rationale. tmpfiles is the right tool here:
+      # declarative, recreated every boot from the /run tmpfs, no
+      # interaction with the survival mechanism.
+      "/run/halmasuit-greeter".d = {
+        user  = "halmasuit-greeter";
+        group = "halmasuit-greeter";
+        mode  = "0700";
       };
     };
 

@@ -208,12 +208,6 @@ in
           "${pkgs.egl-wayland}"
           "${pkgs.egl-gbm}"
         ];
-        # DIAGNOSTIC (2026-05-28): the NVIDIA EGL GBM platform fails to
-        # register in the initramfs but works on rootfs with identical
-        # libs/env. strace the Phase B ExecStart to /run/halmasuit/
-        # egl-strace.log (preserved across switch_root) to find which
-        # file/ioctl libEGL_nvidia trips on. Remove once diagnosed.
-        debugStrace = true;
       };
 
       # PCI BDF of the RTX 5070 Ti. gnomon has multiple DRM devices —

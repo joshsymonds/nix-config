@@ -205,13 +205,16 @@
     # nixosModules.halmasuit + overlays.default; the gnomon-shaped
     # wiring lives in modules/desktop/halmasuit.nix.
     #
-    # `path:` for now while the gnomon integration epic is in flight;
-    # switch to `github:joshsymonds/halmasuit` once stable. halmasuit's
+    # GitHub-tracked (not `path:`): a path: input hashes the entire
+    # directory tree including target/ (~4 GiB), .cargo-home, and
+    # .worktrees, so any local `cargo build` or `just check` mutates
+    # the NAR hash and forces every downstream derivation to rebuild.
+    # github: pins by commit, immune to working-tree noise. halmasuit's
     # own flake declares dms + niri-flake as direct inputs (not via
     # nix-config), so consuming halmasuit here doesn't create a
     # flake-input cycle.
     halmasuit = {
-      url = "path:/home/joshsymonds/Personal/halmasuit";
+      url = "github:joshsymonds/halmasuit/main";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

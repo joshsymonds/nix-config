@@ -1602,13 +1602,18 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "narHash": "sha256-CmU28BrNS2rrXOI1C5t4l6G/QKtqlf7LiUOFJ0wHp6M=",
-        "path": "/home/joshsymonds/Personal/halmasuit",
-        "type": "path"
+        "lastModified": 1779946319,
+        "narHash": "sha256-TIPv11fGMP11rlItzso7Kl5LwdSW02zqydUOYnpeAXw=",
+        "owner": "joshsymonds",
+        "repo": "halmasuit",
+        "rev": "aeddc96121494f9499fedd2e3ce2c9dc90033da5",
+        "type": "github"
       },
       "original": {
-        "path": "/home/joshsymonds/Personal/halmasuit",
-        "type": "path"
+        "owner": "joshsymonds",
+        "ref": "main",
+        "repo": "halmasuit",
+        "type": "github"
       }
     },
     "hardware": {

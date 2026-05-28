@@ -213,6 +213,13 @@ in
           "${pkgs.egl-wayland}"
           "${pkgs.egl-gbm}"
         ];
+        # Pin DP-3 (the left Dell U2724D — "Dell Inc. DELL U2724D
+        # CDL25Z3" at logical position 0,0 per `niri msg outputs`)
+        # as the primary connector. Its mode becomes the canonical
+        # cloned mode for the multi-connector kernel-clone scanout;
+        # DP-2 (the right monitor) joins the clone since both
+        # support 2560x1440 @120Hz.
+        primaryOutput = "DP-3";
       };
 
       # PCI BDF of the RTX 5070 Ti. gnomon has multiple DRM devices —

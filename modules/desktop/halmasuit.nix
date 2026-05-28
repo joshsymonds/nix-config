@@ -266,8 +266,19 @@ in
     # DankGreeter can pick up the user's session.json /
     # settings.json / dms-colors at greeter start.
     #
-    # Ordered Before=halmasuit.service so the cache dir is seeded
-    # before halmasuit forks the greeter.
+    # Wired as a pre-hook of halmasuit-session.service (NOT
+    # halmasuit.service). In Phase B halmasuit IS the surviving
+    # initramfs unit and the rootfs `halmasuit.service` never
+    # "starts", so wantedBy=halmasuit.service would never fire (the
+    # gen 392/394 silent-no-DMS-state failure mode). The broker
+    # halmasuit-session.service IS a rootfs unit, socket-activated
+    # by halmasuit's first connection at /run/halmasuit-session.sock
+    # post-pivot. wantedBy=halmasuit-session.service pulls this
+    # oneshot into the broker's activation; before=halmasuit-session
+    # .service makes systemd run it synchronously to completion
+    # BEFORE the broker starts handling the auth conversation.
+    # Net effect: by the time DankGreeter (forked by the broker)
+    # exists, /var/lib/halmasuit-greeter is already populated.
     systemd.tmpfiles.settings."10-halmasuit-greeter" = {
       ${cacheDir}.d = {
         user  = "halmasuit-greeter";
@@ -296,8 +307,8 @@ in
 
     systemd.services.halmasuit-greeter-setup = {
       description = "Seed DankGreeter cache dir with user session state";
-      wantedBy    = [ "halmasuit.service" ];
-      before      = [ "halmasuit.service" ];
+      wantedBy    = [ "halmasuit-session.service" ];
+      before      = [ "halmasuit-session.service" ];
       after       = [ "local-fs.target" ];
 
       serviceConfig = {

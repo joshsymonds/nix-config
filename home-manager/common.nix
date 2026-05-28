@@ -11,6 +11,7 @@ in {
   imports = [
     ./atuin
     ./claude-code
+    ./codex
     ./mcp
     ./helix
     ./kitty
@@ -40,6 +41,7 @@ in {
           autossh
           bat
           claudeCodeCli
+          codexCli
           coder
           coreutils-full
           curl

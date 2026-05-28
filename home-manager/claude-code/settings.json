@@ -1,7 +1,7 @@
 {
   "companyAnnouncements": [],
   "viewMode": "default",
-  "model": "claude-opus-4-7[1m]",
+  "model": "claude-opus-4-8[1m]",
   "effortLevel": "xhigh",
   "preferredNotifChannel": "notifications_disabled",
   "permissions": {

@@ -53,7 +53,7 @@
     # Bedrock model selection nuance: Claude Code's settings.json `model`
     # field expects an inference profile ARN (with account ID) per
     # code.claude.com/docs/en/model-config. The bare inference profile ID
-    # `us.anthropic.claude-opus-4-7` is rejected when used as the `model`
+    # `us.anthropic.claude-opus-4-8` is rejected when used as the `model`
     # field, even though it's accepted by ANTHROPIC_MODEL env var. We use
     # ANTHROPIC_MODEL in the env block to avoid embedding the AWS account
     # ID in nix-config (which is a public repo).
@@ -73,19 +73,19 @@
       # the rest of the Klover AWS stuff lives. The us.* prefix on the model
       # IDs is a Geo cross-region inference profile that theoretically
       # routes across us-east-1/2/west-2 regardless of source region, but
-      # in practice Opus 4.7 model-access propagation differs by region;
+      # in practice Opus 4.8 model-access propagation differs by region;
       # us-east-2 is where it's actually live for this account.
       AWS_REGION = "us-east-2";
       AWS_PROFILE = "attain";
       # Primary model. Bare inference profile ID is what ANTHROPIC_MODEL
       # accepts (settings.json `model` field would want a full ARN).
-      ANTHROPIC_MODEL = "us.anthropic.claude-opus-4-7[1m]";
+      ANTHROPIC_MODEL = "us.anthropic.claude-opus-4-8[1m]";
       # Alias-resolution targets for opus/sonnet/haiku in /model. The HAIKU
       # entry also doubles as the small/fast background-task model on
       # Bedrock (title generation, auto-compaction summaries). Per Bedrock
       # docs, ANTHROPIC_SMALL_FAST_MODEL is deprecated -- ANTHROPIC_DEFAULT_
       # HAIKU_MODEL covers both slots when set.
-      ANTHROPIC_DEFAULT_OPUS_MODEL = "us.anthropic.claude-opus-4-7[1m]";
+      ANTHROPIC_DEFAULT_OPUS_MODEL = "us.anthropic.claude-opus-4-8[1m]";
       ANTHROPIC_DEFAULT_SONNET_MODEL = "us.anthropic.claude-sonnet-4-6[1m]";
       ANTHROPIC_DEFAULT_HAIKU_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
     };

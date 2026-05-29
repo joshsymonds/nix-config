@@ -73,82 +73,94 @@ let
       -p ${dmsShell}/share/quickshell/dms
   '';
 
-  # Wallpaper uniforms — synced from the user's live DMS dark palette
-  # at ~/.cache/DankMaterialShell/dms-colors.json (the "colors.dark"
-  # block) so the Phase B greeter wallpaper visually matches the
-  # post-login DMS shell. Vec4 values include alpha=1.0 in the .a
-  # slot. The set tracks chrome_hexrain.frag's declared uniforms.
+  # Wallpaper uniforms — synced byte-equivalently from the user's live
+  # DMS chrome_hexrain scene at
+  # ~/Personal/DankMaterialShell/quickshell/Shaders/scenes/wallpaper.json
+  # (the canonical source-of-truth edited via DMS's scene editor) so
+  # the Phase B greeter wallpaper matches the post-login DMS exactly.
   #
-  # MANUAL SYNC: when the DMS palette changes, re-derive these from
-  # dms-colors.json by hand. A runtime-override mechanism (halmasuit
-  # reading a dynamic uniforms JSON populated by halmasuit-greeter-
-  # setup from DMS state) is a future epic — not implemented yet.
-  # Last synced: 2026-05-28 against gnomon's dms-colors.json.
+  # Coercions applied:
+  #   - DMS uses "#RRGGBB" hex; halmasuit takes [ r g b a ] floats.
+  #     Each color row carries the source hex as a trailing comment.
+  #   - DMS uses int for some uniforms (e.g. backSunCount = 4);
+  #     halmasuit needs floats (the .frag declares `uniform float`).
+  #     Integers are written as `4.0` etc.
+  #   - DMS sends `barZoneScreens: [ "DP-2" ]` as a per-output filter
+  #     consumed by Quickshell, not the shader. halmasuit's barZone is
+  #     global; this knob is intentionally absent.
+  #   - DMS sends `depthShading`, `flipSpecular`, `hexDepth` — these
+  #     are NEWER scene-editor uniforms not present in halmasuit's
+  #     current chrome_hexrain port (`halmasuit-wallpaper.glsl`).
+  #     Intentionally absent until the shader is updated; sending them
+  #     to a shader without bindings would be a no-op anyway.
+  #
+  # Last synced: 2026-05-29 against wallpaper.json in DMS fork.
   wallpaperUniforms = {
-    intensity = 1.0;
-    cellSize  = 14.0;
+    intensity = 0.66;
+    cellSize  = 29.0;
 
-    colorPrimary          = [ 0.741 0.761 1.000 1.0 ];  # #bdc2ff (DMS primary)
-    colorSecondary        = [ 0.769 0.773 0.867 1.0 ];  # #c4c5dd (DMS secondary)
-    colorPrimaryContainer = [ 0.235 0.259 0.475 1.0 ];  # #3c4279 (DMS primary_container)
-    colorTertiary         = [ 0.906 0.725 0.839 1.0 ];  # #e7b9d6 (DMS tertiary)
+    colorPrimary          = [ 0.345098 0.592157 0.886275 1.0 ];  # #5897e2
+    colorSecondary        = [ 0.717647 0.066667 0.858824 1.0 ];  # #b711db
+    colorPrimaryContainer = [ 0.090196 0.082353 0.337255 1.0 ];  # #171556
+    colorTertiary         = [ 0.223529 1.000000 0.600000 1.0 ];  # #39ff99
 
-    # Same "Next" palette as current (no flip animation by default —
-    # flipStartTime is held far in the future so per-hex flip phase
-    # clamps to 0 everywhere).
-    colorPrimaryNext          = [ 0.741 0.761 1.000 1.0 ];
-    colorSecondaryNext        = [ 0.769 0.773 0.867 1.0 ];
-    colorPrimaryContainerNext = [ 0.235 0.259 0.475 1.0 ];
-    colorTertiaryNext         = [ 0.906 0.725 0.839 1.0 ];
-    flipOriginX    = 0.0;
-    flipOriginY    = 0.0;
+    # Distinct "Next" palette — DMS's flip-wave animation cycles
+    # through these as the secondary hues. flipStartTime is held far
+    # in the future (DMS default 1e9 sec) so the wave is inert under
+    # normal viewing.
+    colorPrimaryNext          = [ 0.223529 1.000000 0.600000 1.0 ];  # #39ff99
+    colorSecondaryNext        = [ 1.000000 0.466667 0.200000 1.0 ];  # #ff7733
+    colorPrimaryContainerNext = [ 0.337255 0.082353 0.082353 1.0 ];  # #561515
+    colorTertiaryNext         = [ 1.000000 0.847059 0.290196 1.0 ];  # #ffd84a
+    flipOriginX    = 200.0;
+    flipOriginY    = 700.0;
     flipStartTime  = 1.0e9;  # far future — flip wave inert
-    flipPropDelay  = 0.0;
-    flipDuration   = 1.0;
+    flipPropDelay  = 0.12;
+    flipDuration   = 1.6;
 
-    modeAmount   = 1.0;
-    domeStrength = 0.8;
-    seamGlow     = 1.5;
-    sunDriftSpeed   = 1.0;
-    heightAmount    = 0.0;
-    matteness       = 0.70;
-    bleedBack       = 0.03;
+    modeAmount   = 0.77;
+    domeStrength = 0.78;
+    seamGlow     = 2.26;
+    sunDriftSpeed   = 1.8;
+    heightAmount    = 0.55;
+    matteness       = 0.42;
+    bleedBack       = 0.18;
     hexBevel        = 0.6;
-    heightDriftSpeed = 0.0;
+    heightDriftSpeed = 0.75;
 
-    frontSunStrength       = 0.0;
-    frontSunSize           = 0.3;
-    frontSunLifetime       = 40.0;
-    frontSunGap            = 10.0;
+    frontSunStrength       = 0.62;
+    frontSunSize           = 0.57;
+    frontSunLifetime       = 45.0;
+    frontSunGap            = 12.0;
     frontSunSpeed          = 0.02;
-    frontSunShadowLength   = 1.0;
-    frontSunShadowDarkness = 0.85;
-    backSunSize            = 0.4;
+    frontSunShadowLength   = 2.5;
+    frontSunShadowDarkness = 2.3;
+    backSunSize            = 0.32;
     backSunStrength        = 1.0;
-    backSunLifetime        = 45.0;
-    backSunGap             = 12.0;
-    backSunSpeed           = 0.02;
-    backNegSunSize         = 0.3;
-    backNegSunStrength     = 0.0;
+    backSunLifetime        = 50.0;
+    backSunGap             = 15.0;
+    backSunSpeed           = 0.015;
+    backNegSunSize         = 0.33;
+    backNegSunStrength     = 0.43;
     backNegSunLifetime     = 35.0;
     backNegSunGap          = 18.0;
     backNegSunSpeed        = 0.02;
-    backSunPaletteSpeed    = 0.02;
-    frontSunPaletteSpeed   = 0.02;
-    backSunCount           = 3.0;
-    backNegSunCount        = 2.0;
-    frontSunCount          = 0.0;
-    frontNegSunCount       = 0.0;
-    frontNegSunStrength    = 0.0;
-    frontNegSunSize        = 0.3;
+    backSunPaletteSpeed    = 0.84;
+    frontSunPaletteSpeed   = 0.5;
+    backSunCount           = 4.0;
+    backNegSunCount        = 4.0;
+    frontSunCount          = 4.0;
+    frontNegSunCount       = 4.0;
+    frontNegSunStrength    = 0.3;
+    frontNegSunSize        = 0.43;
     frontNegSunLifetime    = 30.0;
-    frontNegSunGap         = 12.0;
-    frontNegSunSpeed       = 0.02;
-    fastBackSunStrength    = 0.0;
-    fastBackSunSize        = 0.2;
-    fastBackSunLifetime    = 8.0;
-    fastBackSunGap         = 60.0;
-    fastBackSunSpeed       = 0.15;
+    frontNegSunGap         = 15.0;
+    frontNegSunSpeed       = 0.025;
+    fastBackSunStrength    = 1.12;
+    fastBackSunSize        = 0.25;
+    fastBackSunLifetime    = 26.0;
+    fastBackSunGap         = 37.0;
+    fastBackSunSpeed       = 0.145;
 
     # Single-monitor mode: windowGeom = (0, 0, width, height). The
     # actual resolution is filled in at runtime by the wallpaper
@@ -156,10 +168,11 @@ let
     # gnomon's DP-2/DP-3 are both 2560x1440.
     windowGeom = [ 0.0 0.0 2560.0 1440.0 ];
 
-    barZoneEnabled   = 0.0;  # no taskbar bump on the greeter
-    barZoneAnchor    = 1.0;
-    barZoneThickness = 40.0;
-    barZoneElevation = 0.5;
+    barZoneEnabled   = 1.0;   # DMS scene has it on; barZoneScreens
+                              # = [ "DP-2" ] is Quickshell-side only.
+    barZoneAnchor    = 2.0;
+    barZoneThickness = 80.0;
+    barZoneElevation = 2.0;
   };
 in
 {

@@ -226,6 +226,10 @@ in
 
       savecraftDataRefresh.enable = true;
       savecraftDataRefresh.enableDatagen = true;
+      # Monthly (first Monday), not weekly: Magic data is set-paced and write-
+      # heavy refreshes were pushing D1 rows-written past the free tier. Stale
+      # data is fine at current usage. See savecraft.gg nix/magic-data-refresh.nix.
+      savecraftDataRefresh.onCalendar = "Mon *-*-1..7 04:00:00";
     };
 
     # Host-specific SSH settings

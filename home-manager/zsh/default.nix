@@ -27,7 +27,146 @@
   direnvInit = preRender "direnv-init" "${config.programs.direnv.package}/bin/direnv hook zsh";
   rbenvBin = "${config.programs.rbenv.package}/bin/rbenv";
   brewShellenvCache = "${config.xdg.cacheHome}/zsh/brew-shellenv.zsh";
+
+  # ── Work-profile LLM backend toggle ────────────────────────────────────
+  # ~/.claude-work is a SINGLE config dir; its backend (AWS Bedrock vs the
+  # Anthropic OAuth account) is a runtime mode persisted in
+  # ~/.claude-work/.backend (default "bedrock"). The launch env below is
+  # exported by the claude()/cw/cwa wrappers and INHERITED by the bg-agent
+  # daemon + every spare worker — verified that workers never re-read
+  # settings.json, they freeze the launch env (a daemon left up across a
+  # 4-7->4-8 bump kept serving 4-7). So flipping backend means: rewrite the
+  # frozen --model baked into each job's respawnFlags, then bounce the
+  # daemon. `cwswitch` does both. cm/cw/cwa are the explicit overrides.
+  #
+  # bedrock<->anthropic model equivalents (the only backend-specific bit in
+  # a job). Bedrock IDs carry the us.* Geo cross-region inference-profile
+  # prefix; the [1m] suffix is a client-side 1M-context hint (stripped
+  # before the request); haiku has no 1M variant and a -v1:0 Bedrock suffix.
+  workModelPairs = [
+    {
+      bedrock = "us.anthropic.claude-opus-4-8[1m]";
+      anthropic = "claude-opus-4-8[1m]";
+    }
+    {
+      bedrock = "us.anthropic.claude-sonnet-4-6[1m]";
+      anthropic = "claude-sonnet-4-6[1m]";
+    }
+    {
+      bedrock = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
+      anthropic = "claude-haiku-4-5-20251001";
+    }
+  ];
+  # Bedrock launch env. us-east-2 is where the attain account has Opus 4.8
+  # model access. In anthropic mode NONE of these are exported, so Claude
+  # Code falls back to the OAuth account's normal model selection.
+  bedrockEnv = {
+    CLAUDE_CODE_USE_BEDROCK = "1";
+    AWS_REGION = "us-east-2";
+    AWS_PROFILE = "attain";
+    ANTHROPIC_MODEL = "us.anthropic.claude-opus-4-8[1m]";
+    ANTHROPIC_DEFAULT_OPUS_MODEL = "us.anthropic.claude-opus-4-8[1m]";
+    ANTHROPIC_DEFAULT_SONNET_MODEL = "us.anthropic.claude-sonnet-4-6[1m]";
+    ANTHROPIC_DEFAULT_HAIKU_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
+  };
+  # zsh array body: KEY='VAL' ... (single-quoted so the [1m] brackets are
+  # not treated as a glob when the array literal is parsed).
+  bedrockEnvZsh = lib.concatStringsSep " " (lib.mapAttrsToList (k: v: "${k}='${v}'") bedrockEnv);
+  toAnthropicMap = builtins.toJSON (builtins.listToAttrs (map (p: lib.nameValuePair p.bedrock p.anthropic) workModelPairs));
+  toBedrockMap = builtins.toJSON (builtins.listToAttrs (map (p: lib.nameValuePair p.anthropic p.bedrock) workModelPairs));
+
+  cwswitch = pkgs.writeShellApplication {
+    name = "cwswitch";
+    runtimeInputs = [pkgs.jq pkgs.coreutils pkgs.procps];
+    text = ''
+      # Flip the ~/.claude-work LLM backend between Bedrock and the Anthropic
+      # OAuth account. Rewrites the frozen --model in every job's
+      # respawnFlags, persists the new mode, and bounces the bg-agent daemon
+      # so new/resumed workers pick up the new backend.
+      work="$HOME/.claude-work"
+      pointer="$work/.backend"
+      jobs="$work/jobs"
+      to_anthropic='${toAnthropicMap}'
+      to_bedrock='${toBedrockMap}'
+
+      cur=bedrock
+      [ -f "$pointer" ] && cur=$(tr -d '[:space:]' < "$pointer")
+      [ -n "$cur" ] || cur=bedrock
+
+      target=''${1:-}
+      if [ -z "$target" ]; then
+        if [ "$cur" = bedrock ]; then target=anthropic; else target=bedrock; fi
+      fi
+      case "$target" in
+        bedrock | anthropic) ;;
+        *)
+          echo "usage: cwswitch [bedrock|anthropic]   (no arg toggles)" >&2
+          exit 2
+          ;;
+      esac
+
+      if [ "$target" = "$cur" ]; then
+        echo "work backend already '$target' — nothing to do."
+        exit 0
+      fi
+
+      if [ "$target" = anthropic ]; then map=$to_anthropic; else map=$to_bedrock; fi
+
+      changed=0
+      unknown=0
+      active=0
+      if [ -d "$jobs" ]; then
+        for sj in "$jobs"/*/state.json; do
+          [ -f "$sj" ] || continue
+          if grep -q '"state": *"working"' "$sj"; then active=$((active + 1)); fi
+          # Warn (don't mangle) on any --model value we don't recognise.
+          while IFS= read -r m; do
+            [ -n "$m" ] || continue
+            if ! printf '%s' "$map" | jq -e --arg k "$m" 'has($k)' >/dev/null 2>&1; then
+              echo "warn: $(basename "$(dirname "$sj")"): unrecognised model '$m' left unchanged" >&2
+              unknown=$((unknown + 1))
+            fi
+          done < <(jq -r '.respawnFlags as $f | range(1;($f|length)) | select($f[.-1]=="--model") | $f[.]' "$sj" 2>/dev/null || true)
+
+          tmp="$sj.cwswitch.$$"
+          if jq --argjson m "$map" '
+            .respawnFlags |= ( . as $f | [ range(0;length) | . as $i |
+              if $i > 0 and $f[$i-1] == "--model" and ($m[$f[$i]] != null)
+              then $m[$f[$i]] else $f[$i] end ] )
+          ' "$sj" > "$tmp" 2>/dev/null; then
+            cmp -s "$sj" "$tmp" || changed=$((changed + 1))
+            mv "$tmp" "$sj"
+          else
+            rm -f "$tmp"
+            echo "warn: failed to rewrite $sj — left unchanged" >&2
+          fi
+        done
+      fi
+
+      if [ "$active" != 0 ]; then
+        echo "note: $active work agent(s) were 'working'; the daemon bounce stops them — pause+resume to migrate them onto $target." >&2
+      fi
+
+      printf '%s\n' "$target" > "$pointer.$$" && mv "$pointer.$$" "$pointer"
+
+      bounced=no
+      status="$work/daemon.status.json"
+      if [ -f "$status" ]; then
+        pid=$(jq -r '.supervisorPid // empty' "$status" 2>/dev/null || true)
+        if [ -n "''${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then
+          pkill -TERM -P "$pid" 2>/dev/null || true
+          kill -TERM "$pid" 2>/dev/null || true
+          bounced=yes
+        fi
+      fi
+
+      echo "work backend: $cur -> $target  (jobs rewritten: $changed, unknown left: $unknown, daemon bounced: $bounced)"
+      echo "next: run 'claude agents' in a work dir and resume workers — they respawn on $target."
+    '';
+  };
 in {
+  home.packages = [cwswitch];
+
   home.sessionVariables =
     {
       NIX_CONFIG = "experimental-features = nix-command flakes";
@@ -99,15 +238,28 @@ in {
 
     initContent = ''
       # Claude Code profile selection. Walks $PWD upward looking for a
-      # .claude-work marker file; if found, invokes claude with
-      # CLAUDE_CONFIG_DIR pointing at ~/.claude-work. Otherwise passes
-      # through untouched, letting claude use its default (~/.claude).
+      # .claude-work marker file; if found, launches the work profile
+      # (~/.claude-work) on whichever backend ~/.claude-work/.backend names
+      # (default bedrock). Otherwise passes through untouched, letting
+      # claude use its default personal profile (~/.claude).
+      #
+      # The backend env is exported here at launch and inherited by the
+      # bg-agent daemon + spare workers; `cwswitch` flips it (and bounces
+      # the daemon). See the workBackend block in this module's `let`.
+      __cc_work() {
+        emulate -L zsh
+        local mode=bedrock
+        [[ -r $HOME/.claude-work/.backend ]] && mode=$(<$HOME/.claude-work/.backend)
+        local -a pfx=( CLAUDE_CONFIG_DIR=$HOME/.claude-work )
+        [[ $mode == bedrock ]] && pfx+=( ${bedrockEnvZsh} )
+        command env "''${pfx[@]}" claude "$@"
+      }
       claude() {
         emulate -L zsh
         local dir=$PWD
         while [[ $dir != / ]]; do
           if [[ -f $dir/.claude-work ]]; then
-            CLAUDE_CONFIG_DIR="$HOME/.claude-work" command claude "$@"
+            __cc_work "$@"
             return
           fi
           dir=''${dir:h}
@@ -115,11 +267,14 @@ in {
         command claude "$@"
       }
 
-      # Explicit profile overrides. Both bypass claude() via `command`.
-      # `cm` uses a subshell to scope the unset — personal prefs live at
-      # ~/.claude.json (at $HOME), not ~/.claude/.claude.json, so the
-      # default (CLAUDE_CONFIG_DIR unset) is what we need.
-      cw() { CLAUDE_CONFIG_DIR="$HOME/.claude-work" command claude "$@" }
+      # Explicit profile overrides. cw/cwa also SET the persistent work
+      # backend (bouncing the daemon on change, via cwswitch) so they double
+      # as the toggle, then launch the work profile regardless of $PWD. `cm`
+      # uses a subshell to scope the unset — personal prefs live at
+      # ~/.claude.json (at $HOME), so the default (CLAUDE_CONFIG_DIR unset)
+      # is what we need.
+      cw() { cwswitch bedrock && __cc_work "$@" }
+      cwa() { cwswitch anthropic && __cc_work "$@" }
       cm() { ( unset CLAUDE_CONFIG_DIR && command claude "$@" ) }
 
       t() {

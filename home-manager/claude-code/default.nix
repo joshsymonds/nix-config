@@ -49,47 +49,21 @@
 
   settingsJsonPersonal = mkSettingsJson "personal" {};
 
-  settingsJsonWork = mkSettingsJson "work" {
-    # Bedrock model selection nuance: Claude Code's settings.json `model`
-    # field expects an inference profile ARN (with account ID) per
-    # code.claude.com/docs/en/model-config. The bare inference profile ID
-    # `us.anthropic.claude-opus-4-8` is rejected when used as the `model`
-    # field, even though it's accepted by ANTHROPIC_MODEL env var. We use
-    # ANTHROPIC_MODEL in the env block to avoid embedding the AWS account
-    # ID in nix-config (which is a public repo).
-    #
-    # 1M context on Bedrock requires the `[1m]` suffix on the model ID. The
-    # suffix is parsed and stripped client-side before the request reaches
-    # Bedrock, but it tells Claude Code to budget context against 1M tokens
-    # instead of the default 200k. Without it, /context shows N/200k and
-    # auto-compaction kicks in around ~167k regardless of what Bedrock would
-    # actually accept on the wire. Verified empirically 2026-05-19: bare ID
-    # gives 200k denominator; `[1m]` suffix invokes successfully (no `400
-    # invalid beta flag` despite earlier folklore). Haiku 4.5 has no 1M
-    # variant, so no suffix there.
-    env = {
-      CLAUDE_CODE_USE_BEDROCK = "1";
-      # us-east-2 matches the attain AWS profile's default region and where
-      # the rest of the Klover AWS stuff lives. The us.* prefix on the model
-      # IDs is a Geo cross-region inference profile that theoretically
-      # routes across us-east-1/2/west-2 regardless of source region, but
-      # in practice Opus 4.8 model-access propagation differs by region;
-      # us-east-2 is where it's actually live for this account.
-      AWS_REGION = "us-east-2";
-      AWS_PROFILE = "attain";
-      # Primary model. Bare inference profile ID is what ANTHROPIC_MODEL
-      # accepts (settings.json `model` field would want a full ARN).
-      ANTHROPIC_MODEL = "us.anthropic.claude-opus-4-8[1m]";
-      # Alias-resolution targets for opus/sonnet/haiku in /model. The HAIKU
-      # entry also doubles as the small/fast background-task model on
-      # Bedrock (title generation, auto-compaction summaries). Per Bedrock
-      # docs, ANTHROPIC_SMALL_FAST_MODEL is deprecated -- ANTHROPIC_DEFAULT_
-      # HAIKU_MODEL covers both slots when set.
-      ANTHROPIC_DEFAULT_OPUS_MODEL = "us.anthropic.claude-opus-4-8[1m]";
-      ANTHROPIC_DEFAULT_SONNET_MODEL = "us.anthropic.claude-sonnet-4-6[1m]";
-      ANTHROPIC_DEFAULT_HAIKU_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
-    };
-  };
+  # The work profile (~/.claude-work) is a SINGLE config dir whose LLM
+  # backend (AWS Bedrock vs Anthropic OAuth) is a runtime-toggled mode, not
+  # a baked setting. settings.json therefore stays vanilla (identical to
+  # personal); the backend env is exported at launch by the zsh `claude`/
+  # `cw`/`cwa` wrappers and flipped by `cwswitch` (see home-manager/zsh).
+  #
+  # Why env, not settings.json: verified empirically that Claude Code reads
+  # the backend env only at top-level launch, injects it into the process,
+  # and the background-agent daemon + all its spare workers INHERIT it —
+  # they never re-read settings.json (a daemon left running across a 4-7->
+  # 4-8 bump kept serving 4-7). So settings.json env and a launch-time shell
+  # export are equivalent for workers, but only the latter can be toggled
+  # without a rebuild. The model-id/region details now live in the zsh
+  # module's `workBackend` block.
+  settingsJsonWork = mkSettingsJson "work" {};
 
   # Skills dir as a linkFarm derivation: nix-managed skills + the
   # team-status skill at an out-of-store writable path so iteration

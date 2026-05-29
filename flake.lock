@@ -631,11 +631,11 @@
         "quickshell": "quickshell"
       },
       "locked": {
-        "lastModified": 1779392822,
-        "narHash": "sha256-c3yB/ip5kU4hHnXmzqnNaDWtdWh3VfKuY/bVJSByACA=",
+        "lastModified": 1780073757,
+        "narHash": "sha256-3XsV6hvCxo8rkxkOKLYCr9qoPmF/jqyNy7GTWrnbMko=",
         "owner": "joshsymonds",
         "repo": "DankMaterialShell",
-        "rev": "47c7dbc3915fe1e6c520ae22cb80bb4e190aaf68",
+        "rev": "4e10ec5227da88bb158a2aab630e97e0a254f499",
         "type": "github"
       },
       "original": {

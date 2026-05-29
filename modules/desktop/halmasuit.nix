@@ -461,6 +461,25 @@ in
         # dms-colors.json is read at the canonical name colors.json.
         mv dms-colors.json colors.json || :
 
+        # Force DMS's greeter-cache settings.json to render with a
+        # transparent background. halmasuit paints the chrome_hexrain
+        # wallpaper underneath; without this, DMS's SessionData
+        # fallback paints opaque on top and the user's wallpaper is
+        # hidden. The override applies ONLY to the greeter cache,
+        # never to the user's actual ~/.config/DankMaterialShell —
+        # post-login DMS retains its own dim Rectangle (it's the
+        # right look there).
+        if [ -f settings.json ]; then
+          mv settings.json settings.greeter-input.json
+          jq '. + {"greeterTransparentBackground": true}' \
+            settings.greeter-input.json > settings.json
+          rm -f settings.greeter-input.json
+        else
+          # No user settings.json copied — seed a minimal one that
+          # still carries the transparent-background flag.
+          echo '{"greeterTransparentBackground": true}' > settings.json
+        fi
+
         # Hand ownership to the greeter user.
         chown -R halmasuit-greeter:halmasuit-greeter ${cacheDir} || :
       '';

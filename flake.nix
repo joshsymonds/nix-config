@@ -16,6 +16,21 @@
     # `nix flake update nixpkgs-inference`.
     nixpkgs-inference.url = "github:nixos/nixpkgs/nixos-unstable";
 
+    # Side-channel nixpkgs used ONLY to source tailscale. The main lock's
+    # tailscale (currently 1.98.0 on the unstable tip) carries the Linux
+    # MagicDNS regression fixed in 1.98.2: after a network link change
+    # tailscaled drops the `tail*.ts.net` LocalDomain route and points the
+    # suffix at the public ts.net resolver, so MagicDNS names NXDOMAIN
+    # tailnet-wide. On ultraviolet, constant podman veth churn re-triggers
+    # it and the fleet loses the Shimmer MCP endpoint. See
+    # NixOS/nixpkgs#520715. Bumping the *main* lock for the fix isn't worth
+    # it — it drags shimmer's closure onto newer nixpkgs and trips broken
+    # upstream builds — so we ride just this one Go package ahead of the
+    # channel (same idea as nixpkgs-inference). REMOVE this input + the
+    # `tailscale` override in overlays/default.nix once the main lock
+    # carries tailscale >= 1.98.2.
+    nixpkgs-tailscale.url = "github:nixos/nixpkgs/nixos-unstable";
+
     # Flake-parts - modular flake outputs
     flake-parts = {
       url = "github:hercules-ci/flake-parts";
@@ -123,7 +138,10 @@
     };
 
     # CC-Tools - Claude Code smart hooks
-    cc-tools.url = "github:joshsymonds/cc-tools";
+    cc-tools = {
+      url = "github:joshsymonds/cc-tools";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     # dms-claudecode — DMS plugin showing Claude Code subscription usage
     # (5h/7d rate windows, token burn, cost estimates) in the bar. Personal
@@ -282,12 +300,6 @@
     # wired in on gnomon only via nix.settings. Garnix is a fallback
     # for builds the lantian Attic doesn't have yet.
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
-
-    # Google Workspace CLI — official `gws` from Google
-    googleworkspace-cli = {
-      url = "github:googleworkspace/cli";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
 
     # Claude Desktop (the chat app, not Claude Code) for Linux. The repo
     # name says "debian" for historical reasons — the flake itself is

@@ -185,6 +185,22 @@ in {
       system = final.stdenv.hostPlatform.system;
       config.allowUnfree = true;
     };
+
+    # Tailscale pinned to 1.98.2+ (nixpkgs-tailscale side-channel input).
+    # The main lock ships tailscale 1.98.0, whose Linux MagicDNS handling
+    # breaks after a network link change: tailscaled stops registering the
+    # `tail*.ts.net` LocalDomain and routes the suffix to the public ts.net
+    # nameserver (no private records), so every node NXDOMAINs the tailnet's
+    # own MagicDNS names. On ultraviolet, podman veth churn re-triggers this
+    # constantly and the fleet loses the Shimmer MCP endpoint
+    # (https://ultraviolet.tail82223.ts.net:8443). 1.98.2 fixes the
+    # recompute. See NixOS/nixpkgs#520715. REMOVE this override + the input
+    # once the main lock carries tailscale >= 1.98.2.
+    tailscale =
+      (import inputs.nixpkgs-tailscale {
+        system = final.stdenv.hostPlatform.system;
+      })
+      .tailscale;
   };
 
   additions = _: _: {};

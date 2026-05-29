@@ -53,7 +53,6 @@ in {
           gptfdisk
           inputs.agenix.packages.${pkgs.stdenv.hostPlatform.system}.agenix
           inputs.cc-tools.packages.${pkgs.stdenv.hostPlatform.system}.default
-          inputs.googleworkspace-cli.packages.${pkgs.stdenv.hostPlatform.system}.default
           istioctl
           jq
           just

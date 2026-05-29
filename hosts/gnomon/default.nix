@@ -374,7 +374,19 @@ in
       # systemd-boot editor (press 'e' at the boot menu); the journal
       # always retains the messages regardless of console visibility.
       "quiet"
-      "loglevel=3"
+      # loglevel=1 (was 3) catches NOTICE-priority kernel prints like
+      # `random: crng init done` (the RSEED32 message visible at t+1s
+      # in gen-399). At loglevel=3 only EMERG/ALERT/CRIT print to
+      # console; NOTICE (level 5) is dropped on the console but kept
+      # in dmesg + journal + console=ttyS0 for forensics. Combined
+      # with the halmasuit-tty-graphics initrd KDSETMODE→KD_GRAPHICS
+      # ioctl on tty1, the physical screen stays black from BIOS
+      # handoff to halmasuit's first frame. Replaces Plymouth.
+      "loglevel=1"
+      # Initramfs udev quiet (the gen-399 t+6.6s `nvidia: loading
+      # out-of-tree module ...` line) and post-pivot udev quiet.
+      "rd.udev.log_priority=3"
+      "udev.log_level=3"
       "rd.systemd.show_status=false"
       "systemd.show_status=false"
       "vt.global_cursor_default=0"

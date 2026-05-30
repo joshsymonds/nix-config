@@ -1565,11 +1565,11 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1780090562,
-        "narHash": "sha256-/dFGIT9dACYCliuQr8zJFkn9tuUHgRnRoYpUAK4Kx0Y=",
+        "lastModified": 1780163907,
+        "narHash": "sha256-dacaejgIrrmfHANAMMB3oZ6fRcGtkOkxvOZFNXEPe5w=",
         "owner": "joshsymonds",
         "repo": "halmasuit",
-        "rev": "e5f2ac4f8597f0a46aa32e47fc5147ec3aee8231",
+        "rev": "5d52530eea6baf84c46c544f01bbf0000c885afd",
         "type": "github"
       },
       "original": {

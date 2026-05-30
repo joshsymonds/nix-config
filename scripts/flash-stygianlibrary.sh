@@ -166,4 +166,6 @@ exec sudo nix run \
   --flake "$FLAKE_REF" \
   --disk main "$EXPECTED_DISK" \
   --extra-files "$STYGIAN_PRIV" /etc/ssh/ssh_host_ed25519_key \
-  --extra-files "$STYGIAN_PUB"  /etc/ssh/ssh_host_ed25519_key.pub
+  --extra-files "$STYGIAN_PUB"  /etc/ssh/ssh_host_ed25519_key.pub \
+  --extra-files "$STYGIAN_PRIV" /persist/etc/ssh/ssh_host_ed25519_key \
+  --extra-files "$STYGIAN_PUB"  /persist/etc/ssh/ssh_host_ed25519_key.pub

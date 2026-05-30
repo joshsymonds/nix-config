@@ -44,7 +44,12 @@
     ../../modules/desktop/dms-niri.nix
     ../../modules/desktop/halmasuit.nix
     ../../modules/hardware/gpu-nvidia.nix
-    inputs.lanzaboote.nixosModules.lanzaboote
+    # No lanzaboote: stygianlibrary is a test rig, not a daily driver.
+    # Secure Boot setup needs sbctl-provisioned keys that aren't worth
+    # the install-time complexity here. Plain systemd-boot works on any
+    # UEFI without enrollment. If we ever care about Secure Boot on the
+    # rig: provision sbctl keys, copy to /var/lib/sbctl via
+    # --extra-files, then re-enable lanzaboote.
   ];
 
   # ── Performance ──────────────────────────────────────────────────────
@@ -63,25 +68,19 @@
     enable32Bit = false;  # No Steam/Proton on a test rig.
   };
 
-  # ── Bootloader: lanzaboote + systemd-boot fallback ──────────────────
-  # Same shape as gnomon. UKIs go in /boot/EFI/Linux/; sbctl-signed
-  # so Secure Boot works after enrollment. Plain systemd-boot is the
-  # fallback if Secure Boot is off.
+  # ── Bootloader: plain systemd-boot, no Secure Boot ───────────────────
+  # No lanzaboote (see imports above for rationale). systemd-boot
+  # writes UKIs to /boot/EFI/systemd/ on stock NixOS-managed paths;
+  # the firmware boot menu picks them up via canTouchEfiVariables.
   boot.loader = {
     systemd-boot = {
-      enable = lib.mkForce false;  # lanzaboote owns the bootloader
+      enable = true;
       configurationLimit = 8;
     };
     efi = {
       canTouchEfiVariables = true;
       efiSysMountPoint = "/boot";
     };
-  };
-
-  boot.lanzaboote = {
-    enable = true;
-    pkiBundle = "/var/lib/sbctl";
-    configurationLimit = 8;
   };
 
   # ── Kernel: latest CachyOS (matches gnomon) ─────────────────────────
@@ -200,7 +199,6 @@
   };
 
   environment.systemPackages = with pkgs; [
-    sbctl
     tailscale
     # Convenience for iteration on the rig: editor + journal + diff.
     vim

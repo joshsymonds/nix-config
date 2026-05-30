@@ -44,9 +44,6 @@
       "/var/lib/nixos"
       "/var/lib/systemd"
       "/var/lib/tailscale"
-      # lanzaboote signing keys (sbctl) — preserved across @root-blank
-      # rollback so each rebuild doesn't have to re-sign UKIs.
-      "/var/lib/sbctl"
     ];
   };
 }

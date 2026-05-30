@@ -374,15 +374,15 @@ in
       # systemd-boot editor (press 'e' at the boot menu); the journal
       # always retains the messages regardless of console visibility.
       "quiet"
-      # loglevel=1 (was 3) catches NOTICE-priority kernel prints like
-      # `random: crng init done` (the RSEED32 message visible at t+1s
-      # in gen-399). At loglevel=3 only EMERG/ALERT/CRIT print to
-      # console; NOTICE (level 5) is dropped on the console but kept
-      # in dmesg + journal + console=ttyS0 for forensics. Combined
-      # with the halmasuit-tty-graphics initrd KDSETMODE→KD_GRAPHICS
-      # ioctl on tty1, the physical screen stays black from BIOS
-      # handoff to halmasuit's first frame. Replaces Plymouth.
-      "loglevel=1"
+      # Epic #42 R6: previously this set `loglevel=1` here, but NixOS
+      # appends `loglevel=${toString boot.consoleLogLevel}` AFTER the
+      # explicit kernelParams, and consoleLogLevel defaults to 4. The
+      # later occurrence wins (the kernel takes the last `loglevel=N`
+      # token), so the explicit `loglevel=1` had no effect on gen-404
+      # and the RDSEED32 ERR-level message (level 3) reached the
+      # console because 3 < 4. The fix is to set `boot.consoleLogLevel`
+      # directly (below), which becomes the only `loglevel=` token in
+      # the cmdline and makes the suppression actually take effect.
       # Initramfs udev quiet (the gen-399 t+6.6s `nvidia: loading
       # out-of-tree module ...` line) and post-pivot udev quiet.
       "rd.udev.log_priority=3"
@@ -401,6 +401,18 @@ in
       # back to whatever mode firmware actually exposed; no harm done.
       "video=2560x1440"
     ];
+
+    # Epic #42 R6: lower console_loglevel so kernel ERR/WARN (3/4) and
+    # NOTICE (5) don't reach the physical console between BIOS handoff
+    # and halmasuit's first frame. Only EMERG (0) prints at level 1.
+    # NixOS appends `loglevel=${toString boot.consoleLogLevel}` to
+    # kernelParams AFTER the list above — this option is the
+    # authoritative source for the `loglevel=` cmdline token. The
+    # `RDSEED32 is broken. Please update your firmware.` message from
+    # gen-404 (level 3 ERR) was visible because the default of 4 lets
+    # ERR through; 1 suppresses it. journalctl -k still records
+    # everything regardless of console visibility.
+    boot.consoleLogLevel = 1;
 
     # ── it87 fan tach / PWM (out-of-tree) ───────────────────────────────
     # Mainline it87 doesn't recognize the IT8689E/IT8696E chip IDs on

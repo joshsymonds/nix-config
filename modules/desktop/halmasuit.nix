@@ -268,6 +268,14 @@ in
         source   = ./halmasuit-wallpaper.glsl;
         uniforms = wallpaperUniforms;
       };
+
+      # Epic #42 R4: ONE diagnostic boot — enables the env-gated
+      # broker wire-frame trace so the next boot captures the exact
+      # PAM conv byte sequence from the gen-404 signin failure.
+      # REMOVE this line (or set to false) on the very next nix-config
+      # change after analysis lands, per the epic's "one boot then
+      # off" workflow.
+      diagnostic.brokerTraceFrames = true;
     };
 
     # ── PAM service: /etc/pam.d/halmasuit ─────────────────────────
@@ -396,15 +404,19 @@ in
           esac
         }
 
-        # Copy joshsymonds' session/settings/colors if present. Use
-        # `cp -L` here is fine — these paths are NOT user-supplied
-        # (they're hard-coded above and prefix-checked by
-        # is_under_home). Symlinks INTO the DMS dir tree are honored;
-        # symlinks pointing OUT escape the read-only ProtectHome
-        # bind anyway, so root reads nothing it shouldn't.
+        # Copy joshsymonds' session + settings. These are home-manager-
+        # symlinked to /nix/store, so they're deterministically present
+        # whenever the user's HM activation has run.
+        #
+        # Epic #42 R1: dms-colors.json is NOT in this loop anymore. The
+        # gen-404 boot showed it absent at the moment this oneshot ran
+        # (DMS regenerates it lazily on user login), and the previous
+        # `mv ... || :` silently fell through, leaving the greeter to
+        # fall back to Tux. The colors are now baked into nix-config as
+        # `./dms-colors-baked.json` and copied below — no $HOME read,
+        # no silent-fallback.
         for f in /home/joshsymonds/.config/DankMaterialShell/settings.json \
-                 /home/joshsymonds/.local/state/DankMaterialShell/session.json \
-                 /home/joshsymonds/.cache/DankMaterialShell/dms-colors.json ; do
+                 /home/joshsymonds/.local/state/DankMaterialShell/session.json ; do
           if [ -f "$f" ]; then
             cp "$f" "./$(basename "$f")"
           fi
@@ -458,8 +470,15 @@ in
           fi
         fi
 
-        # dms-colors.json is read at the canonical name colors.json.
-        mv dms-colors.json colors.json || :
+        # Epic #42 R1: write the baked DMS colors snapshot.
+        # DMS's Quickshell greeter reads `colors.json` from the cache
+        # dir; baking the content removes the prior dependency on
+        # `~/.cache/DankMaterialShell/dms-colors.json` (which DMS only
+        # writes at user-login time and was absent during the gen-404
+        # cold boot). `set -eu` is in effect — a missing baked file
+        # fails closed, surfacing the regression instead of silently
+        # producing a default-themed greeter.
+        cp ${./dms-colors-baked.json} ./colors.json
 
         # Force DMS's greeter-cache settings.json to render with a
         # transparent background. halmasuit paints the chrome_hexrain

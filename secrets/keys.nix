@@ -23,6 +23,11 @@ let
     gnomon = "age1m0fk0lmddud0k6k6mpql73egwysadfvxuqv0kga24d4pls9fff4suaevff";
     bluedesert = "age1ycyy70v27m56f9pq3ry86s5tvwpdehhupc48g3d5raj28qk079xsyhtt7g";
     echelon = "age1gpv6ehlyxflqp0glz6kkh4c3tn57kl73u59wcc2l8vsuj3m6u3lsz7t3fs";
+    # halmasuit test rig — Thunderbolt-attached NVMe, hardware-identical
+    # to gnomon. Key generated 2026-05-30 by scripts/flash-stygianlibrary.sh
+    # workflow; the corresponding SSH host private key was bundled into
+    # the install via disko-install --extra-files at first install.
+    stygianlibrary = "age1650w8v9v6gyand79qnwl08ukyxypfkfe5lsqegx2hw4zjye9e33s6h84nx";
   };
 
   # User keys (from ~/.ssh/<key>.pub, converted via ssh-to-age)
@@ -49,6 +54,7 @@ let
       hosts.gnomon
       hosts.bluedesert
       hosts.echelon
+      hosts.stygianlibrary
     ]
     ++ allUserKeys;
 in {
@@ -63,6 +69,7 @@ in {
   # User-context secrets (home-manager agenix) — all user keys, no host keys.
   gnomon = [hosts.gnomon] ++ allUserKeys;
   bluedesert = [hosts.bluedesert] ++ allUserKeys;
+  stygianlibrary = [hosts.stygianlibrary] ++ allUserKeys;
   joshsymonds = allUserKeys;
 
   # Hosts that participate in the household atticd cache (pull + push).

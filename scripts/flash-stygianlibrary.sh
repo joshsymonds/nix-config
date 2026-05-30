@@ -32,6 +32,20 @@ EXPECTED_SERIAL="253645803652"
 EXPECTED_MODEL="WD_BLACK SN7100 500GB"
 FLAKE_REF=".#stygianlibrary"
 
+# Pre-generated SSH host key. Must be present BEFORE the install so
+# disko-install can copy it into the new system via --extra-files,
+# which is what gives agenix an identity to decrypt secrets during
+# the very first activation. Generated with:
+#   ssh-keygen -t ed25519 -N '' -C 'root@stygianlibrary' \
+#     -f /tmp/stygian-keys/ssh_host_ed25519_key
+# Public key's age form was added to secrets/keys.nix as
+# `hosts.stygianlibrary`, secrets/shared/atticd-push-token.age was
+# re-encrypted to include it (manual rekey via gnomon's agekey since
+# agenix --rekey was silently failing).
+STYGIAN_KEY_DIR="/tmp/stygian-keys"
+STYGIAN_PRIV="$STYGIAN_KEY_DIR/ssh_host_ed25519_key"
+STYGIAN_PUB="$STYGIAN_KEY_DIR/ssh_host_ed25519_key.pub"
+
 red()    { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 green()  { printf '\033[32m%s\033[0m\n' "$*"; }
 yellow() { printf '\033[33m%s\033[0m\n' "$*"; }
@@ -45,6 +59,22 @@ abort() {
 
 bold "stygianlibrary preflight — marriage-safety checks"
 echo
+
+# ── Check 0: pre-generated SSH host key present ──────────────────────
+# disko-install will copy these into the new root via --extra-files
+# so the first-boot activation has an SSH host key (and therefore an
+# agenix identity) immediately.
+if [ ! -f "$STYGIAN_PRIV" ] || [ ! -f "$STYGIAN_PUB" ]; then
+  red "Check 0 FAILED: SSH host key not pre-generated"
+  red "  Expected: $STYGIAN_PRIV"
+  red "            $STYGIAN_PUB"
+  red ""
+  red "Generate with:"
+  red "  mkdir -p $STYGIAN_KEY_DIR"
+  red "  ssh-keygen -t ed25519 -N '' -C 'root@stygianlibrary' -f $STYGIAN_PRIV"
+  abort "no SSH host key"
+fi
+green "Check 0 OK: stygian SSH host key present"
 
 # ── Check 1: expected by-id path exists ───────────────────────────────
 if [ ! -e "$EXPECTED_DISK" ]; then
@@ -134,4 +164,6 @@ exec sudo nix run \
   --extra-experimental-features 'nix-command flakes' \
   github:nix-community/disko#disko-install -- \
   --flake "$FLAKE_REF" \
-  --disk main "$EXPECTED_DISK"
+  --disk main "$EXPECTED_DISK" \
+  --extra-files "$STYGIAN_PRIV" /etc/ssh/ssh_host_ed25519_key \
+  --extra-files "$STYGIAN_PUB"  /etc/ssh/ssh_host_ed25519_key.pub

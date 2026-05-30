@@ -122,10 +122,16 @@ echo "  Flake ref:   $FLAKE_REF"
 echo
 
 # disko-install builds the closure, partitions per disko.nix, mounts,
-# and runs nixos-install. The flake's disko config hardcodes the disk
-# path, so no --disk override is needed (and supplying one would be
-# wrong anyway).
+# and runs nixos-install. It requires `--disk NAME PATH` for each
+# disk in the config (it strips the hardcoded device path and
+# substitutes the CLI arg). Safety: the script has already verified
+# above that EXPECTED_DISK exists with EXPECTED_SERIAL on a
+# Thunderbolt transport — passing it now is the same path the disko
+# config hardcodes, just routed through disko-install's required
+# CLI form. The btrfs-impermanence module names this disk "main"
+# (see modules/disko/btrfs-impermanence.nix:107).
 exec sudo nix run \
   --extra-experimental-features 'nix-command flakes' \
   github:nix-community/disko#disko-install -- \
-  --flake "$FLAKE_REF"
+  --flake "$FLAKE_REF" \
+  --disk main "$EXPECTED_DISK"

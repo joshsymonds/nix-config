@@ -483,6 +483,32 @@
         homeModule = ./home-manager/hosts/vermissian.nix;
       };
 
+      # stygianlibrary — halmasuit test rig on a Thunderbolt-attached
+      # WD_BLACK SN7100 in an ACASIS TBU405AIR enclosure. Hardware-
+      # identical to gnomon (9800X3D + 5070 Ti + X870) so that
+      # NVIDIA Wayland-EGL behavior reproduces faithfully. Boots on
+      # husband's PC; we SSH in over tailscale to iterate on
+      # halmasuit without disrupting gnomon as a daily driver.
+      # Same halmasuit overlay as gnomon — module.nix on
+      # stygianlibrary resolves halmasuit packages through this
+      # overlay just as gnomon does.
+      stygianlibrary = {
+        system = "x86_64-linux";
+        modules = [
+          ./hosts/stygianlibrary
+          ./hosts/common.nix
+          inputs.agenix.nixosModules.default
+          ({outputs, ...}: {
+            nixpkgs.overlays = [
+              outputs.overlays.gaming
+              outputs.overlays.ml
+              inputs.halmasuit.overlays.default
+            ];
+          })
+        ];
+        homeModule = ./home-manager/hosts/stygianlibrary.nix;
+      };
+
       # testhost — fixture for the installer VM test. Minimal consumer of
       # modules/disko/btrfs-impermanence.nix. Deliberately does NOT include
       # hosts/common.nix, agenix, or privatePackages — must work with no

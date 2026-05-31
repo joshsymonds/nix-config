@@ -1,20 +1,14 @@
-# stygianlibrary home-manager — halmasuit test rig.
+# stygianlibrary home-manager — VFIO host for halmasuit test VMs.
 #
-# Strips gnomon.nix down to JUST what the test rig needs:
-#   - Desktop base (zsh, kitty, niri integration via halmasuit, etc.)
-#   - SSH-able workflow
-#   - Git + transcripts so debugging via Claude works
+# Stygianlibrary itself is a HEADLESS host. The NVIDIA GPU is bound
+# to vfio-pci at boot and passed to a guest VM where halmasuit runs.
+# The host needs zsh + git + libvirt CLI + SSH; no desktop, no DMS,
+# no niri.
 #
-# Drops gnomon-specific:
-#   - claude-code/aggregator (DMS bar, gnomon-only by assertion)
-#   - vesktop / spicetify / qbittorrent / calendar / ntfy-notify
-#     (daily-driver apps; not needed on a test rig)
-#
-# Reuses the desktop-x86_64-linux base because halmasuit IS a
-# desktop on this rig.
+# We use the headless base — same shape as ultraviolet / echelon.
 {pkgs, ...}: {
   imports = [
-    ../desktop-x86_64-linux.nix
+    ../headless-x86_64-linux.nix
     ../claude-code/transcripts.nix
   ];
 

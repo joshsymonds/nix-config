@@ -37,17 +37,15 @@
     "thunderbolt"
   ];
 
-  # NVIDIA modules in initrd — same rationale as gnomon: avoid the
-  # simpledrm → nvidia-drm modeset flash. Compositor (halmasuit)
-  # takes DRM master with the right driver loaded from frame 0.
+  # NO NVIDIA modules in initrd: stygianlibrary is a VFIO host. The
+  # NVIDIA GPU is bound to vfio-pci at boot (see kernelParams in
+  # default.nix) and never touched by the host kernel. The guest VM
+  # claims it via PCIe passthrough.
+  #
+  # Thunderbolt initrd module IS needed: root lives on a TB-attached
+  # NVMe and the TB controller has to enumerate the device before the
+  # rootfs mount can find it.
   boot.initrd.kernelModules = [
-    "nvidia"
-    "nvidia_modeset"
-    "nvidia_uvm"
-    "nvidia_drm"
-    # Thunderbolt PCIe tunnel; needs to enumerate the TB hub before
-    # the cryptsetup / mount of root, since root lives on a
-    # TB-attached NVMe.
     "thunderbolt"
   ];
 

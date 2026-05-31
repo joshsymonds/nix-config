@@ -41,15 +41,10 @@
   imports = [
     ./disko.nix
     ./hardware-configuration.nix
-    ../../modules/desktop/dms-niri.nix
-    ../../modules/desktop/halmasuit.nix
-    ../../modules/hardware/gpu-nvidia.nix
-    # No lanzaboote: stygianlibrary is a test rig, not a daily driver.
-    # Secure Boot setup needs sbctl-provisioned keys that aren't worth
-    # the install-time complexity here. Plain systemd-boot works on any
-    # UEFI without enrollment. If we ever care about Secure Boot on the
-    # rig: provision sbctl keys, copy to /var/lib/sbctl via
-    # --extra-files, then re-enable lanzaboote.
+    # NO halmasuit, NO dms-niri, NO gpu-nvidia on the host: stygianlibrary
+    # is a VFIO HOST that passes the entire NVIDIA GPU to a guest VM
+    # where halmasuit runs. The host must NOT claim the GPU.
+    # No lanzaboote (test rig, no sensitive data; saves install complexity).
   ];
 
   # ── Performance ──────────────────────────────────────────────────────
@@ -60,13 +55,58 @@
   nixpkgs.hostPlatform = "x86_64-linux";
   nixpkgs.config.allowUnfree = true;
 
-  # ── GPU ─────────────────────────────────────────────────────────────
-  # Same NVIDIA setup as gnomon. The whole point of this rig is to
-  # reproduce gnomon's NVIDIA-specific behaviour.
-  hardware.gpu-nvidia = {
-    enable = true;
-    enable32Bit = false;  # No Steam/Proton on a test rig.
-  };
+  # ── VFIO: bind NVIDIA RTX 5070 Ti to vfio-pci at boot ────────────────
+  # The whole point of stygianlibrary as a halmasuit test rig: pass
+  # the 5070 Ti to a guest VM where halmasuit runs against real NVIDIA
+  # hardware, reproducing gnomon's behavior bit-for-bit. The host
+  # itself never uses the GPU — it's headless from the GPU's
+  # perspective, displaying only its TTY via simpledrm/fbcon on the
+  # motherboard's framebuffer (or nothing at all once VFIO claims).
+  #
+  # IOMMU group 13 on gnomon contains:
+  #   10de:2c05 — NVIDIA GB203 (RTX 5070 Ti) VGA controller
+  #   10de:22e9 — NVIDIA GB203 HDMI audio controller
+  # Both must be bound to vfio-pci (audio function is in the same
+  # group — kernel won't let us pass just one). The IDs are identical
+  # on hardware-identical stygianlibrary.
+  boot.kernelParams = [
+    "amd_pstate=active"
+    "mitigations=auto"
+    "acpi_enforce_resources=lax"
+
+    # IOMMU: required for VFIO. amd_iommu=on for AMD; iommu=pt
+    # (pass-through) skips DMA-remapping for host devices (faster +
+    # avoids quirks). Has zero effect on the passed-through guest
+    # devices.
+    "amd_iommu=on"
+    "iommu=pt"
+
+    # Bind the NVIDIA GPU + audio to vfio-pci BEFORE the nvidia driver
+    # has a chance to claim them. This is the key VFIO directive on
+    # single-GPU passthrough systems.
+    "vfio-pci.ids=10de:2c05,10de:22e9"
+
+    "quiet"
+    "rd.udev.log_priority=3"
+    "udev.log_level=3"
+    "rd.systemd.show_status=false"
+    "systemd.show_status=false"
+    "vt.global_cursor_default=0"
+    "fbcon=nodefer"
+  ];
+
+  # Load vfio-pci in initrd so it claims the NVIDIA device before
+  # any in-tree driver gets a chance. Order matters: vfio_pci AFTER
+  # vfio_iommu_type1, both BEFORE anything that would touch the GPU.
+  boot.initrd.kernelModules = [
+    "vfio_pci"
+    "vfio"
+    "vfio_iommu_type1"
+  ];
+
+  # Add joshsymonds to libvirtd / kvm groups so they can drive VMs
+  # without sudo every time. Mirror's NixOS's standard libvirtd UX.
+  users.users.joshsymonds.extraGroups = ["libvirtd" "kvm"];
 
   # ── Bootloader: plain systemd-boot, no Secure Boot ───────────────────
   # No lanzaboote (see imports above for rationale). systemd-boot
@@ -90,25 +130,19 @@
   boot.kernelPackages =
     inputs.nix-cachyos-kernel.legacyPackages.x86_64-linux.linuxPackages-cachyos-latest;
 
-  # ── Kernel cmdline: mirror gnomon's quiet-boot policy ────────────────
-  boot.kernelParams = [
-    "amd_pstate=active"
-    "mitigations=auto"
-    "acpi_enforce_resources=lax"
-    "quiet"
-    "rd.udev.log_priority=3"
-    "udev.log_level=3"
-    "rd.systemd.show_status=false"
-    "systemd.show_status=false"
-    "vt.global_cursor_default=0"
-    "fbcon=nodefer"
-    # Native panel mode hint (matches gnomon's primary display).
-    "video=2560x1440"
-  ];
+  # ── Virtualization stack: libvirt + qemu for VFIO VMs ────────────────
+  # OVMF (UEFI firmware for the guest) is bundled with qemu now and
+  # doesn't need the explicit `ovmf` submodule that older NixOS had.
+  virtualisation.libvirtd = {
+    enable = true;
+    qemu = {
+      package = pkgs.qemu_kvm;
+      runAsRoot = false;
+    };
+    onShutdown = "shutdown";
+  };
 
-  # Epic #42 R6: consoleLogLevel=1 so kernel ERR/WARN don't reach the
-  # console between BIOS handoff and halmasuit's first frame.
-  boot.consoleLogLevel = 1;
+  programs.virt-manager.enable = true;
 
   # ── Thunderbolt: auto-authorize so root NVMe enumerates ──────────────
   # The ACASIS TBU405AIR enclosure must be Thunderbolt-authorized
@@ -200,6 +234,8 @@
 
   environment.systemPackages = with pkgs; [
     tailscale
+    qemu_kvm
+    virt-viewer
     # Convenience for iteration on the rig: editor + journal + diff.
     vim
     git

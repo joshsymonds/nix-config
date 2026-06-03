@@ -40,20 +40,21 @@
   # daemon. `cwswitch` does both. cm/cw/cwa are the explicit overrides.
   #
   # bedrock<->anthropic model equivalents (the only backend-specific bit in
-  # a job). Bedrock IDs carry the us.* Geo cross-region inference-profile
-  # prefix; the [1m] suffix is a client-side 1M-context hint (stripped
-  # before the request); haiku has no 1M variant and a -v1:0 Bedrock suffix.
+  # a job). Bedrock IDs are now my per-user application-inference-profile
+  # ARNs (cost governance: the us.*/global.* system profiles are denied per
+  # principal). The [1m] suffix is a client-side 1M-context hint (stripped
+  # before the request); haiku has no 1M variant.
   workModelPairs = [
     {
-      bedrock = "us.anthropic.claude-opus-4-8[1m]";
+      bedrock = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/wi0gw73wk7ce[1m]";
       anthropic = "claude-opus-4-8[1m]";
     }
     {
-      bedrock = "us.anthropic.claude-sonnet-4-6[1m]";
+      bedrock = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/ooy1deiriv8c[1m]";
       anthropic = "claude-sonnet-4-6[1m]";
     }
     {
-      bedrock = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
+      bedrock = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/zx3bqoa6lbav";
       anthropic = "claude-haiku-4-5-20251001";
     }
   ];
@@ -64,10 +65,10 @@
     CLAUDE_CODE_USE_BEDROCK = "1";
     AWS_REGION = "us-east-2";
     AWS_PROFILE = "attain";
-    ANTHROPIC_MODEL = "us.anthropic.claude-opus-4-8[1m]";
-    ANTHROPIC_DEFAULT_OPUS_MODEL = "us.anthropic.claude-opus-4-8[1m]";
-    ANTHROPIC_DEFAULT_SONNET_MODEL = "us.anthropic.claude-sonnet-4-6[1m]";
-    ANTHROPIC_DEFAULT_HAIKU_MODEL = "us.anthropic.claude-haiku-4-5-20251001-v1:0";
+    ANTHROPIC_MODEL = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/wi0gw73wk7ce[1m]";
+    ANTHROPIC_DEFAULT_OPUS_MODEL = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/wi0gw73wk7ce[1m]";
+    ANTHROPIC_DEFAULT_SONNET_MODEL = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/ooy1deiriv8c[1m]";
+    ANTHROPIC_DEFAULT_HAIKU_MODEL = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/zx3bqoa6lbav";
   };
   # zsh array body: KEY='VAL' ... (single-quoted so the [1m] brackets are
   # not treated as a glob when the array literal is parsed).

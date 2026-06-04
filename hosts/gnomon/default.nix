@@ -15,7 +15,6 @@ in
       ./qbittorrent-vpn.nix
       ./shutdown-hardening.nix
       ../../modules/desktop/dms-niri.nix
-      ../../modules/desktop/halmasuit.nix
       ../../modules/hardware/gpu-nvidia.nix
       ../../modules/services/inference-stack.nix
       ../../modules/services/keyd.nix
@@ -155,12 +154,15 @@ in
     # ── Desktop session (niri + DMS, see modules/desktop/dms-niri.nix) ──
     desktop.dms-niri.enable = true;
 
-    # ── Display manager: halmasuit (Phase B) ────────────────────────────
-    # Replaces the upstream greetd + DMS greeter chain with halmasuit
-    # (Linux system compositor) owning DRM master from initramfs through
-    # shutdown. Eliminates the kernel-handoff, greeter→session, and
-    # shutdown flashes. See modules/desktop/halmasuit.nix.
-    desktop.halmasuit.enable = true;
+    # ── Display manager: DankGreeter via greetd ─────────────────────────
+    # The greetd-based DMS greeter. halmasuit (the system compositor that
+    # owns DRM master initramfs→shutdown to eliminate boot flashes) is
+    # being validated on the stygianlibrary test rig; until that work
+    # lands, gnomon boots the conventional greetd greeter so it isn't
+    # pinned behind in-progress halmasuit debugging. Re-enable halmasuit
+    # by re-importing modules/desktop/halmasuit.nix and setting
+    # desktop.halmasuit.enable = true (and flipping greeter.enable off).
+    desktop.dms-niri.greeter.enable = true;
 
     # ── Keyboard: Caps Lock → Escape, everywhere ────────────────────────
     # services.xserver.xkb drives /etc/X11/xkb + XKB_DEFAULT_* env vars,

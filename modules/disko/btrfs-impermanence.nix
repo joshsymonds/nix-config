@@ -52,6 +52,18 @@ in {
   options.btrfs-impermanence = {
     enable = lib.mkEnableOption "btrfs subvolume layout + impermanence rollback";
 
+    rollback.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Wipe @root back to @root-blank in initrd on every boot. Disable on
+        disposable rigs where persisting @root is preferable to wiping it
+        (e.g. a VFIO test host whose /var/lib/libvirt VM definitions should
+        survive reboots). Disabling keeps the subvolume layout and /persist
+        bind-mounts; it only drops the initrd rollback service.
+      '';
+    };
+
     device = lib.mkOption {
       type = lib.types.str;
       example = "/dev/disk/by-id/nvme-...";
@@ -141,7 +153,7 @@ in {
     # Requires a one-time @root-blank snapshot taken manually at install:
     # `btrfs subvolume snapshot -r /mnt/@root /mnt/@root-blank`.
     boot.initrd.systemd.enable = true;
-    boot.initrd.systemd.services.rollback-root = {
+    boot.initrd.systemd.services.rollback-root = lib.mkIf cfg.rollback.enable {
       description = "Roll @root back to @root-blank";
       wantedBy = ["initrd.target"];
       after = lib.optional cfg.luks.enable "systemd-cryptsetup@${cfg.luks.name}.service";
@@ -155,7 +167,14 @@ in {
           else "/dev/disk/by-label/nixos";
       in ''
         mkdir -p /mnt
-        mount -o subvol=/ ${device} /mnt
+        # -t btrfs is load-bearing on the non-LUKS path. With luks.enable
+        # the service is ordered after systemd-cryptsetup@, which has already
+        # forced the btrfs module to load (and the mapper node to exist) by
+        # the time we mount. Without LUKS there is no such barrier, so an
+        # untyped `mount` runs before the btrfs module is loaded and fails
+        # with "no valid filesystem type specified". Naming the type makes
+        # mount request_module("btrfs") itself, removing the race.
+        mount -t btrfs -o subvol=/ ${device} /mnt
         btrfs subvolume list -o /mnt/@root | cut -f9 -d' ' | while read sv; do
           btrfs subvolume delete "/mnt/$sv"
         done

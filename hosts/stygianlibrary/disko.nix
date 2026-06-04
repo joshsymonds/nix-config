@@ -27,6 +27,15 @@
   btrfs-impermanence = {
     enable = true;
 
+    # No @root wipe on this rig. stygianlibrary is a disposable VFIO test
+    # host with no sensitive data (hence luks.enable = false below): we
+    # WANT @root to persist so libvirt VM definitions in /var/lib/libvirt
+    # survive reboots while we iterate on the passed-through halmasuit
+    # guest. Impermanence here would only churn — wiping the very VM state
+    # we're testing against. Keeping the subvolume layout + /persist
+    # bind-mounts, dropping only the initrd rollback service.
+    rollback.enable = false;
+
     # ACASIS TBU405AIR Thunderbolt enclosure holding WD_BLACK SN7100
     # serial 253645803652. The kernel exposes the drive inside the
     # enclosure as an NVMe device; the by-id path is identical

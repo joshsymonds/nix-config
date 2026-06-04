@@ -18,18 +18,29 @@ in {
   imports = [
     inputs.niri-flake.nixosModules.niri
     inputs.dms.nixosModules.dank-material-shell
-    # DMS's greeter NixOS module was the upstream-greetd-based login
-    # path. On gnomon the halmasuit module (modules/desktop/halmasuit.nix)
-    # replaces it — halmasuit IS the display manager and forks
-    # DankGreeter directly as its Wayland client; there is no
-    # greetd daemon and no nested niri compositor for the greeter.
-    # Hosts using dms-niri but NOT halmasuit can re-add this import
-    # locally.
+    # DMS's greeter NixOS module — the greetd-based DankGreeter login.
+    # Gated below by desktop.dms-niri.greeter.enable. (gnomon ran
+    # halmasuit as its display manager for a stretch; that lives in
+    # modules/desktop/halmasuit.nix and, when enabled, replaces this
+    # greetd path. With halmasuit off, this is gnomon's login.)
+    inputs.dms.nixosModules.greeter
     ./niri.nix
   ];
 
   options.desktop.dms-niri = {
-    enable = lib.mkEnableOption "niri (via niri-flake) + DankMaterialShell post-login session";
+    enable = lib.mkEnableOption "niri (via niri-flake) + DankMaterialShell + DankGreeter desktop session";
+
+    greeter.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Enable DankGreeter (the Material You-style login screen via
+        greetd). Disable to fall back to a plain tty login. The tty
+        escape hatch (Ctrl+Alt+F2 → standard NixOS console login) is
+        always available regardless. Mutually exclusive with
+        desktop.halmasuit.enable, which owns the greeter itself when on.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -72,5 +83,28 @@ in {
     # let DMS own the registration. polkitd itself (security.polkit.enable,
     # also set by niri-flake) stays — only the redundant KDE agent goes.
     systemd.user.services.niri-flake-polkit.enable = lib.mkForce false;
+
+    # DankGreeter — graphical login via greetd. Recovery escape hatch
+    # is the tty (Ctrl+Alt+F2 → standard NixOS console login).
+    programs.dank-material-shell.greeter = lib.mkIf cfg.greeter.enable {
+      enable = true;
+      compositor.name = "niri";
+      # DankGreeter gates its FIDO/U2F login flow behind the DMS setting
+      # greeterEnableU2f, which defaults to false (GreetdSettings.qml).
+      # With it false, maybeAutoStartExternalAuth() early-returns and the
+      # greeter only ever shows the password field — even though
+      # /etc/pam.d/greetd already has pam_u2f sufficient+first (via
+      # services.yubikey-auth) and the key is enrolled. Feed a
+      # Nix-generated settings.json turning it on so the greeter
+      # auto-starts the touch prompt at login and falls back to password.
+      # greetd.preStart copies each configFiles entry into the greeter's
+      # cache dir by basename, so the path must end in /settings.json —
+      # writeTextDir gives a store dir containing exactly that name.
+      configFiles = [
+        "${pkgs.writeTextDir "settings.json" (builtins.toJSON {
+          greeterEnableU2f = true;
+        })}/settings.json"
+      ];
+    };
   };
 }

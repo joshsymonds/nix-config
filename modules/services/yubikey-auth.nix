@@ -6,11 +6,8 @@
 #   • sudo            — touch key to elevate in a terminal
 #   • polkit-1        — GUI privilege prompts (NetworkManager, mounts,
 #                       and 1Password's "Unlock using Linux desktop login")
-#   • halmasuit       — DankGreeter boot login via halmasuit (the
-#                       system compositor that replaced greetd; the
-#                       PAM service file is /etc/pam.d/halmasuit, not
-#                       /etc/pam.d/greetd, because greetd-the-daemon
-#                       is gone)
+#   • greetd          — DankGreeter boot login (DMS's greetd-based
+#                       greeter; PAM service file is /etc/pam.d/greetd)
 #   • dankshell-u2f   — DMS (DankMaterialShell) screen lock
 #
 # DMS reads `/etc/pam.d/dankshell-u2f` by literal path and probes the
@@ -49,7 +46,7 @@
   cfg = config.services.yubikey-auth;
 in {
   options.services.yubikey-auth = {
-    enable = lib.mkEnableOption "YubiKey U2F PAM auth for sudo/polkit/halmasuit/DMS lock";
+    enable = lib.mkEnableOption "YubiKey U2F PAM auth for sudo/polkit/greetd/DMS lock";
   };
 
   config = lib.mkIf cfg.enable {
@@ -69,10 +66,9 @@ in {
     security.pam.services = {
       sudo.u2f.enable = true;
       polkit-1.u2f.enable = true;
-      # halmasuit's PAM service (formerly greetd's, before halmasuit
-      # replaced the daemon). The PAM service file itself is
-      # declared in modules/desktop/halmasuit.nix.
-      halmasuit.u2f.enable = true;
+      # greetd's PAM service (/etc/pam.d/greetd), created by DMS's
+      # greetd-based greeter module. Wires pam_u2f into the boot login.
+      greetd.u2f.enable = true;
       dankshell-u2f.u2f.enable = true;
     };
 

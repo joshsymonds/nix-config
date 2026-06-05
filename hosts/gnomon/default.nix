@@ -114,6 +114,9 @@ in
       openWebUI.port = 8081;
       models = let
         base = "https://huggingface.co/nohurry/gemma-4-26B-A4B-it-heretic-GUFF/resolve/main";
+        # Dense Gemma 4 12B, Heretic-abliterated by igorls (0/100 genuine
+        # refusals at KL 0.0284). Single-file GGUFs; llama.cpp reads them direct.
+        base12 = "https://huggingface.co/igorls/gemma-4-12B-it-heretic-GGUF/resolve/main";
         # Sampling params from Google's Gemma 4 partner recommendation
         # (model card + Unsloth docs).
         samplerFlags = [
@@ -146,6 +149,15 @@ in
         };
         "gemma4-heretic-q5" = {
           ggufUrl = "${base}/gemma-4-26b-a4b-it-heretic.q5_k_m.gguf";
+          flags = commonFlags ++ ["--fit-ctx" "32768"];
+        };
+        # Dense 12B at Q8_0 (~12 GB) — fits fully in 16 GB VRAM, all on-GPU.
+        # Configured like the 26B entries: NO forced thinking. Heretic
+        # abliterates the *direct* (non-thinking) response path, so
+        # non-thinking is its reliably-uncensored mode; with thinking engaged
+        # the chain-of-thought can re-derive a refusal. Roomy 32k ctx.
+        "gemma4-12b-heretic-q8" = {
+          ggufUrl = "${base12}/gemma-4-12B-it-heretic-Q8_0.gguf";
           flags = commonFlags ++ ["--fit-ctx" "32768"];
         };
       };

@@ -144,6 +144,45 @@
 
   programs.virt-manager.enable = true;
 
+  # ── VFIO test-runner access (Epic #45) ───────────────────────────────
+  # stygianlibrary doubles as the halmasuit NVIDIA test runner: it runs
+  # `nix run .#checks…<test>.driver` (the non-sandboxed nixosTest driver)
+  # with the 5070 Ti passed through to the guest. Two host prerequisites
+  # the default libvirtd setup does NOT grant the invoking user:
+  #
+  #   1. The IOMMU-group device node /dev/vfio/<group> is created
+  #      root:root 0600 — only root can open it. The runner user
+  #      (joshsymonds, already in `kvm`) needs it. A udev rule hands the
+  #      vfio nodes to the kvm group, 0660. Scoped to the `vfio`
+  #      subsystem so it touches only /dev/vfio/* (the group nodes +
+  #      /dev/vfio/vfio), nothing else.
+  #   2. qemu with vfio-pci pins ALL guest RAM (the device can DMA
+  #      anywhere), so the process needs RLIMIT_MEMLOCK >= guest memory.
+  #      The default soft/hard memlock is 8 MiB — far below a multi-GiB
+  #      guest. Raise it to unlimited for the kvm group (pam_limits
+  #      applies it to the SSH login session the driver runs under).
+  #
+  # Both are runner-only conveniences; neither weakens the host's own
+  # boundary (the GPU is already vfio-bound and unused by the host).
+  services.udev.extraRules = ''
+    SUBSYSTEM=="vfio", OWNER="root", GROUP="kvm", MODE="0660"
+  '';
+
+  security.pam.loginLimits = [
+    {
+      domain = "@kvm";
+      type = "hard";
+      item = "memlock";
+      value = "unlimited";
+    }
+    {
+      domain = "@kvm";
+      type = "soft";
+      item = "memlock";
+      value = "unlimited";
+    }
+  ];
+
   # ── Thunderbolt: auto-authorize so root NVMe enumerates ──────────────
   # The ACASIS TBU405AIR enclosure must be Thunderbolt-authorized
   # before the NVMe inside it appears as a block device. Without this

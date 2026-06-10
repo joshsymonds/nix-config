@@ -89,6 +89,34 @@ in {
     programs.dank-material-shell.greeter = lib.mkIf cfg.greeter.enable {
       enable = true;
       compositor.name = "niri";
+      # Without customConfig, the dms-greeter wrapper generates a niri
+      # config hardcoding `debug { keep-max-bpc-unchanged }` — a flag
+      # niri removed (upstream f9f43d82, in our fork since the 2026-06-10
+      # sync). New niri rejects the whole generated config, falls back to
+      # defaults, and never runs the spawn-at-startup that launches the
+      # greeter UI: black screen at login. This is the wrapper's base
+      # config verbatim minus the dead flag (the wrapper still appends
+      # the quickshell spawn line itself). Drop once the DMS fork's
+      # dms-greeter script no longer emits the flag.
+      compositor.customConfig = ''
+        hotkey-overlay {
+            skip-at-startup
+        }
+
+        environment {
+            DMS_RUN_GREETER "1"
+        }
+
+        gestures {
+           hot-corners {
+             off
+           }
+        }
+
+        layout {
+          background-color "#000000"
+        }
+      '';
       # DankGreeter gates its FIDO/U2F login flow behind the DMS setting
       # greeterEnableU2f, which defaults to false (GreetdSettings.qml).
       # With it false, maybeAutoStartExternalAuth() early-returns and the

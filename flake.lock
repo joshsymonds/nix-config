@@ -2019,11 +2019,11 @@
     "niri-unstable_2": {
       "flake": false,
       "locked": {
-        "lastModified": 1781108912,
-        "narHash": "sha256-tDBHQv3YonYWZPaYunM1aM/+nNGwjN1Qm6Xl11scIT4=",
+        "lastModified": 1781111158,
+        "narHash": "sha256-vhXduP4Z24pHnDfixccSYZZGNBGWVbugmh9QqajyJig=",
         "owner": "joshsymonds",
         "repo": "niri",
-        "rev": "641237bf1f9cc3630015af3ff248f7b899213492",
+        "rev": "b47b677f7ff626180d8ff4a4c71114f26123e0aa",
         "type": "github"
       },
       "original": {

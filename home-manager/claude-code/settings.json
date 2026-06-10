@@ -2,7 +2,7 @@
   "companyAnnouncements": [],
   "viewMode": "default",
   "model": "claude-fable-5",
-  "effortLevel": "xhigh",
+  "effortLevel": "high",
   "preferredNotifChannel": "notifications_disabled",
   "permissions": {
     "defaultMode": "bypassPermissions"

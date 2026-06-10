@@ -203,6 +203,18 @@ in
     # so a future re-enable just needs flipping this back to true.
     hardware.bluetooth.enable = false;
 
+    # ── Wi-Fi: blacklisted ──────────────────────────────────────────────
+    # Gnomon is permanently on ethernet (r8169); the onboard rtw89 card
+    # was auto-binding regardless. Driver-only blacklist — mac80211 and
+    # cfg80211 stay loadable here (unlike the servers) so a future
+    # re-enable is just deleting these lines. Bluetooth on the same combo
+    # card uses btusb, not these modules, so this doesn't block a BT
+    # re-enable either.
+    boot.blacklistedKernelModules = [
+      "rtw89_8922ae"
+      "rtw89_pci"
+    ];
+
     # i2c-dev for DDC/CI brightness control over the external Dell U2724Ds.
     # DMS's Go backend (core/internal/server/brightness/ddc.go in the
     # DankMaterialShell flake input) talks i2c directly via /dev/i2c-* — no

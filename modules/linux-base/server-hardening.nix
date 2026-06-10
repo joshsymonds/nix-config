@@ -14,5 +14,18 @@
   boot.blacklistedKernelModules = [
     "bluetooth"
     "btusb"
+
+    # Wi-Fi — every server runs wired (igc/i40e/r8169); onboard Wi-Fi
+    # cards were auto-binding anyway (observed: mt7921e + mac80211 live
+    # on vermissian, cfg80211 on ultraviolet). mac80211 has remote
+    # frame-parsing CVE history (CVE-2022-41674, CVE-2022-42719/20/21
+    # beacon-parsing series). Blacklist the stack plus every driver
+    # family present in fleet hardware, current and plausible.
+    "cfg80211"
+    "mac80211"
+    "mt7921e" # vermissian onboard (MediaTek MT7921)
+    "iwlwifi" # Intel boxes (ultraviolet/bluedesert/echelon)
+    "rtw89_pci" # Realtek family, defensive
+    "rtw89_8922ae"
   ];
 }

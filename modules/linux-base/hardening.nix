@@ -111,6 +111,12 @@
     "firewire-ohci"
     "firewire-sbp2"
 
+    # Parallel port — dead legacy hardware, no host has (or will have)
+    # a parallel port device. Observed auto-loading on ultraviolet.
+    "parport"
+    "parport_pc"
+    "lp"
+
     # Specific surfaces
     "ksmbd" # kernel SMB server, multiple 2025 CVEs
     "vivid" # V4L2 test driver, LPE history

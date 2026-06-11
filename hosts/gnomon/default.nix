@@ -120,26 +120,38 @@ in
         # Sampling params from Google's Gemma 4 partner recommendation
         # (model card + Unsloth docs).
         samplerFlags = [
-          "--temp" "1.0"
-          "--top-p" "0.95"
-          "--top-k" "64"
-          "--min-p" "0.0"
+          "--temp"
+          "1.0"
+          "--top-p"
+          "0.95"
+          "--top-k"
+          "64"
+          "--min-p"
+          "0.0"
         ];
         # Common runtime flags. --fit on auto-picks the offload split.
         # --mlock + --no-mmap forces all weight pages resident in RAM,
         # which matters for the CPU-side experts in MoE partial offload.
         commonFlags =
           [
-            "--fit" "on"
-            "--fit-target" "256"
-            "-np" "1"
-            "-fa" "on"
+            "--fit"
+            "on"
+            "--fit-target"
+            "256"
+            "-np"
+            "1"
+            "-fa"
+            "on"
             "--mlock"
             "--no-mmap"
-            "-b" "2048"
-            "-ub" "2048"
-            "-ctk" "q8_0"
-            "-ctv" "q8_0"
+            "-b"
+            "2048"
+            "-ub"
+            "2048"
+            "-ctk"
+            "q8_0"
+            "-ctv"
+            "q8_0"
           ]
           ++ samplerFlags;
       in {

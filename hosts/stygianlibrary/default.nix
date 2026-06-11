@@ -200,14 +200,14 @@
   networking = {
     hostName = "stygianlibrary";
     useDHCP = true;
-    networkmanager.enable = false;  # systemd-networkd-managed; DHCP via networkd
+    networkmanager.enable = false; # systemd-networkd-managed; DHCP via networkd
     useNetworkd = true;
     firewall = {
       enable = true;
       trustedInterfaces = ["tailscale0"];
       allowedTCPPorts = [22];
       allowedUDPPorts = [config.services.tailscale.port];
-      checkReversePath = "loose";  # tailscale forwarded packets
+      checkReversePath = "loose"; # tailscale forwarded packets
     };
   };
 

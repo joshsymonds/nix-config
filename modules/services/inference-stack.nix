@@ -134,16 +134,22 @@ in {
           # Drop idle backends to free VRAM after some inactivity. 5 min
           # mirrors what Ollama's OLLAMA_KEEP_ALIVE defaulted to.
           healthCheckTimeout = 60;
-          models = lib.mapAttrs (name: m: {
-            cmd = lib.concatStringsSep " " ([
-              llamaServer
-              "--host" cfg.swap.host
-              "--port" "\${PORT}"
-              "-m" "${modelsDir}/${name}.gguf"
-            ] ++ m.flags);
-            # llama-swap kills idle backends after ttl seconds. 300s = 5m.
-            ttl = 300;
-          }) cfg.models;
+          models =
+            lib.mapAttrs (name: m: {
+              cmd = lib.concatStringsSep " " ([
+                  llamaServer
+                  "--host"
+                  cfg.swap.host
+                  "--port"
+                  "\${PORT}"
+                  "-m"
+                  "${modelsDir}/${name}.gguf"
+                ]
+                ++ m.flags);
+              # llama-swap kills idle backends after ttl seconds. 300s = 5m.
+              ttl = 300;
+            })
+            cfg.models;
         };
       };
 

@@ -246,6 +246,12 @@
     # Savecraft — game save parser + MCP server
     savecraft.url = "github:joshsymonds/savecraft.gg";
 
+    # Mentat — personal assistant daemon (Claude as the brain)
+    mentat = {
+      url = "github:joshsymonds/mentat";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # nix-gaming-edge — proton-cachyos (the SLR x86_64-v3 build). Replaces
     # proton-ge-bin on gnomon. Cache (tokidoki) is wired in on gnomon only —
     # the only host that consumes any of this.
@@ -424,6 +430,7 @@
           ./hosts/common.nix
           inputs.agenix.nixosModules.default
           inputs.savecraft.nixosModules.pob-server
+          inputs.mentat.nixosModules.default
           ({outputs, ...}: {
             nixpkgs.overlays = [outputs.overlays.privatePackages];
           })

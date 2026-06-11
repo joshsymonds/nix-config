@@ -40,41 +40,19 @@
   # daemon. `cwswitch` does both. cm/cw/cwa are the explicit overrides.
   #
   # bedrock<->anthropic model equivalents (the only backend-specific bit in
-  # a job). Bedrock IDs are now my per-user application-inference-profile
-  # ARNs (cost governance: the us.*/global.* system profiles are denied per
-  # principal). The [1m] suffix is a client-side 1M-context hint (stripped
-  # before the request); haiku has no 1M variant.
-  workModelPairs = [
-    {
-      bedrock = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/wi0gw73wk7ce[1m]";
-      anthropic = "claude-opus-4-8[1m]";
-    }
-    {
-      bedrock = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/ooy1deiriv8c[1m]";
-      anthropic = "claude-sonnet-4-6[1m]";
-    }
-    {
-      bedrock = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/zx3bqoa6lbav";
-      anthropic = "claude-haiku-4-5-20251001";
-    }
-  ];
-  # Bedrock launch env. us-east-2 is where the attain account has Opus 4.8
-  # model access. In anthropic mode NONE of these are exported, so Claude
-  # Code falls back to the OAuth account's normal model selection.
-  bedrockEnv = {
-    CLAUDE_CODE_USE_BEDROCK = "1";
-    AWS_REGION = "us-east-2";
-    AWS_PROFILE = "attain";
-    ANTHROPIC_MODEL = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/wi0gw73wk7ce[1m]";
-    ANTHROPIC_DEFAULT_OPUS_MODEL = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/wi0gw73wk7ce[1m]";
-    ANTHROPIC_DEFAULT_SONNET_MODEL = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/ooy1deiriv8c[1m]";
-    ANTHROPIC_DEFAULT_HAIKU_MODEL = "arn:aws:bedrock:us-east-2:113934766313:application-inference-profile/zx3bqoa6lbav";
-  };
-  # zsh array body: KEY='VAL' ... (single-quoted so the [1m] brackets are
-  # not treated as a glob when the array literal is parsed).
-  bedrockEnvZsh = lib.concatStringsSep " " (lib.mapAttrsToList (k: v: "${k}='${v}'") bedrockEnv);
-  toAnthropicMap = builtins.toJSON (builtins.listToAttrs (map (p: lib.nameValuePair p.bedrock p.anthropic) workModelPairs));
-  toBedrockMap = builtins.toJSON (builtins.listToAttrs (map (p: lib.nameValuePair p.anthropic p.bedrock) workModelPairs));
+  # a job) live in an agenix secret: JSON of tier -> {anthropic, bedrock}
+  # with tiers fable/opus/sonnet/haiku. The bedrock side is my per-user
+  # application-inference-profile ARNs (cost governance: the us.*/global.*
+  # system profiles are denied per principal). The ARNs embed the Attain
+  # AWS account id and this repo is public, so they are never written into
+  # the repo or the nix store — the launch wrapper and cwswitch read the
+  # decrypted file at runtime. The secret stores BARE ids/ARNs; the [1m]
+  # suffix (client-side 1M-context hint, stripped before the request) is
+  # applied in code. haiku has no 1M variant. us-east-2 is where the attain
+  # account's profiles live. In anthropic mode NONE of the backend env is
+  # exported, so Claude Code falls back to the OAuth account's normal model
+  # selection.
+  bedrockModelsFile = config.age.secrets."claude-bedrock-models".path;
 
   cwswitch = pkgs.writeShellApplication {
     name = "cwswitch";
@@ -87,8 +65,18 @@
       work="$HOME/.claude-work"
       pointer="$work/.backend"
       jobs="$work/jobs"
-      to_anthropic='${toAnthropicMap}'
-      to_bedrock='${toBedrockMap}'
+
+      # Model maps come from the agenix secret at runtime (bare ids/ARNs;
+      # any [1m] suffix on a job's --model is preserved across the flip).
+      # Double quotes: the agenix path contains a literal ''${XDG_RUNTIME_DIR}
+      # that must expand at runtime.
+      models_file="${bedrockModelsFile}"
+      if [ ! -r "$models_file" ]; then
+        echo "cwswitch: model map $models_file unreadable — is the claude-bedrock-models agenix secret deployed?" >&2
+        exit 1
+      fi
+      to_anthropic=$(jq -c '[.[] | {key: .bedrock, value: .anthropic}] | from_entries' "$models_file")
+      to_bedrock=$(jq -c '[.[] | {key: .anthropic, value: .bedrock}] | from_entries' "$models_file")
 
       cur=bedrock
       [ -f "$pointer" ] && cur=$(tr -d '[:space:]' < "$pointer")
@@ -120,10 +108,12 @@
         for sj in "$jobs"/*/state.json; do
           [ -f "$sj" ] || continue
           if grep -q '"state": *"working"' "$sj"; then active=$((active + 1)); fi
-          # Warn (don't mangle) on any --model value we don't recognise.
+          # Warn (don't mangle) on any --model value we don't recognise
+          # (lookup is on the base id, with any [1m] suffix stripped).
           while IFS= read -r m; do
             [ -n "$m" ] || continue
-            if ! printf '%s' "$map" | jq -e --arg k "$m" 'has($k)' >/dev/null 2>&1; then
+            base=''${m%"[1m]"}
+            if ! printf '%s' "$map" | jq -e --arg k "$base" 'has($k)' >/dev/null 2>&1; then
               echo "warn: $(basename "$(dirname "$sj")"): unrecognised model '$m' left unchanged" >&2
               unknown=$((unknown + 1))
             fi
@@ -132,8 +122,12 @@
           tmp="$sj.cwswitch.$$"
           if jq --argjson m "$map" '
             .respawnFlags |= ( . as $f | [ range(0;length) | . as $i |
-              if $i > 0 and $f[$i-1] == "--model" and ($m[$f[$i]] != null)
-              then $m[$f[$i]] else $f[$i] end ] )
+              if $i > 0 and $f[$i-1] == "--model"
+              then ( $f[$i] as $v
+                   | ($v | sub("\\[1m\\]$"; "")) as $base
+                   | (if ($v | endswith("[1m]")) then "[1m]" else "" end) as $sfx
+                   | if $m[$base] != null then ($m[$base] + $sfx) else $v end )
+              else $f[$i] end ] )
           ' "$sj" > "$tmp" 2>/dev/null; then
             cmp -s "$sj" "$tmp" || changed=$((changed + 1))
             mv "$tmp" "$sj"
@@ -166,6 +160,14 @@
     '';
   };
 in {
+  # tier -> {anthropic, bedrock} model map for the claude-work Bedrock
+  # backend. Encrypted because the bedrock side is application-inference-
+  # profile ARNs embedding the Attain AWS account id, and this repo is
+  # public.
+  age.secrets."claude-bedrock-models" = {
+    file = ../../secrets/user/claude-bedrock-models.age;
+  };
+
   home.packages = [cwswitch];
 
   home.sessionVariables =
@@ -252,7 +254,28 @@ in {
         local mode=bedrock
         [[ -r $HOME/.claude-work/.backend ]] && mode=$(<$HOME/.claude-work/.backend)
         local -a pfx=( CLAUDE_CONFIG_DIR=$HOME/.claude-work )
-        [[ $mode == bedrock ]] && pfx+=( ${bedrockEnvZsh} )
+        if [[ $mode == bedrock ]]; then
+          # ARNs come from the agenix secret at launch (see the workBackend
+          # block in this module's `let`). Fable is the primary; [1m] is the
+          # client-side 1M-context hint (haiku has no 1M variant).
+          local models="${bedrockModelsFile}"
+          if [[ -r $models ]]; then
+            local fable opus sonnet haiku
+            IFS=$'\t' read -r fable opus sonnet haiku < <(
+              jq -r '[.fable.bedrock, .opus.bedrock, .sonnet.bedrock, .haiku.bedrock] | @tsv' "$models"
+            )
+            pfx+=(
+              CLAUDE_CODE_USE_BEDROCK=1 AWS_REGION=us-east-2 AWS_PROFILE=attain
+              ANTHROPIC_MODEL="''${fable}[1m]"
+              ANTHROPIC_DEFAULT_FABLE_MODEL="''${fable}[1m]"
+              ANTHROPIC_DEFAULT_OPUS_MODEL="''${opus}[1m]"
+              ANTHROPIC_DEFAULT_SONNET_MODEL="''${sonnet}[1m]"
+              ANTHROPIC_DEFAULT_HAIKU_MODEL="$haiku"
+            )
+          else
+            print -u2 "claude-work: $models unreadable (claude-bedrock-models agenix secret not deployed?) — launching WITHOUT Bedrock env; this session will use the Anthropic OAuth backend despite .backend=bedrock."
+          fi
+        fi
         command env "''${pfx[@]}" claude "$@"
       }
       claude() {

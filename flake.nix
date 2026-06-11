@@ -562,7 +562,19 @@
           config.allowUnfree = true;
         };
         extraSpecialArgs = mkSpecialArgs system // {inherit hostname;};
-        modules = [inputs.agenix.homeManagerModules.default module];
+        # niri-flake's HM config module (programs.niri.settings +
+        # config.lib.niri.actions, which DMS's HM module dereferences).
+        # On NixOS hosts, niri-flake's nixosModule injects this into
+        # home-manager.sharedModules for every user; these standalone
+        # configs have to import it themselves for parity. Linux only,
+        # matching the injection's reach — and inert on hosts that never
+        # set programs.niri.settings. NOT in the desktop home layer:
+        # that file is shared with the NixOS path, where a second
+        # (differently-keyed) import collides with the injected one.
+        modules =
+          [inputs.agenix.homeManagerModules.default]
+          ++ lib.optionals (system == "x86_64-linux") [inputs.niri-flake.homeModules.config]
+          ++ [module];
       };
   in
     flake-parts.lib.mkFlake {inherit inputs;} {

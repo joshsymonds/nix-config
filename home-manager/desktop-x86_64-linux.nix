@@ -30,6 +30,14 @@ in {
     inputs.dms.homeModules.niri
   ];
 
+  # Our niri fork (niri-flake input override, branch josh/integration).
+  # Under NixOS this is redundant — modules/desktop/dms-niri.nix pins the
+  # same package and niri-flake's HM injection mkForces it through — but
+  # the standalone homeConfigurations path otherwise falls back to
+  # niri-stable, whose config validator rejects fork/unstable settings at
+  # build time.
+  programs.niri.package = inputs.niri-flake.packages.${pkgs.stdenv.hostPlatform.system}.niri-unstable;
+
   # Tell GTK we prefer dark colors. Electron on Linux derives
   # `nativeTheme.shouldUseDarkColors` from GtkSettings'
   # `gtk-application-prefer-dark-theme` property — there is no equivalent

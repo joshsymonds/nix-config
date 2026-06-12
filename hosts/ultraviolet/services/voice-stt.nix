@@ -2,6 +2,12 @@
 # Assist pipeline is one client; future non-HA sinks speak the same Wyoming
 # TCP protocol directly). parakeet-tdt-0.6b-v2 int8 on CPU: more accurate
 # than whisper large-v3 (6.05% vs 7.44% WER) at ~0.3-0.6s per utterance.
+#
+# Wyoming engine registry on ultraviolet (plain TCP, no HA dependency):
+#   tcp://ultraviolet:10300  STT  parakeet-tdt-0.6b-v2 int8 (this file)
+#   tcp://ultraviolet:10200  TTS  piper en_US-amy-medium    (default.nix)
+#   tcp://ultraviolet:10201  TTS  piper en_US-fedcomp-medium, voice-v1 interim
+#                                 (default.nix; Majel bake-off winner replaces it)
 {
   pkgs,
   lib,

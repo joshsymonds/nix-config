@@ -1786,6 +1786,26 @@
         "type": "github"
       }
     },
+    "mentat": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1781158190,
+        "narHash": "sha256-2nweTspr4Q321StwMCvqOXpDVjw9bhEM/+/Dz/A4By8=",
+        "owner": "joshsymonds",
+        "repo": "mentat",
+        "rev": "16a10cc25e7a54f58dc9a2168515e876c1453a5f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "joshsymonds",
+        "repo": "mentat",
+        "type": "github"
+      }
+    },
     "millennium": {
       "inputs": {
         "abseil-src": "abseil-src",
@@ -2894,6 +2914,7 @@
         "home-manager": "home-manager_2",
         "impermanence": "impermanence",
         "lanzaboote": "lanzaboote",
+        "mentat": "mentat",
         "niri-flake": "niri-flake_2",
         "niri-float-sticky": "niri-float-sticky",
         "nix-cachyos-kernel": "nix-cachyos-kernel",

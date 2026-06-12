@@ -44,6 +44,7 @@ in
       ./services/invidious.nix
       ./services/redlib.nix
       ./services/shimmer.nix
+      ./services/mentat.nix
       ./services/inbox-zero.nix
       ./services/inbox-zero-alerts.nix
       ./services/download-proxies.nix

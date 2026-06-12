@@ -34,13 +34,16 @@
       Restart = "always";
       RestartSec = "5s";
 
-      # Loopback only: HA runs on this host; nothing else needs it yet.
+      # 0.0.0.0:10300 — drop-in replacement for the old wyoming-faster-whisper
+      # (base-int8) service: HA's Wyoming integration entry already points at
+      # this host:port, and LAN exposure keeps the engine sink-neutral for
+      # future non-HA clients. Firewall opens the port below.
       ExecStart = lib.concatStringsSep " " [
         (lib.getExe pkgs.wyoming-onnx-asr)
         "--model parakeet-v2"
         "--cpu"
         "--threads 4"
-        "--uri tcp://127.0.0.1:10300"
+        "--uri tcp://0.0.0.0:10300"
       ];
 
       StateDirectory = "voice-stt";
@@ -52,4 +55,6 @@
       ProtectHome = true;
     };
   };
+
+  networking.firewall.allowedTCPPorts = [10300];
 }

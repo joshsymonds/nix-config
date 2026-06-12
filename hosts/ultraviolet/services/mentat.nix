@@ -32,6 +32,11 @@
     reminder.enable = true; # 09:00 daily
   };
 
+  # Restart on secret rotation: the .age ciphertext store path changes on
+  # re-encryption (the module can't do this itself — it only sees the
+  # constant /run/agenix runtime path).
+  systemd.services.mentatd.restartTriggers = [config.age.secrets."mentat-env".file];
+
   # Tailnet ingress: mentatd binds loopback only (the API is
   # unauthenticated by design); `tailscale serve` is the only way in.
   # HTTPS on 8485 — 8443 is shimmer's. NEVER `tailscale funnel`.
@@ -40,11 +45,17 @@
   # first; we order after it) and re-adding the same mapping is
   # idempotent. Resetting here would clobber shimmer's mapping when this
   # unit restarts on its own.
+  #
+  # partOf: shimmer's reset wipes ALL serve mappings, and a shimmer restart
+  # re-runs it (Requires= propagation from shimmer-tailnet). Without restart
+  # propagation here, the 8485 mapping silently dies; partOf + after means
+  # this unit re-runs second and re-adds it.
   systemd.services.mentat-tailnet-serve = {
     description = "Tailscale serve front for mentatd";
     after = ["tailscaled.service" "mentatd.service" "shimmer-tailnet-serve.service"];
     requires = ["tailscaled.service" "mentatd.service"];
     wants = ["shimmer-tailnet-serve.service"];
+    partOf = ["shimmer-tailnet-serve.service"];
     wantedBy = ["multi-user.target"];
 
     serviceConfig = {

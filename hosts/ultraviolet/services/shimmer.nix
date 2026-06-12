@@ -164,8 +164,9 @@
     # Wait for the local listener before applying serve config so the unit
     # doesn't race shimmer-tailnet's startup. `serve reset` first so the
     # config is idempotent across port/target changes (a prior mapping on a
-    # different port would otherwise linger). shimmer is the only serve
-    # consumer on this node, so a full reset is safe.
+    # different port would otherwise linger). The reset wipes EVERY serve
+    # mapping on the node — other consumers (mentat-tailnet-serve) must be
+    # partOf this unit so they re-run after it and re-add theirs.
     script = ''
       for i in $(seq 1 30); do
         if ${pkgs.iproute2}/bin/ss -ltn 2>/dev/null | grep -q '127.0.0.1:8001'; then

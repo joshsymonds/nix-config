@@ -110,6 +110,11 @@
 
   # Ensure directories exist with proper permissions
   systemd = {
+    # The completed-downloads bind source lives on the NFS automount. Without
+    # this ordering, a container started before the share is reachable binds
+    # the bare local directory and silently fills the root disk.
+    services.podman-sabnzbd.unitConfig.RequiresMountsFor = "/mnt/video/sabnzbd/completed";
+
     tmpfiles.rules = [
       # Gluetun data directory (server list cache, etc.)
       "d /var/lib/gluetun 0700 root root -"
@@ -121,10 +126,6 @@
       "d /var/lib/sabnzbd/scripts 0755 1000 1000 -"
       "d /var/cache/sabnzbd 0755 1000 1000 -"
       "d /var/cache/sabnzbd/incomplete 0755 1000 1000 -"
-
-      # Completed downloads on NFS
-      "d /mnt/video/sabnzbd 0755 1000 1000 -"
-      "d /mnt/video/sabnzbd/completed 0755 1000 1000 -"
     ];
 
     # Deploy post-processing script for SABnzbd

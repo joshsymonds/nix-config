@@ -5,8 +5,21 @@
 {
   pkgs,
   config,
+  inputs,
   ...
 }: {
+  # The HA conversation agent bridging Assist to the daemon. Ships in the
+  # mentat repo (ha/custom_components/mentat); merges with the components
+  # declared in home-assistant.nix.
+  services.home-assistant.customComponents = [
+    (pkgs.buildHomeAssistantComponent {
+      owner = "joshsymonds";
+      domain = "mentat";
+      version = "0.1.0";
+      src = "${inputs.mentat}/ha";
+    })
+  ];
+
   # MORGEN_API_KEY, NTFY_URL, NTFY_TOKEN, CLAUDE_CODE_OAUTH_TOKEN
   # (the OAuth token is minted interactively via `claude setup-token`).
   age.secrets."mentat-env" = {

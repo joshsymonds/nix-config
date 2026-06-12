@@ -33,6 +33,16 @@ export PROTON_USE_WAYLAND="${PROTON_USE_WAYLAND:-1}"
 export PROTON_ENABLE_NVAPI="${PROTON_ENABLE_NVAPI:-1}"
 export PROTON_HIDE_NVIDIA_GPU="${PROTON_HIDE_NVIDIA_GPU:-0}"
 
+# Hide the Raphael iGPU from D3D translation layers. With the 9800X3D's
+# iGPU active, RADV reports its shared GTT memory as *dedicated* VRAM
+# (~22 GB — more than the 5070 Ti's 16 GB), and engines whose adapter
+# picker weighs dedicated VRAM (UE5: Satisfactory chose the 0-output
+# iGPU over the dGPU this way) end up software-rendering on 2 CUs.
+# Filtering here is narrower than blacklisting amdgpu: the iGPU stays
+# alive as a fallback display output and VCN encode block.
+export VKD3D_FILTER_DEVICE_NAME="${VKD3D_FILTER_DEVICE_NAME:-NVIDIA}"
+export DXVK_FILTER_DEVICE_NAME="${DXVK_FILTER_DEVICE_NAME:-NVIDIA}"
+
 # ── gamescope (opt-in) ───────────────────────────────────────────────────
 #
 # Gamescope is opt-in via `PROTON_GAMESCOPE_ENABLE=1 %command%` in the

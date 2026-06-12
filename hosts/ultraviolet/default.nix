@@ -177,6 +177,18 @@ in
           voice = "en_US-amy-medium";
           uri = "tcp://0.0.0.0:10200";
         };
+        # Star Trek Federation computer voice (github:sparky-vision/fedcomp),
+        # the voice-v1 interim until the Majel bake-off picks a winner. Voice
+        # files live at /var/lib/wyoming/piper/en_US-fedcomp-medium.onnx[.json]
+        # (installed by hand from the repo's Dropbox archive, dataset field
+        # fixed to match the voice name; artifact policy keeps voice models
+        # out of repos). lengthScale 1.1 per the author's pacing guidance.
+        "fedcomp" = {
+          enable = true;
+          voice = "en_US-fedcomp-medium";
+          lengthScale = 1.1;
+          uri = "tcp://0.0.0.0:10201";
+        };
       };
 
       tailscale = {

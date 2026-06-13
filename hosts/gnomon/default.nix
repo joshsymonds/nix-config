@@ -73,6 +73,21 @@ in
     hardware.gpu-nvidia = {
       enable = true;
       enable32Bit = true; # Steam/Proton, 32-bit Wine
+      # 595.71.05 (this nixpkgs pin's production) faults under D3D12
+      # PSO-compile load: Xid 109 "CTX SWITCH TIMEOUT" on GameThread
+      # killed Satisfactory's device twice in a row (2026-06-12),
+      # matching ValveSoftware/Proton#7580 reports blaming the 595
+      # branch. Pin the 610.43.02 new-feature branch (hashes from
+      # nixpkgs master) — where active Blackwell work lands. Fallbacks
+      # if unstable: 595.80 production, 580.159.04 previous-stable.
+      # Delete once the flake's nixpkgs ships a fixed production branch.
+      package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
+        version = "610.43.02";
+        sha256_64bit = "sha256-MDSgVLtM33dS/43CclZMsQVROAS/9TU4lFkBsWyndGM=";
+        openSha256 = "sha256-hP5NVZZ4vGsACHLmUDKq4uckpd/kn1GxCSYnnJfAuBs=";
+        settingsSha256 = "sha256-0YAhufRgjDW+uR+kjaTb154fibpcDw8QowfrucoZsKE=";
+        persistencedSha256 = "sha256-Whgv9X+v2fRhzliOl2LzltY9v1SxDafFfv3IUPqj/hk=";
+      };
       # cudaArches deliberately left at module default (empty list).
       # Pinning to ["12.0"] (Blackwell-only) was technically tighter
       # but every CUDA package's hash diverged from cache.nixos-cuda.org

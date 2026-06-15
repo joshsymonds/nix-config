@@ -155,16 +155,11 @@
     throughput.
   '';
 
-  # Caps Lock → Escape (host-local: the laptop has its own keyboard
-  # config, this is gnomon's external-keyboard preference).
-  programs.niri.settings.input.keyboard.xkb.options = "caps:escape";
-
-  # Propagate to XKB_DEFAULT_OPTIONS so nested compositors (gamescope
-  # for Steam/Proton games) rebuild their own xkb keymap with caps:escape
-  # too — they don't inherit niri's keymap, just the env vars. niri's
-  # `environment` block lands in niri's own env AND gets imported into
-  # the systemd user manager, so Steam-launched scopes pick it up.
-  programs.niri.settings.environment.XKB_DEFAULT_OPTIONS = "caps:escape";
+  # Caps Lock → Escape is handled by keyd at the evdev layer (see
+  # modules/services/keyd.nix, capslock = esc in [main]), NOT xkb. An
+  # xkb-level caps:escape only rewrites the keysym, which raw-input games
+  # (Steam/Proton) bypass — so it never reached them. keyd rewrites the
+  # actual key event upstream of niri, gamescope, and the games.
 
   # keyd app.conf — per-app modifier overrides read by keyd-application-
   # mapper (set up by modules/services/keyd.nix at the system level).
@@ -262,6 +257,31 @@
     [firefox]
     meta+shift.rightbrace = C-tab
     meta+shift.leftbrace = C-S-tab
+
+    # Steam games (class steam_app_<id>): drop the global Alt overload.
+    # [main] binds leftalt/rightalt to overload(alt, noop), which adds
+    # tap/hold disambiguation latency to every Alt press and makes a bare
+    # Alt tap emit nothing — both wrong for games that use Alt as an
+    # ordinary modifier or keypress. Reset to plain Alt while a Steam game
+    # window is focused.
+    #
+    # Extend the Cmd→Ctrl translation to the scroll wheel. The global
+    # [meta] layer only rewrites keyboard keys (Cmd+C → Ctrl+C); the wheel
+    # passed through as raw Super+scroll, which Windows games ignore (their
+    # bindings expect Ctrl+wheel — e.g. Satisfactory's vertical/build
+    # adjustments). keyd grabs the mouse via `[ids] *` and routes incoming
+    # wheel events through the binding system as scrollup/scrolldown/etc.
+    # (daemon.c DEV_MOUSE_SCROLL → process_keypress), so binding them in
+    # [meta] makes Cmd+wheel emit Ctrl+wheel while a game is focused. Kept
+    # game-scoped, not global [meta], so Cmd+scroll doesn't become
+    # accidental Ctrl+scroll zoom in Firefox and other desktop apps.
+    [steam_app_*]
+    leftalt = leftalt
+    rightalt = rightalt
+    meta.scrollup = C-scrollup
+    meta.scrolldown = C-scrolldown
+    meta.scrollleft = C-scrollleft
+    meta.scrollright = C-scrollright
   '';
 
   # Restart keyd-application-mapper when app.conf changes. The mapper

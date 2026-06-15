@@ -114,6 +114,17 @@ in {
         settings.main = {
           leftalt = "overload(alt, noop)";
           rightalt = "overload(alt, noop)";
+
+          # Caps Lock → Escape at the evdev layer. Done in keyd, not via
+          # xkb (services.xserver.xkb / niri xkb.options), because keyd
+          # rewrites the emitted key event itself — so the remap reaches
+          # apps that read raw scancodes (Steam/Proton games) and bypass
+          # the xkb keymap. An xkb-level caps:escape only changes the
+          # keysym and silently does nothing for those games. keyd grabs
+          # all keyboards before greetd starts (multi-user.target vs
+          # graphical.target), so caps→esc is live at the greeter, in
+          # Wayland, on TTYs, and in games alike.
+          capslock = "esc";
         };
 
         settings.meta = {

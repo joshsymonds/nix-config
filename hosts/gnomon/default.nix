@@ -203,11 +203,13 @@ in
     # desktop.halmasuit.enable = true (and flipping greeter.enable off).
     desktop.dms-niri.greeter.enable = true;
 
-    # ── Keyboard: Caps Lock → Escape, everywhere ────────────────────────
-    # services.xserver.xkb drives /etc/X11/xkb + XKB_DEFAULT_* env vars,
-    # which greetd and Wayland compositors (incl. niri's defaults) pick up.
-    # console.useXkbConfig propagates the same to TTYs (Ctrl+Alt+F1..F6).
-    services.xserver.xkb.options = "caps:escape";
+    # ── Keyboard: Caps Lock → Escape ────────────────────────────────────
+    # Handled by keyd at the evdev layer (modules/services/keyd.nix,
+    # capslock = esc in [main]), not xkb — keyd rewrites the key event
+    # itself so the remap reaches scancode-reading games, which an
+    # xkb-level caps:escape silently misses. keyd starts before greetd
+    # (multi-user vs graphical target), so caps→esc covers the greeter,
+    # Wayland, TTYs, and games.
     console.useXkbConfig = true;
 
     # ── HID device access for WebHID configurators ──────────────────────

@@ -3068,11 +3068,11 @@
         "nixpkgs": "nixpkgs_13"
       },
       "locked": {
-        "lastModified": 1779643750,
-        "narHash": "sha256-znz6Z5yRTZE7gdHzV7AEHltzE8WIzSGnKSpp4xXLXP8=",
+        "lastModified": 1781540054,
+        "narHash": "sha256-Th9Y+7dyWqYeVKsV+tdwSb9MaCuXMWPMZVxqtFH/VkA=",
         "owner": "joshsymonds",
         "repo": "savecraft.gg",
-        "rev": "5c51460bdbb68c19c76d59c0abac19caa63d6ce5",
+        "rev": "49e032ce007c48177964f210050324ecb3e9da8a",
         "type": "github"
       },
       "original": {

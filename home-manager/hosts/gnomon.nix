@@ -13,7 +13,16 @@
     ../claude-code/transcripts.nix
     ../claude-code/aggregator.nix
     ../ntfy-notify
+    ../savecraftd
   ];
+
+  # Watch this gaming box's game saves (Satisfactory et al.) and push parsed
+  # state to Savecraft. Links to the production account; the daemon logs a
+  # pairing URL on first run.
+  services.savecraftd = {
+    enable = true;
+    server = "production";
+  };
 
   home.packages = with pkgs; [
     # Gaming auxiliaries (Steam itself is system-level via programs.steam)

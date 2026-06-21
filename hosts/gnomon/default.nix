@@ -40,12 +40,15 @@ in
       }
     ];
 
-    # ── Keyboard: Mac-style Cmd modifier on the Q6 HE ───────────────────
-    # leftmeta/rightmeta (physical Cmd in Mac mode) act as Ctrl globally,
-    # so Cmd+C/V/T/W/etc. fire the Linux Ctrl+letter shortcuts in Firefox,
-    # Slack, Electron apps, and so on. Kitty has a per-app exception so it
-    # receives raw Super (and Ctrl+C/D in the terminal stays as untouched
-    # interrupt/EOF). See modules/services/keyd.nix for the why.
+    # ── Keyboard: static Mac-style modifier remap on the Q6 HE ──────────
+    # Physical bottom-left in Mac mode is [Ctrl][Option][Cmd][Space]. keyd
+    # statically relabels the emitted modifier per key: corner Ctrl key →
+    # Alt, Option → Super, Cmd → Ctrl. So Cmd+C/V/T/W fire the Linux
+    # Ctrl+letter shortcuts in Firefox/Electron natively (no translation
+    # layer), Option drives niri (Option+M = Spotify), and bare-Proton games
+    # get clean Ctrl (Cmd key) + Alt (corner). kitty swaps Alt↔Ctrl back for
+    # itself via app.conf so the terminal keeps interrupt on the corner and
+    # copy on the command key. See modules/services/keyd.nix for the why.
     services.keyd-mac-style = {
       enable = true;
       users = ["joshsymonds"];

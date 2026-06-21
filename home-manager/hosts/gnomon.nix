@@ -161,127 +161,32 @@
   # (Steam/Proton) bypass — so it never reached them. keyd rewrites the
   # actual key event upstream of niri and the games.
 
-  # keyd app.conf — per-app modifier overrides read by keyd-application-
-  # mapper (set up by modules/services/keyd.nix at the system level).
+  # keyd app.conf — per-app overrides read by keyd-application-mapper
+  # (set up by modules/services/keyd.nix). The global remap there is
+  # static: corner Ctrl key → Alt, Option → Super, Cmd → Ctrl. That keeps
+  # the GUI desktop Mac-correct (Cmd+C → Ctrl+C natively) and gives
+  # bare-Proton games clean Ctrl (Cmd key) + Alt (corner) with niri living
+  # only on the Super keysym (the Option key), which games never press.
   #
-  # Two non-obvious mechanics:
+  # kitty needs the *terminal* to stay Mac-correct, so we swap Alt↔Ctrl
+  # back inside kitty only: the corner key returns to Ctrl (so Ctrl+C
+  # SIGINT, Ctrl+D EOF and every other control char work wholesale — no
+  # per-key send_key remapping), and the Cmd key becomes Alt so kitty's own
+  # alt+c/alt+v/alt+t binds copy/paste/new-tab. Alt is the only free
+  # terminal lane: Ctrl is SIGINT, Super is niri. Option stays Super
+  # (unstated → inherits its [main] binding).
   #
-  # 1. The system config translates Cmd+key → Ctrl+key via rules in the
-  #    predefined [meta] layer (a `:M` modifier layer that leftmeta/
-  #    rightmeta activate implicitly — that activation is hardcoded in
-  #    keyd's modifier handler, NOT a [main] binding you can rebind
-  #    away). So a per-app exception has to override the [meta] rules
-  #    themselves; `[kitty] leftmeta = leftmeta` is a literal no-op,
-  #    since leftmeta still activates [meta] regardless.
-  #
-  # 2. Section headers in app.conf are `[<class>]` (split on `|`, not
-  #    `.`) — keyd-application-mapper does NOT recognize a layer-suffix
-  #    syntax in the header. The layer prefix goes on each *binding*
-  #    inside, the same `[<layer>.]<key> = <action>` form the `keyd bind`
-  #    CLI accepts. So `meta.t = M-t` under `[kitty]` is right;
-  #    `t = M-t` under `[kitty.meta]` would silently never match
-  #    because the focused-class "kitty" doesn't fnmatch "kitty.meta".
-  #
-  # For kitty we re-translate every Ctrl-prefixed [meta] rule to use
-  # Super (M-) instead, so kitty's own super+c/v/t/etc. binds fire while
-  # raw Ctrl+C / Ctrl+D in the terminal stay SIGINT/EOF. Keep this list
-  # in sync with `settings.meta` in modules/services/keyd.nix.
-  xdg.configFile."keyd/app.conf".text = let
-    kittyPassthroughKeys = [
-      "a"
-      "b"
-      "c"
-      "d"
-      "e"
-      "f"
-      "g"
-      "h"
-      "i"
-      "j"
-      "k"
-      "l"
-      "m"
-      "n"
-      "o"
-      "p"
-      "q"
-      "r"
-      "s"
-      "t"
-      "u"
-      "v"
-      "w"
-      "x"
-      "y"
-      "z"
-      "1"
-      "2"
-      "3"
-      "4"
-      "5"
-      "6"
-      "7"
-      "8"
-      "9"
-      "0"
-      "left"
-      "right"
-      "up"
-      "down"
-      "backspace"
-      "enter"
-      "minus"
-      "equal"
-      "leftbrace"
-      "rightbrace"
-      "semicolon"
-      "apostrophe"
-      "backslash"
-      "dot"
-      "slash"
-    ];
-    kittyMetaOverrides =
-      lib.concatMapStringsSep "\n"
-      (k: "meta.${k} = M-${k}")
-      kittyPassthroughKeys;
-  in ''
+  # These are plain [main] per-app rebinds, NOT overrides of a predefined
+  # layer, so the old "rebinding leftmeta in [main] is a no-op for the
+  # [meta] layer" caveat no longer applies — there is no [meta] layer.
+  # Section headers are `[<class>]`, fnmatched against the focused window's
+  # app_id (split on `|`), so `[kitty]` matches the kitty window class.
+  xdg.configFile."keyd/app.conf".text = ''
     [kitty]
-    ${kittyMetaOverrides}
-
-    # Firefox: Mac-style tab cycling on Cmd+Shift+]/[. Linux Firefox
-    # doesn't bind Ctrl+Shift+]/[ — its tab-cycle shortcuts are Ctrl+Tab
-    # / Ctrl+Shift+Tab. Targeting the composite [meta+shift] layer means
-    # plain Cmd+] / Cmd+[ keep their existing [meta] translation
-    # (Ctrl+]/Ctrl+[) and only the shifted variant cycles tabs. The
-    # [meta+shift] layer is declared (empty) in modules/services/keyd.nix.
-    [firefox]
-    meta+shift.rightbrace = C-tab
-    meta+shift.leftbrace = C-S-tab
-
-    # Steam games (class steam_app_<id>): drop the global Alt overload.
-    # [main] binds leftalt/rightalt to overload(alt, noop), which adds
-    # tap/hold disambiguation latency to every Alt press and makes a bare
-    # Alt tap emit nothing — both wrong for games that use Alt as an
-    # ordinary modifier or keypress. Reset to plain Alt while a Steam game
-    # window is focused.
-    #
-    # Extend the Cmd→Ctrl translation to the scroll wheel. The global
-    # [meta] layer only rewrites keyboard keys (Cmd+C → Ctrl+C); the wheel
-    # passed through as raw Super+scroll, which Windows games ignore (their
-    # bindings expect Ctrl+wheel — e.g. Satisfactory's vertical/build
-    # adjustments). keyd grabs the mouse via `[ids] *` and routes incoming
-    # wheel events through the binding system as scrollup/scrolldown/etc.
-    # (daemon.c DEV_MOUSE_SCROLL → process_keypress), so binding them in
-    # [meta] makes Cmd+wheel emit Ctrl+wheel while a game is focused. Kept
-    # game-scoped, not global [meta], so Cmd+scroll doesn't become
-    # accidental Ctrl+scroll zoom in Firefox and other desktop apps.
-    [steam_app_*]
-    leftalt = leftalt
-    rightalt = rightalt
-    meta.scrollup = C-scrollup
-    meta.scrolldown = C-scrolldown
-    meta.scrollleft = C-scrollleft
-    meta.scrollright = C-scrollright
+    leftctrl = leftctrl
+    leftmeta = leftalt
+    rightctrl = leftctrl
+    rightmeta = leftalt
   '';
 
   # Restart keyd-application-mapper when app.conf changes. The mapper

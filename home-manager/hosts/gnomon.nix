@@ -384,6 +384,18 @@
       ];
       open-floating = true;
     }
+    # Pin Steam/Proton games to the leftmost monitor (the gaming monitor,
+    # CDL25Z3 at x=0). Native-Wayland Proton games capture the FPS camera
+    # with a oneshot zwp_locked_pointer; moving such a window across outputs
+    # (meta+shift+h/l) transiently drops pointer focus, which destroys the
+    # oneshot lock — niri's follow-the-window cursor warp doesn't re-arm it,
+    # so the cursor escapes and clicks stop registering. Opening games on the
+    # monitor we actually play on sidesteps the cross-output move entirely.
+    # Every Steam title reports app-id steam_app_<id> (Satisfactory = 526870).
+    {
+      matches = [{app-id = "^steam_app_";}];
+      open-on-output = "Dell Inc. DELL U2724D CDL25Z3";
+    }
   ];
 
   # Shadow the flatpak's us.zoom.Zoom.desktop entry. The flatpak's wrapper

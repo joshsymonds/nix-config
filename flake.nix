@@ -263,14 +263,20 @@
     # earning measurable FPS. Reverted to nixpkgs stable mesa. The overlay
     # still ships proton-cachyos, which we do want.
     #
-    # Tracking joshsymonds/nix-gaming-edge josh/fix-fhsenv-override until
-    # the upstream FHS-env wrapper bug is merged: the upstream wrapFhsEnv
-    # rewrites pkgs.buildFHSEnv as a plain function, dropping `.override`.
-    # That breaks evaluation when programs.steam.gamescopeSession.enable
-    # AND programs.gamescope.capSysNice are both true (steam.nix calls
-    # pkgs.buildFHSEnv.override to swap in setuid bubblewrap). Source lives
-    # at ~/Personal/nix-gaming-edge with `upstream` remote pointing at
-    # powerofthe69; rebase + push when picking up new releases.
+    # Pinned to the joshsymonds/nix-gaming-edge josh/fix-fhsenv-override fork =
+    # powerofthe69/master fast-forwarded + ONE local commit. The branch's
+    # original namesake fix (upstream wrapFhsEnv dropped `.override` on
+    # pkgs.buildFHSEnv, breaking eval with gamescopeSession + capSysNice) is
+    # upstreamed and moot now (gnomon no longer enables gamescope at all).
+    #
+    # The one remaining local commit corrects upstream's `chore: update
+    # sources` (9e5e95f), which recorded WRONG sha256 hashes for BOTH
+    # proton-cachyos 11.0-20260602 release tarballs (x86_64 and x86_64_v3) —
+    # fixed-output hash mismatches that make the build unusable (verified
+    # 2026-06-20: real assets hash to qC20cEi0… / HZmTHT…, not the recorded
+    # KeYloyih… / g74Xzf…). Drop the fork and follow
+    # `github:powerofthe69/nix-gaming-edge` directly once upstream corrects
+    # those hashes. Source at ~/Personal/nix-gaming-edge (`upstream` → powerofthe69).
     #
     # NB: deliberately NOT `inputs.nixpkgs.follows = "nixpkgs"`. nix-gaming-
     # edge's tokidoki binary cache is built by their CI against THEIR pinned

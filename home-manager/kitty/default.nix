@@ -1,4 +1,20 @@
-{config, ...}: {
+{
+  config,
+  pkgs,
+  ...
+}: let
+  # Mac-style command key: `mod` = `cmd` on macOS (the real Cmd key), `alt`
+  # on Linux. On gnomon the keyd [kitty] app.conf swap makes the physical Cmd
+  # key emit Alt inside kitty (Ctrl stays on the corner key for SIGINT/EOF,
+  # Super is the Option key for niri), so the command key copies/pastes via
+  # alt+. macOS keeps the real Cmd key. gnomon is the only interactive-kitty
+  # Linux host; on headless Linux servers kitty is unused so the choice is
+  # moot.
+  mod =
+    if pkgs.stdenv.hostPlatform.isDarwin
+    then "cmd"
+    else "alt";
+in {
   programs.kitty = {
     enable = true;
 
@@ -9,43 +25,42 @@
     keybindings = {
       "kitty_mod" = "ctrl+shift";
 
-      # Mac-style Cmd shortcuts. On macOS, kitty interprets `cmd` as the
-      # actual Cmd key. On Linux, kitty interprets `cmd` as Super — and
-      # on gnomon the keyd config has a `[kitty.main]` exception that
-      # lets Super reach kitty raw (instead of being translated to Ctrl
-      # as it is for every other app). Net effect: identical Cmd-key
-      # muscle memory on both platforms.
+      # Mac-style command-key shortcuts on `${mod}` (cmd on macOS, alt on
+      # Linux — see the `mod` binding at the top). On gnomon the physical Cmd
+      # key arrives as Alt inside kitty (keyd [kitty] swap), so these copy/
+      # paste/tab on the command key; on macOS they use the real Cmd key.
+      # Same finger, same result on both.
       #
-      # Crucially absent from this list: cmd+c is bound below (works on
-      # both), but Ctrl+C is NOT bound — it stays raw to the shell as
-      # SIGINT, same as Ctrl+D for EOF. That's the whole point of the
-      # kitty exception in keyd.
-      "cmd+c" = "copy_to_clipboard";
-      "cmd+v" = "paste_from_clipboard";
-      "cmd+t" = "new_tab";
-      "cmd+w" = "close_tab";
-      "cmd+n" = "new_os_window";
-      "cmd+1" = "goto_tab 1";
-      "cmd+2" = "goto_tab 2";
-      "cmd+3" = "goto_tab 3";
-      "cmd+4" = "goto_tab 4";
-      "cmd+5" = "goto_tab 5";
-      "cmd+6" = "goto_tab 6";
-      "cmd+7" = "goto_tab 7";
-      "cmd+8" = "goto_tab 8";
-      "cmd+9" = "goto_tab 9";
-      "cmd+shift+]" = "next_tab";
-      "cmd+shift+[" = "previous_tab";
-      "cmd+plus" = "change_font_size all +2.0";
-      "cmd+equal" = "change_font_size all +2.0";
-      "cmd+minus" = "change_font_size all -2.0";
-      "cmd+0" = "change_font_size all 0";
-      "cmd+k" = "clear_terminal scrollback active";
-      "cmd+f" = "show_scrollback";
-      "cmd+enter" = "no_op";
-      "cmd+shift+enter" = "no_op";
+      # Crucially absent: Ctrl+C / Ctrl+D are NOT bound — they stay raw to
+      # the shell as SIGINT / EOF. On gnomon that is the corner key (which
+      # the keyd [kitty] swap restores to Ctrl); on macOS it is the Control
+      # key. Copy is the command key (${mod}+c), never Ctrl+C.
+      "${mod}+c" = "copy_to_clipboard";
+      "${mod}+v" = "paste_from_clipboard";
+      "${mod}+t" = "new_tab";
+      "${mod}+w" = "close_tab";
+      "${mod}+n" = "new_os_window";
+      "${mod}+1" = "goto_tab 1";
+      "${mod}+2" = "goto_tab 2";
+      "${mod}+3" = "goto_tab 3";
+      "${mod}+4" = "goto_tab 4";
+      "${mod}+5" = "goto_tab 5";
+      "${mod}+6" = "goto_tab 6";
+      "${mod}+7" = "goto_tab 7";
+      "${mod}+8" = "goto_tab 8";
+      "${mod}+9" = "goto_tab 9";
+      "${mod}+shift+]" = "next_tab";
+      "${mod}+shift+[" = "previous_tab";
+      "${mod}+plus" = "change_font_size all +2.0";
+      "${mod}+equal" = "change_font_size all +2.0";
+      "${mod}+minus" = "change_font_size all -2.0";
+      "${mod}+0" = "change_font_size all 0";
+      "${mod}+k" = "clear_terminal scrollback active";
+      "${mod}+f" = "show_scrollback";
+      "${mod}+enter" = "no_op";
+      "${mod}+shift+enter" = "no_op";
 
-      # Also map Ctrl+V for consistency in terminal apps
+      # Also map Ctrl+V for paste in terminal apps (corner key on gnomon).
       "ctrl+v" = "paste_from_clipboard";
 
       # kitty_mod (= Ctrl+Shift) variants — Linux convention fallback.

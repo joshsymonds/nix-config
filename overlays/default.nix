@@ -308,15 +308,15 @@ in {
       };
   };
 
-  # Gaming overlay: proton-cachyos from nix-gaming-edge, extended with the
-  # local proton-gamescope wrapper (a Steam compatibility tool that auto-
-  # wraps every Proton game in gamescope when opted in) and a libvpx.so.9
-  # patch for proton-cachyos's bundled ffmpeg. Applied only on gnomon (see
-  # flake.nix) — keeps the tokidoki cache out of headless servers' eval
-  # graphs.
+  # Gaming overlay: proton-cachyos from nix-gaming-edge, extended with a
+  # libvpx.so.9 patch for proton-cachyos's bundled ffmpeg. Applied only on
+  # gnomon (see flake.nix) — keeps the tokidoki cache out of headless
+  # servers' eval graphs. Native-Wayland / NVAPI / iGPU-filter defaults are
+  # set as niri session env vars (home-manager/hosts/gnomon.nix), not a
+  # wrapper, so the stock proton-cachyos-x86_64-v3 tool is used directly.
   #
-  # composeManyExtensions threads the upstream overlay first, so
-  # proton-gamescope's callPackage scope can see proton-cachyos-x86_64-v3.
+  # composeManyExtensions threads the upstream overlay first so the
+  # proton-cachyos-x86_64-v3 override below sees the base package.
   gaming = inputs.nixpkgs.lib.composeManyExtensions [
     inputs.nix-gaming-edge.overlays.default
     (_final: prev: let
@@ -345,19 +345,6 @@ in {
       # is the canonical accessor that unambiguously selects an output.
       libvpxLibPath = inputs.nixpkgs.lib.getOutput "out" libvpxForProton;
     in {
-      # gamescope ships a Vulkan implicit layer (VkLayer_FROG_gamescope_wsi)
-      # that proxies WSI surface creation to gamescope, surfacing present
-      # feedback to the xwm and unlocking gamescope-specific knobs like
-      # GAMESCOPE_WSI_HIDE_PRESENT_WAIT_EXT. nixpkgs builds gamescope with
-      # enableWsi=false by default (the layer isn't installed), which makes
-      # gamescope's xwm fall into the no-feedback dedup path on NVIDIA
-      # (ValveSoftware/gamescope#1592) — every commit collapses to "same
-      # buffer twice", every frame gets dropped, output is permanently
-      # black. Flip the build option on so the layer is available
-      # system-wide. The layer auto-activates only inside a gamescope
-      # session via env-var presence, so it's a no-op outside gamescope.
-      gamescope = prev.gamescope.override {enableWsi = true;};
-
       proton-cachyos-x86_64-v3 = prev.proton-cachyos-x86_64-v3.overrideAttrs (old: {
         # Drop libvpx.so.9 into proton's bundled lib dir. proton-cachyos's
         # libavcodec.so.61.19.101 has a hard NEEDED on libvpx.so.9 — nixpkgs
@@ -387,7 +374,6 @@ in {
               $steamcompattool/files/lib/x86_64-linux-gnu/libvpx.so.9
           '';
       });
-      proton-gamescope = _final.callPackage ../pkgs/proton-gamescope {};
     })
   ];
 }

@@ -259,63 +259,42 @@ in
     users.users.joshsymonds.extraGroups = ["i2c"];
 
     # ── Gaming ──────────────────────────────────────────────────────────
-    # Two Proton tools in Steam → Settings → Compatibility:
+    # Steam compatibility: use the stock "Proton CachyOS x86_64-v3" tool
+    # (AVX2/x86_64-v3 ISA build, Steam Linux Runtime sniper variant; prebuilt
+    # and pulled from the tokidoki cache below — no compile cost). Set it as
+    # the default in Steam → Settings → Compatibility ("Run other titles
+    # with…").
     #
-    #   "Proton CachyOS x86_64-v3" — bare proton-cachyos from nix-gaming-edge
-    #     (AVX2/x86_64-v3 ISA build, Steam Linux Runtime sniper variant).
-    #     Prebuilt and pulled from the tokidoki cache below — no compile cost.
+    # The native-Wayland / NVAPI / iGPU-filter defaults that proton games want
+    # are set declaratively as niri session env vars (home-manager/hosts/
+    # gnomon.nix → programs.niri.settings.environment), not a wrapper compat
+    # tool: PROTON_USE_WAYLAND (winewayland.drv straight to niri — the path
+    # that reliably renders RE Engine titles), PROTON_ENABLE_NVAPI (DLSS/RT in
+    # PRAGMATA, RE4R, MH Wilds, DD2), and VKD3D/DXVK device filters (hide the
+    # Raphael iGPU so UE5 doesn't software-render on its fake-huge GTT "VRAM").
+    # Per-game overrides still work via Steam launch options, e.g.
+    # `PROTON_USE_WAYLAND=0 %command%` for a title whose winewayland breaks.
     #
-    #   "Proton CachyOS (Gamescope)" — local pkgs/proton-gamescope wrapper.
-    #     Drops a 2560x1440 fullscreen gamescope between Steam Linux Runtime
-    #     and Proton, so every Windows game gets a niri-friendly stable
-    #     Wayland surface instead of fighting xwayland-satellite. Set this
-    #     ONCE as the default ("Run other titles with…") and forget it.
-    #     Also exports PROTON_ENABLE_NVAPI=1 so RE Engine titles (PRAGMATA,
-    #     RE4R, MH Wilds, DD2) can probe the NVIDIA GPU and unlock RT/DLSS.
-    #
-    #   Per-game escape hatches (Steam → Properties → Launch Options):
-    #     PROTON_GAMESCOPE_DISABLE=1     bypass gamescope (EAC titles, etc.)
-    #     PROTON_GAMESCOPE_FORCE_GRAB=1  force pointer lock (buggy FPS games)
-    #     PROTON_ENABLE_NVAPI=0          hide NVIDIA GPU again (rare)
+    # We do NOT use gamescope. Nesting it forces games off winewayland onto
+    # XWayland (gamescope never exposes wl_subcompositor, which Wine's wayland
+    # driver needs), and on this niri + NVIDIA stack it never presents anyway
+    # (the game hangs at startup and no window maps). niri provides natively
+    # the only things it would have given us — fullscreen, VRR, HDR.
     #
     # NOTE: programs.steam.gamescopeSession is deliberately NOT enabled.
     # It installs a second wayland-sessions entry (steam.desktop); with
     # gnomon's impermanence wiping DankGreeter's memory.json every boot,
     # the greeter's no-saved-session fallback is a nondeterministic race
-    # for session index 0, so an enabled Steam session randomly hijacks
-    # login. The Big Picture session is also black on this NVIDIA GPU
-    # anyway (see the gamescope WSI note below). Per-game gamescope
-    # wrapping via proton-gamescope is independent and unaffected.
+    # for session index 0, so an enabled Steam session randomly hijacks login.
     programs.steam = {
       enable = true;
       remotePlay.openFirewall = true;
       dedicatedServer.openFirewall = false;
       extraCompatPackages = with pkgs; [
         proton-cachyos-x86_64-v3
-        proton-gamescope
       ];
     };
     hardware.steam-hardware.enable = true;
-
-    # gamescope module installs the binary + sets cap_sys_nice (needed for
-    # gamescope's input-thread scheduling; without it gamescope warns and
-    # cursor capture is flaky).
-    programs.gamescope = {
-      enable = true;
-      capSysNice = true;
-    };
-
-    # Expose gamescope's WSI Vulkan implicit layer (VkLayer_FROG_gamescope_wsi)
-    # to the Vulkan loader. programs.gamescope.enable only adds the binary
-    # to system PATH via a makeWrapper wrapper that drops share/vulkan/.
-    # hardware.graphics.extraPackages symlinks the unwrapped package's
-    # share/vulkan/implicit_layer.d/ into /run/opengl-driver/share/vulkan/
-    # where pressure-vessel / the SLR sniper's Vulkan loader will find it.
-    # Without this, the WSI layer is built (enableWsi = true in the gaming
-    # overlay) but never loaded — gamescope's xwm dedup path fires for
-    # every commit and gamescope output is permanently black on NVIDIA
-    # for any vkd3d-proton or DXVK game.
-    hardware.graphics.extraPackages = [pkgs.gamescope];
 
     # Substituters live in modules/nix/substituters.nix (single source
     # of truth, feature-gated). gnomon picks up tokidoki + lantian +

@@ -149,7 +149,7 @@
     - niri + DankMaterialShell desktop, Wayland, lanzaboote-signed boot
 
     ## Role
-    Linux gaming + GPU workstation. Steam/Proton (gamescope), 1Password GUI,
+    Linux gaming + GPU workstation. Steam/Proton (native Wayland), 1Password GUI,
     Bluetooth controllers/headphones. The RTX 5070 Ti makes this the local
     CUDA / inference box. The 9800X3D is tuned for game latency, not parallel
     throughput.
@@ -159,7 +159,7 @@
   # modules/services/keyd.nix, capslock = esc in [main]), NOT xkb. An
   # xkb-level caps:escape only rewrites the keysym, which raw-input games
   # (Steam/Proton) bypass — so it never reached them. keyd rewrites the
-  # actual key event upstream of niri, gamescope, and the games.
+  # actual key event upstream of niri and the games.
 
   # keyd app.conf — per-app modifier overrides read by keyd-application-
   # mapper (set up by modules/services/keyd.nix at the system level).
@@ -424,6 +424,30 @@
       x = 2560;
       y = 0;
     };
+  };
+
+  # Proton/game defaults as niri session env. niri runs `systemctl --user
+  # import-environment` on startup, so these propagate to the user manager
+  # and every app.slice scope niri spawns — including Steam and the games it
+  # launches. They're plain env vars Proton/vkd3d/dxvk read from the
+  # environment, so they live here declaratively rather than in a custom
+  # Steam compat-tool wrapper script (which is all the old proton-gamescope
+  # tool did once gamescope itself proved unusable on this niri+NVIDIA stack).
+  #
+  #   PROTON_USE_WAYLAND       winewayland.drv → native Wayland straight to
+  #                            niri (the path that reliably renders RE Engine)
+  #   PROTON_ENABLE_NVAPI      expose the NVIDIA GPU to NVAPI → DLSS / RT
+  #   PROTON_HIDE_NVIDIA_GPU=0  counterpart: don't hide it from NVAPI probes
+  #   VKD3D/DXVK filter        hide the Raphael iGPU so UE5 (Satisfactory)
+  #                            doesn't pick its fake-huge GTT "VRAM" and
+  #                            software-render on 2 CUs
+  # Per-game override via Steam launch options, e.g. PROTON_USE_WAYLAND=0 %command%.
+  programs.niri.settings.environment = {
+    PROTON_USE_WAYLAND = "1";
+    PROTON_ENABLE_NVAPI = "1";
+    PROTON_HIDE_NVIDIA_GPU = "0";
+    VKD3D_FILTER_DEVICE_NAME = "NVIDIA";
+    DXVK_FILTER_DEVICE_NAME = "NVIDIA";
   };
 
   programs.niri.settings.window-rules = [

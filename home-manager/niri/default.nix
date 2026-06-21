@@ -1,8 +1,20 @@
 {
   lib,
   pkgs,
+  osConfig,
   ...
 }: let
+  # niri's WM modifier is host-scoped. On hosts running the keyd Mac-style
+  # remap (gnomon) the Option key emits Super and every WM/launcher/DMS/
+  # lock/screenshot bind lives on Super, leaving the Alt and Ctrl keysyms
+  # entirely free for bare-Proton games. Elsewhere (e.g. stygianlibrary,
+  # which has no keyd remap) the binds stay on Alt as before. See
+  # modules/services/keyd.nix.
+  mod =
+    if (osConfig.services.keyd-mac-style.enable or false)
+    then "Super"
+    else "Alt";
+
   # Region pick → satty annotate → wl-copy + timestamped save. Shared by the
   # Shift+Print and Super+Shift+5 binds. slurp's -d shows the selection's
   # pixel dimensions while dragging (the "screen ruler" side-effect). The
@@ -333,40 +345,18 @@ in {
   # which silently disables Alt+Shift+H/L (move column to monitor),
   # Alt+F (exit fullscreen), Alt+Q (close), etc. while the game is
   # focused. We're not running an RDP client; niri's binds always win.
-  programs.niri.settings.binds = let
-    # These Super binds YIELD to a focused game's keyboard-shortcuts-
-    # inhibitor; everything else stays non-inhibitable. Rationale: a
-    # Wine/Proton game on winewayland desyncs its Win32 VK_LWIN state
-    # every time niri grabs Super (leave/enter without a clean key
-    # release — see dlls/winewayland.drv keyboard stub), so Super+chord
-    # binds (Ping/Hotbar/Map-marker on LeftCommand) register only
-    # intermittently. Letting the game's inhibitor suspend niri's own
-    # Super binds while it's focused hands Super to the game cleanly.
-    # Cost: only these 5 suspend mid-game (launcher, settings, the 3
-    # screenshots). All 33 Alt launchers/switchers, Ctrl binds, and
-    # media keys keep working. Flip the inhibitor with Super+Escape.
-    inhibitableBinds = [
-      "Super+Space"
-      "Super+Comma"
-      "Super+Shift+3"
-      "Super+Shift+4"
-      "Super+Shift+5"
-    ];
-  in
-    lib.mapAttrs (name: v:
-      v // {allow-inhibiting = builtins.elem name inhibitableBinds;})
-    {
-      # ── Shortcut-inhibit toggle (Wine/Proton games) ───────────────
-      # Non-inhibitable itself (not in inhibitableBinds), so it always
-      # works to flip the game's inhibitor back OFF — e.g. to use
-      # Super+Space or a screenshot while a game is focused.
-      "Super+Escape" = {
-        hotkey-overlay.title = "Toggle Shortcut Inhibit";
-        action.toggle-keyboard-shortcuts-inhibit = [];
-      };
-
+  # All WM/launcher/DMS/lock/screenshot binds live on `${mod}` (Super on
+  # gnomon, Alt elsewhere — see the `mod` binding at the top of the file),
+  # so niri holds NO binds on the Alt or Ctrl keysyms on gnomon. That is
+  # what lets bare-Proton games — which cannot use the Wayland
+  # keyboard-shortcuts-inhibit protocol — get clean Ctrl+Alt: the game's
+  # modifiers simply aren't bound by the compositor. The old
+  # inhibitable-binds / Super+Escape toggle machinery was deleted with the
+  # move off Alt — games never press Super here, so there is nothing to
+  # yield. DMS feature binds that were already on Super stay on Super.
+  programs.niri.settings.binds = {
       # ── Window lifecycle ──────────────────────────────────────────
-      "Alt+Q" = {
+      "${mod}+Q" = {
         hotkey-overlay.title = "Close Window";
         action.close-window = [];
       };
@@ -377,10 +367,10 @@ in {
       # column and fall through to the previous/next workspace when the
       # stack is exhausted. Niri keeps exactly one empty trailing
       # workspace per monitor and auto-creates/collapses as needed.
-      "Alt+H".action.focus-column-or-monitor-left = [];
-      "Alt+L".action.focus-column-or-monitor-right = [];
-      "Alt+J".action.focus-window-or-workspace-down = [];
-      "Alt+K".action.focus-window-or-workspace-up = [];
+      "${mod}+H".action.focus-column-or-monitor-left = [];
+      "${mod}+L".action.focus-column-or-monitor-right = [];
+      "${mod}+J".action.focus-window-or-workspace-down = [];
+      "${mod}+K".action.focus-window-or-workspace-up = [];
 
       # ── Reorder (Shift = reorder, mirrors focus motion) ───────────
       # Shift+H/L: shove the focused column left/right. When already at
@@ -389,21 +379,21 @@ in {
       # Shift+J/K: reorder the focused window within its stacked column,
       # falling through to the previous/next workspace when the stack is
       # exhausted — mirrors the focus binds.
-      "Alt+Shift+H".action.move-column-left-or-to-monitor-left = [];
-      "Alt+Shift+L".action.move-column-right-or-to-monitor-right = [];
-      "Alt+Shift+J".action.move-window-down-or-to-workspace-down = [];
-      "Alt+Shift+K".action.move-window-up-or-to-workspace-up = [];
+      "${mod}+Shift+H".action.move-column-left-or-to-monitor-left = [];
+      "${mod}+Shift+L".action.move-column-right-or-to-monitor-right = [];
+      "${mod}+Shift+J".action.move-window-down-or-to-workspace-down = [];
+      "${mod}+Shift+K".action.move-window-up-or-to-workspace-up = [];
 
       # ── Resize ────────────────────────────────────────────────────
       # R cycles the column through preset widths (1/3, 1/2, 2/3).
       # Shift+R cycles the focused window through preset heights —
       # useful for stacked columns where you want one window to take
       # more vertical space than its siblings.
-      "Alt+R" = {
+      "${mod}+R" = {
         hotkey-overlay.title = "Cycle Column Width";
         action.switch-preset-column-width = [];
       };
-      "Alt+Shift+R" = {
+      "${mod}+Shift+R" = {
         hotkey-overlay.title = "Cycle Window Height";
         action.switch-preset-window-height = [];
       };
@@ -415,11 +405,11 @@ in {
       # exits fullscreen.
       # Shift+F: maximize column to fill the monitor (other columns
       # scrolled off but still on the workspace, no fullscreen).
-      "Alt+F" = {
+      "${mod}+F" = {
         hotkey-overlay.title = "Fullscreen Window";
         action.fullscreen-window = [];
       };
-      "Alt+Shift+F" = {
+      "${mod}+Shift+F" = {
         hotkey-overlay.title = "Maximize Column";
         action.maximize-column = [];
       };
@@ -433,15 +423,15 @@ in {
       #    J/K to swap) display.
       # The bare Alt+I/O/T slots are now launcher binds (see below) — these
       # WM ops moved to Alt+Shift to free those letters for app focus-or-spawn.
-      "Alt+Shift+I" = {
+      "${mod}+Shift+I" = {
         hotkey-overlay.title = "Consume Window into Column";
         action.consume-window-into-column = [];
       };
-      "Alt+Shift+O" = {
+      "${mod}+Shift+O" = {
         hotkey-overlay.title = "Expel Window from Column";
         action.expel-window-from-column = [];
       };
-      "Alt+Shift+T" = {
+      "${mod}+Shift+T" = {
         hotkey-overlay.title = "Toggle Tabbed Column";
         action.toggle-column-tabbed-display = [];
       };
@@ -457,39 +447,39 @@ in {
       # check `niri msg --json windows | jq '.[].app_id'` against the
       # --app-id below — Electron apps occasionally drift their app_id
       # across versions and the bind needs a one-letter update.
-      "Alt+M" = {
+      "${mod}+M" = {
         hotkey-overlay.title = "Focus or Launch Spotify";
         action.spawn = ["focus-or-spawn" "--app-id" "spotify" "--" "spotify"];
       };
-      "Alt+O" = {
+      "${mod}+O" = {
         hotkey-overlay.title = "Focus or Launch Claude";
         action.spawn = ["focus-or-spawn" "--app-id" "claude-desktop" "--" "claude-desktop"];
       };
-      "Alt+W" = {
+      "${mod}+W" = {
         hotkey-overlay.title = "Focus or Launch Firefox";
         action.spawn = ["focus-or-spawn" "--app-id" "firefox" "--" "firefox"];
       };
-      "Alt+T" = {
+      "${mod}+T" = {
         hotkey-overlay.title = "Focus or Launch Kitty";
         action.spawn = ["focus-or-spawn" "--app-id" "kitty" "--" "kitty"];
       };
-      "Alt+S" = {
+      "${mod}+S" = {
         hotkey-overlay.title = "Focus or Launch Slack";
         action.spawn = ["focus-or-spawn" "--app-id" "slack" "--" "slack"];
       };
-      "Alt+C" = {
+      "${mod}+C" = {
         hotkey-overlay.title = "Focus or Launch Signal";
         action.spawn = ["focus-or-spawn" "--app-id" "signal" "--" "signal-desktop"];
       };
-      "Alt+D" = {
+      "${mod}+D" = {
         hotkey-overlay.title = "Focus or Launch Vesktop";
         action.spawn = ["focus-or-spawn" "--app-id" "vesktop" "--" "vesktop"];
       };
-      "Alt+I" = {
+      "${mod}+I" = {
         hotkey-overlay.title = "Focus or Launch Morgen";
         action.spawn = ["focus-or-spawn" "--app-id" "Morgen" "--" "morgen"];
       };
-      "Alt+N" = {
+      "${mod}+N" = {
         hotkey-overlay.title = "Focus or Launch Obsidian";
         action.spawn = ["focus-or-spawn" "--app-id" "obsidian" "--" "obsidian"];
       };
@@ -497,14 +487,14 @@ in {
       # path arg — its Exec is `cosmic-files %U`, so bare launch opens the
       # last/home dir. app_id is the libcosmic default; if a launch ever
       # fails to refocus, check `niri msg --json windows | jq '.[].app_id'`.
-      "Alt+E" = {
+      "${mod}+E" = {
         hotkey-overlay.title = "Focus or Launch Files";
         action.spawn = ["focus-or-spawn" "--app-id" "com.system76.CosmicFiles" "--" "cosmic-files"];
       };
       # Alt+1 → 1Password. The leading "1" of the app name is the mnemonic;
       # nothing else here binds a digit, and niri's default workspace
       # switching lives on Mod+1..9, so this doesn't shadow anything.
-      "Alt+1" = {
+      "${mod}+1" = {
         hotkey-overlay.title = "Focus or Launch 1Password";
         action.spawn = ["focus-or-spawn" "--app-id" "1Password" "--" "1password"];
       };
@@ -520,7 +510,7 @@ in {
       #      so the zoom-bypass-zoomlauncher wrapper and any OBS/exec
       #      shimming in that .desktop apply. Direct `flatpak run` would
       #      bypass the wrapper and SIGILL on NVIDIA.
-      "Alt+Z" = {
+      "${mod}+Z" = {
         hotkey-overlay.title = "Focus or Launch Zoom";
         action.spawn = [
           "focus-or-spawn"
@@ -541,9 +531,9 @@ in {
       };
 
       # ── DMS shell features ────────────────────────────────────────
-      # Mac-style Cmd shortcuts (physical Cmd key → keyd carve-out
-      # passes Super raw → niri grabs Super+key). These mirror the
-      # universal Mac chord for each feature.
+      # These live on Super directly. On gnomon Super is the Option key
+      # (the keyd remap), so spotlight is Option+Space and settings is
+      # Option+Comma; the WM/launcher binds above also ride Super there.
       "Super+Space" = {
         hotkey-overlay.title = "Toggle Application Launcher";
         action.spawn = ["dms" "ipc" "call" "spotlight" "toggle"];
@@ -556,67 +546,59 @@ in {
       # niri's built-in `recent-windows` config defaults (Mod+Tab etc.,
       # Mod = Super) — no explicit bind needed here.
 
-      # Aerospace-style Option shortcuts (no Mac convention for these
-      # features, so they live alongside the WM binds on Alt).
-      "Alt+P" = {
+      # DMS toggles that have no Mac convention — they live alongside the
+      # WM binds on ${mod}.
+      "${mod}+P" = {
         hotkey-overlay.title = "Toggle Notepad";
         action.spawn = ["dms" "ipc" "call" "notepad" "toggle"];
       };
-      "Alt+X" = {
+      "${mod}+X" = {
         hotkey-overlay.title = "Toggle Power Menu";
         action.spawn = ["dms" "ipc" "call" "powermenu" "toggle"];
       };
-      "Alt+V" = {
+      "${mod}+V" = {
         hotkey-overlay.title = "Toggle Clipboard Manager";
         action.spawn = ["dms" "ipc" "call" "clipboard" "toggle"];
       };
-      # Lock and night mode get Ctrl+Alt because the bare-Alt slots are
-      # already used (Alt+N = notifications). Lock lands on Q to mirror
-      # Mac's Ctrl+Cmd+Q lock convention: physical Alt+Cmd+Q → keyd →
-      # Ctrl+Alt+Q reaches niri.
-      "Ctrl+Alt+Q" = {
+      # Lock and night mode on ${mod}+Shift (Q/N). They must not touch the
+      # Alt or Ctrl keysyms (those belong to games on gnomon), and the bare
+      # ${mod}+Q/${mod}+N slots are taken (close-window / Obsidian
+      # launcher), so they sit on the Shift variants.
+      "${mod}+Shift+Q" = {
         hotkey-overlay.title = "Lock Screen";
         action.spawn = ["dms" "ipc" "call" "lock" "lock"];
       };
-      "Ctrl+Alt+N" = {
+      "${mod}+Shift+N" = {
         allow-when-locked = true;
         hotkey-overlay.title = "Toggle Night Mode";
         action.spawn = ["dms" "ipc" "call" "night" "toggle"];
       };
 
-      "Alt+Shift+Slash" = {
+      "${mod}+Shift+Slash" = {
         hotkey-overlay.title = "Show Hotkeys";
         action.show-hotkey-overlay = [];
       };
 
       # ── Screenshots ───────────────────────────────────────────────
-      # Two parallel bindsets:
+      # Two parallel bindsets, both writing to ~/Pictures/Screenshots and
+      # copying to the clipboard:
       #
-      #   Print key (PrtSc): niri's standard screenshot keybinds. Print =
-      #     interactive picker (region/window), Ctrl+Print = whole monitor,
-      #     Alt+Print = focused window, Shift+Print = region → satty annotate.
-      #     The Q6 HE's PrtSc currently emits something other than KEY_SYSRQ
-      #     (likely a VIA layer), so these are dormant fallbacks until the
-      #     firmware is fixed or another keyboard is attached.
+      #   Print key (PrtSc): Print = interactive picker, ${mod}+Print =
+      #     focused window, Shift+Print = region → satty annotate. (The Q6
+      #     HE's PrtSc currently emits something other than KEY_SYSRQ, so
+      #     these are dormant fallbacks.) Whole-monitor lives on the
+      #     Mac-style set below; the old Ctrl+Print variant was dropped to
+      #     keep niri off the Ctrl keysym.
       #
-      #   Super+Shift+3/4/5 (Mac-style): mirrors macOS exactly via the
-      #     Cmd→Super keyd carve-out, since this config heavily uses Mac
-      #     muscle memory elsewhere (Cmd+Space spotlight, Ctrl+Cmd+Q lock).
-      #     3 = whole monitor, 4 = niri's interactive picker (analogous to
-      #     macOS's Cmd+Shift+4 + Space window-pick combined into one UI),
-      #     5 = satty annotation pipeline.
+      #   Super+Shift+3/4/5 (Mac-style, the Cmd/Super key — Option on
+      #     gnomon): 3 = whole monitor, 4 = interactive picker, 5 = satty.
       #
-      # All variants write to ~/Pictures/Screenshots and copy to the
-      # clipboard. Annotation pipeline lives in `sattyPipeline` (top of file).
+      # Annotation pipeline lives in `sattyPipeline` (top of file).
       "Print" = {
         hotkey-overlay.title = "Screenshot";
         action.screenshot = [];
       };
-      "Ctrl+Print" = {
-        hotkey-overlay.title = "Screenshot Monitor";
-        action.screenshot-screen = [];
-      };
-      "Alt+Print" = {
+      "${mod}+Print" = {
         hotkey-overlay.title = "Screenshot Window";
         action.screenshot-window = [];
       };

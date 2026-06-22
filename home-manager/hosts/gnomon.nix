@@ -185,6 +185,30 @@
     # (Cmd+Shift+[/] tab cycling is global — see [cmd+shift] in keyd.nix.)
     cmd.left = A-left
     cmd.right = A-right
+
+    [steam-app-*]
+    # In games the Cmd key emulating Control (the global [cmd:C] model) is
+    # useless — it just looks like a SECOND Ctrl, indistinguishable from the
+    # corner key, so the game can't bind it on its own. Here the Cmd key
+    # becomes a real, distinct Alt instead: it sits under the left thumb by the
+    # spacebar (hand on WASD), so it's the natural game modifier. e.g. bind
+    # Satisfactory's hotbar-cycle to Alt + Wheel Down. The desktop is untouched
+    # — [cmd:C] still gives every Mac shortcut for free; only Steam/Proton
+    # titles get this mask. niri shortcuts still work mid-game via the Option
+    # key (= Super); only the Cmd-key variants change here, which is the point.
+    #
+    # Two non-obvious correctness points (both verified against keyd source):
+    #   - Header is `steam-app-*`, NOT `steam_app_*`. keyd-application-mapper
+    #     normalizes the focused window's class (normalize_class:
+    #     re.sub('[^A-Za-z0-9]+','-')), so the live app_id `steam_app_526870`
+    #     arrives as `steam-app-526870`. An underscore pattern never matches.
+    #   - `layer(alt)`, NOT `leftmeta = leftalt`. The `leftalt` KEY is itself
+    #     remapped to layer(meta) (Super) in keyd.nix, so emitting the bare
+    #     leftalt keycode would re-resolve to Super / fall back to raw. The
+    #     built-in `alt` layer cleanly emulates MOD_ALT, held for the duration
+    #     of the Cmd press (set_mods) so a mouse-wheel chord picks up Alt.
+    leftmeta = layer(alt)
+    rightmeta = layer(alt)
   '';
 
   # Restart keyd-application-mapper when app.conf changes. The mapper

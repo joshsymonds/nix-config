@@ -312,8 +312,10 @@ in {
   # libvpx.so.9 patch for proton-cachyos's bundled ffmpeg. Applied only on
   # gnomon (see flake.nix) — keeps the tokidoki cache out of headless
   # servers' eval graphs. Native-Wayland / NVAPI / iGPU-filter defaults are
-  # set as niri session env vars (home-manager/hosts/gnomon.nix), not a
-  # wrapper, so the stock proton-cachyos-x86_64-v3 tool is used directly.
+  # baked into the tool as a user_settings.py (below) — NOT niri session env
+  # vars: Steam is not spawned from niri's environment (verified absent from
+  # the game's /proc/<pid>/environ), so programs.niri.settings.environment
+  # never reached Proton games and those defaults silently did nothing there.
   #
   # composeManyExtensions threads the upstream overlay first so the
   # proton-cachyos-x86_64-v3 override below sees the base package.
@@ -344,6 +346,28 @@ in {
       # on the first try (observed via `nix derivation show`). lib.getOutput
       # is the canonical accessor that unambiguously selects an output.
       libvpxLibPath = inputs.nixpkgs.lib.getOutput "out" libvpxForProton;
+
+      # Per-tool environment defaults for every game launched through
+      # proton-cachyos. proton imports this in init_session and merges each
+      # key into the game env *only if not already set* (proton:1801-1808),
+      # so a per-game `PROTON_USE_WAYLAND=0 %command%` launch option still
+      # wins. check_environment reads PROTON_USE_WAYLAND from that merged env
+      # (proton:1711/1873), so this genuinely selects winewayland.drv.
+      #
+      #   PROTON_USE_WAYLAND       winewayland.drv → native Wayland to niri
+      #   PROTON_ENABLE_NVAPI      expose the NVIDIA GPU to NVAPI → DLSS / RT
+      #   PROTON_HIDE_NVIDIA_GPU=0 counterpart: don't hide it from NVAPI probes
+      #   VKD3D/DXVK filter        hide the Raphael iGPU so UE5 (Satisfactory)
+      #                            doesn't pick its fake-huge GTT "VRAM"
+      protonUserSettings = prev.writeText "proton-cachyos-user_settings.py" ''
+        user_settings = {
+            "PROTON_USE_WAYLAND": "1",
+            "PROTON_ENABLE_NVAPI": "1",
+            "PROTON_HIDE_NVIDIA_GPU": "0",
+            "VKD3D_FILTER_DEVICE_NAME": "NVIDIA",
+            "DXVK_FILTER_DEVICE_NAME": "NVIDIA",
+        }
+      '';
     in {
       proton-cachyos-x86_64-v3 = prev.proton-cachyos-x86_64-v3.overrideAttrs (old: {
         # Drop libvpx.so.9 into proton's bundled lib dir. proton-cachyos's
@@ -372,6 +396,8 @@ in {
           + ''
             install -m 0644 ${libvpxLibPath}/lib/libvpx.so.9 \
               $steamcompattool/files/lib/x86_64-linux-gnu/libvpx.so.9
+            install -m 0644 ${protonUserSettings} \
+              $steamcompattool/user_settings.py
           '';
       });
     })

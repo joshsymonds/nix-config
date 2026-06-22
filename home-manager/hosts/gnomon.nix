@@ -357,29 +357,14 @@
     };
   };
 
-  # Proton/game defaults as niri session env. niri runs `systemctl --user
-  # import-environment` on startup, so these propagate to the user manager
-  # and every app.slice scope niri spawns — including Steam and the games it
-  # launches. They're plain env vars Proton/vkd3d/dxvk read from the
-  # environment, so they live here declaratively rather than in a custom
-  # Steam compat-tool wrapper script (which is all the old proton-gamescope
-  # tool did once gamescope itself proved unusable on this niri+NVIDIA stack).
-  #
-  #   PROTON_USE_WAYLAND       winewayland.drv → native Wayland straight to
-  #                            niri (the path that reliably renders RE Engine)
-  #   PROTON_ENABLE_NVAPI      expose the NVIDIA GPU to NVAPI → DLSS / RT
-  #   PROTON_HIDE_NVIDIA_GPU=0  counterpart: don't hide it from NVAPI probes
-  #   VKD3D/DXVK filter        hide the Raphael iGPU so UE5 (Satisfactory)
-  #                            doesn't pick its fake-huge GTT "VRAM" and
-  #                            software-render on 2 CUs
-  # Per-game override via Steam launch options, e.g. PROTON_USE_WAYLAND=0 %command%.
-  programs.niri.settings.environment = {
-    PROTON_USE_WAYLAND = "1";
-    PROTON_ENABLE_NVAPI = "1";
-    PROTON_HIDE_NVIDIA_GPU = "0";
-    VKD3D_FILTER_DEVICE_NAME = "NVIDIA";
-    DXVK_FILTER_DEVICE_NAME = "NVIDIA";
-  };
+  # Proton/game env defaults (PROTON_USE_WAYLAND, NVAPI, vkd3d/dxvk iGPU
+  # filter) live in the proton-cachyos user_settings.py baked by the gaming
+  # overlay (overlays/default.nix), NOT here. They were previously set as niri
+  # session env vars on the theory that niri import-environment'd them to
+  # Steam — it doesn't, and Steam isn't spawned from niri's env anyway, so
+  # they never reached Proton games (the game ran on XWayland, not winewayland).
+  # Per-game override still works via Steam launch options, e.g.
+  # `PROTON_USE_WAYLAND=0 %command%`.
 
   programs.niri.settings.window-rules = [
     # Zoom on XWayland (via xwayland-satellite). xdg-decoration doesn't

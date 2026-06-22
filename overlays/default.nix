@@ -71,6 +71,50 @@ in {
         buildGoModule = final.buildGo123Module;
       };
 
+    # keyd: fix a silent wire-parser desync in keyd-application-mapper.
+    # Its Wayland reader used bare self.sock.recv(8)/recv(size-8); on a
+    # SOCK_STREAM recv() may short-read, and a short payload read desyncs
+    # the parser permanently — the mapper stays alive and connected but
+    # stops reacting to focus changes, so per-app masks (e.g. gnomon's
+    # [steam-app-*] meta⇒alt) silently stop applying until it's restarted.
+    # The patch routes reads through a recvall() loop. Mirrors upstream
+    # PR #1261 (open, bundled with unrelated Cosmic work); drop this once
+    # that lands. Correctness fix → overlay (all hosts), not per-host.
+    #
+    # nixpkgs builds the mapper as a SEPARATE buildPythonApplication
+    # (`appMap`) that the main keyd only symlinks to — overrideAttrs on
+    # keyd can't reach it, so we rebuild that small derivation from the
+    # same (now patched) src and re-point the symlink. Tracking
+    # `inherit (prev.keyd) version src` keeps us on nixpkgs' keyd version.
+    keyd = let
+      appMap = prev.python3Packages.buildPythonApplication {
+        pname = "keyd-application-mapper";
+        inherit (prev.keyd) version src;
+        pyproject = false;
+        patches = [../pkgs/keyd/recvall.patch];
+        postPatch = ''
+          substituteInPlace scripts/keyd-application-mapper \
+            --replace-fail /bin/sh ${prev.runtimeShell}
+        '';
+        propagatedBuildInputs = with prev.python3Packages; [
+          xlib
+          pygobject3.out
+          dbus-python.out
+        ];
+        dontBuild = true;
+        installPhase = ''
+          install -Dm555 -t $out/bin scripts/keyd-application-mapper
+        '';
+        meta.mainProgram = "keyd-application-mapper";
+      };
+    in
+      prev.keyd.overrideAttrs (_: {
+        postInstall = ''
+          ln -sf ${prev.lib.getExe appMap} $out/bin/keyd-application-mapper
+          rm -rf $out/etc
+        '';
+      });
+
     moor = prev.moor.overrideAttrs (_: {
       version = moarVersion;
       src = final.fetchFromGitHub {

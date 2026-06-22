@@ -1,0 +1,42 @@
+Fix silent wire-parser desync in keyd-application-mapper.
+
+The Wayland reader used bare self.sock.recv(8) / self.sock.recv(size-8).
+On a SOCK_STREAM recv() may return fewer bytes than requested; when the
+payload read comes up short (a message straddling a socket-buffer
+boundary, common under window-title churn over a long session) the next
+recv_msg reads the leftover bytes as a fresh header and the stream
+desyncs permanently. The process stays alive and connected but never
+matches a window again, so per-app bindings silently stop applying.
+
+Route both reads through a recvall() loop. Mirrors upstream PR #1261.
+
+--- a/scripts/keyd-application-mapper
++++ b/scripts/keyd-application-mapper
+@@ -215,13 +215,25 @@
+         self.sock.sendall(struct.pack(b'II', object_id, opcode))
+         self.sock.sendall(payload)
+ 
++    def _recvall(self, n):
++        # SOCK_STREAM recv() may return fewer bytes than requested; loop
++        # until the whole message is read. A short read otherwise desyncs
++        # the parser and the mapper silently stops reacting to focus.
++        buf = b''
++        while len(buf) < n:
++            chunk = self.sock.recv(n - len(buf))
++            if not chunk:
++                raise EOFError('wayland socket closed')
++            buf += chunk
++        return buf
++
+     def recv_msg(self):
+-        (object_id, evcode) = struct.unpack('II', self.sock.recv(8))
++        (object_id, evcode) = struct.unpack('II', self._recvall(8))
+ 
+         size = evcode >> 16
+         evcode = evcode & 0xFFFF
+ 
+-        data = self.sock.recv(size-8)
++        data = self._recvall(size-8)
+ 
+         return (object_id, evcode, data)
+ 

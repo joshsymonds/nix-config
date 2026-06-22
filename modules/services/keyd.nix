@@ -113,6 +113,8 @@ in {
         #                 in the niri module) instead of leaking Ctrl+Tab.
         #   q          -> Super+Q = niri close-window (Mac's Cmd+Q "quit", as
         #                 close-focused-window — the tiling-WM equivalent).
+        #   space      -> Super+Space = DMS spotlight (Mac's Cmd+Space launcher;
+        #                 the cmd:C default Ctrl+Space would be autocomplete).
         #   left/right -> Home/End (Mac line-nav; browsers override these to
         #                 history back/forward in app.conf).
         #
@@ -129,6 +131,7 @@ in {
           tab = M-tab
           grave = M-grave
           q = M-q
+          space = M-space
           left = home
           right = end
 

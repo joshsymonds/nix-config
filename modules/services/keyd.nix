@@ -101,14 +101,34 @@ in {
           capslock = "esc";
         };
 
-        # Declare the control+shift composite layer so per-app overrides in
-        # ~/.config/keyd/app.conf can bind against it (keyd refuses dynamic
-        # binds against an undeclared composite). Empty = falls through to
-        # plain Ctrl+Shift everywhere except where an app.conf rule overrides
-        # it (e.g. Firefox tab cycling on Cmd+Shift+]/[). Composite layers
-        # must be declared after their components; control/shift are built-ins.
+        # Tab routing + composite-layer declarations.
+        #
+        # `[control] tab = M-tab` / `[control+shift] tab = M-S-tab`: the Cmd
+        # key emits Ctrl globally (leftmeta = layer(control)), so Cmd+Tab is
+        # Ctrl+Tab. We rewrite that to Super+Tab (M- = MOD_SUPER) so the Cmd
+        # key drives niri's recent-windows switcher (bound to Mod+Tab) in
+        # every context — desktop, GUI apps, and games alike — instead of
+        # leaking a stray Ctrl+Tab. This is the "Cmd+Tab = window switcher"
+        # half of the Tab story. The corner key (= Alt) is deliberately left
+        # alone so Alt+Tab stays the app's own chord, and niri no longer binds
+        # Alt+Tab at all (recent-windows binds are pinned to Mod+ only).
+        # kitty inverts Ctrl/Alt, so it overrides control.tab/alt.tab back in
+        # app.conf (there the corner key is Ctrl and must stay tab-cycle).
+        #
+        # The composite layers must be declared here before any app.conf rule
+        # can dynamically bind against them (keyd refuses binds against an
+        # undeclared composite). [control+shift] also still backs Firefox's
+        # Cmd+Shift+]/[ tab cycling; [alt+shift] backs the corner-key reverse
+        # tab-cycle (Ctrl+Shift+Tab) in Firefox/kitty. Composite layers must
+        # be declared after their components; control/alt/shift are built-ins.
         extraConfig = ''
+          [control]
+          tab = M-tab
+
           [control+shift]
+          tab = M-S-tab
+
+          [alt+shift]
         '';
       };
     };

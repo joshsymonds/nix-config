@@ -542,9 +542,11 @@ in {
       hotkey-overlay.title = "Toggle Settings";
       action.spawn = ["dms" "ipc" "call" "settings" "toggle"];
     };
-    # Cmd+Tab / Cmd+Shift+Tab / Cmd+` / Cmd+Shift+` are handled by
-    # niri's built-in `recent-windows` config defaults (Mod+Tab etc.,
-    # Mod = Super) — no explicit bind needed here.
+    # Cmd+Tab / Cmd+Shift+Tab open the window switcher: keyd rewrites the
+    # Cmd key's Ctrl+Tab to Super+Tab ([control] tab = M-tab), which the
+    # pinned recent-windows binds (extras.kdl, Mod+ only) pick up. Cmd+grave
+    # and Cmd+Shift+grave stay on the Option key (Mod+grave, current-app
+    # cycle). No bind needed here — recent-windows owns Mod+Tab/Mod+grave.
 
     # DMS toggles that have no Mac convention — they live alongside the
     # WM binds on ${mod}.
@@ -921,6 +923,19 @@ in {
               corner-radius 12
               active-color "#4f378b"
               urgent-color "#f2b8b5"
+          }
+          // Pin the switcher to the Super keysym only. niri's defaults ALSO
+          // bind Alt+Tab/Alt+grave — but the corner key emits Alt and is
+          // reserved for games, so Alt+Tab must never pop the switcher.
+          // Declaring binds{} replaces ALL defaults, so we re-list only the
+          // Mod (= Super) variants. The Cmd key reaches niri as Super+Tab via
+          // the keyd [control] tab = M-tab rule, so Cmd+Tab drives this; the
+          // Option key (Super) works natively too. grave = current-app cycle.
+          binds {
+              Mod+Tab         { next-window; }
+              Mod+Shift+Tab   { previous-window; }
+              Mod+grave       { next-window     filter="app-id"; }
+              Mod+Shift+grave { previous-window filter="app-id"; }
           }
       }
 

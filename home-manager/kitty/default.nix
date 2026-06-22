@@ -63,6 +63,13 @@ in {
       # Also map Ctrl+V for paste in terminal apps (corner key on gnomon).
       "ctrl+v" = "paste_from_clipboard";
 
+      # Tab cycling on the Control key: the corner key on gnomon (the keyd
+      # [kitty] rule routes corner+Tab → Ctrl+Tab; the Cmd key drives the niri
+      # window switcher via Super+Tab instead), the real Control key on macOS.
+      # Same finger, same result on both — and Mac-conventional either way.
+      "ctrl+tab" = "next_tab";
+      "ctrl+shift+tab" = "previous_tab";
+
       # kitty_mod (= Ctrl+Shift) variants — Linux convention fallback.
       "kitty_mod+c" = "copy_to_clipboard";
       "kitty_mod+v" = "paste_from_clipboard";

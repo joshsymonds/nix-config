@@ -187,15 +187,32 @@
     leftmeta = layer(alt)
     rightcontrol = layer(control)
     rightmeta = layer(alt)
+    # Tab story inside kitty, where the swap inverts Ctrl/Alt: the corner key
+    # is Ctrl, the Cmd key is Alt. Override the global [control] tab = M-tab
+    # back to Ctrl+Tab so the corner key tab-cycles kitty (kitty.conf binds
+    # ctrl+tab → next_tab); route the Cmd key (Alt here) to Super+Tab so it
+    # still drives niri's window switcher. Mirrors the desktop behaviour by
+    # physical key despite the inverted modifiers.
+    control.tab = C-tab
+    control+shift.tab = C-S-tab
+    alt.tab = M-tab
+    alt+shift.tab = M-S-tab
 
     # Firefox: Mac-style tab cycling. The user's Cmd+Shift+]/[ muscle memory
     # arrives here as Ctrl+Shift+]/[ (Cmd → Ctrl globally), which Firefox
     # doesn't bind. Translate to Firefox's native Ctrl+Tab / Ctrl+Shift+Tab.
     # Targets the [control+shift] composite layer (declared in
     # modules/services/keyd.nix); plain Cmd+]/[ keep their Ctrl+]/[ meaning.
+    #
+    # alt.tab / alt+shift.tab: the corner key (= Alt outside kitty) tab-cycles
+    # Firefox via its native Ctrl+Tab / Ctrl+Shift+Tab. The Cmd key (= Ctrl)
+    # is untouched here so it falls through to the global [control] tab = M-tab
+    # rule → Super+Tab → niri window switcher.
     [firefox]
     control+shift.rightbrace = C-tab
     control+shift.leftbrace = C-S-tab
+    alt.tab = C-tab
+    alt+shift.tab = C-S-tab
   '';
 
   # Restart keyd-application-mapper when app.conf changes. The mapper

@@ -162,57 +162,30 @@
   # actual key event upstream of niri and the games.
 
   # keyd app.conf — per-app overrides read by keyd-application-mapper
-  # (set up by modules/services/keyd.nix). The global remap there is
-  # static: corner Ctrl key → Alt, Option → Super, Cmd → Ctrl. That keeps
-  # the GUI desktop Mac-correct (Cmd+C → Ctrl+C natively) and gives
-  # bare-Proton games clean Ctrl (Cmd key) + Alt (corner) with niri living
-  # only on the Super keysym (the Option key), which games never press.
+  # (set up by modules/services/keyd.nix). The global model there: corner
+  # Ctrl = real Control, Option = Super, Cmd = layer(cmd) where [cmd:C]
+  # emulates Control, so Cmd+<key> = Ctrl+<key> automatically. These sections
+  # are masks applied on focus change; only the per-app deltas live here.
   #
-  # kitty needs the *terminal* to stay Mac-correct, so we swap Alt↔Ctrl
-  # back inside kitty only: the corner key returns to Ctrl (so Ctrl+C
-  # SIGINT, Ctrl+D EOF and every other control char work wholesale — no
-  # per-key send_key remapping), and the Cmd key becomes Alt so kitty's own
-  # alt+c/alt+v/alt+t binds copy/paste/new-tab. Alt is the only free
-  # terminal lane: Ctrl is SIGINT, Super is niri. Option stays Super
-  # (unstated → inherits its [main] binding).
-  #
-  # These are plain [main] per-app rebinds, NOT overrides of a predefined
-  # layer, so the old "rebinding leftmeta in [main] is a no-op for the
-  # [meta] layer" caveat no longer applies — there is no [meta] layer.
   # Section headers are `[<class>]`, fnmatched against the focused window's
   # app_id (split on `|`), so `[kitty]` matches the kitty window class.
   xdg.configFile."keyd/app.conf".text = ''
     [kitty]
-    leftcontrol = layer(control)
+    # Point the Cmd key at the `alt` layer inside kitty so kitty's own
+    # alt+c/alt+v/alt+t/alt+<n> command binds fire (see home-manager/kitty).
+    # The corner key stays real Control (the global default) → SIGINT/EOF
+    # wholesale, no per-key terminal remap. Option stays Super.
     leftmeta = layer(alt)
-    rightcontrol = layer(control)
     rightmeta = layer(alt)
-    # Tab story inside kitty, where the swap inverts Ctrl/Alt: the corner key
-    # is Ctrl, the Cmd key is Alt. Override the global [control] tab = M-tab
-    # back to Ctrl+Tab so the corner key tab-cycles kitty (kitty.conf binds
-    # ctrl+tab → next_tab); route the Cmd key (Alt here) to Super+Tab so it
-    # still drives niri's window switcher. Mirrors the desktop behaviour by
-    # physical key despite the inverted modifiers.
-    control.tab = C-tab
-    control+shift.tab = C-S-tab
+    # Cmd+Tab (= Alt+Tab inside kitty) → niri window switcher, not a kitty op.
     alt.tab = M-tab
     alt+shift.tab = M-S-tab
 
-    # Firefox: Mac-style tab cycling. The user's Cmd+Shift+]/[ muscle memory
-    # arrives here as Ctrl+Shift+]/[ (Cmd → Ctrl globally), which Firefox
-    # doesn't bind. Translate to Firefox's native Ctrl+Tab / Ctrl+Shift+Tab.
-    # Targets the [control+shift] composite layer (declared in
-    # modules/services/keyd.nix); plain Cmd+]/[ keep their Ctrl+]/[ meaning.
-    #
-    # alt.tab / alt+shift.tab: the corner key (= Alt outside kitty) tab-cycles
-    # Firefox via its native Ctrl+Tab / Ctrl+Shift+Tab. The Cmd key (= Ctrl)
-    # is untouched here so it falls through to the global [control] tab = M-tab
-    # rule → Super+Tab → niri window switcher.
     [firefox]
-    control+shift.rightbrace = C-tab
-    control+shift.leftbrace = C-S-tab
-    alt.tab = C-tab
-    alt+shift.tab = C-S-tab
+    # Cmd+Left/Right = history back/forward (override the [cmd:C] Home/End).
+    # (Cmd+Shift+[/] tab cycling is global — see [cmd+shift] in keyd.nix.)
+    cmd.left = A-left
+    cmd.right = A-right
   '';
 
   # Restart keyd-application-mapper when app.conf changes. The mapper

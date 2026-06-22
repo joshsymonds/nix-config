@@ -4,12 +4,12 @@
   ...
 }: let
   # Mac-style command key: `mod` = `cmd` on macOS (the real Cmd key), `alt`
-  # on Linux. On gnomon the keyd [kitty] app.conf swap makes the physical Cmd
-  # key emit Alt inside kitty (Ctrl stays on the corner key for SIGINT/EOF,
-  # Super is the Option key for niri), so the command key copies/pastes via
-  # alt+. macOS keeps the real Cmd key. gnomon is the only interactive-kitty
-  # Linux host; on headless Linux servers kitty is unused so the choice is
-  # moot.
+  # on Linux. On gnomon the keyd [kitty] app.conf rule points the physical Cmd
+  # key at the `alt` layer inside kitty (the corner key is real Ctrl globally
+  # for SIGINT/EOF, Super is the Option key for niri), so the command key
+  # copies/pastes via alt+. macOS keeps the real Cmd key. gnomon is the only
+  # interactive-kitty Linux host; on headless Linux servers kitty is unused so
+  # the choice is moot.
   mod =
     if pkgs.stdenv.hostPlatform.isDarwin
     then "cmd"
@@ -27,14 +27,14 @@ in {
 
       # Mac-style command-key shortcuts on `${mod}` (cmd on macOS, alt on
       # Linux — see the `mod` binding at the top). On gnomon the physical Cmd
-      # key arrives as Alt inside kitty (keyd [kitty] swap), so these copy/
+      # key arrives as Alt inside kitty (keyd [kitty] rule), so these copy/
       # paste/tab on the command key; on macOS they use the real Cmd key.
       # Same finger, same result on both.
       #
       # Crucially absent: Ctrl+C / Ctrl+D are NOT bound — they stay raw to
-      # the shell as SIGINT / EOF. On gnomon that is the corner key (which
-      # the keyd [kitty] swap restores to Ctrl); on macOS it is the Control
-      # key. Copy is the command key (${mod}+c), never Ctrl+C.
+      # the shell as SIGINT / EOF. On gnomon that is the corner key, which is
+      # real Control globally (no kitty-specific remap); on macOS it is the
+      # Control key. Copy is the command key (${mod}+c), never Ctrl+C.
       "${mod}+c" = "copy_to_clipboard";
       "${mod}+v" = "paste_from_clipboard";
       "${mod}+t" = "new_tab";
@@ -63,10 +63,10 @@ in {
       # Also map Ctrl+V for paste in terminal apps (corner key on gnomon).
       "ctrl+v" = "paste_from_clipboard";
 
-      # Tab cycling on the Control key: the corner key on gnomon (the keyd
-      # [kitty] rule routes corner+Tab → Ctrl+Tab; the Cmd key drives the niri
-      # window switcher via Super+Tab instead), the real Control key on macOS.
-      # Same finger, same result on both — and Mac-conventional either way.
+      # Tab cycling on the Control key: the corner key on gnomon (real Control
+      # globally, so corner+Tab → ctrl+tab → next_tab here; the Cmd key drives
+      # the niri window switcher via Super+Tab instead), the real Control key
+      # on macOS. Same finger, same result on both — Mac-conventional either way.
       "ctrl+tab" = "next_tab";
       "ctrl+shift+tab" = "previous_tab";
 

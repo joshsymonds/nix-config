@@ -8,40 +8,52 @@
 in {
   options.services.keyd-mac-style = {
     enable = lib.mkEnableOption ''
-      keyd-driven static Mac-style modifier remap (gnomon).
+      keyd-driven Mac-style keyboard model (gnomon).
 
       Physical bottom-left keycaps in Mac mode are [Ctrl][Option][Cmd][Space].
-      keyd statically remaps the EMITTED modifier per physical key so the
-      desktop keeps Mac muscle memory while bare-Proton games get clean,
-      reliable Ctrl+Alt:
+      Rather than SWAP which modifier each physical key emits, keyd gives the
+      Cmd key its own occluding layer that emulates Control and translates
+      Cmd-combos to Linux equivalents — globally and per-app — while Ctrl and
+      Alt are left completely untouched:
 
-        corner Ctrl key -> Alt    (games' Alt modifier; GUI menu mnemonics)
-        Option          -> Super  (niri's sole modifier: Option+M = Spotify)
-        Cmd (by space)  -> Ctrl   (Cmd+C -> Ctrl+C copies natively)
+        corner Ctrl key -> REAL Control   (unmapped: SIGINT/EOF in terminals,
+                                           clean Ctrl for games, native Linux
+                                           Ctrl shortcuts)
+        Option          -> Super          (niri's sole modifier: Option+M ...)
+        Cmd (by space)  -> layer(cmd)     ([cmd:C] emulates Control, so every
+                                           Cmd+<key> with no explicit override
+                                           becomes Ctrl+<key> automatically —
+                                           Cmd+C copy, Cmd+A, Cmd+Z, ...)
 
-      This is fully static: no Cmd->Ctrl translation layer, no tap/hold
-      overload, no game-mode toggle, and no dependence on detecting a
-      focused game. It works for bare-Proton (XWayland) games — which
-      cannot use the Wayland keyboard-shortcuts-inhibit protocol — precisely
-      because niri binds only the Super keysym (the Option key), which games
-      never press, so Alt and Ctrl reach the game untouched.
+      Only the EXCEPTIONS to "Cmd = Ctrl" are enumerated (in [cmd]/[cmd+shift]
+      below and in ~/.config/keyd/app.conf): e.g. Cmd+Tab -> Super+Tab (niri
+      switcher), Cmd+Left/Right -> Home/End. This is the same translation model
+      Toshy uses (Cmd as a distinct Control-emulating modifier), expressed in
+      keyd's native modifier-layer system instead of a Python event loop.
 
-      Two consumers cooperate with this remap, configured in the user's
-      home-manager (the niri module and home-manager/hosts/<host>.nix):
+      Why this beats the old static swap, especially for games: because Cmd is
+      a layer activated ONLY by the Cmd key — which bare-Proton (XWayland)
+      games never press — Ctrl and Alt reach games completely untouched, with
+      NO per-game exclusion and NO swap to undo. The old design remapped the
+      corner key to Alt and then un-swapped it inside kitty to recover SIGINT;
+      here the corner key is simply real Control everywhere, so that whole
+      dance is gone.
 
-        - niri rebinds every WM/launcher/DMS/screenshot action onto Super,
-          so nothing sits on the Alt or Ctrl keysyms.
-        - kitty swaps Alt<->Ctrl back *inside kitty only* via
-          ~/.config/keyd/app.conf, so the terminal stays Mac-correct: the
-          corner key is Ctrl (SIGINT/EOF and every control char, wholesale),
-          the Cmd key is Alt (kitty's alt+c/alt+v/alt+t copy/paste/new-tab).
-          Alt is the only free terminal lane (Ctrl=SIGINT, Super=niri).
+      Two consumers cooperate, configured in the user's home-manager (the niri
+      module and home-manager/hosts/<host>.nix):
 
-      App detection requires keyd-application-mapper, enabled as a user
+        - niri binds every WM/launcher/DMS/screenshot action onto Super, so
+          nothing sits on the Ctrl or Alt keysyms (games own those).
+        - kitty: app.conf points the Cmd key at the `alt` layer *inside kitty*
+          so kitty's own alt+c/alt+v/alt+t/alt+<n> command binds fire. The
+          corner key stays real Control (the global default) for SIGINT/EOF
+          wholesale — no per-key terminal remap needed anymore.
+
+      Per-app overrides require keyd-application-mapper, enabled as a user
       service alongside the daemon. It reads ~/.config/keyd/app.conf, watches
       the focused window via wlr-foreign-toplevel-management-v1 (niri
-      implements it), and pokes keyd's IPC socket on focus changes. Only the
-      kitty swap depends on this; the global remap and the game path do not.
+      implements it), and applies each section's binds as a mask on FOCUS
+      CHANGE (not per keypress) by calling `keyd bind` over the IPC socket.
     '';
 
     users = lib.mkOption {
@@ -64,32 +76,24 @@ in {
       keyboards.default = {
         ids = ["*"];
 
-        # Static modifier remap, using keyd's `layer(<mod>)` modifier idiom
-        # (NOT bare keycode assignment like `leftctrl = leftalt`). keyd warns
-        # against the bare form and it misbehaves here: each target modifier
-        # is ITSELF remapped, so `leftctrl = leftalt` doesn't yield a clean
-        # Alt — apps fall back to the raw key. `layer(<mod>)` momentarily
-        # activates that modifier while the key is held, independent of the
-        # other remaps, so the emitted modifier is unambiguous.
+        # Modifier-layer model (NOT a static swap of emitted modifiers, and
+        # NOT bare keycode assignment like `leftcontrol = leftalt`):
         #
-        #   corner Ctrl key -> Alt    (leftcontrol/rightcontrol = layer(alt))
-        #   Option          -> Super  (leftalt/rightalt         = layer(meta))
-        #   Cmd (by space)  -> Ctrl   (leftmeta/rightmeta       = layer(control))
+        #   Cmd    (leftmeta/rightmeta) -> layer(cmd); [cmd:C] emulates Control,
+        #     so Cmd+<key> = Ctrl+<key> by default (exceptions in extraConfig).
+        #   Option (leftalt/rightalt)   -> layer(meta) = Super (niri's modifier).
+        #   corner Ctrl                 -> left UNMAPPED = real Control. SIGINT/
+        #     EOF in terminals, clean Ctrl for games, native Linux Ctrl. Games
+        #     never press Cmd, so the cmd layer never activates for them and
+        #     Ctrl/Alt pass through untouched — no per-game exclusion needed.
         #
         # NB: keyd's key name is `leftcontrol`/`rightcontrol`, NOT `leftctrl`
-        # (no such alias — keyd rejects it as "not a valid key"). alt/meta
-        # have the short forms; control does not.
-        #
-        # kitty swaps Alt<->Ctrl back for itself via app.conf (also with
-        # layer()) so the terminal keeps interrupt on the corner and copy on
-        # the command key. Mirrored left/right.
+        # (no such alias — keyd rejects it as "not a valid key").
         settings.main = {
-          leftcontrol = "layer(alt)";
-          rightcontrol = "layer(alt)";
+          leftmeta = "layer(cmd)";
+          rightmeta = "layer(cmd)";
           leftalt = "layer(meta)";
           rightalt = "layer(meta)";
-          leftmeta = "layer(control)";
-          rightmeta = "layer(control)";
 
           # Caps Lock -> Escape at the evdev layer (keyd, not xkb) so the
           # remap reaches apps that read raw scancodes (Steam/Proton games)
@@ -101,32 +105,38 @@ in {
           capslock = "esc";
         };
 
-        # Tab routing + composite-layer declarations.
+        # The cmd layer (Control-emulating) plus composite declarations.
         #
-        # `[control] tab = M-tab` / `[control+shift] tab = M-S-tab`: the Cmd
-        # key emits Ctrl globally (leftmeta = layer(control)), so Cmd+Tab is
-        # Ctrl+Tab. We rewrite that to Super+Tab (M- = MOD_SUPER) so the Cmd
-        # key drives niri's recent-windows switcher (bound to Mod+Tab) in
-        # every context — desktop, GUI apps, and games alike — instead of
-        # leaking a stray Ctrl+Tab. This is the "Cmd+Tab = window switcher"
-        # half of the Tab story. The corner key (= Alt) is deliberately left
-        # alone so Alt+Tab stays the app's own chord, and niri no longer binds
-        # Alt+Tab at all (recent-windows binds are pinned to Mod+ only).
-        # kitty inverts Ctrl/Alt, so it overrides control.tab/alt.tab back in
-        # app.conf (there the corner key is Ctrl and must stay tab-cycle).
+        # [cmd:C] holds only the EXCEPTIONS to "Cmd = Ctrl":
+        #   tab/grave  -> Super+Tab / Super+grave so the Cmd key drives niri's
+        #                 recent-windows / app-window switchers (bound to Mod+
+        #                 in the niri module) instead of leaking Ctrl+Tab.
+        #   q          -> Super+Q = niri close-window (Mac's Cmd+Q "quit", as
+        #                 close-focused-window — the tiling-WM equivalent).
+        #   left/right -> Home/End (Mac line-nav; browsers override these to
+        #                 history back/forward in app.conf).
         #
-        # The composite layers must be declared here before any app.conf rule
-        # can dynamically bind against them (keyd refuses binds against an
-        # undeclared composite). [control+shift] also still backs Firefox's
-        # Cmd+Shift+]/[ tab cycling; [alt+shift] backs the corner-key reverse
-        # tab-cycle (Ctrl+Shift+Tab) in Firefox/kitty. Composite layers must
-        # be declared after their components; control/alt/shift are built-ins.
+        # [cmd+shift] and [alt+shift] are composite layers, declared here so
+        # binds can target them (composites must follow their components):
+        #   [cmd+shift] = the Cmd+Shift+Tab / Cmd+Shift+grave reverse switchers
+        #     and Cmd+Shift+[/] tab cycling (Ctrl+Shift+Tab / Ctrl+Tab). Bound
+        #     globally here, NOT per-app, so it doesn't depend on the focus-
+        #     triggered app-mapper having pushed the mask (and because Mac
+        #     cycles tabs with Cmd+Shift+[/] in essentially every tabbed app).
+        #   [alt+shift] backs kitty's Cmd+Shift+Tab (Cmd = Alt inside kitty).
         extraConfig = ''
-          [control]
+          [cmd:C]
           tab = M-tab
+          grave = M-grave
+          q = M-q
+          left = home
+          right = end
 
-          [control+shift]
+          [cmd+shift]
           tab = M-S-tab
+          grave = M-S-grave
+          leftbrace = C-S-tab
+          rightbrace = C-tab
 
           [alt+shift]
         '';

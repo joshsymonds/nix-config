@@ -183,9 +183,9 @@
   # app_id (split on `|`), so `[kitty]` matches the kitty window class.
   xdg.configFile."keyd/app.conf".text = ''
     [kitty]
-    leftctrl = layer(control)
+    leftcontrol = layer(control)
     leftmeta = layer(alt)
-    rightctrl = layer(control)
+    rightcontrol = layer(control)
     rightmeta = layer(alt)
 
     # Firefox: Mac-style tab cycling. The user's Cmd+Shift+]/[ muscle memory

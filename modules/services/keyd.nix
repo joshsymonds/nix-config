@@ -72,16 +72,20 @@ in {
         # activates that modifier while the key is held, independent of the
         # other remaps, so the emitted modifier is unambiguous.
         #
-        #   corner Ctrl key -> Alt    (leftctrl/rightctrl = layer(alt))
-        #   Option          -> Super  (leftalt/rightalt   = layer(meta))
-        #   Cmd (by space)  -> Ctrl   (leftmeta/rightmeta = layer(control))
+        #   corner Ctrl key -> Alt    (leftcontrol/rightcontrol = layer(alt))
+        #   Option          -> Super  (leftalt/rightalt         = layer(meta))
+        #   Cmd (by space)  -> Ctrl   (leftmeta/rightmeta       = layer(control))
+        #
+        # NB: keyd's key name is `leftcontrol`/`rightcontrol`, NOT `leftctrl`
+        # (no such alias — keyd rejects it as "not a valid key"). alt/meta
+        # have the short forms; control does not.
         #
         # kitty swaps Alt<->Ctrl back for itself via app.conf (also with
         # layer()) so the terminal keeps interrupt on the corner and copy on
         # the command key. Mirrored left/right.
         settings.main = {
-          leftctrl = "layer(alt)";
-          rightctrl = "layer(alt)";
+          leftcontrol = "layer(alt)";
+          rightcontrol = "layer(alt)";
           leftalt = "layer(meta)";
           rightalt = "layer(meta)";
           leftmeta = "layer(control)";

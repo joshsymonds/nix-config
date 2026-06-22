@@ -171,15 +171,14 @@
   # app_id (split on `|`), so `[kitty]` matches the kitty window class.
   xdg.configFile."keyd/app.conf".text = ''
     [kitty]
-    # Point the Cmd key at the `alt` layer inside kitty so kitty's own
-    # alt+c/alt+v/alt+t/alt+<n> command binds fire (see home-manager/kitty).
-    # The corner key stays real Control (the global default) → SIGINT/EOF
-    # wholesale, no per-key terminal remap. Option stays Super.
-    leftmeta = layer(alt)
-    rightmeta = layer(alt)
-    # Cmd+Tab (= Alt+Tab inside kitty) → niri window switcher, not a kitty op.
-    alt.tab = M-tab
-    alt+shift.tab = M-S-tab
+    # Point the Cmd key at [cmdterm:C-S] (Ctrl+Shift-emulating) so every
+    # Cmd+<key> becomes Ctrl+Shift+<key> = kitty's native command chords
+    # (copy/paste/new-tab/goto-tab/...; see home-manager/kitty). The WM/global
+    # keys (Cmd+Tab/Q/Space/Left/Right) are overridden to niri inside the
+    # cmdterm layer itself, so they match the rest of the desktop. The corner
+    # key stays real Control (global default) → SIGINT/EOF. Option stays Super.
+    leftmeta = layer(cmdterm)
+    rightmeta = layer(cmdterm)
 
     [firefox]
     # Cmd+Left/Right = history back/forward (override the [cmd:C] Home/End).

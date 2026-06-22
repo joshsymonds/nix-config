@@ -44,10 +44,12 @@ in {
 
         - niri binds every WM/launcher/DMS/screenshot action onto Super, so
           nothing sits on the Ctrl or Alt keysyms (games own those).
-        - kitty: app.conf points the Cmd key at the `alt` layer *inside kitty*
-          so kitty's own alt+c/alt+v/alt+t/alt+<n> command binds fire. The
-          corner key stays real Control (the global default) for SIGINT/EOF
-          wholesale — no per-key terminal remap needed anymore.
+        - kitty: app.conf points the Cmd key at [cmdterm:C-S] *inside kitty*,
+          which emulates Ctrl+Shift — so Cmd+<key> becomes Ctrl+Shift+<key>,
+          kitty's native command chords (copy/paste/new-tab/...). The corner
+          key stays real Control for SIGINT/EOF, and the WM/global keys
+          (Cmd+Tab/Q/Space/...) are overridden to niri exactly as in [cmd:C],
+          so they behave the same in the terminal as everywhere else.
 
       Per-app overrides require keyd-application-mapper, enabled as a user
       service alongside the daemon. It reads ~/.config/keyd/app.conf, watches
@@ -105,12 +107,22 @@ in {
           capslock = "esc";
         };
 
-        # The cmd layer (Control-emulating) plus composite declarations.
+        # The cmd layer (Control-emulating), its shift composite, and the
+        # terminal variant (Ctrl+Shift-emulating).
         #
-        # [cmd:C] holds only the EXCEPTIONS to "Cmd = Ctrl":
-        #   tab/grave  -> Super+Tab / Super+grave so the Cmd key drives niri's
-        #                 recent-windows / app-window switchers (bound to Mod+
-        #                 in the niri module) instead of leaking Ctrl+Tab.
+        # [cmd:C] holds only the EXCEPTIONS to "Cmd = Ctrl" (the GUI default):
+        #   tab/grave  -> swapm(switcher, M-tab/M-grave): emit the macro once,
+        #                 then enter [switcher:M], which HOLDS Super for the
+        #                 duration of the Cmd press so niri's recent-windows /
+        #                 app-window overlay (bound to Mod+Tab / Mod+grave) stays
+        #                 open and CYCLES on repeated Tab / Shift+Tab. A plain
+        #                 `M-tab` macro only taps Super (the overlay flashes
+        #                 shut), so swapm is required — keyd rewrites the Cmd
+        #                 key's own cache entry to hold the switcher layer, tying
+        #                 Super to the Cmd hold, not the Tab tap. (NB: it is
+        #                 `swapm` for the 2-arg layer+macro form; bare `swap`
+        #                 takes only a layer. The man-page Example 4 `swap(l, m)`
+        #                 is a docs bug — `keyd check` rejects it.)
         #   q          -> Super+Q = niri close-window (Mac's Cmd+Q "quit", as
         #                 close-focused-window — the tiling-WM equivalent).
         #   space      -> Super+Space = DMS spotlight (Mac's Cmd+Space launcher;
@@ -118,18 +130,29 @@ in {
         #   left/right -> Home/End (Mac line-nav; browsers override these to
         #                 history back/forward in app.conf).
         #
-        # [cmd+shift] and [alt+shift] are composite layers, declared here so
-        # binds can target them (composites must follow their components):
-        #   [cmd+shift] = the Cmd+Shift+Tab / Cmd+Shift+grave reverse switchers
-        #     and Cmd+Shift+[/] tab cycling (Ctrl+Shift+Tab / Ctrl+Tab). Bound
-        #     globally here, NOT per-app, so it doesn't depend on the focus-
-        #     triggered app-mapper having pushed the mask (and because Mac
-        #     cycles tabs with Cmd+Shift+[/] in essentially every tabbed app).
-        #   [alt+shift] backs kitty's Cmd+Shift+Tab (Cmd = Alt inside kitty).
+        # [cmd+shift] is a composite layer (declared after its components):
+        #   the Cmd+Shift+Tab / Cmd+Shift+grave reverse switchers and Cmd+Shift+
+        #   [/] tab cycling (Ctrl+Shift+Tab / Ctrl+Tab). Bound globally, NOT per-
+        #   app, so it doesn't depend on the focus-triggered app-mapper, and
+        #   because Mac cycles tabs with Cmd+Shift+[/] in essentially every app.
+        #
+        # [cmdterm:C-S] is the terminal flavour of the cmd layer: it emulates
+        # Ctrl+SHIFT instead of Ctrl, so inside kitty (which points Cmd here via
+        # app.conf) every Cmd+<key> becomes Ctrl+Shift+<key> — exactly kitty's
+        # native command chords (copy/paste/new-tab/...), while the corner key
+        # stays real Ctrl for SIGINT. The same WM/global keys are overridden to
+        # niri/Super as in [cmd:C], so Cmd+Tab/Q/Space/etc. behave identically
+        # in the terminal and everywhere else. Its tab/grave swap into the same
+        # [switcher:M].
+        #
+        # [switcher:M] is the held-Super alt-tab layer (empty: Tab/Shift+Tab and
+        # grave/Shift+grave fall through with the layer's Super applied, so they
+        # emit Mod+Tab / Mod+Shift+Tab / Mod+grave that niri's recent-windows
+        # cycles). swap keeps it active until the Cmd key is released.
         extraConfig = ''
           [cmd:C]
-          tab = M-tab
-          grave = M-grave
+          tab = swapm(switcher, M-tab)
+          grave = swapm(switcher, M-grave)
           q = M-q
           space = M-space
           left = home
@@ -141,7 +164,15 @@ in {
           leftbrace = C-S-tab
           rightbrace = C-tab
 
-          [alt+shift]
+          [cmdterm:C-S]
+          tab = swapm(switcher, M-tab)
+          grave = swapm(switcher, M-grave)
+          q = M-q
+          space = M-space
+          left = home
+          right = end
+
+          [switcher:M]
         '';
       };
     };

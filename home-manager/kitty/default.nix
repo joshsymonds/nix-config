@@ -3,17 +3,19 @@
   pkgs,
   ...
 }: let
-  # Mac-style command key: `mod` = `cmd` on macOS (the real Cmd key), `alt`
-  # on Linux. On gnomon the keyd [kitty] app.conf rule points the physical Cmd
-  # key at the `alt` layer inside kitty (the corner key is real Ctrl globally
-  # for SIGINT/EOF, Super is the Option key for niri), so the command key
-  # copies/pastes via alt+. macOS keeps the real Cmd key. gnomon is the only
-  # interactive-kitty Linux host; on headless Linux servers kitty is unused so
-  # the choice is moot.
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
+  # Mac-style command key. `mod` = `cmd` on macOS (the real Cmd key), and
+  # `ctrl+shift` on Linux. On gnomon the keyd [kitty] rule points the physical
+  # Cmd key at the Ctrl+Shift-emulating [cmdterm] layer, so Cmd+<key> arrives
+  # here as Ctrl+Shift+<key> = kitty's native command chords. The corner key is
+  # real Control globally (SIGINT/EOF), and Super is the Option key for niri,
+  # so the WM/global Cmd shortcuts (Cmd+Tab/Q/Space/...) are handled in keyd and
+  # reach niri directly. gnomon is the only interactive-kitty Linux host; on
+  # headless Linux servers kitty is unused so the choice is moot.
   mod =
-    if pkgs.stdenv.hostPlatform.isDarwin
+    if isDarwin
     then "cmd"
-    else "alt";
+    else "ctrl+shift";
 in {
   programs.kitty = {
     enable = true;
@@ -22,71 +24,70 @@ in {
     font.size = 13;
     themeFile = "Catppuccin-Mocha";
 
-    keybindings = {
-      "kitty_mod" = "ctrl+shift";
+    keybindings =
+      {
+        "kitty_mod" = "ctrl+shift";
 
-      # Mac-style command-key shortcuts on `${mod}` (cmd on macOS, alt on
-      # Linux — see the `mod` binding at the top). On gnomon the physical Cmd
-      # key arrives as Alt inside kitty (keyd [kitty] rule), so these copy/
-      # paste/tab on the command key; on macOS they use the real Cmd key.
-      # Same finger, same result on both.
-      #
-      # Crucially absent: Ctrl+C / Ctrl+D are NOT bound — they stay raw to
-      # the shell as SIGINT / EOF. On gnomon that is the corner key, which is
-      # real Control globally (no kitty-specific remap); on macOS it is the
-      # Control key. Copy is the command key (${mod}+c), never Ctrl+C.
-      "${mod}+c" = "copy_to_clipboard";
-      "${mod}+v" = "paste_from_clipboard";
-      "${mod}+t" = "new_tab";
-      "${mod}+w" = "close_tab";
-      "${mod}+n" = "new_os_window";
-      "${mod}+1" = "goto_tab 1";
-      "${mod}+2" = "goto_tab 2";
-      "${mod}+3" = "goto_tab 3";
-      "${mod}+4" = "goto_tab 4";
-      "${mod}+5" = "goto_tab 5";
-      "${mod}+6" = "goto_tab 6";
-      "${mod}+7" = "goto_tab 7";
-      "${mod}+8" = "goto_tab 8";
-      "${mod}+9" = "goto_tab 9";
-      "${mod}+shift+]" = "next_tab";
-      "${mod}+shift+[" = "previous_tab";
-      "${mod}+plus" = "change_font_size all +2.0";
-      "${mod}+equal" = "change_font_size all +2.0";
-      "${mod}+minus" = "change_font_size all -2.0";
-      "${mod}+0" = "change_font_size all 0";
-      "${mod}+k" = "clear_terminal scrollback active";
-      "${mod}+f" = "show_scrollback";
-      "${mod}+enter" = "no_op";
-      "${mod}+shift+enter" = "no_op";
+        # Mac-style command-key shortcuts on `${mod}` (cmd on macOS, ctrl+shift
+        # on Linux — see the `mod` binding at the top). On gnomon the physical
+        # Cmd key arrives as Ctrl+Shift inside kitty (keyd [cmdterm] layer), so
+        # these copy/paste/tab on the command key; on macOS they use the real
+        # Cmd key. Same finger, same result on both.
+        #
+        # Crucially absent: Ctrl+C / Ctrl+D are NOT bound — they stay raw to
+        # the shell as SIGINT / EOF. On gnomon that is the corner key, which is
+        # real Control globally; on macOS it is the Control key. Copy is the
+        # command key (${mod}+c), never Ctrl+C.
+        "${mod}+c" = "copy_to_clipboard";
+        "${mod}+v" = "paste_from_clipboard";
+        "${mod}+t" = "new_tab";
+        "${mod}+w" = "close_tab";
+        "${mod}+n" = "new_os_window";
+        "${mod}+1" = "goto_tab 1";
+        "${mod}+2" = "goto_tab 2";
+        "${mod}+3" = "goto_tab 3";
+        "${mod}+4" = "goto_tab 4";
+        "${mod}+5" = "goto_tab 5";
+        "${mod}+6" = "goto_tab 6";
+        "${mod}+7" = "goto_tab 7";
+        "${mod}+8" = "goto_tab 8";
+        "${mod}+9" = "goto_tab 9";
+        "${mod}+equal" = "change_font_size all +2.0";
+        "${mod}+minus" = "change_font_size all -2.0";
+        "${mod}+0" = "change_font_size all 0";
+        "${mod}+k" = "clear_terminal scrollback active";
+        "${mod}+f" = "show_scrollback";
+        "${mod}+enter" = "no_op";
 
-      # Also map Ctrl+V for paste in terminal apps (corner key on gnomon).
-      "ctrl+v" = "paste_from_clipboard";
+        # Also map Ctrl+V for paste in terminal apps (corner key on gnomon).
+        "ctrl+v" = "paste_from_clipboard";
 
-      # Tab cycling on the Control key: the corner key on gnomon (real Control
-      # globally, so corner+Tab → ctrl+tab → next_tab here; the Cmd key drives
-      # the niri window switcher via Super+Tab instead), the real Control key
-      # on macOS. Same finger, same result on both — Mac-conventional either way.
-      "ctrl+tab" = "next_tab";
-      "ctrl+shift+tab" = "previous_tab";
+        # Tab cycling on the corner Control key (real Control on both gnomon and
+        # macOS). On gnomon the Cmd key drives the niri window switcher via
+        # Super+Tab instead (keyd), so this is purely the corner-key cycle.
+        "ctrl+tab" = "next_tab";
+        "ctrl+shift+tab" = "previous_tab";
 
-      # kitty_mod (= Ctrl+Shift) variants — Linux convention fallback.
-      "kitty_mod+c" = "copy_to_clipboard";
-      "kitty_mod+v" = "paste_from_clipboard";
-      "kitty_mod+s" = "launch --type=overlay --cwd=current cursor -";
-      "kitty_mod+l" = "clear_terminal scrollback active";
-      "kitty_mod+t" = "new_tab";
-      "kitty_mod+1" = "goto_tab 1";
-      "kitty_mod+2" = "goto_tab 2";
-      "kitty_mod+3" = "goto_tab 3";
-      "kitty_mod+4" = "goto_tab 4";
-      "kitty_mod+5" = "goto_tab 5";
-      "kitty_mod+6" = "goto_tab 6";
-      "kitty_mod+shift+]" = "next_tab";
-      "kitty_mod+shift+[" = "previous_tab";
-      "kitty_mod+h" = "show_scrollback";
-      "kitty_mod+g" = "show_last_non_empty_command_output";
-    };
+        # Secondary tools on kitty_mod (= Ctrl+Shift): reachable via the Cmd key
+        # on gnomon (Cmd → Ctrl+Shift), and via Ctrl+Shift on macOS.
+        "kitty_mod+s" = "launch --type=overlay --cwd=current cursor -";
+        "kitty_mod+l" = "clear_terminal scrollback active";
+        "kitty_mod+h" = "show_scrollback";
+        "kitty_mod+g" = "show_last_non_empty_command_output";
+      }
+      # Cmd+Shift+[/] tab cycling. On macOS that's the literal chord; on Linux
+      # keyd's [cmdterm] turns Cmd+[/] into Ctrl+Shift+[/], which kitty cycles.
+      // (
+        if isDarwin
+        then {
+          "cmd+shift+]" = "next_tab";
+          "cmd+shift+[" = "previous_tab";
+        }
+        else {
+          "ctrl+shift+]" = "next_tab";
+          "ctrl+shift+[" = "previous_tab";
+        }
+      );
 
     settings = {
       "cursor_trail" = 1;

@@ -355,324 +355,324 @@ in {
   # move off Alt — games never press Super here, so there is nothing to
   # yield. DMS feature binds that were already on Super stay on Super.
   programs.niri.settings.binds = {
-      # ── Window lifecycle ──────────────────────────────────────────
-      "${mod}+Q" = {
-        hotkey-overlay.title = "Close Window";
-        action.close-window = [];
-      };
-
-      # ── Focus motion ──────────────────────────────────────────────
-      # H/L walk columns and hop to the next monitor when the current
-      # monitor is exhausted. J/K walk stacked windows in the focused
-      # column and fall through to the previous/next workspace when the
-      # stack is exhausted. Niri keeps exactly one empty trailing
-      # workspace per monitor and auto-creates/collapses as needed.
-      "${mod}+H".action.focus-column-or-monitor-left = [];
-      "${mod}+L".action.focus-column-or-monitor-right = [];
-      "${mod}+J".action.focus-window-or-workspace-down = [];
-      "${mod}+K".action.focus-window-or-workspace-up = [];
-
-      # ── Reorder (Shift = reorder, mirrors focus motion) ───────────
-      # Shift+H/L: shove the focused column left/right. When already at
-      # the edge, falls through to the next monitor — same edge-crossing
-      # shape as the Alt+H/L focus binds.
-      # Shift+J/K: reorder the focused window within its stacked column,
-      # falling through to the previous/next workspace when the stack is
-      # exhausted — mirrors the focus binds.
-      "${mod}+Shift+H".action.move-column-left-or-to-monitor-left = [];
-      "${mod}+Shift+L".action.move-column-right-or-to-monitor-right = [];
-      "${mod}+Shift+J".action.move-window-down-or-to-workspace-down = [];
-      "${mod}+Shift+K".action.move-window-up-or-to-workspace-up = [];
-
-      # ── Resize ────────────────────────────────────────────────────
-      # R cycles the column through preset widths (1/3, 1/2, 2/3).
-      # Shift+R cycles the focused window through preset heights —
-      # useful for stacked columns where you want one window to take
-      # more vertical space than its siblings.
-      "${mod}+R" = {
-        hotkey-overlay.title = "Cycle Column Width";
-        action.switch-preset-column-width = [];
-      };
-      "${mod}+Shift+R" = {
-        hotkey-overlay.title = "Cycle Window Height";
-        action.switch-preset-window-height = [];
-      };
-
-      # ── Focus modes (replaces modal workspaces) ───────────────────
-      # F: fullscreen the focused window (covers the whole monitor;
-      # other columns hidden). This is what was previously a Zoom
-      # workspace — Alt+F on the Zoom window IS call mode. Alt+F again
-      # exits fullscreen.
-      # Shift+F: maximize column to fill the monitor (other columns
-      # scrolled off but still on the workspace, no fullscreen).
-      "${mod}+F" = {
-        hotkey-overlay.title = "Fullscreen Window";
-        action.fullscreen-window = [];
-      };
-      "${mod}+Shift+F" = {
-        hotkey-overlay.title = "Maximize Column";
-        action.maximize-column = [];
-      };
-
-      # ── Stack manipulation ────────────────────────────────────────
-      # Shift+I: pull the right neighbor INTO this column, stacking it.
-      # Shift+O: expel the focused window OUT of this column, into a new
-      #    column to the right.
-      # Shift+T: toggle the focused column between split (all stacked windows
-      #    visible at fractional height) and tabbed (only one visible,
-      #    J/K to swap) display.
-      # The bare Alt+I/O/T slots are now launcher binds (see below) — these
-      # WM ops moved to Alt+Shift to free those letters for app focus-or-spawn.
-      "${mod}+Shift+I" = {
-        hotkey-overlay.title = "Consume Window into Column";
-        action.consume-window-into-column = [];
-      };
-      "${mod}+Shift+O" = {
-        hotkey-overlay.title = "Expel Window from Column";
-        action.expel-window-from-column = [];
-      };
-      "${mod}+Shift+T" = {
-        hotkey-overlay.title = "Toggle Tabbed Column";
-        action.toggle-column-tabbed-display = [];
-      };
-
-      # ── App launchers (focus-or-spawn) ────────────────────────────
-      # Each bind hits the named app's window if one exists (cycling
-      # between matches if multiple), else spawns it via niri so the
-      # window lands through the same code path as action.spawn. app_id
-      # match is case-insensitive exact — covers the Slack/spotify
-      # capitalisation drift without per-bind regex.
-      #
-      # If a launcher fails to find an existing window after launch,
-      # check `niri msg --json windows | jq '.[].app_id'` against the
-      # --app-id below — Electron apps occasionally drift their app_id
-      # across versions and the bind needs a one-letter update.
-      "${mod}+M" = {
-        hotkey-overlay.title = "Focus or Launch Spotify";
-        action.spawn = ["focus-or-spawn" "--app-id" "spotify" "--" "spotify"];
-      };
-      "${mod}+O" = {
-        hotkey-overlay.title = "Focus or Launch Claude";
-        action.spawn = ["focus-or-spawn" "--app-id" "claude-desktop" "--" "claude-desktop"];
-      };
-      "${mod}+W" = {
-        hotkey-overlay.title = "Focus or Launch Firefox";
-        action.spawn = ["focus-or-spawn" "--app-id" "firefox" "--" "firefox"];
-      };
-      "${mod}+T" = {
-        hotkey-overlay.title = "Focus or Launch Kitty";
-        action.spawn = ["focus-or-spawn" "--app-id" "kitty" "--" "kitty"];
-      };
-      "${mod}+S" = {
-        hotkey-overlay.title = "Focus or Launch Slack";
-        action.spawn = ["focus-or-spawn" "--app-id" "slack" "--" "slack"];
-      };
-      "${mod}+C" = {
-        hotkey-overlay.title = "Focus or Launch Signal";
-        action.spawn = ["focus-or-spawn" "--app-id" "signal" "--" "signal-desktop"];
-      };
-      "${mod}+D" = {
-        hotkey-overlay.title = "Focus or Launch Vesktop";
-        action.spawn = ["focus-or-spawn" "--app-id" "vesktop" "--" "vesktop"];
-      };
-      "${mod}+I" = {
-        hotkey-overlay.title = "Focus or Launch Morgen";
-        action.spawn = ["focus-or-spawn" "--app-id" "Morgen" "--" "morgen"];
-      };
-      "${mod}+N" = {
-        hotkey-overlay.title = "Focus or Launch Obsidian";
-        action.spawn = ["focus-or-spawn" "--app-id" "obsidian" "--" "obsidian"];
-      };
-      # E = filEs/Explorer (Alt+F is Fullscreen). cosmic-files takes no
-      # path arg — its Exec is `cosmic-files %U`, so bare launch opens the
-      # last/home dir. app_id is the libcosmic default; if a launch ever
-      # fails to refocus, check `niri msg --json windows | jq '.[].app_id'`.
-      "${mod}+E" = {
-        hotkey-overlay.title = "Focus or Launch Files";
-        action.spawn = ["focus-or-spawn" "--app-id" "com.system76.CosmicFiles" "--" "cosmic-files"];
-      };
-      # Alt+1 → 1Password. The leading "1" of the app name is the mnemonic;
-      # nothing else here binds a digit, and niri's default workspace
-      # switching lives on Mod+1..9, so this doesn't shadow anything.
-      "${mod}+1" = {
-        hotkey-overlay.title = "Focus or Launch 1Password";
-        action.spawn = ["focus-or-spawn" "--app-id" "1Password" "--" "1password"];
-      };
-      # Zoom is special-cased because its app_id "Zoom" covers many
-      # top-levels (hub "Zoom Workplace …", chat, settings, annotate
-      # toolbar, screen-share controls). Tier the lookup:
-      #   1. In-call video window (title exactly "Meeting") — preferred
-      #      target during a call.
-      #   2. Hub ("Zoom Workplace …") — has the Join/Start/Schedule UI,
-      #      so focusing it is what we want when no meeting is live.
-      #   3. Nothing open → gtk-launch the desktop entry. This MUST go
-      #      through us.zoom.Zoom.desktop (hosts/gnomon nix.xdg.dataFile)
-      #      so the zoom-bypass-zoomlauncher wrapper and any OBS/exec
-      #      shimming in that .desktop apply. Direct `flatpak run` would
-      #      bypass the wrapper and SIGILL on NVIDIA.
-      "${mod}+Z" = {
-        hotkey-overlay.title = "Focus or Launch Zoom";
-        action.spawn = [
-          "focus-or-spawn"
-          "--app-id"
-          "Zoom"
-          "--title-regex"
-          "^Meeting$"
-          "--"
-          "focus-or-spawn"
-          "--app-id"
-          "Zoom"
-          "--title-regex"
-          "^Zoom Workplace"
-          "--"
-          "${pkgs.gtk3}/bin/gtk-launch"
-          "us.zoom.Zoom"
-        ];
-      };
-
-      # ── DMS shell features ────────────────────────────────────────
-      # These live on Super directly. On gnomon Super is the Option key
-      # (the keyd remap), so spotlight is Option+Space and settings is
-      # Option+Comma; the WM/launcher binds above also ride Super there.
-      "Super+Space" = {
-        hotkey-overlay.title = "Toggle Application Launcher";
-        action.spawn = ["dms" "ipc" "call" "spotlight" "toggle"];
-      };
-      "Super+Comma" = {
-        hotkey-overlay.title = "Toggle Settings";
-        action.spawn = ["dms" "ipc" "call" "settings" "toggle"];
-      };
-      # Cmd+Tab / Cmd+Shift+Tab / Cmd+` / Cmd+Shift+` are handled by
-      # niri's built-in `recent-windows` config defaults (Mod+Tab etc.,
-      # Mod = Super) — no explicit bind needed here.
-
-      # DMS toggles that have no Mac convention — they live alongside the
-      # WM binds on ${mod}.
-      "${mod}+P" = {
-        hotkey-overlay.title = "Toggle Notepad";
-        action.spawn = ["dms" "ipc" "call" "notepad" "toggle"];
-      };
-      "${mod}+X" = {
-        hotkey-overlay.title = "Toggle Power Menu";
-        action.spawn = ["dms" "ipc" "call" "powermenu" "toggle"];
-      };
-      "${mod}+V" = {
-        hotkey-overlay.title = "Toggle Clipboard Manager";
-        action.spawn = ["dms" "ipc" "call" "clipboard" "toggle"];
-      };
-      # Lock and night mode on ${mod}+Shift (Q/N). They must not touch the
-      # Alt or Ctrl keysyms (those belong to games on gnomon), and the bare
-      # ${mod}+Q/${mod}+N slots are taken (close-window / Obsidian
-      # launcher), so they sit on the Shift variants.
-      "${mod}+Shift+Q" = {
-        hotkey-overlay.title = "Lock Screen";
-        action.spawn = ["dms" "ipc" "call" "lock" "lock"];
-      };
-      "${mod}+Shift+N" = {
-        allow-when-locked = true;
-        hotkey-overlay.title = "Toggle Night Mode";
-        action.spawn = ["dms" "ipc" "call" "night" "toggle"];
-      };
-
-      "${mod}+Shift+Slash" = {
-        hotkey-overlay.title = "Show Hotkeys";
-        action.show-hotkey-overlay = [];
-      };
-
-      # ── Screenshots ───────────────────────────────────────────────
-      # Two parallel bindsets, both writing to ~/Pictures/Screenshots and
-      # copying to the clipboard:
-      #
-      #   Print key (PrtSc): Print = interactive picker, ${mod}+Print =
-      #     focused window, Shift+Print = region → satty annotate. (The Q6
-      #     HE's PrtSc currently emits something other than KEY_SYSRQ, so
-      #     these are dormant fallbacks.) Whole-monitor lives on the
-      #     Mac-style set below; the old Ctrl+Print variant was dropped to
-      #     keep niri off the Ctrl keysym.
-      #
-      #   Super+Shift+3/4/5 (Mac-style, the Cmd/Super key — Option on
-      #     gnomon): 3 = whole monitor, 4 = interactive picker, 5 = satty.
-      #
-      # Annotation pipeline lives in `sattyPipeline` (top of file).
-      "Print" = {
-        hotkey-overlay.title = "Screenshot";
-        action.screenshot = [];
-      };
-      "${mod}+Print" = {
-        hotkey-overlay.title = "Screenshot Window";
-        action.screenshot-window = [];
-      };
-      "Shift+Print" = {
-        hotkey-overlay.title = "Region Screenshot → Annotate";
-        action.spawn = sattyPipeline;
-      };
-
-      "Super+Shift+3" = {
-        hotkey-overlay.title = "Screenshot Monitor";
-        action.screenshot-screen = [];
-      };
-      "Super+Shift+4" = {
-        hotkey-overlay.title = "Screenshot";
-        action.screenshot = [];
-      };
-      "Super+Shift+5" = {
-        hotkey-overlay.title = "Region Screenshot → Annotate";
-        action.spawn = sattyPipeline;
-      };
-
-      # Audio + brightness keys: pass through to DMS for the OSD.
-      # allow-when-locked so they keep working on the lock screen.
-      "XF86AudioRaiseVolume" = {
-        allow-when-locked = true;
-        action.spawn = ["dms" "ipc" "call" "audio" "increment" "3"];
-      };
-      "XF86AudioLowerVolume" = {
-        allow-when-locked = true;
-        action.spawn = ["dms" "ipc" "call" "audio" "decrement" "3"];
-      };
-      "XF86AudioMute" = {
-        allow-when-locked = true;
-        action.spawn = ["dms" "ipc" "call" "audio" "mute"];
-      };
-      "XF86AudioMicMute" = {
-        allow-when-locked = true;
-        action.spawn = ["dms" "ipc" "call" "audio" "micmute"];
-      };
-
-      # Media transport: route through DMS's mpris IPC so the on-screen
-      # OSD shows track/state, exactly like the audio binds above. DMS
-      # talks MPRIS to whatever player is active (mpv, Spotify, browser).
-      # XF86AudioPlay and XF86AudioPause both toggle: some keyboards emit
-      # one, some the other, some alternate — playPause is correct for all.
-      "XF86AudioPlay" = {
-        allow-when-locked = true;
-        action.spawn = ["dms" "ipc" "call" "mpris" "playPause"];
-      };
-      "XF86AudioPause" = {
-        allow-when-locked = true;
-        action.spawn = ["dms" "ipc" "call" "mpris" "playPause"];
-      };
-      "XF86AudioNext" = {
-        allow-when-locked = true;
-        action.spawn = ["dms" "ipc" "call" "mpris" "next"];
-      };
-      "XF86AudioPrev" = {
-        allow-when-locked = true;
-        action.spawn = ["dms" "ipc" "call" "mpris" "previous"];
-      };
-      "XF86AudioStop" = {
-        allow-when-locked = true;
-        action.spawn = ["dms" "ipc" "call" "mpris" "stop"];
-      };
-      "XF86MonBrightnessUp" = {
-        allow-when-locked = true;
-        action.spawn = ["dms" "ipc" "call" "brightness" "increment" "5" ""];
-      };
-      "XF86MonBrightnessDown" = {
-        allow-when-locked = true;
-        action.spawn = ["dms" "ipc" "call" "brightness" "decrement" "5" ""];
-      };
+    # ── Window lifecycle ──────────────────────────────────────────
+    "${mod}+Q" = {
+      hotkey-overlay.title = "Close Window";
+      action.close-window = [];
     };
+
+    # ── Focus motion ──────────────────────────────────────────────
+    # H/L walk columns and hop to the next monitor when the current
+    # monitor is exhausted. J/K walk stacked windows in the focused
+    # column and fall through to the previous/next workspace when the
+    # stack is exhausted. Niri keeps exactly one empty trailing
+    # workspace per monitor and auto-creates/collapses as needed.
+    "${mod}+H".action.focus-column-or-monitor-left = [];
+    "${mod}+L".action.focus-column-or-monitor-right = [];
+    "${mod}+J".action.focus-window-or-workspace-down = [];
+    "${mod}+K".action.focus-window-or-workspace-up = [];
+
+    # ── Reorder (Shift = reorder, mirrors focus motion) ───────────
+    # Shift+H/L: shove the focused column left/right. When already at
+    # the edge, falls through to the next monitor — same edge-crossing
+    # shape as the Alt+H/L focus binds.
+    # Shift+J/K: reorder the focused window within its stacked column,
+    # falling through to the previous/next workspace when the stack is
+    # exhausted — mirrors the focus binds.
+    "${mod}+Shift+H".action.move-column-left-or-to-monitor-left = [];
+    "${mod}+Shift+L".action.move-column-right-or-to-monitor-right = [];
+    "${mod}+Shift+J".action.move-window-down-or-to-workspace-down = [];
+    "${mod}+Shift+K".action.move-window-up-or-to-workspace-up = [];
+
+    # ── Resize ────────────────────────────────────────────────────
+    # R cycles the column through preset widths (1/3, 1/2, 2/3).
+    # Shift+R cycles the focused window through preset heights —
+    # useful for stacked columns where you want one window to take
+    # more vertical space than its siblings.
+    "${mod}+R" = {
+      hotkey-overlay.title = "Cycle Column Width";
+      action.switch-preset-column-width = [];
+    };
+    "${mod}+Shift+R" = {
+      hotkey-overlay.title = "Cycle Window Height";
+      action.switch-preset-window-height = [];
+    };
+
+    # ── Focus modes (replaces modal workspaces) ───────────────────
+    # F: fullscreen the focused window (covers the whole monitor;
+    # other columns hidden). This is what was previously a Zoom
+    # workspace — Alt+F on the Zoom window IS call mode. Alt+F again
+    # exits fullscreen.
+    # Shift+F: maximize column to fill the monitor (other columns
+    # scrolled off but still on the workspace, no fullscreen).
+    "${mod}+F" = {
+      hotkey-overlay.title = "Fullscreen Window";
+      action.fullscreen-window = [];
+    };
+    "${mod}+Shift+F" = {
+      hotkey-overlay.title = "Maximize Column";
+      action.maximize-column = [];
+    };
+
+    # ── Stack manipulation ────────────────────────────────────────
+    # Shift+I: pull the right neighbor INTO this column, stacking it.
+    # Shift+O: expel the focused window OUT of this column, into a new
+    #    column to the right.
+    # Shift+T: toggle the focused column between split (all stacked windows
+    #    visible at fractional height) and tabbed (only one visible,
+    #    J/K to swap) display.
+    # The bare Alt+I/O/T slots are now launcher binds (see below) — these
+    # WM ops moved to Alt+Shift to free those letters for app focus-or-spawn.
+    "${mod}+Shift+I" = {
+      hotkey-overlay.title = "Consume Window into Column";
+      action.consume-window-into-column = [];
+    };
+    "${mod}+Shift+O" = {
+      hotkey-overlay.title = "Expel Window from Column";
+      action.expel-window-from-column = [];
+    };
+    "${mod}+Shift+T" = {
+      hotkey-overlay.title = "Toggle Tabbed Column";
+      action.toggle-column-tabbed-display = [];
+    };
+
+    # ── App launchers (focus-or-spawn) ────────────────────────────
+    # Each bind hits the named app's window if one exists (cycling
+    # between matches if multiple), else spawns it via niri so the
+    # window lands through the same code path as action.spawn. app_id
+    # match is case-insensitive exact — covers the Slack/spotify
+    # capitalisation drift without per-bind regex.
+    #
+    # If a launcher fails to find an existing window after launch,
+    # check `niri msg --json windows | jq '.[].app_id'` against the
+    # --app-id below — Electron apps occasionally drift their app_id
+    # across versions and the bind needs a one-letter update.
+    "${mod}+M" = {
+      hotkey-overlay.title = "Focus or Launch Spotify";
+      action.spawn = ["focus-or-spawn" "--app-id" "spotify" "--" "spotify"];
+    };
+    "${mod}+O" = {
+      hotkey-overlay.title = "Focus or Launch Claude";
+      action.spawn = ["focus-or-spawn" "--app-id" "claude-desktop" "--" "claude-desktop"];
+    };
+    "${mod}+W" = {
+      hotkey-overlay.title = "Focus or Launch Firefox";
+      action.spawn = ["focus-or-spawn" "--app-id" "firefox" "--" "firefox"];
+    };
+    "${mod}+T" = {
+      hotkey-overlay.title = "Focus or Launch Kitty";
+      action.spawn = ["focus-or-spawn" "--app-id" "kitty" "--" "kitty"];
+    };
+    "${mod}+S" = {
+      hotkey-overlay.title = "Focus or Launch Slack";
+      action.spawn = ["focus-or-spawn" "--app-id" "slack" "--" "slack"];
+    };
+    "${mod}+C" = {
+      hotkey-overlay.title = "Focus or Launch Signal";
+      action.spawn = ["focus-or-spawn" "--app-id" "signal" "--" "signal-desktop"];
+    };
+    "${mod}+D" = {
+      hotkey-overlay.title = "Focus or Launch Vesktop";
+      action.spawn = ["focus-or-spawn" "--app-id" "vesktop" "--" "vesktop"];
+    };
+    "${mod}+I" = {
+      hotkey-overlay.title = "Focus or Launch Morgen";
+      action.spawn = ["focus-or-spawn" "--app-id" "Morgen" "--" "morgen"];
+    };
+    "${mod}+N" = {
+      hotkey-overlay.title = "Focus or Launch Obsidian";
+      action.spawn = ["focus-or-spawn" "--app-id" "obsidian" "--" "obsidian"];
+    };
+    # E = filEs/Explorer (Alt+F is Fullscreen). cosmic-files takes no
+    # path arg — its Exec is `cosmic-files %U`, so bare launch opens the
+    # last/home dir. app_id is the libcosmic default; if a launch ever
+    # fails to refocus, check `niri msg --json windows | jq '.[].app_id'`.
+    "${mod}+E" = {
+      hotkey-overlay.title = "Focus or Launch Files";
+      action.spawn = ["focus-or-spawn" "--app-id" "com.system76.CosmicFiles" "--" "cosmic-files"];
+    };
+    # Alt+1 → 1Password. The leading "1" of the app name is the mnemonic;
+    # nothing else here binds a digit, and niri's default workspace
+    # switching lives on Mod+1..9, so this doesn't shadow anything.
+    "${mod}+1" = {
+      hotkey-overlay.title = "Focus or Launch 1Password";
+      action.spawn = ["focus-or-spawn" "--app-id" "1Password" "--" "1password"];
+    };
+    # Zoom is special-cased because its app_id "Zoom" covers many
+    # top-levels (hub "Zoom Workplace …", chat, settings, annotate
+    # toolbar, screen-share controls). Tier the lookup:
+    #   1. In-call video window (title exactly "Meeting") — preferred
+    #      target during a call.
+    #   2. Hub ("Zoom Workplace …") — has the Join/Start/Schedule UI,
+    #      so focusing it is what we want when no meeting is live.
+    #   3. Nothing open → gtk-launch the desktop entry. This MUST go
+    #      through us.zoom.Zoom.desktop (hosts/gnomon nix.xdg.dataFile)
+    #      so the zoom-bypass-zoomlauncher wrapper and any OBS/exec
+    #      shimming in that .desktop apply. Direct `flatpak run` would
+    #      bypass the wrapper and SIGILL on NVIDIA.
+    "${mod}+Z" = {
+      hotkey-overlay.title = "Focus or Launch Zoom";
+      action.spawn = [
+        "focus-or-spawn"
+        "--app-id"
+        "Zoom"
+        "--title-regex"
+        "^Meeting$"
+        "--"
+        "focus-or-spawn"
+        "--app-id"
+        "Zoom"
+        "--title-regex"
+        "^Zoom Workplace"
+        "--"
+        "${pkgs.gtk3}/bin/gtk-launch"
+        "us.zoom.Zoom"
+      ];
+    };
+
+    # ── DMS shell features ────────────────────────────────────────
+    # These live on Super directly. On gnomon Super is the Option key
+    # (the keyd remap), so spotlight is Option+Space and settings is
+    # Option+Comma; the WM/launcher binds above also ride Super there.
+    "Super+Space" = {
+      hotkey-overlay.title = "Toggle Application Launcher";
+      action.spawn = ["dms" "ipc" "call" "spotlight" "toggle"];
+    };
+    "Super+Comma" = {
+      hotkey-overlay.title = "Toggle Settings";
+      action.spawn = ["dms" "ipc" "call" "settings" "toggle"];
+    };
+    # Cmd+Tab / Cmd+Shift+Tab / Cmd+` / Cmd+Shift+` are handled by
+    # niri's built-in `recent-windows` config defaults (Mod+Tab etc.,
+    # Mod = Super) — no explicit bind needed here.
+
+    # DMS toggles that have no Mac convention — they live alongside the
+    # WM binds on ${mod}.
+    "${mod}+P" = {
+      hotkey-overlay.title = "Toggle Notepad";
+      action.spawn = ["dms" "ipc" "call" "notepad" "toggle"];
+    };
+    "${mod}+X" = {
+      hotkey-overlay.title = "Toggle Power Menu";
+      action.spawn = ["dms" "ipc" "call" "powermenu" "toggle"];
+    };
+    "${mod}+V" = {
+      hotkey-overlay.title = "Toggle Clipboard Manager";
+      action.spawn = ["dms" "ipc" "call" "clipboard" "toggle"];
+    };
+    # Lock and night mode on ${mod}+Shift (Q/N). They must not touch the
+    # Alt or Ctrl keysyms (those belong to games on gnomon), and the bare
+    # ${mod}+Q/${mod}+N slots are taken (close-window / Obsidian
+    # launcher), so they sit on the Shift variants.
+    "${mod}+Shift+Q" = {
+      hotkey-overlay.title = "Lock Screen";
+      action.spawn = ["dms" "ipc" "call" "lock" "lock"];
+    };
+    "${mod}+Shift+N" = {
+      allow-when-locked = true;
+      hotkey-overlay.title = "Toggle Night Mode";
+      action.spawn = ["dms" "ipc" "call" "night" "toggle"];
+    };
+
+    "${mod}+Shift+Slash" = {
+      hotkey-overlay.title = "Show Hotkeys";
+      action.show-hotkey-overlay = [];
+    };
+
+    # ── Screenshots ───────────────────────────────────────────────
+    # Two parallel bindsets, both writing to ~/Pictures/Screenshots and
+    # copying to the clipboard:
+    #
+    #   Print key (PrtSc): Print = interactive picker, ${mod}+Print =
+    #     focused window, Shift+Print = region → satty annotate. (The Q6
+    #     HE's PrtSc currently emits something other than KEY_SYSRQ, so
+    #     these are dormant fallbacks.) Whole-monitor lives on the
+    #     Mac-style set below; the old Ctrl+Print variant was dropped to
+    #     keep niri off the Ctrl keysym.
+    #
+    #   Super+Shift+3/4/5 (Mac-style, the Cmd/Super key — Option on
+    #     gnomon): 3 = whole monitor, 4 = interactive picker, 5 = satty.
+    #
+    # Annotation pipeline lives in `sattyPipeline` (top of file).
+    "Print" = {
+      hotkey-overlay.title = "Screenshot";
+      action.screenshot = [];
+    };
+    "${mod}+Print" = {
+      hotkey-overlay.title = "Screenshot Window";
+      action.screenshot-window = [];
+    };
+    "Shift+Print" = {
+      hotkey-overlay.title = "Region Screenshot → Annotate";
+      action.spawn = sattyPipeline;
+    };
+
+    "Super+Shift+3" = {
+      hotkey-overlay.title = "Screenshot Monitor";
+      action.screenshot-screen = [];
+    };
+    "Super+Shift+4" = {
+      hotkey-overlay.title = "Screenshot";
+      action.screenshot = [];
+    };
+    "Super+Shift+5" = {
+      hotkey-overlay.title = "Region Screenshot → Annotate";
+      action.spawn = sattyPipeline;
+    };
+
+    # Audio + brightness keys: pass through to DMS for the OSD.
+    # allow-when-locked so they keep working on the lock screen.
+    "XF86AudioRaiseVolume" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "audio" "increment" "3"];
+    };
+    "XF86AudioLowerVolume" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "audio" "decrement" "3"];
+    };
+    "XF86AudioMute" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "audio" "mute"];
+    };
+    "XF86AudioMicMute" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "audio" "micmute"];
+    };
+
+    # Media transport: route through DMS's mpris IPC so the on-screen
+    # OSD shows track/state, exactly like the audio binds above. DMS
+    # talks MPRIS to whatever player is active (mpv, Spotify, browser).
+    # XF86AudioPlay and XF86AudioPause both toggle: some keyboards emit
+    # one, some the other, some alternate — playPause is correct for all.
+    "XF86AudioPlay" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "mpris" "playPause"];
+    };
+    "XF86AudioPause" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "mpris" "playPause"];
+    };
+    "XF86AudioNext" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "mpris" "next"];
+    };
+    "XF86AudioPrev" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "mpris" "previous"];
+    };
+    "XF86AudioStop" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "mpris" "stop"];
+    };
+    "XF86MonBrightnessUp" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "brightness" "increment" "5" ""];
+    };
+    "XF86MonBrightnessDown" = {
+      allow-when-locked = true;
+      action.spawn = ["dms" "ipc" "call" "brightness" "decrement" "5" ""];
+    };
+  };
 
   # Niri config that DMS used to write into ~/.config/niri/dms/*.kdl,
   # ported into nix-typed niri-flake settings.

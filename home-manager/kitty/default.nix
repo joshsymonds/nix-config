@@ -86,6 +86,13 @@ in {
         else {
           "ctrl+shift+]" = "next_tab";
           "ctrl+shift+[" = "previous_tab";
+          # Option+Enter inserts a newline in Claude Code (and any readline/Ink
+          # prompt). keyd maps the Option key to Super, so Option+Enter arrives
+          # here as super+enter — no longer Alt+Enter — and matches no newline
+          # binding. Translate it to a literal Ctrl+J (\n), which IS Claude
+          # Code's `chat:newline`; sending the raw byte works over SSH without
+          # relying on the kitty keyboard protocol reaching the remote.
+          "super+enter" = "send_text all \\n";
         }
       );
 

@@ -64,30 +64,28 @@ in {
       keyboards.default = {
         ids = ["*"];
 
-        # Static 3-key modifier remap. See the option description above for
-        # the full rationale; in short, this relabels the EMITTED modifier
-        # per physical key so the desktop is Mac-correct and bare-Proton
-        # games get clean Ctrl+Alt with niri off those keysyms entirely.
+        # Static modifier remap, using keyd's `layer(<mod>)` modifier idiom
+        # (NOT bare keycode assignment like `leftctrl = leftalt`). keyd warns
+        # against the bare form and it misbehaves here: each target modifier
+        # is ITSELF remapped, so `leftctrl = leftalt` doesn't yield a clean
+        # Alt — apps fall back to the raw key. `layer(<mod>)` momentarily
+        # activates that modifier while the key is held, independent of the
+        # other remaps, so the emitted modifier is unambiguous.
         #
-        #   corner Ctrl key -> Alt    (leftctrl/rightctrl = leftalt)
-        #   Option          -> Super  (leftalt/rightalt   = leftmeta)
-        #   Cmd (by space)  -> Ctrl   (leftmeta/rightmeta = leftctrl)
+        #   corner Ctrl key -> Alt    (leftctrl/rightctrl = layer(alt))
+        #   Option          -> Super  (leftalt/rightalt   = layer(meta))
+        #   Cmd (by space)  -> Ctrl   (leftmeta/rightmeta = layer(control))
         #
-        # This is the canonical keyd "swap modifiers" idiom — direct [main]
-        # key-to-key rebinds, no stateful layers, no overload. kitty swaps
-        # Alt<->Ctrl back for itself via app.conf so the terminal keeps
-        # interrupt on the corner and copy on the command key (see the
-        # home-manager host module).
-        #
-        # Mirrored left/right so both physical Cmd/Option/Ctrl keys behave
-        # alike regardless of which one the user reaches for.
+        # kitty swaps Alt<->Ctrl back for itself via app.conf (also with
+        # layer()) so the terminal keeps interrupt on the corner and copy on
+        # the command key. Mirrored left/right.
         settings.main = {
-          leftctrl = "leftalt";
-          rightctrl = "leftalt";
-          leftalt = "leftmeta";
-          rightalt = "leftmeta";
-          leftmeta = "leftctrl";
-          rightmeta = "leftctrl";
+          leftctrl = "layer(alt)";
+          rightctrl = "layer(alt)";
+          leftalt = "layer(meta)";
+          rightalt = "layer(meta)";
+          leftmeta = "layer(control)";
+          rightmeta = "layer(control)";
 
           # Caps Lock -> Escape at the evdev layer (keyd, not xkb) so the
           # remap reaches apps that read raw scancodes (Steam/Proton games)
@@ -98,6 +96,16 @@ in {
           # Wayland, on TTYs, and in games alike.
           capslock = "esc";
         };
+
+        # Declare the control+shift composite layer so per-app overrides in
+        # ~/.config/keyd/app.conf can bind against it (keyd refuses dynamic
+        # binds against an undeclared composite). Empty = falls through to
+        # plain Ctrl+Shift everywhere except where an app.conf rule overrides
+        # it (e.g. Firefox tab cycling on Cmd+Shift+]/[). Composite layers
+        # must be declared after their components; control/shift are built-ins.
+        extraConfig = ''
+          [control+shift]
+        '';
       };
     };
 

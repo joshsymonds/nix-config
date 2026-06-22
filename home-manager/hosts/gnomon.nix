@@ -183,10 +183,19 @@
   # app_id (split on `|`), so `[kitty]` matches the kitty window class.
   xdg.configFile."keyd/app.conf".text = ''
     [kitty]
-    leftctrl = leftctrl
-    leftmeta = leftalt
-    rightctrl = leftctrl
-    rightmeta = leftalt
+    leftctrl = layer(control)
+    leftmeta = layer(alt)
+    rightctrl = layer(control)
+    rightmeta = layer(alt)
+
+    # Firefox: Mac-style tab cycling. The user's Cmd+Shift+]/[ muscle memory
+    # arrives here as Ctrl+Shift+]/[ (Cmd → Ctrl globally), which Firefox
+    # doesn't bind. Translate to Firefox's native Ctrl+Tab / Ctrl+Shift+Tab.
+    # Targets the [control+shift] composite layer (declared in
+    # modules/services/keyd.nix); plain Cmd+]/[ keep their Ctrl+]/[ meaning.
+    [firefox]
+    control+shift.rightbrace = C-tab
+    control+shift.leftbrace = C-S-tab
   '';
 
   # Restart keyd-application-mapper when app.conf changes. The mapper

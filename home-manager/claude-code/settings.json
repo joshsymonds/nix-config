@@ -27,6 +27,17 @@
     "command": "~/.claude/bin/cc-tools subagent-statusline"
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/destructive-guard.py"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "",

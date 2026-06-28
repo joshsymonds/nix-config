@@ -146,6 +146,7 @@ in {
         yq
         jq
         ripgrep
+        python3
         # Include cc-tools binaries
         cc-tools
       ])
@@ -222,6 +223,10 @@ in {
             };
             "${dir}/hooks/aws-profile-mirror.sh" = {
               source = ./hooks/aws-profile-mirror.sh;
+              executable = true;
+            };
+            "${dir}/hooks/destructive-guard.py" = {
+              source = ./hooks/destructive-guard.py;
               executable = true;
             };
             "${dir}/.keep".text = "";

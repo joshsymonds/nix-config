@@ -18,15 +18,25 @@
 #   prompt interaction to finish first, which it always does.
 #
 # WHY DEBOUNCED
-#   Rapid-fire turns (tool loops, agent sub-turns) generate many Stop
-#   events in quick succession.  The summarizer is idempotent and the
-#   result is the same modulo a few seconds of new data, so there is no
-#   point running it more than once per minute.  The 60-second window is
-#   a deliberately chosen floor that caps how often we write to the
-#   platter-backed Synology NFS share — without it, a bursty tool loop
-#   would hammer the slow spinning disks with a write storm.  It is not
-#   tied to any API cache window (the summarizer's own usage cache in
-#   get-claude-usage is 120s); 60s is purely write-storm protection.
+#   A Stop hook fires once per completed top-level turn — not per tool call
+#   (that is PostToolUse) and not per sub-agent (that is SubagentStop); this
+#   hook is registered only on Stop.  Even so, back-to-back short turns, and
+#   simultaneous turns from concurrent sessions on the same host+profile, can
+#   cluster.  We cap to one summarizer spawn per 60 seconds so a cluster can't
+#   hammer the platter-backed Synology with a write storm.  The 60s is purely
+#   write-storm protection — unrelated to any API cache window (the reader,
+#   get-claude-usage, separately caches the live API usage for 120s).
+#
+# WHY A LOCAL STAMP
+#   The debounce is keyed on a small LOCAL stamp file, not the NFS summary.
+#   Two reasons.  (1) The summary's mtime only advances after the detached
+#   child finishes its multi-second JSONL crawl and atomic mv, so gating on it
+#   would let every turn during that window pass the check and spawn another
+#   concurrent crawl — the exact storm we are preventing.  A local stamp we
+#   touch *before* spawning closes the window the instant we commit.  (2)
+#   stat-ing the NFS file would put a synchronous GETATTR — and a possible
+#   automount stall — on every turn's critical path; the local stamp is a
+#   tmpfs/SSD read.
 #
 # WHY THE GUARD
 #   This hook is deployed to ALL profiles on ALL in-scope hosts (gnomon,
@@ -94,47 +104,43 @@ fi
 OUT="$BUCKET/$profile/summary.json"
 
 # ---------------------------------------------------------------------------
-# DEBOUNCE — at most one refresh per 60 seconds.
+# DEBOUNCE + DETACHED SPAWN — at most one summarizer per 60s, per profile.
 #
-# A rapid tool loop can generate a burst of Stop events.  Re-running the
-# summarizer on every one would write to the NFS share many times per
-# minute for negligible gain.  60s is a chosen write-frequency floor —
-# not a mirror of any API cache window — that spares NAS I/O and avoids a
-# pile-up of background processes on the Synology platter drives.
+# Keyed on a small LOCAL stamp (see WHY A LOCAL STAMP above), not $OUT: we
+# touch the stamp *before* spawning so a burst of turns during the child's
+# multi-second crawl can't each slip past and pile concurrent crawls onto the
+# platter NAS.  A missing stamp counts as stale, so the first run after boot
+# or a manual cleanup always proceeds.
 #
-# A missing OUT file counts as stale: first run on a new host or profile,
-# or after a manual cleanup, should always proceed.
+# The check-touch-spawn runs under flock on a sibling lockfile so two
+# concurrent hooks (simultaneous sessions on the same host+profile) can't both
+# pass the age check and double-spawn.  The lock is held only for the few
+# syscalls here and released the instant the subshell exits — the setsid'd
+# child is reparented and runs on past it; we never wait on it.  The 10-min
+# timer in transcripts.nix is the fallback for any run the hook misses, and
+# the summarizer's own atomic $OUT.tmp → mv keeps a concurrent timer run safe.
 #
-# stat -c %Y is GNU coreutils (standard on NixOS); this hook is not
-# intended to run on macOS (ninuan does not import transcripts.nix).
+# Dependency assumptions, all safe on the NixOS hosts that import this hook
+# (macOS never does): flock (util-linux), stat -c %Y (GNU coreutils).  </dev/null
+# keeps the child off Claude's hook stdin pipe; >/dev/null 2>&1 keeps its output
+# out of Claude's hook stream.
 # ---------------------------------------------------------------------------
-if [[ -f "$OUT" ]]; then
-  NOW="$(date +%s)"
-  MTIME="$(stat -c %Y "$OUT")"
-  AGE=$(( NOW - MTIME ))
-  if [[ $AGE -lt 60 ]]; then
-    exit 0  # File is fresh enough; nothing to do.
-  fi
-fi
+STAMP_DIR="${XDG_RUNTIME_DIR:-$HOME/.cache}"
+STAMP="$STAMP_DIR/claude-usage-refresh.$profile.stamp"
+mkdir -p "$STAMP_DIR" 2>/dev/null || true
 
-# ---------------------------------------------------------------------------
-# DETACHED RUN — fire and forget.
-#
-# setsid detaches the child from this hook's process session so it is not
-# killed when Claude tears down the hook's process group.  Stdin is
-# redirected from /dev/null so the child does not inherit the hook's
-# stdin pipe (which Claude holds open and may close at any time).  Stdout
-# and stderr are discarded — this is a background writer, not a UI tool,
-# and any diagnostic output must not leak into Claude's hook stream.
-#
-# We do NOT wait on the child.  The exit 0 returns control to Claude
-# before the summarizer has done any work.  The 10-minute timer in
-# transcripts.nix is the fallback for any run the hook misses (host
-# unreachable at NFS mount time, binary crash, etc.).  The summarizer
-# already writes atomically ($OUT.tmp → mv), so a concurrent timer run
-# is safe — no additional locking is needed here.
-# ---------------------------------------------------------------------------
-setsid claude-usage-summary --profile "$profile" --out "$OUT" \
-  >/dev/null 2>&1 </dev/null &
+(
+  flock -n 9 || exit 0  # another invocation owns the window; nothing to do.
+
+  if [[ -f "$STAMP" ]] && [[ $(( $(date +%s) - $(stat -c %Y "$STAMP") )) -lt 60 ]]; then
+    exit 0  # a summarizer was spawned within the last 60s; debounced.
+  fi
+
+  # Claim the window before spawning so overlapping turns can't double-fire.
+  touch "$STAMP"
+
+  setsid claude-usage-summary --profile "$profile" --out "$OUT" \
+    >/dev/null 2>&1 </dev/null &
+) 9>"$STAMP.lock"
 
 exit 0

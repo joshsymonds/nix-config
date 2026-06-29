@@ -249,6 +249,10 @@ in {
             # Revalidate file attributes within 10s (vs the ~60s NFS default)
             # so gnomon's widget notices a remote host's freshly-rewritten
             # summary.json promptly instead of serving a stale cached mtime.
+            # Mount-wide on purpose: the per-profile projects/sessions/todos/
+            # tasks dirs are symlinked onto this same mount (claude-code/
+            # default.nix), so live transcript I/O revalidates 6x more often
+            # too — cheap (GETATTRs are tiny next to the JSONL writes) and fine.
             "actimeo=10"
           ];
         };

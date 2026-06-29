@@ -289,6 +289,11 @@ in {
       # default. The Stop hook (claude-code/usage-summary-refresh.sh) keeps
       # those summaries fresh within seconds of remote activity, so a tighter
       # widget poll is what actually surfaces it here without a long wait.
+      # NB: 1 is intentionally below the plugin slider's declared minimum of 2
+      # (ClaudeCodeUsageSettings.qml). It works because the widget consumes the
+      # raw value unclamped ((pluginData.refreshInterval || 2) * 60000); if a
+      # future plugin revision adds Math.max(minimum, …) it silently floors
+      # back to 2 — harmless, just slower.
       settings.refreshInterval = 1;
     };
 

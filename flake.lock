@@ -2601,11 +2601,11 @@
         "rust-overlay": "rust-overlay_4"
       },
       "locked": {
-        "lastModified": 1782284061,
-        "narHash": "sha256-3YWVezZLrpAHcoVKyENmoF1XLSZrpH4dXFuJurnEXc8=",
+        "lastModified": 1782775038,
+        "narHash": "sha256-KpAUz0arN22jGVqqckqqGVz0zmkdBiYNJzAv1gMJfxs=",
         "owner": "joshsymonds",
         "repo": "redlib",
-        "rev": "a66889da93db52bd769e39fb3dae5876e34b0ec0",
+        "rev": "e3582134bdf01da21cea780e0b453b5d89ee8050",
         "type": "github"
       },
       "original": {

@@ -285,6 +285,11 @@ in {
     plugins.claudeCodeUsage = {
       src = inputs.dms-claudecode;
       settings.showWorkCostPill = true; # appends today's work spend after the rings
+      # Poll the aggregated NFS summaries every 1 min instead of the 2-min
+      # default. The Stop hook (claude-code/usage-summary-refresh.sh) keeps
+      # those summaries fresh within seconds of remote activity, so a tighter
+      # widget poll is what actually surfaces it here without a long wait.
+      settings.refreshInterval = 1;
     };
 
     # Network bandwidth pill (RX/TX from /proc/net/dev). Source repo at

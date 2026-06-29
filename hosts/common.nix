@@ -246,6 +246,10 @@ in {
             "x-systemd.automount"
             "x-systemd.mount-timeout=10s"
             "x-systemd.idle-timeout=3600"
+            # Revalidate file attributes within 10s (vs the ~60s NFS default)
+            # so gnomon's widget notices a remote host's freshly-rewritten
+            # summary.json promptly instead of serving a stale cached mtime.
+            "actimeo=10"
           ];
         };
       })

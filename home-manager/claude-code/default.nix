@@ -487,6 +487,41 @@ in {
       done
     '';
 
+    # Clear the per-model "launch effort pin" in both profiles. When a new
+    # model ships (Opus 4.7/4.8, Fable 5), Claude Code pins it to a
+    # conservative launch-default effort and IGNORES the persisted
+    # effortLevel from settings.json until the user bumps effort for that
+    # model once — an acknowledgement recorded as unpin<Model>LaunchEffort
+    # in .claude.json (NOT settings.json). The resolver reads it at session
+    # start: pinned -> launch default; unpinned -> settings.json effortLevel.
+    #
+    # Our settings.json is a read-only Nix store symlink, so the normal
+    # interactive unpin (/effort) fails with EROFS and can never write the
+    # flag — leaving settings.json's "xhigh" permanently overridden by the
+    # pin. We set the flags here so settings.json stays authoritative.
+    # Same merge discipline as claudeShimmerMcp: .claude.json is
+    # runtime-mutable, so MERGE and only rewrite when a flag is missing.
+    # New models add a new unpin<Model>LaunchEffort key; append it here when
+    # adopting one.
+    activation.claudeEffortUnpin = lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
+      set -euo pipefail
+      for prefs in "$HOME/.claude.json" "$HOME/.claude-work/.claude.json"; do
+        mkdir -p "$(dirname "$prefs")"
+        [ -f "$prefs" ] || echo '{}' > "$prefs"
+        if ! ${pkgs.jq}/bin/jq -e \
+            '.unpinOpus47LaunchEffort == true
+             and .unpinOpus48LaunchEffort == true
+             and .unpinFable5LaunchEffort == true' \
+            "$prefs" >/dev/null 2>&1; then
+          ${pkgs.jq}/bin/jq \
+            '.unpinOpus47LaunchEffort = true
+             | .unpinOpus48LaunchEffort = true
+             | .unpinFable5LaunchEffort = true' \
+            "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
+        fi
+      done
+    '';
+
     # Declaratively install gambit into both profile dirs. Rather than shell
     # out to `claude plugin install` (which wants to modify settings.json —
     # not possible when it's a read-only Nix store symlink), we populate the

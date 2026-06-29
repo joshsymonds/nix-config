@@ -6,29 +6,38 @@
 }: let
   cfg = config.btrfs-impermanence;
 
+  # discard=async: continuous background TRIM as extents free, paired with
+  # the LUKS allowDiscards passthrough below. This is what makes the weekly
+  # `services.fstrim` batch redundant — and on a DRAM-less SSD that batch is
+  # a multi-minute 100%-util stall (worse on resume, where Persistent=
+  # replays it) — so fstrim is disabled in the config block. Set explicitly
+  # rather than trusting a kernel default: CachyOS enables discard=async,
+  # mainline may not, and TRIM is too important to leave to luck.
+  persistentMountOptions = ["compress=zstd:3" "noatime" "discard=async"];
+
   # btrfs subvolumes: @root is ephemeral (rolled back to @root-blank each boot).
   # @home/@nix/@persist/@log/@swap are persistent.
   rootSubvolumes =
     {
       "@root" = {
         mountpoint = "/";
-        mountOptions = ["compress=zstd:3" "noatime"];
+        mountOptions = persistentMountOptions;
       };
       "@home" = {
         mountpoint = "/home";
-        mountOptions = ["compress=zstd:3" "noatime"];
+        mountOptions = persistentMountOptions;
       };
       "@nix" = {
         mountpoint = "/nix";
-        mountOptions = ["compress=zstd:3" "noatime"];
+        mountOptions = persistentMountOptions;
       };
       "@persist" = {
         mountpoint = "/persist";
-        mountOptions = ["compress=zstd:3" "noatime"];
+        mountOptions = persistentMountOptions;
       };
       "@log" = {
         mountpoint = "/var/log";
-        mountOptions = ["compress=zstd:3" "noatime"];
+        mountOptions = persistentMountOptions;
       };
     }
     // lib.optionalAttrs (cfg.swapSizeGiB > 0) {
@@ -193,6 +202,15 @@ in {
 
     # /persist needs to exist as a mountpoint root before bind-mounts run.
     fileSystems."/persist".neededForBoot = true;
+
+    # These btrfs mounts use discard=async (persistentMountOptions), so TRIM
+    # happens continuously and the weekly fstrim batch is pure redundancy —
+    # and on a DRAM-less SSD that batch pins the drive at 100% util for
+    # minutes. Disabling it here (rather than in common.nix) scopes the
+    # change to exactly the btrfs-impermanence hosts; ext4 hosts have no
+    # continuous discard and keep common.nix's default fstrim as their only
+    # TRIM path. mkDefault in common.nix means a plain `false` wins here.
+    services.fstrim.enable = false;
 
     # Persist bind-mounts that the new initrd-init flow can rely on. NixOS
     # unstable runs `activate` inside `chroot /sysroot` BEFORE stage-2,

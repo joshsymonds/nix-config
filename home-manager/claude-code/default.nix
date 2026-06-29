@@ -229,6 +229,10 @@ in {
               source = ./hooks/destructive-guard.py;
               executable = true;
             };
+            "${dir}/hooks/usage-summary-refresh.sh" = {
+              source = ./hooks/usage-summary-refresh.sh;
+              executable = true;
+            };
             "${dir}/.keep".text = "";
             "${dir}/statsig/.keep".text = "";
             "${dir}/commands/.keep".text = "";

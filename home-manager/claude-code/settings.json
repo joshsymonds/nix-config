@@ -45,6 +45,10 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/ntfy-notifier.sh"
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/usage-summary-refresh.sh"
           }
         ]
       }

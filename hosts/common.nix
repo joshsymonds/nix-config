@@ -15,6 +15,7 @@ in {
     ../modules/services/age-identity.nix
     ../modules/services/atticd-cache.nix
     ../modules/services/cleanup-stale-processes.nix
+    ../modules/services/maintenance-io-priority.nix
     ../modules/performance/profiles.nix
     inputs.determinate.nixosModules.default
   ];

@@ -40,14 +40,12 @@ in {
 
   # Tell GTK we prefer dark colors. Electron on Linux derives
   # `nativeTheme.shouldUseDarkColors` from GtkSettings'
-  # `gtk-application-prefer-dark-theme` property — there is no equivalent
-  # "template image" path on Linux, so apps that ship macOS-style monochrome
-  # tray icons (Claude Desktop's `TrayIconTemplate*.png`) only render
-  # legibly when they pick the "-Dark" white-on-transparent variant.
-  # aaddrick's claude-desktop-debian build already swaps to that variant
-  # when `shouldUseDarkColors` is true; setting this flag is what flips it.
-  # Other GTK apps inherit the preference too, which is the desired
-  # default — niri/DMS is a dark surface.
+  # `gtk-application-prefer-dark-theme` property. Apps that ship light/dark
+  # tray-icon variants (Claude Desktop's `TrayIconLinux.png` /
+  # `TrayIconLinux-Dark.png`) pick the white-on-transparent "-Dark" one when
+  # `shouldUseDarkColors` is true; setting this flag is what flips it, so the
+  # tray icon stays legible against DMS's dark bar. Other GTK apps inherit the
+  # preference too, which is the desired default — niri/DMS is a dark surface.
   #
   # gtk-enable-mnemonics=0 disables the Alt-as-menubar-accelerator and the
   # underline-letter visual that goes with it. The keyd layer already

@@ -202,28 +202,14 @@ in {
     signal-desktop = electronNoScrollAnchoring prev.signal-desktop "signal-desktop";
     vesktop = electronNoScrollAnchoring prev.vesktop "vesktop";
 
-    # Claude Desktop: sourced from the claude-desktop flake input (daily
-    # CI auto-bumps upstream Anthropic releases; `nix flake update
-    # claude-desktop` pulls newer). The -fhs variant wraps the Electron
-    # app in buildFHSEnv so MCP servers can shell out to npx/uvx/docker.
-    # That builder runs no postFixup, but its desktop Exec is bare
-    # `claude-desktop` (PATH-resolved), so a symlinkJoin that replaces
-    # only the bin with a flag-injecting wrapper is sufficient and cheap
-    # (no app rebuild) — the desktop entry resolves to the wrapper via
-    # PATH without needing a rewrite.
-    claude-desktop = let
-      base = inputs.claude-desktop.packages.${final.stdenv.hostPlatform.system}.claude-desktop-fhs;
-    in
-      final.symlinkJoin {
-        name = "claude-desktop-noscrollanchor";
-        paths = [base];
-        nativeBuildInputs = [final.makeWrapper];
-        postBuild = ''
-          rm "$out/bin/claude-desktop"
-          makeWrapper "${base}/bin/claude-desktop" "$out/bin/claude-desktop" \
-            --add-flags "--disable-blink-features=ScrollAnchoring"
-        '';
-      };
+    # Claude Desktop (the chat app — not Claude Code): Anthropic's official
+    # native-Linux build, packaged locally from their apt repo. See
+    # pkgs/claude-desktop/. The niri scroll-anchoring fix and the Wayland
+    # ozone hint are baked into the package launcher (default.nix); the
+    # -fhs wrap gives MCP servers and Cowork a normal filesystem to shell
+    # out into. Bump via pkgs/claude-desktop/default.nix (version + hashes).
+    claude-desktop-unwrapped = final.callPackage ../pkgs/claude-desktop {};
+    claude-desktop = final.callPackage ../pkgs/claude-desktop/fhs.nix {};
 
     # Stable packages available under pkgs.stable (if needed)
     stable = import inputs.nixpkgs-stable {

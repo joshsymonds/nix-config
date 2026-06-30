@@ -68,9 +68,10 @@
     chromium
 
     # Claude Desktop (the chat app — separate from Claude Code).
-    # Packaging (flake-input sourcing, fhs wrap, scroll-anchoring fix)
-    # lives in overlays/default.nix; this is just the per-host opt-in.
-    # `nix flake update claude-desktop` still pulls a newer upstream.
+    # Anthropic's official native-Linux build; packaging (deb extract, fhs
+    # wrap, scroll-anchoring fix) lives in pkgs/claude-desktop/ and is wired
+    # in overlays/default.nix. This is just the per-host opt-in. Bump via
+    # pkgs/claude-desktop/default.nix (version + hashes).
     claude-desktop
 
     # Obsidian — Markdown notes / vaults. The headless flavor on

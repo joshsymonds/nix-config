@@ -93,6 +93,15 @@ in {
           # Code's `chat:newline`; sending the raw byte works over SSH without
           # relying on the kitty keyboard protocol reaching the remote.
           "super+enter" = "send_text all \\n";
+          # Mac word navigation on the Option key, same mechanism: Option+arrow
+          # and Option+Backspace/Delete arrive as super+<key> (keyd Option →
+          # Super), so translate them to the emacs meta sequences zsh binds by
+          # default (bindkey -e): ESC b/f word back/forward, ESC DEL backward-
+          # kill-word, ESC d kill-word. Raw bytes, so they survive SSH and tmux.
+          "super+left" = "send_text all \\x1bb";
+          "super+right" = "send_text all \\x1bf";
+          "super+backspace" = "send_text all \\x1b\\x7f";
+          "super+delete" = "send_text all \\x1bd";
         }
       );
 

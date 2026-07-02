@@ -190,6 +190,19 @@ in
           ggufUrl = "${base12}/gemma-4-12B-it-heretic-Q8_0.gguf";
           flags = commonFlags ++ ["--fit-ctx" "32768"];
         };
+        # STOCK (non-abliterated) dense 12B at Q8_0 (~12.7 GB), official
+        # ggml-org GGUF — the grailquest local renderer candidate
+        # (grailquest docs/llm-tractability.md §5: stock instruct is the
+        # doctrine default; abliteration only if evals show refusals on the
+        # authored seeds). Thinking disabled at the chat-template layer so
+        # the OpenAI-compatible path never burns its token budget on
+        # reasoning content — grailquest's renderer and judges both run
+        # thinking-off by design. Same proven Q8_0/32k footprint as the
+        # heretic 12B entry above.
+        "gemma4-12b-it" = {
+          ggufUrl = "https://huggingface.co/ggml-org/gemma-4-12B-it-GGUF/resolve/main/gemma-4-12B-it-Q8_0.gguf";
+          flags = commonFlags ++ ["--fit-ctx" "32768" "--chat-template-kwargs" ''{"enable_thinking":false}''];
+        };
       };
     };
 

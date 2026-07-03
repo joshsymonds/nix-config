@@ -16,15 +16,13 @@ in
       ../../modules/services/cleanup-services.nix
       ../../modules/services/cloudflare-tunnel.nix
       ./hardware-configuration.nix
+      ./services/marvin-blackbox-reap.nix
 
       # Headless-server hardening (BT module blacklist on top of fleet-wide)
       ../../modules/linux-base/server-hardening.nix
     ];
 
-    services.cleanup-services = {
-      enable = true;
-      kindClusters.enable = true;
-    };
+    services.cleanup-services.enable = true;
 
     # Performance tuning
     performance.profile = "dev";

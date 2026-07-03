@@ -65,6 +65,292 @@
   # module's `workBackend` block.
   settingsJsonWork = mkSettingsJson "work" {};
 
+  # ── Model registry ──────────────────────────────────────────────────────
+  # Single source of truth for every Claude Code model this fleet adopts.
+  # Drives cmswitch's alias resolution (below) and the generated
+  # per-model unpin<Model>LaunchEffort check/assignment in
+  # activation.claudeEffortUnpin (further down). Adding a model here is the
+  # only step needed for cmswitch to recognise it and — if unpinKey is
+  # non-null — for activation to clear its launch-default effort pin.
+  modelRegistry = {
+    "fable-5" = {
+      model = "claude-fable-5";
+      defaultEffort = "high";
+      unpinKey = "unpinFable5LaunchEffort";
+      aliases = ["fable"];
+    };
+    "opus-4-8" = {
+      model = "claude-opus-4-8";
+      defaultEffort = "xhigh";
+      unpinKey = "unpinOpus48LaunchEffort";
+      aliases = ["opus"];
+    };
+    "opus-4-7" = {
+      model = "claude-opus-4-7";
+      defaultEffort = "xhigh";
+      unpinKey = "unpinOpus47LaunchEffort";
+      aliases = [];
+    };
+    "sonnet-5" = {
+      model = "claude-sonnet-5";
+      defaultEffort = "high";
+      unpinKey = null;
+      aliases = ["sonnet"];
+    };
+    "haiku-4-5" = {
+      model = "claude-haiku-4-5-20251001";
+      defaultEffort = "high";
+      unpinKey = null;
+      aliases = ["haiku"];
+    };
+  };
+
+  # Normalize a model name/alias for matching: lowercase, drop spaces/dots/
+  # underscores/dashes, then strip a leading "claude" prefix. Mirrored
+  # exactly in cmswitch's bash `normalize()` (below) so Nix-side
+  # alias-table construction and runtime CLI parsing agree on what counts
+  # as "the same name" — e.g. normalize "Claude Opus 4.8" == normalize
+  # "opus-4-8" == "opus48".
+  normalize = s: let
+    lower = lib.toLower s;
+    noSeparators = lib.concatStrings (
+      builtins.filter (c: !(builtins.elem c [" " "." "_" "-"])) (lib.stringToCharacters lower)
+    );
+  in
+    lib.removePrefix "claude" noSeparators;
+
+  # Flatten modelRegistry into a normalized-alias -> {name; model;
+  # defaultEffort;} lookup table. Each entry contributes its attr name, its
+  # model string, and any extra aliases — deduped after normalizing, since
+  # e.g. normalize "fable-5" and normalize "claude-fable-5" both collide on
+  # "fable5". Throws at eval time, naming the offending alias, if two
+  # DIFFERENT registry entries would normalize to the same key — plain
+  # attrset construction would otherwise silently keep only the last
+  # writer, which is exactly the failure mode we don't want from a typo'd
+  # alias.
+  aliasTable = let
+    aliasEntries = lib.concatMap (
+      name: let
+        entry = modelRegistry.${name};
+        candidates = lib.unique (map normalize ([name entry.model] ++ entry.aliases));
+      in
+        map (alias: {
+          inherit alias name;
+          value = {
+            inherit name;
+            inherit (entry) model defaultEffort;
+          };
+        })
+        candidates
+    ) (lib.attrNames modelRegistry);
+  in
+    lib.foldl' (
+      acc: e:
+        if acc ? ${e.alias} && acc.${e.alias}.name != e.name
+        then
+          throw
+          "modelRegistry: alias '${e.alias}' is claimed by both '${acc.${e.alias}.name}' and '${e.name}' — aliases must be unique after normalization"
+        else acc // {${e.alias} = e.value;}
+    ) {}
+    aliasEntries;
+
+  # Human-readable "known models" listing, shared by cmswitch's usage text
+  # and its refusal-path output (empty input, unknown alias).
+  modelListingText = lib.concatStringsSep "\n" (
+    map (
+      name: let
+        entry = modelRegistry.${name};
+        aliasSuffix =
+          if entry.aliases == []
+          then ""
+          else " (aliases: ${lib.concatStringsSep ", " entry.aliases})";
+      in "  ${name} — default effort ${entry.defaultEffort}${aliasSuffix}"
+    ) (lib.attrNames modelRegistry)
+  );
+
+  # unpin<Model>LaunchEffort keys to clear in activation.claudeEffortUnpin,
+  # generated from modelRegistry.*.unpinKey — see that activation script
+  # for why this exists at all.
+  unpinKeys = builtins.filter (k: k != null) (
+    lib.mapAttrsToList (_: entry: entry.unpinKey) modelRegistry
+  );
+  unpinCheckExpr = lib.concatMapStringsSep " and " (k: ".${k} == true") unpinKeys;
+  unpinAssignExpr = lib.concatMapStringsSep " | " (k: ".${k} = true") unpinKeys;
+
+  # Registry-driven model/effort switcher for settings.json. See the
+  # extensive comment on the `cmswitch` derivation itself (below) for full
+  # behavior; this mirrors cwswitch's shape (home-manager/zsh/default.nix)
+  # but edits+commits+deploys the Nix-tracked settings.json instead of
+  # rewriting runtime daemon state.
+  cmswitch = pkgs.writeShellApplication {
+    name = "cmswitch";
+    runtimeInputs = [pkgs.jq pkgs.git pkgs.coreutils];
+    text = ''
+      # Switch the repo's home-manager/claude-code/settings.json to a
+      # different model/effort, commit just that file, deploy via `update`,
+      # and bounce the Claude Code background-agent daemon in each profile
+      # (~/.claude, ~/.claude-work) so new work picks up the change —
+      # mirroring cwswitch's daemon-bounce step, but for the *default*
+      # model/effort baked into settings.json rather than the work-profile
+      # Bedrock/Anthropic backend.
+      #
+      # `update`/`claude` are user-profile binaries, not Nix store paths we
+      # can reference at build time (this derivation's runtimeInputs only
+      # cover jq/git/coreutils) — guard for them explicitly so a missing
+      # profile fails fast with a clear message instead of a raw
+      # "command not found".
+      command -v update >/dev/null 2>&1 || { echo "cmswitch: 'update' not found on PATH — is it deployed for this profile?" >&2; exit 1; }
+      command -v claude >/dev/null 2>&1 || { echo "cmswitch: 'claude' not found on PATH." >&2; exit 1; }
+
+      repo="${config.home.homeDirectory}/nix-config"
+      settings_file="$repo/home-manager/claude-code/settings.json"
+
+      # The alias table is baked in at build time from modelRegistry, so
+      # cmswitch and the Nix-side alias resolution can never drift.
+      table='${builtins.toJSON aliasTable}'
+
+      model_listing='${modelListingText}'
+
+      # Mirrors the Nix `normalize` function above exactly: lowercase, drop
+      # spaces/dots/underscores/dashes, strip a leading "claude" prefix.
+      normalize() {
+        local s="''${1,,}"
+        s="''${s//[ ._-]/}"
+        s="''${s#claude}"
+        printf '%s' "$s"
+      }
+
+      usage() {
+        cat >&2 <<EOF
+      usage: cmswitch <model> [effort]
+        <model>  a registry name or alias below (matching ignores case, spaces,
+                 dots, underscores, dashes, and a leading "claude")
+        effort   low | medium | high | xhigh — defaults to the model's own default
+
+      known models:
+      $model_listing
+
+      valid efforts: low medium high xhigh
+      EOF
+      }
+
+      # Reverse-map a settings.json model string back to its canonical
+      # registry name, for the no-args status display.
+      reverse_lookup() {
+        printf '%s' "$table" | jq -r --arg m "$1" \
+          'to_entries | map(select(.value.model == $m)) | (.[0].value.name // empty)'
+      }
+
+      if [ $# -eq 0 ]; then
+        cur_model=$(jq -r '.model // empty' "$settings_file")
+        cur_effort=$(jq -r '.effortLevel // empty' "$settings_file")
+        if [ -z "$cur_model" ]; then
+          echo "model: (unset)"
+        else
+          canon=$(reverse_lookup "$cur_model")
+          if [ -n "$canon" ]; then
+            echo "model: $cur_model ($canon)"
+          else
+            echo "model: $cur_model"
+          fi
+        fi
+        if [ -z "$cur_effort" ]; then
+          echo "effortLevel: (unset)"
+        else
+          echo "effortLevel: $cur_effort"
+        fi
+        exit 0
+      fi
+
+      # Join every arg with spaces, then re-split into words so callers can
+      # quote however they like (`cmswitch opus xhigh`, `cmswitch "opus
+      # xhigh"`, ...). If the last word normalizes to a known effort level,
+      # peel it off; whatever remains (rejoined and normalized) is the
+      # model key.
+      all_args="$*"
+      read -ra words <<< "$all_args"
+      word_count=''${#words[@]}
+      effort=""
+      model_words=("''${words[@]}")
+      if [ "$word_count" -gt 0 ]; then
+        last_norm=$(normalize "''${words[$((word_count - 1))]}")
+        case "$last_norm" in
+          low | medium | high | xhigh)
+            effort="$last_norm"
+            model_words=("''${words[@]:0:$((word_count - 1))}")
+            ;;
+        esac
+      fi
+      model_key=$(normalize "''${model_words[*]}")
+
+      # Empty model key (input was only an effort, or only the word
+      # "claude") or an alias-table miss: refuse with usage, no side
+      # effects.
+      if [ -z "$model_key" ]; then
+        usage
+        exit 2
+      fi
+      if ! printf '%s' "$table" | jq -e --arg k "$model_key" '.[$k] // empty' >/dev/null 2>&1; then
+        usage
+        exit 2
+      fi
+
+      name=$(printf '%s' "$table" | jq -r --arg k "$model_key" '.[$k].name')
+      model=$(printf '%s' "$table" | jq -r --arg k "$model_key" '.[$k].model')
+      default_effort=$(printf '%s' "$table" | jq -r --arg k "$model_key" '.[$k].defaultEffort')
+      effort="''${effort:-$default_effort}"
+
+      cur_model=$(jq -r '.model // empty' "$settings_file")
+      cur_effort=$(jq -r '.effortLevel // empty' "$settings_file")
+
+      if [ "$cur_model" = "$model" ] && [ "$cur_effort" = "$effort" ]; then
+        echo "already on $name $effort"
+        exit 0
+      fi
+
+      tmp="$settings_file.cmswitch.$$"
+      jq --indent 2 --arg m "$model" --arg e "$effort" '.model = $m | .effortLevel = $e' "$settings_file" > "$tmp"
+      mv "$tmp" "$settings_file"
+
+      # Commit ONLY settings.json — the pathspec on both `add` and `commit`
+      # guarantees any other dirty files in the repo are left untouched.
+      git -C "$repo" add -- home-manager/claude-code/settings.json
+      git -C "$repo" commit -m "claude-code: $name $effort" -- home-manager/claude-code/settings.json
+      sha=$(git -C "$repo" rev-parse --short HEAD)
+
+      if ! update; then
+        echo "cmswitch: commit $sha is in place but NOT deployed — rerun 'update'." >&2
+        exit 1
+      fi
+
+      # Bounce each profile's bg-agent daemon so new work picks up the new
+      # default — but only if nothing is actively "working" there (a bounce
+      # would kill in-flight work; leave the daemon up and let it pick up
+      # the new default on its own next restart instead). Mirrors the
+      # jobs/*/state.json scan in cwswitch (home-manager/zsh/default.nix).
+      for base in ".claude" ".claude-work"; do
+        profile_dir="$HOME/$base"
+        working=0
+        if [ -d "$profile_dir/jobs" ]; then
+          for state_file in "$profile_dir"/jobs/*/state.json; do
+            [ -f "$state_file" ] || continue
+            if grep -q '"state": *"working"' "$state_file" 2>/dev/null; then
+              working=$((working + 1))
+            fi
+          done
+        fi
+        if [ "$working" -gt 0 ]; then
+          echo "$base: $working job(s) working — daemon left running; new bg jobs may use the old default until it restarts"
+        else
+          CLAUDE_CONFIG_DIR="$profile_dir" claude daemon stop --any >/dev/null 2>&1 || true
+          echo "$base: bounce requested"
+        fi
+      done
+
+      echo "''${cur_model:-(unset)} ''${cur_effort:-(unset)} -> $name $effort (commit $sha) deployed"
+    '';
+  };
+
   # Skills dir as a linkFarm derivation: nix-managed skills + the
   # team-status skill at an out-of-store writable path so iteration
   # on team-status does not require a rebuild. New skills added under
@@ -150,7 +436,7 @@ in {
         # Include cc-tools binaries
         cc-tools
       ])
-      ++ [pkgs.claudeCodeCli];
+      ++ [pkgs.claudeCodeCli cmswitch];
 
     # Add npm global bin to PATH for user-installed packages
     sessionPath = lib.mkAfter [
@@ -501,22 +787,19 @@ in {
     # pin. We set the flags here so settings.json stays authoritative.
     # Same merge discipline as claudeShimmerMcp: .claude.json is
     # runtime-mutable, so MERGE and only rewrite when a flag is missing.
-    # New models add a new unpin<Model>LaunchEffort key; append it here when
-    # adopting one.
+    # The check/assignment expressions below are generated from
+    # modelRegistry's unpinKey field (see that `let`-block definition);
+    # new models pick up automatically once added there.
     activation.claudeEffortUnpin = lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
       set -euo pipefail
       for prefs in "$HOME/.claude.json" "$HOME/.claude-work/.claude.json"; do
         mkdir -p "$(dirname "$prefs")"
         [ -f "$prefs" ] || echo '{}' > "$prefs"
         if ! ${pkgs.jq}/bin/jq -e \
-            '.unpinOpus47LaunchEffort == true
-             and .unpinOpus48LaunchEffort == true
-             and .unpinFable5LaunchEffort == true' \
+            '${unpinCheckExpr}' \
             "$prefs" >/dev/null 2>&1; then
           ${pkgs.jq}/bin/jq \
-            '.unpinOpus47LaunchEffort = true
-             | .unpinOpus48LaunchEffort = true
-             | .unpinFable5LaunchEffort = true' \
+            '${unpinAssignExpr}' \
             "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
         fi
       done

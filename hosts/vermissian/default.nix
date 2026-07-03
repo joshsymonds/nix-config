@@ -22,7 +22,13 @@ in
       ../../modules/linux-base/server-hardening.nix
     ];
 
-    services.cleanup-services.enable = true;
+    services.cleanup-services = {
+      enable = true;
+      # The marvin-blackbox reaper owns docker hygiene on this host (surgical
+      # dangling-image + aged-build-cache prunes); nightly `docker system
+      # prune -a` here wiped warm blackbox caches.
+      dockerPrune = false;
+    };
 
     # Performance tuning
     performance.profile = "dev";

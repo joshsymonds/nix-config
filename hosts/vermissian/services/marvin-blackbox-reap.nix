@@ -24,6 +24,7 @@
       pkgs.findutils
       pkgs.util-linux
       pkgs.bash
+      pkgs.procps
       "/run/wrappers"
     ];
     serviceConfig = {

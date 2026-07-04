@@ -4,7 +4,6 @@
   pkgs,
   ...
 }: let
-  configHome = config.xdg.configHome;
   dataHome = config.xdg.dataHome;
 
   # khal expects a vdir-style directory of one-event-per-.ics files; the

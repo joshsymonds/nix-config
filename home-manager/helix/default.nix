@@ -1,13 +1,19 @@
 {
   lib,
   pkgs,
+  config,
+  hostname,
   ...
 }: let
+  # nixd option completion evaluates the real per-host option sets through
+  # the flake, lazily — the first option query pays an eval, then nixd
+  # caches. The flake path must match NH_FLAKE (home-manager/common.nix).
+  flakeRef = ''builtins.getFlake "${config.home.homeDirectory}/nix-config"'';
   lspPackages = [
     pkgs.lua-language-server
     pkgs.gopls
     pkgs.pyright
-    pkgs.nil
+    pkgs.nixd
     pkgs.typescript-language-server
     pkgs.typescript
     pkgs.vscode-langservers-extracted
@@ -136,7 +142,7 @@ in {
           formatter = {
             command = "${pkgs.alejandra}/bin/alejandra";
           };
-          "language-servers" = ["nil"];
+          "language-servers" = ["nixd"];
         }
         {
           name = "javascript";
@@ -201,8 +207,20 @@ in {
           command = "${pkgs.pyright}/bin/pyright-langserver";
           args = ["--stdio"];
         };
-        nil = {
-          command = "${pkgs.nil}/bin/nil";
+        nixd = {
+          command = "${pkgs.nixd}/bin/nixd";
+          config.nixd = {
+            nixpkgs.expr = "import (${flakeRef}).inputs.nixpkgs { }";
+            options =
+              {
+                home-manager.expr = ''(${flakeRef}).homeConfigurations."joshsymonds@${hostname}".options'';
+              }
+              // (
+                if pkgs.stdenv.isDarwin
+                then {nix-darwin.expr = "(${flakeRef}).darwinConfigurations.${hostname}.options";}
+                else {nixos.expr = "(${flakeRef}).nixosConfigurations.${hostname}.options";}
+              );
+          };
         };
         "typescript-language-server" = {
           command = "${pkgs.typescript-language-server}/bin/typescript-language-server";

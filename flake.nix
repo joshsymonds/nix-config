@@ -4,7 +4,6 @@
   inputs = {
     # Nixpkgs - using unstable as primary
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    nixpkgs-stable.url = "github:nixos/nixpkgs/nixos-25.11"; # Keep stable available if needed
 
     # Side-channel nixpkgs pinned to current unstable HEAD, used by the
     # inference-stack module (modules/services/inference-stack.nix) for
@@ -15,21 +14,6 @@
     # the main lock bumps. Update independently via
     # `nix flake update nixpkgs-inference`.
     nixpkgs-inference.url = "github:nixos/nixpkgs/nixos-unstable";
-
-    # Side-channel nixpkgs used ONLY to source tailscale. The main lock's
-    # tailscale (currently 1.98.0 on the unstable tip) carries the Linux
-    # MagicDNS regression fixed in 1.98.2: after a network link change
-    # tailscaled drops the `tail*.ts.net` LocalDomain route and points the
-    # suffix at the public ts.net resolver, so MagicDNS names NXDOMAIN
-    # tailnet-wide. On ultraviolet, constant podman veth churn re-triggers
-    # it and the fleet loses the Shimmer MCP endpoint. See
-    # NixOS/nixpkgs#520715. Bumping the *main* lock for the fix isn't worth
-    # it — it drags shimmer's closure onto newer nixpkgs and trips broken
-    # upstream builds — so we ride just this one Go package ahead of the
-    # channel (same idea as nixpkgs-inference). REMOVE this input + the
-    # `tailscale` override in overlays/default.nix once the main lock
-    # carries tailscale >= 1.98.2.
-    nixpkgs-tailscale.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Flake-parts - modular flake outputs
     flake-parts = {
@@ -85,7 +69,7 @@
 
     # Lanzaboote — Secure Boot for NixOS (signed UKI; PCR 7 binding for TPM-sealed LUKS)
     lanzaboote = {
-      url = "github:nix-community/lanzaboote/v1.0.0";
+      url = "github:nix-community/lanzaboote/v1.1.0";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -263,27 +247,17 @@
     # earning measurable FPS. Reverted to nixpkgs stable mesa. The overlay
     # still ships proton-cachyos, which we do want.
     #
-    # Pinned to the joshsymonds/nix-gaming-edge josh/fix-fhsenv-override fork =
-    # powerofthe69/master fast-forwarded + ONE local commit. The branch's
-    # original namesake fix (upstream wrapFhsEnv dropped `.override` on
-    # pkgs.buildFHSEnv, breaking eval with gamescopeSession + capSysNice) is
-    # upstreamed and moot now (gnomon no longer enables gamescope at all).
-    #
-    # The one remaining local commit corrects upstream's `chore: update
-    # sources` (9e5e95f), which recorded WRONG sha256 hashes for BOTH
-    # proton-cachyos 11.0-20260602 release tarballs (x86_64 and x86_64_v3) —
-    # fixed-output hash mismatches that make the build unusable (verified
-    # 2026-06-20: real assets hash to qC20cEi0… / HZmTHT…, not the recorded
-    # KeYloyih… / g74Xzf…). Drop the fork and follow
-    # `github:powerofthe69/nix-gaming-edge` directly once upstream corrects
-    # those hashes. Source at ~/Personal/nix-gaming-edge (`upstream` → powerofthe69).
+    # Back on `github:powerofthe69/nix-gaming-edge` directly: upstream fixed
+    # the bad proton-cachyos 11.0-20260602 hashes (verified 2026-07-03), so
+    # the joshsymonds/nix-gaming-edge josh/fix-fhsenv-override fork (which
+    # only existed to carry that hash correction) is retired.
     #
     # NB: deliberately NOT `inputs.nixpkgs.follows = "nixpkgs"`. nix-gaming-
     # edge's tokidoki binary cache is built by their CI against THEIR pinned
     # nixpkgs; following ours would force a different output hash on every
     # flake-lock bump and miss the cache. Worth ~5s of extra eval time for
     # the cache hit on proton-cachyos.
-    nix-gaming-edge.url = "github:joshsymonds/nix-gaming-edge/josh/fix-fhsenv-override";
+    nix-gaming-edge.url = "github:powerofthe69/nix-gaming-edge";
 
     # nix-cachyos-kernel — CachyOS kernel for gnomon, completing the
     # gaming-edge stack alongside proton-cachyos + mesa-git. Provides
@@ -451,7 +425,6 @@
           ({outputs, ...}: {
             nixpkgs.overlays = [
               outputs.overlays.gaming
-              outputs.overlays.ml
               # halmasuit-replaces-greetd integration; the new
               # modules/desktop/halmasuit.nix on gnomon imports
               # services.halmasuit.* whose package defaults
@@ -492,7 +465,6 @@
           ({outputs, ...}: {
             nixpkgs.overlays = [
               outputs.overlays.gaming
-              outputs.overlays.ml
               inputs.halmasuit.overlays.default
             ];
           })
@@ -589,7 +561,7 @@
         };
 
         packages =
-          (import ./pkgs {inherit pkgs;})
+          (import ./pkgs {inherit pkgs inputs;})
           // lib.optionalAttrs (system == "x86_64-linux") {
             installerIso = self.nixosConfigurations.installer.config.system.build.isoImage;
             ultravioletInstallerIso = self.nixosConfigurations.ultraviolet-installer.config.system.build.isoImage;
@@ -616,13 +588,17 @@
           };
         };
 
-        devShells.default = pkgs.mkShell {
+        # mkShellNoCC + a tiny package set keeps the direnv shell closure
+        # small, so a flake.lock bump re-pulls megabytes, not gigabytes.
+        # google-cloud-sdk used to live here (~700MB closure, re-fetched on
+        # every lock bump); the host that actually uses gcloud (vermissian)
+        # installs it system-wide in hosts/vermissian/default.nix.
+        devShells.default = pkgs.mkShellNoCC {
           name = "nix-config-dev";
           packages = with pkgs; [
             statix
             deadnix
             git
-            google-cloud-sdk
           ];
         };
 

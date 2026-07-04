@@ -19,6 +19,7 @@ _: {
     autoStart = true;
     extraOptions = [
       "--network=host"
+      "--security-opt=no-new-privileges"
     ];
   };
 

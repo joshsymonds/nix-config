@@ -19,6 +19,7 @@ in {
     ./git
     ./gpg
     ./k9s
+    ./lazygit
     ./ssh-agent
     ./zsh
     ./starship
@@ -64,11 +65,13 @@ in {
           kubectl
           kubernetes-helm
           kustomize
-          manix
+          fd
           moar
           ncdu
           nh
           nix-output-monitor
+          nix-search-tv
+          nix-tree
           nvd
           parallel
         ]
@@ -119,11 +122,20 @@ in {
         enableZshIntegration = false;
       };
 
+      zoxide = {
+        enable = true;
+        # Disabled: init script is pre-rendered at build time and sourced from
+        # home-manager/zsh/default.nix. See preRender helper there.
+        enableZshIntegration = false;
+      };
+
       htop = {
         enable = true;
         package = pkgs.htop;
         settings.show_program_path = true;
       };
+
+      btop.enable = true;
     };
 
     # Agenix identity for home-manager secret decryption

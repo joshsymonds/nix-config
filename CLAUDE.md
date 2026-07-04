@@ -6,10 +6,15 @@ Flake-based Nix configuration managing multiple systems.
 
 | Host | Platform | Description |
 |------|----------|-------------|
-| ninuan | macOS (aarch64-darwin) | Primary dev machine, Aerospace WM |
-| ultraviolet | NixOS (x86_64-linux) | Headless server |
-| bluedesert | NixOS (x86_64-linux) | Headless server |
-| echelon | NixOS (x86_64-linux) | Headless server |
+| gnomon | NixOS (x86_64-linux) | Primary dev machine now, niri + DankMaterialShell, gaming rig |
+| ultraviolet | NixOS (x86_64-linux) | Main homelab server |
+| bluedesert | NixOS (x86_64-linux) | Z-Wave bridge (zwave-js-ui) |
+| vermissian | NixOS (x86_64-linux) | Work/dev server |
+| echelon | NixOS (x86_64-linux) | Remote tailnet node |
+| stygianlibrary | NixOS (x86_64-linux) | halmasuit test rig, hardware-identical to gnomon |
+| ninuan | macOS (aarch64-darwin) | Aerospace WM; rarely powered on now that gnomon is primary |
+| testhost | NixOS (x86_64-linux) | VM fixture for the installer test, not a real machine |
+| installer | NixOS (x86_64-linux) | Generic installer ISO output, not a deployed host |
 
 ## Essential Commands
 

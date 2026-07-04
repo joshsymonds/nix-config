@@ -4,6 +4,12 @@ let
   keys = import ./keys.nix;
 in {
   # Shared secrets
+  #
+  # coder-db-password / coder-env (below) and coder-ghcr-cache-auth (host-
+  # specific section) are consumed by the out-of-band Coder Docker stack on
+  # vermissian — that stack is run directly with `docker compose`, not
+  # declared via `age.secrets` in this repo. Don't delete these as orphans;
+  # `grep`-for-consumers will correctly find nothing in *.nix.
   "secrets/shared/coder-db-password.age".publicKeys = keys.vermissian;
   "secrets/shared/coder-env.age".publicKeys = keys.vermissian;
   "secrets/shared/atticd-push-token.age".publicKeys = keys.publisherHosts;
@@ -37,5 +43,7 @@ in {
   "secrets/hosts/gnomon/mullvad-privatekey.age".publicKeys = keys.gnomon;
   "secrets/hosts/gnomon/mullvad-addresses.age".publicKeys = keys.gnomon;
   "secrets/hosts/vermissian/cloudflared-token.age".publicKeys = keys.vermissian;
+  # Out-of-band Coder Docker stack (see the coder-db-password/coder-env
+  # comment above) — no in-repo age.secrets declaration, not an orphan.
   "secrets/hosts/vermissian/coder-ghcr-cache-auth.age".publicKeys = keys.vermissian;
 }

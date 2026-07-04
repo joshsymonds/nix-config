@@ -119,7 +119,6 @@ in
           22
           80
           443
-          9437
           1400 # Sonos event callbacks (primary)
           10200 # Wyoming Piper TTS server
           8123 # Home Assistant (LAN access for TTS fetch by Sonos)

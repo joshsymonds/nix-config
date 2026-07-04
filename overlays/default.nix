@@ -39,200 +39,169 @@ in {
               --add-flags "--disable-blink-features=ScrollAnchoring"
           '';
       });
-  in {
-    devenv = devenvPkg;
-    myCaddy = final.callPackage ../pkgs/caddy {};
-    starlark-lsp = final.callPackage ../pkgs/starlark-lsp {};
-    nuclei = final.callPackage ../pkgs/nuclei {};
-    mcp-atlassian = final.callPackage ../pkgs/mcp-atlassian {};
-    claudeCodeCli = final.callPackage ../pkgs/claude-code-cli {};
-    codexCli = final.callPackage ../pkgs/codex-cli {};
-    deadcode = final.callPackage ../pkgs/deadcode {};
-    golangciLintBin = final.callPackage ../pkgs/golangci-lint-bin {};
-    coder = final.callPackage ../pkgs/coder-cli {inherit (final) unzip;};
-    invidious-companion = final.callPackage ../pkgs/invidious-companion {};
-    newrelic-cli = final.callPackage ../pkgs/newrelic-cli {};
-    morgen-fetch = final.callPackage ../pkgs/morgen-fetch {};
-    morgen-notifier = final.callPackage ../pkgs/morgen-notifier {};
-    wyoming-onnx-asr = final.callPackage ../pkgs/wyoming-onnx-asr {};
-    claude-notify-sounds = final.callPackage ../pkgs/claude-notify-sounds {};
-    redlib-veraticus = final.callPackage ../pkgs/redlib-veraticus {
-      inherit (inputs) crane;
-      redlibSrc = inputs.redlib-fork.sourceInfo.outPath;
-      redlibRev = inputs.redlib-fork.sourceInfo.rev;
-      rustOverlay = inputs.rust-overlay;
-    };
-
-    # gocover-cobertura 1.3.0 fails to build with Go 1.24; rebuild with Go 1.23
-    gocover-cobertura =
-      final.callPackage
-      (inputs.nixpkgs + "/pkgs/by-name/go/gocover-cobertura/package.nix")
-      {
-        buildGoModule = final.buildGo123Module;
+  in
+    (import ../pkgs/simple.nix {pkgs = final;})
+    // {
+      devenv = devenvPkg;
+      # redlib-veraticus needs flake inputs (crane, redlib-fork, rust-overlay)
+      # so it isn't in pkgs/simple.nix's plain-callPackage set; pkgs/default.nix
+      # (the `nix build .#redlib-veraticus` path) wires the same inputs
+      # through separately.
+      redlib-veraticus = final.callPackage ../pkgs/redlib-veraticus {
+        inherit (inputs) crane;
+        redlibSrc = inputs.redlib-fork.sourceInfo.outPath;
+        redlibRev = inputs.redlib-fork.sourceInfo.rev;
+        rustOverlay = inputs.rust-overlay;
       };
 
-    # keyd: fix a silent wire-parser desync in keyd-application-mapper.
-    # Its Wayland reader used bare self.sock.recv(8)/recv(size-8); on a
-    # SOCK_STREAM recv() may short-read, and a short payload read desyncs
-    # the parser permanently — the mapper stays alive and connected but
-    # stops reacting to focus changes, so per-app masks (e.g. gnomon's
-    # [steam-app-*] meta⇒alt) silently stop applying until it's restarted.
-    # The patch routes reads through a recvall() loop. Mirrors upstream
-    # PR #1261 (open, bundled with unrelated Cosmic work); drop this once
-    # that lands. Correctness fix → overlay (all hosts), not per-host.
-    #
-    # nixpkgs builds the mapper as a SEPARATE buildPythonApplication
-    # (`appMap`) that the main keyd only symlinks to — overrideAttrs on
-    # keyd can't reach it, so we rebuild that small derivation from the
-    # same (now patched) src and re-point the symlink. Tracking
-    # `inherit (prev.keyd) version src` keeps us on nixpkgs' keyd version.
-    keyd = let
-      appMap = prev.python3Packages.buildPythonApplication {
-        pname = "keyd-application-mapper";
-        inherit (prev.keyd) version src;
-        pyproject = false;
-        patches = [../pkgs/keyd/recvall.patch];
-        postPatch = ''
-          substituteInPlace scripts/keyd-application-mapper \
-            --replace-fail /bin/sh ${prev.runtimeShell}
-        '';
-        propagatedBuildInputs = with prev.python3Packages; [
-          xlib
-          pygobject3.out
-          dbus-python.out
+      # gocover-cobertura 1.3.0 fails to build with Go 1.24; rebuild with Go 1.23
+      gocover-cobertura =
+        final.callPackage
+        (inputs.nixpkgs + "/pkgs/by-name/go/gocover-cobertura/package.nix")
+        {
+          buildGoModule = final.buildGo123Module;
+        };
+
+      # keyd: fix a silent wire-parser desync in keyd-application-mapper.
+      # Its Wayland reader used bare self.sock.recv(8)/recv(size-8); on a
+      # SOCK_STREAM recv() may short-read, and a short payload read desyncs
+      # the parser permanently — the mapper stays alive and connected but
+      # stops reacting to focus changes, so per-app masks (e.g. gnomon's
+      # [steam-app-*] meta⇒alt) silently stop applying until it's restarted.
+      # The patch routes reads through a recvall() loop. Mirrors upstream
+      # PR #1261 (open, bundled with unrelated Cosmic work); drop this once
+      # that lands. Correctness fix → overlay (all hosts), not per-host.
+      #
+      # nixpkgs builds the mapper as a SEPARATE buildPythonApplication
+      # (`appMap`) that the main keyd only symlinks to — overrideAttrs on
+      # keyd can't reach it, so we rebuild that small derivation from the
+      # same (now patched) src and re-point the symlink. Tracking
+      # `inherit (prev.keyd) version src` keeps us on nixpkgs' keyd version.
+      keyd = let
+        appMap = prev.python3Packages.buildPythonApplication {
+          pname = "keyd-application-mapper";
+          inherit (prev.keyd) version src;
+          pyproject = false;
+          patches = [../pkgs/keyd/recvall.patch];
+          postPatch = ''
+            substituteInPlace scripts/keyd-application-mapper \
+              --replace-fail /bin/sh ${prev.runtimeShell}
+          '';
+          propagatedBuildInputs = with prev.python3Packages; [
+            xlib
+            pygobject3.out
+            dbus-python.out
+          ];
+          dontBuild = true;
+          installPhase = ''
+            install -Dm555 -t $out/bin scripts/keyd-application-mapper
+          '';
+          meta.mainProgram = "keyd-application-mapper";
+        };
+      in
+        prev.keyd.overrideAttrs (_: {
+          postInstall = ''
+            ln -sf ${prev.lib.getExe appMap} $out/bin/keyd-application-mapper
+            rm -rf $out/etc
+          '';
+        });
+
+      moor = prev.moor.overrideAttrs (_: {
+        version = moarVersion;
+        src = final.fetchFromGitHub {
+          owner = "walles";
+          repo = "moor";
+          rev = moarRev;
+          hash = "sha256-c2ypM5xglQbvgvU2Eq7sgMpNHSAsKEBDwQZC/Sf4GPU=";
+        };
+        vendorHash = "sha256-ve8QT2dIUZGTFYESt9vIllGTan22ciZr8SQzfqtqQfw=";
+        ldflags = [
+          "-s"
+          "-w"
+          "-X"
+          "main.versionString=${moarVersionString}"
         ];
-        dontBuild = true;
-        installPhase = ''
-          install -Dm555 -t $out/bin scripts/keyd-application-mapper
-        '';
-        meta.mainProgram = "keyd-application-mapper";
-      };
-    in
-      prev.keyd.overrideAttrs (_: {
         postInstall = ''
-          ln -sf ${prev.lib.getExe appMap} $out/bin/keyd-application-mapper
-          rm -rf $out/etc
+          ln -s moor "$out/bin/moar"
+          if [ -f ./moor.1 ]; then
+            installManPage ./moor.1
+          fi
         '';
       });
+      moar = final.moor;
 
-    moor = prev.moor.overrideAttrs (_: {
-      version = moarVersion;
-      src = final.fetchFromGitHub {
-        owner = "walles";
-        repo = "moor";
-        rev = moarRev;
-        hash = "sha256-c2ypM5xglQbvgvU2Eq7sgMpNHSAsKEBDwQZC/Sf4GPU=";
-      };
-      vendorHash = "sha256-ve8QT2dIUZGTFYESt9vIllGTan22ciZr8SQzfqtqQfw=";
-      ldflags = [
-        "-s"
-        "-w"
-        "-X"
-        "main.versionString=${moarVersionString}"
-      ];
-      postInstall = ''
-        ln -s moor "$out/bin/moar"
-        if [ -f ./moor.1 ]; then
-          installManPage ./moor.1
-        fi
-      '';
-    });
-    moar = final.moor;
-
-    # XIVLauncher customizations
-    xivlauncher =
-      prev.xivlauncher.override {
-        steam = prev.steam.override {
-          extraLibraries = _: [prev.gamemode.lib];
+      # XIVLauncher customizations
+      xivlauncher =
+        prev.xivlauncher.override {
+          steam = prev.steam.override {
+            extraLibraries = _: [prev.gamemode.lib];
+          };
+        }
+        // {
+          desktopItems = [];
         };
-      }
-      // {
-        desktopItems = [];
+
+      vaapiIntel = prev.vaapiIntel.override {
+        enableHybridCodec = true;
       };
 
-    vaapiIntel = prev.vaapiIntel.override {
-      enableHybridCodec = true;
+      # Morgen patches, applied by splicing into the upstream asar-pack
+      # invocation. Both anchors are exact-string `--replace-fail` matches
+      # so a future morgen bump fails loudly here instead of silently
+      # producing a broken build. Reference: 0xpetersatoshi/nix-config.
+      #
+      # (1) main.js: `app.disableHardwareAcceleration()` → no-op.
+      # On Wayland/NVIDIA that call flips Chromium's GPU process fully
+      # off, and Sentry's electron integration then calls
+      # `app.getGPUInfo()` which rejects with "GPU access not allowed" —
+      # an unhandled promise rejection at the top of main, so
+      # BrowserWindow.show() never fires and the app runs as a
+      # window-less zombie process.
+      #
+      # (2) app.js: merged-event color → primary calendar only.
+      # When "Merge Duplicate Events" combines an event with mirrors
+      # (the N→N calendar-propagation workflow lives in this repo's
+      # Morgen Custom Workflow), the renderer builds a gradient of
+      # every merged event's calendar color. Patch the color-array
+      # to single-element {primary's calendar color}; the `[Busy]`
+      # mirrors carry "Calendar Propagation" + a `Ref-Group-Id`
+      # description marker, which combine to give them ~100× the
+      # priority factor of the source, so `D` (= `L[0]` after
+      # priority sort) is always the source event. Result: merged
+      # block shows the source calendar's color and title, mirrors
+      # contribute busy-block visibility without polluting the view.
+      morgen = prev.morgen.overrideAttrs (oldAttrs: {
+        installPhase =
+          builtins.replaceStrings
+          ["asar pack --unpack='{*.node,*.ftz,rect-overlay}' \"$TMP/work\" $out/opt/Morgen/resources/app.asar"]
+          [
+            ''
+              substituteInPlace $TMP/work/dist/main.js \
+                --replace-fail "zj&&ee.app.disableHardwareAcceleration()" "void 0"
+              substituteInPlace $TMP/work/dist/app.js \
+                --replace-fail "N.map(e=>A.calendarById\$[e]?.mtColor)" "[A.calendarById\$[D?.mtCalendarId]?.mtColor]"
+              asar pack --unpack='{*.node,*.ftz,rect-overlay}' "$TMP/work" $out/opt/Morgen/resources/app.asar
+            ''
+          ]
+          oldAttrs.installPhase;
+      });
+
+      # Electron chat apps, scroll-anchoring fix baked in (see
+      # electronNoScrollAnchoring above). Per-host package lists reference
+      # these by bare name and transparently get the fix.
+      slack = electronNoScrollAnchoring prev.slack "slack";
+      signal-desktop = electronNoScrollAnchoring prev.signal-desktop "signal-desktop";
+      vesktop = electronNoScrollAnchoring prev.vesktop "vesktop";
+
+      # Claude Desktop (the chat app — not Claude Code): Anthropic's official
+      # native-Linux build, packaged locally from their apt repo. See
+      # pkgs/claude-desktop/. The niri scroll-anchoring fix and the Wayland
+      # ozone hint are baked into the package launcher (default.nix); the
+      # -fhs wrap gives MCP servers and Cowork a normal filesystem to shell
+      # out into. Bump via pkgs/claude-desktop/default.nix (version + hashes).
+      claude-desktop-unwrapped = final.callPackage ../pkgs/claude-desktop {};
+      claude-desktop = final.callPackage ../pkgs/claude-desktop/fhs.nix {};
     };
-
-    # Morgen patches, applied by splicing into the upstream asar-pack
-    # invocation. Both anchors are exact-string `--replace-fail` matches
-    # so a future morgen bump fails loudly here instead of silently
-    # producing a broken build. Reference: 0xpetersatoshi/nix-config.
-    #
-    # (1) main.js: `app.disableHardwareAcceleration()` → no-op.
-    # On Wayland/NVIDIA that call flips Chromium's GPU process fully
-    # off, and Sentry's electron integration then calls
-    # `app.getGPUInfo()` which rejects with "GPU access not allowed" —
-    # an unhandled promise rejection at the top of main, so
-    # BrowserWindow.show() never fires and the app runs as a
-    # window-less zombie process.
-    #
-    # (2) app.js: merged-event color → primary calendar only.
-    # When "Merge Duplicate Events" combines an event with mirrors
-    # (the N→N calendar-propagation workflow lives in this repo's
-    # Morgen Custom Workflow), the renderer builds a gradient of
-    # every merged event's calendar color. Patch the color-array
-    # to single-element {primary's calendar color}; the `[Busy]`
-    # mirrors carry "Calendar Propagation" + a `Ref-Group-Id`
-    # description marker, which combine to give them ~100× the
-    # priority factor of the source, so `D` (= `L[0]` after
-    # priority sort) is always the source event. Result: merged
-    # block shows the source calendar's color and title, mirrors
-    # contribute busy-block visibility without polluting the view.
-    morgen = prev.morgen.overrideAttrs (oldAttrs: {
-      installPhase =
-        builtins.replaceStrings
-        ["asar pack --unpack='{*.node,*.ftz,rect-overlay}' \"$TMP/work\" $out/opt/Morgen/resources/app.asar"]
-        [
-          ''
-            substituteInPlace $TMP/work/dist/main.js \
-              --replace-fail "zj&&ee.app.disableHardwareAcceleration()" "void 0"
-            substituteInPlace $TMP/work/dist/app.js \
-              --replace-fail "N.map(e=>A.calendarById\$[e]?.mtColor)" "[A.calendarById\$[D?.mtCalendarId]?.mtColor]"
-            asar pack --unpack='{*.node,*.ftz,rect-overlay}' "$TMP/work" $out/opt/Morgen/resources/app.asar
-          ''
-        ]
-        oldAttrs.installPhase;
-    });
-
-    # Electron chat apps, scroll-anchoring fix baked in (see
-    # electronNoScrollAnchoring above). Per-host package lists reference
-    # these by bare name and transparently get the fix.
-    slack = electronNoScrollAnchoring prev.slack "slack";
-    signal-desktop = electronNoScrollAnchoring prev.signal-desktop "signal-desktop";
-    vesktop = electronNoScrollAnchoring prev.vesktop "vesktop";
-
-    # Claude Desktop (the chat app — not Claude Code): Anthropic's official
-    # native-Linux build, packaged locally from their apt repo. See
-    # pkgs/claude-desktop/. The niri scroll-anchoring fix and the Wayland
-    # ozone hint are baked into the package launcher (default.nix); the
-    # -fhs wrap gives MCP servers and Cowork a normal filesystem to shell
-    # out into. Bump via pkgs/claude-desktop/default.nix (version + hashes).
-    claude-desktop-unwrapped = final.callPackage ../pkgs/claude-desktop {};
-    claude-desktop = final.callPackage ../pkgs/claude-desktop/fhs.nix {};
-
-    # Stable packages available under pkgs.stable (if needed)
-    stable = import inputs.nixpkgs-stable {
-      system = final.stdenv.hostPlatform.system;
-      config.allowUnfree = true;
-    };
-
-    # Tailscale pinned to 1.98.2+ (nixpkgs-tailscale side-channel input).
-    # The main lock ships tailscale 1.98.0, whose Linux MagicDNS handling
-    # breaks after a network link change: tailscaled stops registering the
-    # `tail*.ts.net` LocalDomain and routes the suffix to the public ts.net
-    # nameserver (no private records), so every node NXDOMAINs the tailnet's
-    # own MagicDNS names. On ultraviolet, podman veth churn re-triggers this
-    # constantly and the fleet loses the Shimmer MCP endpoint
-    # (https://ultraviolet.tail82223.ts.net:8443). 1.98.2 fixes the
-    # recompute. See NixOS/nixpkgs#520715. REMOVE this override + the input
-    # once the main lock carries tailscale >= 1.98.2.
-    tailscale =
-      (import inputs.nixpkgs-tailscale {
-        system = final.stdenv.hostPlatform.system;
-      })
-      .tailscale;
-  };
 
   additions = _: _: {};
   modifications = _: _: {};
@@ -245,97 +214,6 @@ in {
   # reinstalls and the nixosTest VM that has no GitHub credentials).
   privatePackages = final: _prev: {
     shimmer = inputs.shimmer.packages.${final.stdenv.hostPlatform.system}.default;
-  };
-
-  # ML overlay: hand obs-backgroundremoval a CUDA-enabled onnxruntime
-  # without globally swapping `pkgs.onnxruntime` itself. The plugin
-  # uses `-DUSE_SYSTEM_ONNXRUNTIME=ON` and accepts `onnxruntime` as a
-  # callPackage argument — overriding ONLY that argument keeps the
-  # rest of the closure (notably Firefox, which carries onnxruntime
-  # as a ML-translation dependency) pointing at the cache.nixos.org
-  # CPU build and avoids invalidating their hashes.
-  #
-  # Applied only on gnomon (see flake.nix) — headless hosts have no
-  # GPU and skip the CUDA closure entirely. Default `cudaPackages`
-  # alias (currently 12.9) is what cache.nixos-cuda.org pre-builds
-  # against, so this combination is a cache hit instead of a ~45-min
-  # local onnxruntime rebuild.
-  #
-  # ── RVM `.ort` → `.onnx` replacement ───────────────────────────────
-  #
-  # obs-backgroundremoval bundles RobustVideoMatting as
-  # `rvm_mobilenetv3_fp32.with_runtime_opt.ort` — a FlatBuffers-format
-  # runtime-optimized model. Empirically, that file SIGSEGVs the ORT
-  # CUDA Execution Provider during first inference (in
-  # ParseScalesData → __memmove_avx512_unaligned_erms via
-  # cuda::Resize/Upsample::ComputeInternal). The root cause: the
-  # `.ort` flatbuffer freezes ORT's graph-optimization decisions at
-  # conversion time, which strips the `MemcpyToHost` nodes that the
-  # CUDA EP needs around Resize/Upsample to route the model's `scales`
-  # input from device → host memory. Without those memcpy edges,
-  # ParseScalesData memmoves a CUDA device pointer as if it were host
-  # memory and the kernel faults.
-  #
-  # The `.onnx` (Protobuf) variant hasn't been pre-optimized — at
-  # session creation, ORT's MemcpyTransformer runs against the live
-  # EP set and correctly inserts the host-bound memcpy edges. So we
-  # need the plugin to LOAD an `.onnx` file. ORT routes by file
-  # extension (not magic bytes), so we have to actually rename — a
-  # `.onnx` file at a `.ort` path goes through LoadOrtModelWithLoader
-  # and verification-fails on the protobuf content.
-  #
-  # The fix is two-part:
-  #   1. `substituteInPlace src/consts.h` so the plugin's MODEL_RVM
-  #      constant points at "models/rvm_mobilenetv3_fp32.onnx"
-  #      instead of "...with_runtime_opt.ort".
-  #   2. `install` the .onnx at the new path in $out.
-  #
-  # Our declarative scene file in home-manager/obs/default.nix also
-  # needs to match — the filter's model_select setting value must
-  # equal the new constant ("models/rvm_mobilenetv3_fp32.onnx"),
-  # otherwise the plugin won't recognize the saved selection on
-  # scene-collection load.
-  #
-  # RVM .onnx pulled from PeterL1n/RobustVideoMatting v1.0.0 release
-  # (the canonical Sep 2021 upload, 14.3 MB, fp32). Stays at fp32
-  # because RVM at fp32 measures ~5 ms/frame on a 5070 Ti — well
-  # under the 33 ms 30fps budget. No latency problem to solve, so
-  # no reason to trade away the model's trained numerical precision
-  # for speed we don't need.
-  ml = _final: prev: let
-    rvmOnnx = prev.fetchurl {
-      url = "https://github.com/PeterL1n/RobustVideoMatting/releases/download/v1.0.0/rvm_mobilenetv3_fp32.onnx";
-      sha256 = "0a18pp5z10636vsd20iq75cybhmfcvszcq7xy9dmk3qijw957m48";
-    };
-  in {
-    obs-studio-plugins =
-      prev.obs-studio-plugins
-      // {
-        obs-backgroundremoval =
-          (prev.obs-studio-plugins.obs-backgroundremoval.override {
-            onnxruntime = prev.onnxruntime.override {cudaSupport = true;};
-          })
-          .overrideAttrs (old: {
-            postPatch =
-              (old.postPatch or "")
-              + ''
-                substituteInPlace src/consts.h \
-                  --replace-fail \
-                    'models/rvm_mobilenetv3_fp32.with_runtime_opt.ort' \
-                    'models/rvm_mobilenetv3_fp32.onnx'
-              '';
-            postFixup =
-              (old.postFixup or "")
-              + ''
-                install -m 0644 ${rvmOnnx} \
-                  $out/share/obs/obs-plugins/obs-backgroundremoval/models/rvm_mobilenetv3_fp32.onnx
-                # Leave the original .with_runtime_opt.ort in place
-                # so other RVM-using paths (if any future code refers
-                # to it by name) don't 404; it's just no longer the
-                # plugin's selected MODEL_RVM target.
-              '';
-          });
-      };
   };
 
   # Gaming overlay: proton-cachyos from nix-gaming-edge, extended with a

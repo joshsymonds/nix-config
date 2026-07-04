@@ -25,6 +25,7 @@
   starshipInit = preRender "starship-init" "${config.programs.starship.package}/bin/starship init zsh";
   atuinInit = preRender "atuin-init" "${config.programs.atuin.package}/bin/atuin init zsh";
   direnvInit = preRender "direnv-init" "${config.programs.direnv.package}/bin/direnv hook zsh";
+  zoxideInit = preRender "zoxide-init" "${config.programs.zoxide.package}/bin/zoxide init zsh";
   rbenvBin = "${config.programs.rbenv.package}/bin/rbenv";
   brewShellenvCache = "${config.xdg.cacheHome}/zsh/brew-shellenv.zsh";
 
@@ -176,6 +177,12 @@ in {
       ZVM_CURSOR_STYLE_ENABLED = "false";
       XL_SECRET_PROVIDER = "FILE";
       WINEDLLOVERRIDES = "d3dcompiler_47=n;d3d11=n,b";
+      # fd-backed fzf file search (Ctrl-T and the default `**`-completion
+      # source). Written out identically in both vars rather than having
+      # one reference the other — home.sessionVariables' export order isn't
+      # guaranteed to put FZF_DEFAULT_COMMAND before FZF_CTRL_T_COMMAND.
+      FZF_DEFAULT_COMMAND = "fd --type f --strip-cwd-prefix --hidden --exclude .git";
+      FZF_CTRL_T_COMMAND = "fd --type f --strip-cwd-prefix --hidden --exclude .git";
     }
     // lib.optionalAttrs pkgs.stdenv.isLinux {
       PRISMA_SCHEMA_ENGINE_BINARY = "${pkgs.prisma-engines}/bin/schema-engine";
@@ -488,6 +495,7 @@ in {
       source ${starshipInit}
       source ${atuinInit}
       source ${direnvInit}
+      source ${zoxideInit}
     '';
   };
 

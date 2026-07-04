@@ -73,8 +73,8 @@ This repository treats Home Assistant as a first-class Nix service that runs on 
    - Blueprints → create a new file under `home-assistant/blueprints/automation/<namespace>/` if you need reusable logic.
    - Shell tooling/backup flows → update `hosts/ultraviolet/home-assistant/scripts/` or the matching systemd service definitions.
 2. **Explore the current state** with `hass-cli` or the UI to capture entity IDs, attributes, and service payloads. This ensures your automation references real sensors.
-3. **Validate syntax**: run `yamllint` against edited files (`yamllint home-assistant/automations/water-leaks.yaml`). For Nix edits run `nix fmt` if needed and rely on `make check` (statix + deadnix + ShellSpec) at the repo root.
-4. **Deploy**: run `make check`, then `make update` (or `sudo nixos-rebuild switch --flake .#ultraviolet`) to push changes onto the host. The Home Assistant service has `restartTriggers` on the `home-assistant/{dashboards,automations,blueprints}` paths so it restarts and recopies all YAML automatically.
+3. **Validate syntax**: run `yamllint` against edited files (`yamllint home-assistant/automations/water-leaks.yaml`). For Nix edits run `nix fmt`, then `nix flake check` at the repo root (remember `git add` any new files first — flakes only see tracked files).
+4. **Deploy**: run `update` (the `writeShellScriptBin` on `PATH`; runs `nh os switch` under the hood) or `sudo nixos-rebuild switch --flake .#ultraviolet` to push changes onto the host. The Home Assistant service has `restartTriggers` on the `home-assistant/{dashboards,automations,blueprints}` paths so it restarts and recopies all YAML automatically.
 5. **Verify**: tail logs via `sudo journalctl -fu home-assistant.service`, open the UI, and run `hass-cli state get …` to confirm entities/cards appear. For Lovelace edits also clear browser cache or reload the browser.
 6. **Back up**: when landing big changes, trigger an on-demand backup (`ha-backup my-new-automation`) so you can roll back quickly. Details live in `hosts/ultraviolet/HOME-ASSISTANT-BACKUP.md`.
 

@@ -43,6 +43,7 @@ in {
   imports = [
     ./common.nix
     ./devspaces-host
+    ./direnv-prewarm
     ./security-tools
   ];
 

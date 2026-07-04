@@ -280,7 +280,10 @@ in {
   };
 
   virtualisation.oci-containers.containers."inbox-zero-redis-http" = {
-    image = "hiett/serverless-redis-http:latest";
+    # Pinned to the :latest digest as of 2026-07-03. Bump: re-run
+    # `skopeo inspect --format '{{.Digest}}' docker://hiett/serverless-redis-http:latest`
+    # and replace the digest below.
+    image = "hiett/serverless-redis-http:latest@sha256:5b0bb9239fce53abf87b2018a7a0deb9ec7bd900c5360738fe5fbeeb426f9150";
     autoStart = true;
     environmentFiles = ["/run/inbox-zero/redis-http.env"];
     dependsOn = ["inbox-zero-redis"];
@@ -291,7 +294,10 @@ in {
   };
 
   virtualisation.oci-containers.containers."inbox-zero-web" = {
-    image = "ghcr.io/elie222/inbox-zero:latest";
+    # Pinned to the :latest digest as of 2026-07-03. Bump: re-run
+    # `skopeo inspect --format '{{.Digest}}' docker://ghcr.io/elie222/inbox-zero:latest`
+    # and replace the digest below (same image as inbox-zero-worker).
+    image = "ghcr.io/elie222/inbox-zero:latest@sha256:3fba3e9c062dcc3fdc696f0337146c94b994de94469629bd8363063ca6378b8b";
     autoStart = true;
     environmentFiles = ["/run/inbox-zero/runtime.env"];
     ports = ["127.0.0.1:3000:3000"];
@@ -308,7 +314,10 @@ in {
   };
 
   virtualisation.oci-containers.containers."inbox-zero-worker" = {
-    image = "ghcr.io/elie222/inbox-zero:latest";
+    # Pinned to the :latest digest as of 2026-07-03. Bump: re-run
+    # `skopeo inspect --format '{{.Digest}}' docker://ghcr.io/elie222/inbox-zero:latest`
+    # and replace the digest below (same image as inbox-zero-web).
+    image = "ghcr.io/elie222/inbox-zero:latest@sha256:3fba3e9c062dcc3fdc696f0337146c94b994de94469629bd8363063ca6378b8b";
     autoStart = true;
     environmentFiles = ["/run/inbox-zero/runtime.env"];
     cmd = ["/app/docker/scripts/start-worker.sh"];

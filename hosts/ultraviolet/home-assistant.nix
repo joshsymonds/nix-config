@@ -733,12 +733,16 @@ in {
       # Enable the web interface
       http = {
         server_host = "0.0.0.0"; # Listen on all interfaces (needed for proxies)
+        # Narrowed from the /24 to just localhost: Caddy (the only reverse
+        # proxy in front of HA) runs on this same host, so nothing else
+        # legitimately sends X-Forwarded-* headers.
         trusted_proxies = [
-          "::1"
           "127.0.0.1"
-          "172.31.0.0/24" # Local network
+          "::1"
         ];
         use_x_forwarded_for = true;
+        ip_ban_enabled = true;
+        login_attempts_threshold = 5;
       };
 
       # Configure recorder for history (30 days default)
@@ -769,8 +773,26 @@ in {
       ble_passthrough = {};
 
       # Lovelace configuration
+      #
+      # `lovelace.mode` is deprecated (nixpkgs' home-assistant module warns:
+      # removed upstream in HA 2026.8, currently pinned to 2026.6.4). Its
+      # replacement isn't a doc-guessed shape — it's read straight out of
+      # this pin's homeassistant/components/lovelace/__init__.py: when
+      # `mode: yaml` was set, HA's own deprecation shim auto-added exactly
+      # this `dashboards.lovelace` entry (title/icon/show_in_sidebar/
+      # require_admin match its hardcoded defaults) and split resource
+      # loading out into `resource_mode`. This is that same shape written
+      # explicitly, so behavior for the existing dashboards is unchanged.
       lovelace = {
-        mode = "yaml";
+        resource_mode = "yaml";
+        dashboards.lovelace = {
+          mode = "yaml";
+          filename = "ui-lovelace.yaml";
+          title = "Overview";
+          icon = "mdi:view-dashboard";
+          show_in_sidebar = true;
+          require_admin = false;
+        };
         resources = [
           {
             url = "/hacsfiles/Bubble-Card/bubble-card.js";

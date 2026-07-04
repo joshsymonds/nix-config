@@ -24,10 +24,46 @@ in
 
     services.cleanup-services = {
       enable = true;
-      # The marvin-blackbox reaper owns docker hygiene on this host (surgical
-      # dangling-image + aged-build-cache prunes); nightly `docker system
-      # prune -a` here wiped warm blackbox caches.
+      # The marvin-blackbox reaper (./services/marvin-blackbox-reap.nix) owns
+      # docker hygiene *for marvin-blackbox specifically* (idle kind clusters,
+      # aged build caches, registry tag GC) on this host; nightly `docker
+      # system prune -a --volumes` here wiped every unused image and all
+      # build cache regardless of source, making the first blackbox build of
+      # each day fully cold and undercutting that reaper's warm-cache design.
+      # docker-scoped-prune below is the narrow stopgap for everything else
+      # Docker on this host accumulates (Coder stack images, ad-hoc builds)
+      # now that the nightly global prune is gone.
       dockerPrune = false;
+    };
+
+    # Docker hygiene stopgap for everything OTHER than marvin-blackbox (see
+    # the dockerPrune comment above). Deliberately narrow so it can't repeat
+    # the warm-cache wipe that got the nightly global prune disabled: no
+    # `-a` (only dangling/unreferenced images, not everything unused) and no
+    # volume pruning (never touch data) — just dangling images idle >72h and
+    # build cache idle >168h (1wk).
+    systemd.services.docker-scoped-prune = {
+      description = "Weekly scoped Docker prune (dangling images >72h, build cache >168h)";
+      after = ["docker.service"];
+      path = [pkgs.docker];
+      serviceConfig = {
+        Type = "oneshot";
+        ExecStart = pkgs.writeShellScript "docker-scoped-prune" ''
+          #!${pkgs.bash}/bin/bash
+          set -euo pipefail
+          ${pkgs.docker}/bin/docker image prune -f --filter until=72h
+          ${pkgs.docker}/bin/docker builder prune -f --filter until=168h
+        '';
+      };
+    };
+
+    systemd.timers.docker-scoped-prune = {
+      wantedBy = ["timers.target"];
+      timerConfig = {
+        OnCalendar = "weekly";
+        RandomizedDelaySec = "30m";
+        Persistent = true;
+      };
     };
 
     # Performance tuning
@@ -67,7 +103,6 @@ in
           80
           443
           7080
-          9437
         ];
       };
     };
@@ -168,11 +203,7 @@ in
             "network.target"
             "remote-fs.target"
           ];
-          before = ["podman-bazarr.service"];
-          wantedBy = [
-            "multi-user.target"
-            "podman-bazarr.service"
-          ];
+          wantedBy = ["multi-user.target"];
           serviceConfig = {
             Type = "oneshot";
             RemainAfterExit = true;

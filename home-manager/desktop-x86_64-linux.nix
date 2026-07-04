@@ -20,6 +20,7 @@ in {
   imports = [
     ./common.nix
     ./devspaces-client
+    ./direnv-prewarm
     ./firefox
     ./niri
     ./dms

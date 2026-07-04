@@ -135,9 +135,7 @@ in {
   # then every fork() in that session returns EAGAIN until the scope
   # frees slots. Lift the per-scope cap; the kernel-wide threads-max
   # still applies as the real ceiling.
-  systemd.user.extraConfig = ''
-    DefaultTasksMax=infinity
-  '';
+  systemd.user.settings.Manager.DefaultTasksMax = "infinity";
 
   # Common packages for all headless Linux hosts
   environment.pathsToLink = ["/share/zsh"];

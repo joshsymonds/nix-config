@@ -1,13 +1,22 @@
 # Josh Symonds' Nix Configuration
 
-This repository contains my personal Nix configuration for managing my Mac laptop and Linux home servers using a declarative, reproducible approach with Nix flakes.
+This repository contains my personal Nix configuration for managing my desktop, servers, and (occasionally) a Mac, using a declarative, reproducible approach with Nix flakes.
 
 ## Overview
 
-This configuration manages:
-- **macOS laptop** (ninuan) - M-series Mac with nix-darwin
-- **Linux servers** - Multiple headless NixOS home servers:
-  - ultraviolet, bluedesert, echelon
+This configuration manages 9 hosts:
+
+| Host | Platform | Role |
+|------|----------|------|
+| gnomon | NixOS (x86_64-linux) | Primary desktop — niri + DankMaterialShell, gaming rig |
+| ultraviolet | NixOS (x86_64-linux) | Main homelab server |
+| bluedesert | NixOS (x86_64-linux) | Z-Wave bridge (zwave-js-ui) |
+| vermissian | NixOS (x86_64-linux) | Work/dev server |
+| echelon | NixOS (x86_64-linux) | Remote tailnet node |
+| stygianlibrary | NixOS (x86_64-linux) | halmasuit test rig (portable, hardware-identical to gnomon) |
+| ninuan | macOS (aarch64-darwin) | Rarely powered on now that gnomon is the primary desktop |
+| testhost | NixOS (x86_64-linux) | VM fixture for the installer test, not a real machine |
+| installer | NixOS (x86_64-linux) | Generic installer ISO output, not a deployed host |
 
 ## Features
 
@@ -24,7 +33,13 @@ This configuration manages:
 
 ### Rebuild System Configuration
 
-On the target machine, use the `update` alias or run directly:
+On the target machine, run `update` — a `writeShellScriptBin` on `PATH` that dispatches to `nh os switch`/`nh darwin switch` (or SSHes into bluedesert, which has no local Nix). It pre-flights `sudo -n true` and refuses to hang waiting on a password prompt, so it's safe to run from scripts and agents:
+
+```bash
+update
+```
+
+Or invoke the underlying rebuild directly:
 
 ```bash
 # macOS
@@ -32,6 +47,13 @@ darwin-rebuild switch --flake ".#$(hostname -s)" --option warn-dirty false
 
 # Linux
 sudo nixos-rebuild switch --flake ".#$(hostname)" --option warn-dirty false
+```
+
+### Validate Before Rebuilding
+
+```bash
+git add .        # flakes only see git-tracked files
+nix flake check
 ```
 
 ### Update Flake Inputs

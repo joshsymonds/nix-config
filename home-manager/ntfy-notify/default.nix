@@ -4,8 +4,9 @@
 # This is the gnomon end of the "ntfy is the one true notification path"
 # design. Claude's own terminal notification is disabled everywhere
 # (settings.json preferredNotifChannel=notifications_disabled); the
-# Stop/Notification hooks (home-manager/claude-code/hooks/ntfy-notifier.sh)
-# POST to the ntfy topic with a classifying tag. Every agent — gnomon's
+# Stop/Notification/SessionEnd hooks (`cc-tools notify`, wired in
+# home-manager/claude-code/settings.json) POST to the ntfy topic with a
+# classifying tag. Every agent — gnomon's
 # own AND vermissian's — therefore comes back through this one
 # subscriber, so the desktop popup and the watch push are the same
 # signal from the same source. gnomon's own agents loop back through

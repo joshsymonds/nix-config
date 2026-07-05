@@ -70,7 +70,7 @@ Maintain persistent, labeled environments for Claude Code on remote hosts. Each 
    - Right-aligned context segment with icons (☿♀♁♂♃ or `` for Coder)
    - Kitty/tmux titles read `DEV_CONTEXT` so tabs match prompts
 
-6. **Notifications (`home-manager/codex/hooks/ntfy-notifier.sh`)**
+6. **Notifications (`cc-tools notify (see home-manager/claude-code/hooks/README.md)`)**
    - Derives the same metadata and includes it in the push title/body
 
 ## Session Flow
@@ -101,7 +101,7 @@ Key tmux bindings remain the same (Ctrl-b + planet initial to jump between plane
 ## Status & Notifications
 - `devspace-status` / `ds` → `tmux list-sessions`
 - `dsl` → includes window counts and creation times
-- `home-manager/codex/hooks/ntfy-notifier.sh` → reads `DEV_CONTEXT` and `DEV_CONTEXT_ICON` so phone alerts show "☿ mercury" or " coder-workspace"
+- `cc-tools notify (see home-manager/claude-code/hooks/README.md)` → reads `DEV_CONTEXT` and `DEV_CONTEXT_ICON` so phone alerts show "☿ mercury" or " coder-workspace"
 
 ## File Map
 
@@ -112,7 +112,7 @@ Key tmux bindings remain the same (Ctrl-b + planet initial to jump between plane
 | `home-manager/devspaces-host` | Planetary aliases on the server |
 | `home-manager/devspaces-client` | Same aliases for macOS (via ET) |
 | `home-manager/starship/default.nix` | Prompt segment showing the context |
-| `home-manager/codex/hooks/ntfy-notifier.sh` | Push notifications with context metadata |
+| `cc-tools notify (see home-manager/claude-code/hooks/README.md)` | Push notifications with context metadata |
 
 ## Troubleshooting
 

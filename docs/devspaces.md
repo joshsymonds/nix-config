@@ -25,7 +25,7 @@ This document describes the new dev context abstraction that replaced the older 
 5. **Prompt + titles** (`home-manager/starship/default.nix`, `home-manager/tmux/default.nix`)
    - Starship adds a right-side context segment with optional icons
    - Tmux titles use the per-session option `@dev_context` so Kitty tabs and other terminals stay in sync
-6. **Notifications** (`home-manager/codex/hooks/ntfy-notifier.sh`)
+6. **Notifications** (`cc-tools notify (see home-manager/claude-code/hooks/README.md)`)
    - Reads the derived context metadata and embeds it in mobile alerts
 
 ## Planetary helpers

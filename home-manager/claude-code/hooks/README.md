@@ -3,20 +3,24 @@
 Hook scripts deployed verbatim to `~/.claude/hooks/` and `~/.claude-work/hooks/`
 by `../default.nix` (`mkClaudeFiles`), wired up in `../settings.json`:
 
-- `ntfy-notifier.sh` — **the** ntfy sender. Runs on the `Stop` and
-  `Notification` events; POSTs to the ntfy URL in the `ntfy-url` agenix
-  secret. Classifies the event so the phone (priority + emoji) and
-  gnomon's ntfy subscriber (`home-manager/ntfy-notify/`) can tell
-  "finished" (`white_check_mark`, priority 3) from "Claude is waiting
-  on you" (`question`, priority 5). This is the only ntfy path; it is
-  NOT in cc-tools.
 - `aws-profile-mirror.sh` — `PostToolUse`/`Bash` hook.
 
-## cc-tools
+## Notifications live in cc-tools
 
-Only the **statusline** lives in cc-tools (https://github.com/joshsymonds/cc-tools),
-installed as the `cc-tools-statusline` binary and referenced by
-`settings.json`'s `statusLine.command`. cc-tools has a parsed-but-unused
-`notifications.ntfy_topic` config field and `docs/claude-notify-go-design.md`
-sketches a Go rewrite of the notifier — neither is implemented. Do not
-assume cc-tools sends notifications; `ntfy-notifier.sh` does.
+The ntfy sender is `cc-tools notify` (https://github.com/joshsymonds/cc-tools,
+`internal/notify/`), wired in `../settings.json` on the `Stop`, `Notification`
+(matcher `permission_prompt|idle_prompt|agent_needs_input|agent_completed`),
+and `SessionEnd` events. It reads the same `CLAUDE_HOOKS_NTFY_URL_FILE` /
+`CLAUDE_HOOKS_NTFY_TOKEN_FILE` agenix env wiring as the old bash hook did,
+and keeps the tag contract gnomon's subscriber (`home-manager/ntfy-notify/`)
+chimes on: blocked = priority 5 + `question`, done/info = 4/3 +
+`white_check_mark`.
+
+What it adds over the deleted `ntfy-notifier.sh`: transcript-derived gates
+(silent while a `/goal` is unmet or background tasks are pending; silent in
+subagent contexts), a Haiku judge that writes the notification title/body
+(`<project> · <task>` instead of window-title guessing), a per-session
+detached watchdog that pings on goal completion, hung tasks, and a 4h
+parked ceiling, and an append-only decision log of every evaluation at
+`~/.local/state/cc-tools/notify-decisions.jsonl` — read that log first when
+a ping (or a silence) looks wrong.

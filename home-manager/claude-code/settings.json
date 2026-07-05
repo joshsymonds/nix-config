@@ -44,7 +44,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/ntfy-notifier.sh"
+            "command": "~/.claude/bin/cc-tools notify",
+            "timeout": 90
           },
           {
             "type": "command",
@@ -55,11 +56,23 @@
     ],
     "Notification": [
       {
+        "matcher": "permission_prompt|idle_prompt|agent_needs_input|agent_completed",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/bin/cc-tools notify",
+            "timeout": 90
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
         "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/hooks/ntfy-notifier.sh"
+            "command": "~/.claude/bin/cc-tools notify"
           }
         ]
       }

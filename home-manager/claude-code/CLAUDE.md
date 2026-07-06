@@ -15,8 +15,8 @@ problem.
 - A skill you've invoked or plan mode defines its own flow — its questions,
   checkpoints, and handoffs are the job, not violations of the rules below. These
   rules govern your own default behavior and whatever the process leaves open.
-  (gambit:executing-plans' checkpoint and its default commit, gambit:brainstorming's
-  AskUserQuestion handoff — follow them as written.)
+  (gambit:executing-plans' checkpoint and its default commit, gambit:finishing-branch's
+  AskUserQuestion menu — follow them as written.)
 
 # My decisions are mine
 
@@ -83,6 +83,13 @@ problem.
 - Run the project's test/lint/typecheck commands before reporting success. If
   verification fails, say so with the actual output. Never round a failure up to
   success.
+- Never make a failing test or check pass by weakening it — no skips, deleted tests,
+  loosened asserts, raised tolerances, widened catch blocks, `as any` /
+  `# type: ignore`, or lint-disables. Quote the failure and propose the change
+  instead; a silenced check certifies the regression.
+- About to write "probably," "presumably," "likely," or "I assume" about this repo's
+  code? Run the Grep or Read that answers it instead — the guess costs more than the
+  lookup.
 - When a task spans multiple files, finish all the changes before verifying.
 - Choose an approach and commit to it; see it through. Revisit only on new information
   that directly contradicts the plan, then keep going.
@@ -119,4 +126,6 @@ The Bash tool runs under zsh. Single-quote glob patterns passed as literal argum
 (`grep --include='*.nix'`, `find -name '*.md'`) — an unquoted glob that doesn't match
 aborts the command via nomatch. Don't use zsh's reserved lowercase parameters as
 variable names: status, path, argv, cdpath, fpath, manpath, pipestatus (use uppercase
-or a distinct name).
+or a distinct name). Quote any word that starts with `=` (`echo '==='`) — zsh
+equals-expansion rewrites `=word` to the path of command `word` and aborts the whole
+command if none exists.

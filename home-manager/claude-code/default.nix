@@ -903,13 +903,23 @@ in {
       After = ["default.target"];
     };
     Service = {
-      ExecStart = "${cc-tools}/bin/cc-tools notifyd";
+      # The ntfy secrets are read in a shell wrapper rather than passed as
+      # *_FILE env: home-manager agenix leaves the runtime dir unexpanded in
+      # the secret path (literal "''${XDG_RUNTIME_DIR}/agenix/..."), and
+      # systemd's Environment= does not expand it — only bash, at runtime,
+      # does. Same reason ntfy-notify reads its secret in-shell. The daemon
+      # fail-fasts if the URL is empty, so a missing secret surfaces loudly.
+      ExecStart = pkgs.writeShellScript "cc-tools-notifyd-start" ''
+        export CLAUDE_HOOKS_NTFY_URL
+        CLAUDE_HOOKS_NTFY_URL="$(cat "${config.age.secrets."ntfy-url".path}")"
+        export CLAUDE_HOOKS_NTFY_TOKEN
+        CLAUDE_HOOKS_NTFY_TOKEN="$(cat "${config.age.secrets."ntfy-token".path}")"
+        exec ${cc-tools}/bin/cc-tools notifyd
+      '';
       Restart = "on-failure";
       RestartSec = 5;
       Environment = [
         "PATH=${lib.makeBinPath [pkgs.claudeCodeCli pkgs.tmux pkgs.git pkgs.coreutils]}"
-        "CLAUDE_HOOKS_NTFY_URL_FILE=${config.age.secrets."ntfy-url".path}"
-        "CLAUDE_HOOKS_NTFY_TOKEN_FILE=${config.age.secrets."ntfy-token".path}"
       ];
     };
     Install.WantedBy = ["default.target"];

@@ -36,7 +36,7 @@ in
 
     nativeBuildInputs = [makeWrapper];
 
-    # Two upstream fixes:
+    # Three upstream fixes:
     # 1. Upstream never passes quantization= to onnx_asr.load_model, so it
     #    always loads fp32 weights. Thread it through an env var; unset means
     #    None (fp32), ONNX_ASR_QUANTIZATION=int8 loads the int8 ONNX files.
@@ -44,12 +44,19 @@ in
     #    in onnx-asr >=0.11; upstream's hasattr fallback stringifies the
     #    generator and Wyoming clients receive "<generator object ...>" as
     #    the transcript. Join the segment texts instead.
+    # 3. Upstream passes its providers list to load_model but not load_vad,
+    #    which then defaults to every provider onnxruntime was built with.
+    #    onnxruntime 1.26 with the OpenVINO EP can't compile silero-vad's
+    #    dynamic-rank If-subgraph (verified live on ultraviolet), killing
+    #    startup even with --cpu. Thread the same providers through.
     postPatch = ''
       substituteInPlace wyoming_onnx_asr.py \
         --replace-fail "sess_options=sess_options" \
                        "sess_options=sess_options, quantization=os.environ.get(\"ONNX_ASR_QUANTIZATION\")" \
         --replace-fail 'text = results.text if hasattr(results, "text") else str(results).strip()' \
-                       'text = results.text if hasattr(results, "text") else (results.strip() if isinstance(results, str) else " ".join(seg.text for seg in results).strip())'
+                       'text = results.text if hasattr(results, "text") else (results.strip() if isinstance(results, str) else " ".join(seg.text for seg in results).strip())' \
+        --replace-fail 'model.with_vad(onnx_asr.load_vad("silero"))' \
+                       'model.with_vad(onnx_asr.load_vad("silero", providers=providers))'
     '';
 
     installPhase = ''

@@ -291,6 +291,10 @@ in
       enable = true;
       package = inputs.savecraft.packages.x86_64-linux.pob-server;
       apiKeyFile = config.age.secrets."pob-server-api-key".path;
+      # PoB2 (Path of Exile 2) LuaJIT pool alongside PoE1. Each process
+      # peaks ~145MB; poolSize 8 + pool2Size 4 defaults ≈ 1.7GB worst
+      # case against 62GB — no contention.
+      poe2Enable = true;
     };
 
     # Podman for media containers

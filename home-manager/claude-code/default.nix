@@ -436,7 +436,7 @@ in {
         # Include cc-tools binaries
         cc-tools
       ])
-      ++ [pkgs.claudeCodeCli cmswitch];
+      ++ [pkgs.claudeCodeCli pkgs.claude-swap cmswitch];
 
     # Add npm global bin to PATH for user-installed packages
     sessionPath = lib.mkAfter [

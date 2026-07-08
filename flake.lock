@@ -195,11 +195,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1783492946,
-        "narHash": "sha256-haHVDRjHHY2Y/TEVcJRPOooCwPZ9i8sShDNcMDnoDxE=",
+        "lastModified": 1783526721,
+        "narHash": "sha256-gxv85AUZopadADP7/2pG6YdKy9Yzt6MdVaTxpYsB2w4=",
         "owner": "joshsymonds",
         "repo": "cc-tools",
-        "rev": "fb74bf43b4644c5820da8f1087ef2ce662c0756f",
+        "rev": "3e3891d862dc323c7ebc8b9754ab2884a0e00a2e",
         "type": "github"
       },
       "original": {

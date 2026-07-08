@@ -881,4 +881,37 @@ in {
       chmod +x "$HOME/.local/bin/claude"
     '';
   };
+
+  # notifyd — the per-user notification daemon. The `cc-tools notify` hook
+  # (settings.json Stop/Notification/SessionEnd) is now a fire-and-forget
+  # client that hands each hook payload to this daemon over a unix socket at
+  # $XDG_RUNTIME_DIR/cc-tools/notifyd.sock and exits in milliseconds, so a
+  # turn-end hook never blocks the agent on the ~18s judge compose. The
+  # daemon owns decide/judge/dedupe/watchdog/delivery in one serialized
+  # process; if it is unreachable the client falls back inline (deterministic
+  # send, no judge) so a ping is never lost.
+  #
+  # PATH carries the two binaries the daemon shells out to: `claude` for the
+  # judge that composes turn-end summaries, and `tmux` for presence detection
+  # (is the user looking at the pane the frame came from). The ntfy URL/token
+  # ride the same agenix secret-file env the interactive hook uses — a
+  # systemd user service does NOT inherit home.sessionVariables, so they are
+  # set explicitly here; without a URL the daemon fail-fasts at startup.
+  config.systemd.user.services.cc-tools-notifyd = {
+    Unit = {
+      Description = "cc-tools notifyd — serialized turn-end notification daemon";
+      After = ["default.target"];
+    };
+    Service = {
+      ExecStart = "${cc-tools}/bin/cc-tools notifyd";
+      Restart = "on-failure";
+      RestartSec = 5;
+      Environment = [
+        "PATH=${lib.makeBinPath [pkgs.claudeCodeCli pkgs.tmux pkgs.git pkgs.coreutils]}"
+        "CLAUDE_HOOKS_NTFY_URL_FILE=${config.age.secrets."ntfy-url".path}"
+        "CLAUDE_HOOKS_NTFY_TOKEN_FILE=${config.age.secrets."ntfy-token".path}"
+      ];
+    };
+    Install.WantedBy = ["default.target"];
+  };
 }

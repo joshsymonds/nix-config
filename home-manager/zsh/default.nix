@@ -57,11 +57,14 @@
 
   cwswitch = pkgs.writeShellApplication {
     name = "cwswitch";
-    runtimeInputs = [pkgs.jq pkgs.coreutils pkgs.procps];
+    runtimeInputs = [pkgs.jq pkgs.coreutils pkgs.procps config.programs.claudeCode.cwrenderPackage];
     text = ''
       # Flip the ~/.claude-work LLM backend between Bedrock and the Anthropic
       # OAuth account. Rewrites the frozen --model in every job's
-      # respawnFlags, persists the new mode, and bounces the bg-agent daemon
+      # respawnFlags, persists the new mode, re-renders the work profile's
+      # settings.json via cwrender (spare workers get a scrubbed env and read
+      # their backend from settings.json's env block — see the cwrender
+      # comment in home-manager/claude-code), and bounces the bg-agent daemon
       # so new/resumed workers pick up the new backend.
       work="$HOME/.claude-work"
       pointer="$work/.backend"
@@ -95,10 +98,13 @@
           ;;
       esac
 
-      if [ "$target" = "$cur" ]; then
-        echo "work backend already '$target' — nothing to do."
-        exit 0
-      fi
+      # Same-target runs still do the job-rewrite loop below (repair mode):
+      # a job created while the launch env disagreed with the pointer keeps
+      # a frozen --model from the wrong backend, and skipping here would
+      # strand it forever. Only the daemon bounce is conditional on an
+      # actual backend change.
+      repair=no
+      [ "$target" = "$cur" ] && repair=yes
 
       if [ "$target" = anthropic ]; then map=$to_anthropic; else map=$to_bedrock; fi
 
@@ -111,10 +117,13 @@
           if grep -q '"state": *"working"' "$sj"; then active=$((active + 1)); fi
           # Warn (don't mangle) on any --model value we don't recognise
           # (lookup is on the base id, with any [1m] suffix stripped).
+          # Known = a key of either direction's map: source-side ids get
+          # rewritten, target-side ids are already correct — only ids from
+          # neither backend are truly unknown.
           while IFS= read -r m; do
             [ -n "$m" ] || continue
             base=''${m%"[1m]"}
-            if ! printf '%s' "$map" | jq -e --arg k "$base" 'has($k)' >/dev/null 2>&1; then
+            if ! printf '%s%s' "$to_anthropic" "$to_bedrock" | jq -e -s --arg k "$base" 'any(has($k))' >/dev/null 2>&1; then
               echo "warn: $(basename "$(dirname "$sj")"): unrecognised model '$m' left unchanged" >&2
               unknown=$((unknown + 1))
             fi
@@ -130,7 +139,11 @@
                    | if $m[$base] != null then ($m[$base] + $sfx) else $v end )
               else $f[$i] end ] )
           ' "$sj" > "$tmp" 2>/dev/null; then
-            cmp -s "$sj" "$tmp" || changed=$((changed + 1))
+            # Count only real model changes: cmp on whole files would count
+            # jq's whitespace re-serialization as a rewrite.
+            before=$(jq -c '[.respawnFlags as $f | range(1;($f|length)) | select($f[.-1]=="--model") | $f[.]]' "$sj" 2>/dev/null || echo '[]')
+            after=$(jq -c '[.respawnFlags as $f | range(1;($f|length)) | select($f[.-1]=="--model") | $f[.]]' "$tmp" 2>/dev/null || echo '[]')
+            [ "$before" = "$after" ] || changed=$((changed + 1))
             mv "$tmp" "$sj"
           else
             rm -f "$tmp"
@@ -139,25 +152,38 @@
         done
       fi
 
-      if [ "$active" != 0 ]; then
-        echo "note: $active work agent(s) were 'working'; the daemon bounce stops them — pause+resume to migrate them onto $target." >&2
-      fi
-
       printf '%s\n' "$target" > "$pointer.$$" && mv "$pointer.$$" "$pointer"
 
+      # Re-render settings.json for the (possibly unchanged) backend: spare
+      # workers read their backend env from here at spawn, so repair mode
+      # re-renders too — a stale render is exactly the strand this fixes.
+      cwrender
+
+      # Repair mode: backend unchanged, so the daemon's inherited env is
+      # already correct — bounce nothing. Workers pick up rewritten
+      # respawnFlags on their next respawn regardless.
       bounced=no
-      status="$work/daemon.status.json"
-      if [ -f "$status" ]; then
-        pid=$(jq -r '.supervisorPid // empty' "$status" 2>/dev/null || true)
-        if [ -n "''${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then
-          pkill -TERM -P "$pid" 2>/dev/null || true
-          kill -TERM "$pid" 2>/dev/null || true
-          bounced=yes
+      if [ "$repair" = no ]; then
+        if [ "$active" != 0 ]; then
+          echo "note: $active work agent(s) were 'working'; the daemon bounce stops them — pause+resume to migrate them onto $target." >&2
+        fi
+        status="$work/daemon.status.json"
+        if [ -f "$status" ]; then
+          pid=$(jq -r '.supervisorPid // empty' "$status" 2>/dev/null || true)
+          if [ -n "''${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then
+            pkill -TERM -P "$pid" 2>/dev/null || true
+            kill -TERM "$pid" 2>/dev/null || true
+            bounced=yes
+          fi
         fi
       fi
 
-      echo "work backend: $cur -> $target  (jobs rewritten: $changed, unknown left: $unknown, daemon bounced: $bounced)"
-      echo "next: run 'claude agents' in a work dir and resume workers — they respawn on $target."
+      if [ "$repair" = yes ]; then
+        echo "work backend already '$target' — repaired stranded jobs instead  (jobs rewritten: $changed, unknown left: $unknown)"
+      else
+        echo "work backend: $cur -> $target  (jobs rewritten: $changed, unknown left: $unknown, daemon bounced: $bounced)"
+        echo "next: run 'claude agents' in a work dir and resume workers — they respawn on $target."
+      fi
     '';
   };
 in {

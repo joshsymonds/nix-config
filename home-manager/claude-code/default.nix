@@ -51,19 +51,82 @@
 
   # The work profile (~/.claude-work) is a SINGLE config dir whose LLM
   # backend (AWS Bedrock vs Anthropic OAuth) is a runtime-toggled mode, not
-  # a baked setting. settings.json therefore stays vanilla (identical to
-  # personal); the backend env is exported at launch by the zsh `claude`/
-  # `cw`/`cwa` wrappers and flipped by `cwswitch` (see home-manager/zsh).
+  # a baked setting. Home-manager therefore deploys this file as
+  # settings.base.json (never settings.json), and `cwrender` (below) merges
+  # it with the runtime backend mode into a REAL ~/.claude-work/settings.json
+  # at activation time and on every `cwswitch` flip.
   #
-  # Why env, not settings.json: verified empirically that Claude Code reads
-  # the backend env only at top-level launch, injects it into the process,
-  # and the background-agent daemon + all its spare workers INHERIT it —
-  # they never re-read settings.json (a daemon left running across a 4-7->
-  # 4-8 bump kept serving 4-7). So settings.json env and a launch-time shell
-  # export are equivalent for workers, but only the latter can be toggled
-  # without a rebuild. The model-id/region details now live in the zsh
-  # module's `workBackend` block.
+  # Why settings.json and not just launch env: the bg-agent daemon inherits
+  # the launch env, but the spare workers it forks get a SCRUBBED env —
+  # CLAUDE_CODE_USE_BEDROCK, ANTHROPIC_MODEL, and ANTHROPIC_DEFAULT_*_MODEL
+  # are exactly the vars stripped (observed on CLI 2.1.204 via /proc environ
+  # diff, 2026-07-09; an older CLI did inherit them, which is how this went
+  # unnoticed). Spares DO read settings.json's `env` block at spawn, so the
+  # backend env must live there for resumed/background sessions to hit
+  # Bedrock. settings.local.json is NOT an option: its `env` block is
+  # ignored entirely (probed empirically, same date). The launch-time zsh
+  # wrapper exports remain as the interactive-session path; cwrender is the
+  # worker path. The Bedrock model ARNs embed the Attain AWS account id and
+  # this repo is public, so they are never baked in here — cwrender reads
+  # them from the claude-bedrock-models agenix secret at runtime.
   settingsJsonWork = mkSettingsJson "work" {};
+
+  # tier -> {anthropic, bedrock} model map (declared in home-manager/zsh,
+  # shared here for cwrender).
+  bedrockModelsFile = config.age.secrets."claude-bedrock-models".path;
+
+  # cwrender — render ~/.claude-work/settings.json from the HM-deployed
+  # settings.base.json plus the runtime backend pointer (.backend). In
+  # bedrock mode the env block gets CLAUDE_CODE_USE_BEDROCK + region/profile
+  # + per-tier model ARNs from the agenix secret ([1m] 1M-context suffix on
+  # everything but haiku, matching the zsh launch wrapper exactly); in
+  # anthropic mode the base is written through untouched, so NO backend env
+  # leaks into OAuth sessions. Output is always a real, writable file
+  # replaced atomically — never a store symlink — because spare workers
+  # re-read it at spawn and cwswitch must be able to re-render without a
+  # rebuild.
+  cwrender = pkgs.writeShellApplication {
+    name = "cwrender";
+    runtimeInputs = [pkgs.jq pkgs.coreutils];
+    text = ''
+      work="$HOME/.claude-work"
+      base="$work/settings.base.json"
+      out="$work/settings.json"
+
+      if [ ! -r "$base" ]; then
+        echo "cwrender: $base missing or unreadable — is home-manager deployed?" >&2
+        exit 1
+      fi
+
+      mode=bedrock
+      [ -f "$work/.backend" ] && mode=$(tr -d '[:space:]' < "$work/.backend")
+      [ -n "$mode" ] || mode=bedrock
+
+      models="${bedrockModelsFile}"
+      tmp="$out.cwrender.$$"
+
+      if [ "$mode" = bedrock ] && [ -r "$models" ]; then
+        jq --slurpfile m "$models" '
+          .env += {
+            CLAUDE_CODE_USE_BEDROCK: "1",
+            AWS_REGION: "us-east-2",
+            AWS_PROFILE: "attain",
+            ANTHROPIC_MODEL: ($m[0].fable.bedrock + "[1m]"),
+            ANTHROPIC_DEFAULT_FABLE_MODEL: ($m[0].fable.bedrock + "[1m]"),
+            ANTHROPIC_DEFAULT_OPUS_MODEL: ($m[0].opus.bedrock + "[1m]"),
+            ANTHROPIC_DEFAULT_SONNET_MODEL: ($m[0].sonnet.bedrock + "[1m]"),
+            ANTHROPIC_DEFAULT_HAIKU_MODEL: $m[0].haiku.bedrock
+          }' "$base" > "$tmp"
+      else
+        if [ "$mode" = bedrock ]; then
+          echo "cwrender: model map $models unreadable (claude-bedrock-models agenix secret not deployed?) — rendering WITHOUT Bedrock env; work workers will use the Anthropic OAuth backend despite .backend=bedrock." >&2
+        fi
+        jq . "$base" > "$tmp"
+      fi
+      mv "$tmp" "$out"
+      echo "cwrender: $out rendered for backend '$mode'"
+    '';
+  };
 
   # ── Model registry ──────────────────────────────────────────────────────
   # Single source of truth for every Claude Code model this fleet adopts.
@@ -396,6 +459,15 @@ in {
     '';
   };
 
+  # Exposes the cwrender package so other modules (home-manager/zsh's
+  # cwswitch) can depend on the exact same renderer without duplicating it
+  # or reaching across module files.
+  options.programs.claudeCode.cwrenderPackage = lib.mkOption {
+    type = lib.types.package;
+    readOnly = true;
+    description = "The cwrender script that materializes ~/.claude-work/settings.json from settings.base.json + the runtime backend mode.";
+  };
+
   options.programs.claudeCode.extraSkills = lib.mkOption {
     type = lib.types.attrsOf lib.types.path;
     default = {};
@@ -407,6 +479,8 @@ in {
       Map entries: name → directory containing SKILL.md.
     '';
   };
+
+  config.programs.claudeCode.cwrenderPackage = cwrender;
 
   config.age.secrets."ntfy-url" = {
     file = ../../secrets/user/ntfy-url.age;
@@ -436,7 +510,7 @@ in {
         # Include cc-tools binaries
         cc-tools
       ])
-      ++ [pkgs.claudeCodeCli pkgs.claude-swap cmswitch];
+      ++ [pkgs.claudeCodeCli pkgs.claude-swap cmswitch cwrender];
 
     # Add npm global bin to PATH for user-installed packages
     sessionPath = lib.mkAfter [
@@ -485,17 +559,25 @@ in {
           @fleet.md
         '';
 
+      # settingsAttr: the personal profile symlinks settings.json straight
+      # to the store; the work profile deploys settings.base.json instead
+      # and lets cwrender produce the real settings.json (see the cwrender
+      # comment above for why it can't be a store symlink).
       mkClaudeFiles = dir: settings: let
         commandFileAttrs =
           lib.mapAttrs' (
             name: _: lib.nameValuePair "${dir}/commands/${name}" {source = ./commands/${name};}
           )
           commandEntries;
+        settingsAttr =
+          if dir == ".claude-work"
+          then {"${dir}/settings.base.json".source = settings;}
+          else {"${dir}/settings.json".source = settings;};
       in
         lib.mkMerge [
           commandFileAttrs
+          settingsAttr
           {
-            "${dir}/settings.json".source = settings;
             "${dir}/CLAUDE.md".text = claudeMdText;
             "${dir}/host.md".text = cfg.hostContext;
             "${dir}/fleet.md".source = ./fleet.md;
@@ -715,6 +797,20 @@ in {
         done
         )
       '');
+
+    # Render the work profile's real settings.json from settings.base.json +
+    # the current backend mode. Must run after linkGeneration so the new
+    # generation's settings.base.json is in place. On a first-ever activation
+    # the agenix mount may not exist yet; cwrender degrades to a no-Bedrock
+    # render with a loud warning and the next `cwswitch`/activation fixes it.
+    activation.claudeWorkSettingsRender = lib.hm.dag.entryAfter ["linkGeneration"] ''
+      # Legacy cleanup: settings.json used to be an HM-managed store symlink;
+      # remove it so cwrender's atomic mv never writes through a stale link.
+      if [ -L "$HOME/.claude-work/settings.json" ]; then
+        run rm "$HOME/.claude-work/settings.json"
+      fi
+      run ${cwrender}/bin/cwrender || echo "claudeWorkSettingsRender: cwrender failed — work profile may lack a settings.json until the next activation or cwswitch." >&2
+    '';
 
     activation.claudeDirectoryPermissions = lib.hm.dag.entryAfter ["writeBoundary" "claudeUnifiedState"] ''
       set -euo pipefail

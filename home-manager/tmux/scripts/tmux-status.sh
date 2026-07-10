@@ -13,8 +13,28 @@
 
 set -euo pipefail
 
-dir=${TMUX_STATUS_DIR:-/tmp}
+if [[ -n ${TMUX_STATUS_DIR:-} ]]; then
+  dir=$TMUX_STATUS_DIR
+else
+  dir=${XDG_RUNTIME_DIR:-/tmp}/tmux-status-$(id -u)
+fi
 mkdir -p "$dir"
+# Fixed, guessable state-file names live under $dir (lock/cache/*.state). A
+# world-writable parent (the /tmp fallback) lets an attacker pre-create $dir
+# themselves before we ever run, which mkdir -p would silently accept. Refuse
+# to operate on a directory we don't own instead of writing into (or
+# chmod'ing) something an attacker controls. Reject a symlink outright first,
+# so the guarantee doesn't rest implicitly on stat(1) not dereferencing.
+if [[ -L $dir ]]; then
+  echo "tmux-status: refusing to use $dir (symlink)" >&2
+  exit 1
+fi
+if [[ $(stat -c %u "$dir") == "$(id -u)" ]]; then
+  chmod 700 "$dir"
+else
+  echo "tmux-status: refusing to use $dir (not owned by current user)" >&2
+  exit 1
+fi
 psi_base=${TMUX_STATUS_PSI:-/proc/pressure}
 
 cache=$dir/tmux-status.cache
@@ -86,7 +106,7 @@ physical_disks() {
     case $resolved in
       */devices/virtual/*) continue ;;
     esac
-    basename "$d"
+    printf '%s\n' "${d##*/}"
   done
 }
 
@@ -128,22 +148,6 @@ read_disk_pct() {
   df --output=pcent / | awk 'NR==2 { gsub(/[ %]/, ""); printf "%s", $0 }'
 }
 
-read_psi() {
-  # "some avg10=" value for $1 (cpu/memory/io). 0 if PSI is unavailable —
-  # guarded, never aborts under set -e.
-  local f="$psi_base/$1" val=""
-  if [[ -r $f ]]; then
-    val=$(awk '
-      $1 == "some" {
-        for (i = 2; i <= NF; i++) {
-          if ($i ~ /^avg10=/) { sub(/^avg10=/, "", $i); print $i; exit }
-        }
-      }
-    ' "$f" 2>/dev/null || true)
-  fi
-  printf '%s\n' "${val:-0}"
-}
-
 read_failed_units() {
   systemctl --failed --no-legend --plain --state=failed 2>/dev/null | wc -l
 }
@@ -159,6 +163,13 @@ human() {
 
 # ---------- state helpers ----------
 
+is_uint() {
+  # $1 matches an unsigned integer literal — the only shape safe to feed
+  # into bash arithmetic. A planted non-numeric first token (e.g.
+  # `a[$(cmd)]`) in a state file fails this and is treated as missing data.
+  [[ $1 =~ ^[0-9]+$ ]]
+}
+
 state_is_stale() {
   # $1 = state file, $2 = now (ns). Echoes 1 (stale/missing) or 0 (fresh).
   local f=$1 now=$2 ts _rest
@@ -167,7 +178,7 @@ state_is_stale() {
     return
   fi
   read -r ts _rest < "$f" || true
-  if [[ -z ${ts:-} ]]; then
+  if [[ -z ${ts:-} ]] || ! is_uint "$ts"; then
     echo 1
     return
   fi
@@ -204,6 +215,24 @@ measure_all() {
 
   local base_ts cpu_busy0 cpu_idle0 net_rx0 net_tx0 disk_rd0 disk_wr0
 
+  if (( any_stale == 0 )); then
+    read -r base_ts cpu_busy0 cpu_idle0 < "$state_cpu"
+    read -r _ net_rx0 net_tx0 < "$state_net"
+    read -r _ disk_rd0 disk_wr0 < "$state_disk"
+    # Defense in depth: even though state_is_stale already validated the
+    # timestamp column, every numeric field that reaches arithmetic below
+    # must be validated too — a planted non-numeric baseline counter is
+    # just as dangerous as a planted timestamp. Any bad field forces a
+    # rebaseline instead of reaching `(( ))`.
+    local v
+    for v in "$base_ts" "$cpu_busy0" "$cpu_idle0" "$net_rx0" "$net_tx0" "$disk_rd0" "$disk_wr0"; do
+      if ! is_uint "$v"; then
+        any_stale=1
+        break
+      fi
+    done
+  fi
+
   if (( any_stale == 1 )); then
     read -r cpu_busy0 cpu_idle0 < <(raw_cpu)
     read -r net_rx0 net_tx0 < <(raw_net)
@@ -214,10 +243,6 @@ measure_all() {
     printf '%s %s %s\n' "$base_ts" "$disk_rd0" "$disk_wr0" > "$state_disk"
     sleep 1
     now=$(now_ns)
-  else
-    read -r base_ts cpu_busy0 cpu_idle0 < "$state_cpu"
-    read -r _ net_rx0 net_tx0 < "$state_net"
-    read -r _ disk_rd0 disk_wr0 < "$state_disk"
   fi
 
   local cpu_busy1 cpu_idle1 net_rx1 net_tx1 disk_rd1 disk_wr1
@@ -241,26 +266,78 @@ measure_all() {
   local window_ns=$(( now - base_ts ))
   if (( window_ns <= 0 )); then window_ns=1000000000; fi
 
-  NET_RX_RATE=$(( (net_rx1 - net_rx0) * 1000000000 / window_ns ))
-  NET_TX_RATE=$(( (net_tx1 - net_tx0) * 1000000000 / window_ns ))
-  DISK_RD_RATE=$(( (disk_rd1 - disk_rd0) * 1000000000 / window_ns ))
-  DISK_WR_RATE=$(( (disk_wr1 - disk_wr0) * 1000000000 / window_ns ))
+  # Scale-and-divide in awk (double precision) instead of bash 64-bit
+  # arithmetic: `delta * 1e9` overflows a signed 64-bit intermediate once a
+  # window's byte/sector delta exceeds ~8.59 GiB (fires under heavy disk
+  # I/O), wrapping negative and corrupting human()'s output. One awk call
+  # computes all four rates together.
+  read -r NET_RX_RATE NET_TX_RATE DISK_RD_RATE DISK_WR_RATE < <(awk \
+    -v rx1="$net_rx1" -v rx0="$net_rx0" \
+    -v tx1="$net_tx1" -v tx0="$net_tx0" \
+    -v rd1="$disk_rd1" -v rd0="$disk_rd0" \
+    -v wr1="$disk_wr1" -v wr0="$disk_wr0" \
+    -v w="$window_ns" '
+    BEGIN {
+      printf "%.0f %.0f %.0f %.0f\n",
+        (rx1 - rx0) * 1000000000 / w,
+        (tx1 - tx0) * 1000000000 / w,
+        (rd1 - rd0) * 1000000000 / w,
+        (wr1 - wr0) * 1000000000 / w
+    }')
 }
 
 # ---------- severity / coloring ----------
 
-sev_ge() {
-  # $1 = value, $2 = warn threshold, $3 = crit threshold -> echoes 0/1/2.
-  # awk comparison handles both int and float values uniformly.
-  awk -v v="$1" -v w="$2" -v c="$3" 'BEGIN {
-    if (v + 0 >= c + 0)      { print 2 }
-    else if (v + 0 >= w + 0) { print 1 }
-    else                     { print 0 }
-  }'
-}
+# severity_awk: single awk invocation replacing the former per-metric
+# sev_ge (×6 forks) + max_sev (×2 forks) + load_ratio awk + three read_psi
+# forks (each its own [[ -r ]] test + awk). Reads the three PSI files
+# itself (missing/unreadable -> 0, matching read_psi's degrade-gracefully
+# behavior) and emits: sev_cpu sev_ram sev_disk_io sev_disk_usage
+# load_round (load1 rounded to nearest integer, for the CPU card's N/nproc
+# display). Severity is the worst of the metric's own threshold and (where
+# applicable) its PSI threshold — identical semantics to the old sev_ge/
+# max_sev pairing.
+severity_awk() {
+  awk \
+    -v load1="$1" -v nproc="$2" -v used_pct="$3" -v disk_pct="$4" \
+    -v psi_cpu_f="$5" -v psi_mem_f="$6" -v psi_io_f="$7" '
+  function read_psi_val(f,    line, i, n, parts, val) {
+    val = 0
+    while ((getline line < f) > 0) {
+      if (line ~ /^some /) {
+        n = split(line, parts, " ")
+        for (i = 1; i <= n; i++) {
+          if (parts[i] ~ /^avg10=/) {
+            val = substr(parts[i], index(parts[i], "=") + 1) + 0
+            break
+          }
+        }
+        break
+      }
+    }
+    close(f)
+    return val
+  }
+  function sev(v, w, c) {
+    if (v + 0 >= c + 0)      { return 2 }
+    else if (v + 0 >= w + 0) { return 1 }
+    else                     { return 0 }
+  }
+  function maxi(a, b) { return (a > b) ? a : b }
+  BEGIN {
+    psi_cpu = read_psi_val(psi_cpu_f)
+    psi_mem = read_psi_val(psi_mem_f)
+    psi_io  = read_psi_val(psi_io_f)
+    load_ratio = (nproc + 0 > 0) ? load1 / nproc : 0
 
-max_sev() {
-  if (( $1 > $2 )); then printf '%s' "$1"; else printf '%s' "$2"; fi
+    sev_cpu        = maxi(sev(load_ratio, 0.7, 1.0), sev(psi_cpu, 20, 50))
+    sev_ram        = maxi(sev(used_pct, 75, 90), sev(psi_mem, 20, 50))
+    sev_disk_io    = sev(psi_io, 20, 50)
+    sev_disk_usage = sev(disk_pct, 85, 95)
+    load_round     = sprintf("%.0f", load1)
+
+    printf "%d %d %d %d %s\n", sev_cpu, sev_ram, sev_disk_io, sev_disk_usage, load_round
+  }'
 }
 
 accent_for() {
@@ -301,22 +378,14 @@ build_status() {
   disk_pct=$(read_disk_pct)
   [[ -z $disk_pct ]] && disk_pct=0
 
-  local psi_cpu psi_mem psi_io
-  psi_cpu=$(read_psi cpu)
-  psi_mem=$(read_psi memory)
-  psi_io=$(read_psi io)
-
   local nproc_n
   nproc_n=$(nproc 2>/dev/null || echo 1)
   (( nproc_n < 1 )) && nproc_n=1
-  local load_ratio
-  load_ratio=$(awk -v l="$load1" -v n="$nproc_n" 'BEGIN { printf "%.4f", l / n }')
 
-  local sev_cpu sev_ram sev_disk_io sev_disk_usage
-  sev_cpu=$(max_sev "$(sev_ge "$load_ratio" 0.7 1.0)" "$(sev_ge "$psi_cpu" 20 50)")
-  sev_ram=$(max_sev "$(sev_ge "$used_pct" 75 90)" "$(sev_ge "$psi_mem" 20 50)")
-  sev_disk_io=$(sev_ge "$psi_io" 20 50)
-  sev_disk_usage=$(sev_ge "$disk_pct" 85 95)
+  local sev_cpu sev_ram sev_disk_io sev_disk_usage load_round
+  read -r sev_cpu sev_ram sev_disk_io sev_disk_usage load_round < <(severity_awk \
+    "$load1" "$nproc_n" "$used_pct" "$disk_pct" \
+    "$psi_base/cpu" "$psi_base/memory" "$psi_base/io")
 
   local net_str disk_io_str failed
   net_str=$(printf '↓%s ↑%s' "$(human "$NET_RX_RATE")" "$(human "$NET_TX_RATE")")
@@ -324,7 +393,7 @@ build_status() {
   failed=$(read_failed_units)
 
   pill '#94e2d5' '󰈀' "$net_str"
-  pill "$(accent_for '#f9e2af' "$sev_cpu")" '' "${CPU_PCT}% ${load1}"
+  pill "$(accent_for '#f9e2af' "$sev_cpu")" '' "${CPU_PCT}% ${load_round}/${nproc_n}"
   pill "$(accent_for '#cba6f7' "$sev_ram")" '' "$(human "$used_bytes")"
   pill "$(accent_for '#89dceb' "$sev_disk_io")" '󰓅' "$disk_io_str"
   pill "$(accent_for '#89b4fa' "$sev_disk_usage")" '󰋊' "${disk_pct}%"

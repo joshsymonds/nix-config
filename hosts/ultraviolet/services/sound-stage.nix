@@ -19,6 +19,9 @@
     deckURL = "http://172.31.0.39:9000";
     delyricURL = "http://172.31.0.98:9001";
     libraryDir = "/mnt/music/sound-stage";
+    # The Deck mounts the same NFS export at /var/mnt — paths sent to its
+    # POST /refresh are translated from libraryDir to this prefix.
+    deckLibraryDir = "/var/mnt/music/sound-stage";
     environmentFile = config.age.secrets."sound-stage-env".path;
   };
 

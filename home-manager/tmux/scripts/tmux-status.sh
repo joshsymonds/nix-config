@@ -393,8 +393,8 @@ build_status() {
   failed=$(read_failed_units)
 
   pill '#94e2d5' '󰈀' "$net_str"
-  pill "$(accent_for '#f9e2af' "$sev_cpu")" '' "${CPU_PCT}% ${load_round}/${nproc_n}"
-  pill "$(accent_for '#cba6f7' "$sev_ram")" '' "$(human "$used_bytes")"
+  pill "$(accent_for '#f9e2af' "$sev_cpu")" '' "${CPU_PCT}% ${load_round}/${nproc_n}"
+  pill "$(accent_for '#cba6f7' "$sev_ram")" '' "$(human "$used_bytes")"
   pill "$(accent_for '#89dceb' "$sev_disk_io")" '󰓅' "$disk_io_str"
   pill "$(accent_for '#89b4fa' "$sev_disk_usage")" '󰋊' "${disk_pct}%"
   if (( failed > 0 )); then

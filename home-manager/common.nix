@@ -41,7 +41,7 @@ in {
           autossh
           bat
           claudeCodeCli
-          codexCli
+          codex
           coder
           coreutils-full
           curl

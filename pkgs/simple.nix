@@ -12,7 +12,6 @@
   mcp-atlassian = pkgs.callPackage ./mcp-atlassian {};
   claudeCodeCli = pkgs.callPackage ./claude-code-cli {};
   claude-swap = pkgs.callPackage ./claude-swap {};
-  codexCli = pkgs.callPackage ./codex-cli {};
   deadcode = pkgs.callPackage ./deadcode {};
   golangciLintBin = pkgs.callPackage ./golangci-lint-bin {};
   coder = pkgs.callPackage ./coder-cli {inherit (pkgs) unzip;};

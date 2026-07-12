@@ -15,6 +15,12 @@
     # `nix flake update nixpkgs-inference`.
     nixpkgs-inference.url = "github:nixos/nixpkgs/nixos-unstable";
 
+    # Side-channel nixpkgs for the codex CLI only (overlays/default.nix).
+    # OpenAI ships codex releases weekly and new models require the
+    # matching CLI, so the main lock is perpetually behind. Update
+    # independently via `nix flake update nixpkgs-codex`.
+    nixpkgs-codex.url = "github:nixos/nixpkgs/nixos-unstable";
+
     # Flake-parts - modular flake outputs
     flake-parts = {
       url = "github:hercules-ci/flake-parts";

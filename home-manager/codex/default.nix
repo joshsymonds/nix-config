@@ -7,8 +7,14 @@
   # model, dir, git branch, context, rate limits. Codex has no native
   # equivalent for the host/AWS/GCloud/K8s chips, so they're absent here.
   home.file.".codex/config.toml".text = ''
-    model = "gpt-5.5"
+    model = "gpt-5.6-sol"
     model_reasoning_effort = "xhigh"
+
+    # Trust is normally persisted by codex rewriting config.toml, which
+    # fails against this read-only store symlink — declare trusted
+    # projects here instead (one table per directory).
+    [projects."/home/joshsymonds/nix-config"]
+    trust_level = "trusted"
 
     [tui]
     status_line = [

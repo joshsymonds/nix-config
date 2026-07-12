@@ -1,12 +1,12 @@
-# gnomon-only: subscribe to the Claude ntfy topic and surface every
+# gnomon-only: subscribe to the coding-agent ntfy topic and surface every
 # message as a DankMaterialShell desktop popup + a synthesized chime.
 #
 # This is the gnomon end of the "ntfy is the one true notification path"
 # design. Claude's own terminal notification is disabled everywhere
 # (settings.json preferredNotifChannel=notifications_disabled); the
-# Stop/Notification/SessionEnd hooks (`cc-tools notify`, wired in
-# home-manager/claude-code/settings.json) POST to the ntfy topic with a
-# classifying tag. Every agent — gnomon's
+# Claude Stop/Notification/SessionEnd hooks and Codex's external
+# agent-turn-complete notifier POST to the ntfy topic with a classifying tag.
+# Every agent — gnomon's
 # own AND vermissian's — therefore comes back through this one
 # subscriber, so the desktop popup and the watch push are the same
 # signal from the same source. gnomon's own agents loop back through
@@ -42,9 +42,9 @@
     # freedesktop hint as of the josh/notif-suppress-sound patch on the
     # dank-material-shell integration branch — without that patch DMS
     # double-sounds nondeterministically (dedup-dependent).
-    ${pkgs.libnotify}/bin/notify-send -a Claude -u "$urgency" \
+    ${pkgs.libnotify}/bin/notify-send -a "Coding Agent" -u "$urgency" \
       -h boolean:suppress-sound:true -- \
-      "''${title:-Claude}" "''${message:-}"
+      "''${title:-Coding Agent}" "''${message:-}"
     exec ${pkgs.pipewire}/bin/pw-play "${sounds}/$sound.wav"
   '';
 
@@ -68,7 +68,7 @@
 in {
   systemd.user.services.ntfy-notify = {
     Unit = {
-      Description = "Surface Claude ntfy notifications as desktop popups + chime";
+      Description = "Surface coding-agent ntfy notifications as desktop popups + chime";
       After = ["graphical-session.target"];
       PartOf = ["graphical-session.target"];
     };

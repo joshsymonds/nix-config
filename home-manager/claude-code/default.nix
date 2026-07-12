@@ -525,8 +525,9 @@ in {
       CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
       CLAUDE_CODE_NO_FLICKER = "1";
       CLAUDE_CODE_TMUX_TRUECOLOR = "1";
-      CLAUDE_HOOKS_NTFY_URL_FILE = config.age.secrets."ntfy-url".path;
-      CLAUDE_HOOKS_NTFY_TOKEN_FILE = config.age.secrets."ntfy-token".path;
+      # Shared by Claude's stdin hooks and Codex's argv notify command.
+      CC_TOOLS_NTFY_URL_FILE = config.age.secrets."ntfy-url".path;
+      CC_TOOLS_NTFY_TOKEN_FILE = config.age.secrets."ntfy-token".path;
       # The only reliable way to disable auto-updates for native installs.
       # settings.json autoUpdater.disabled is cosmetic; ~/.claude.json autoUpdates
       # is bypassed by autoUpdatesProtectedForNative for native installMethod.
@@ -1006,10 +1007,10 @@ in {
       # does. Same reason ntfy-notify reads its secret in-shell. The daemon
       # fail-fasts if the URL is empty, so a missing secret surfaces loudly.
       ExecStart = pkgs.writeShellScript "cc-tools-notifyd-start" ''
-        export CLAUDE_HOOKS_NTFY_URL
-        CLAUDE_HOOKS_NTFY_URL="$(cat "${config.age.secrets."ntfy-url".path}")"
-        export CLAUDE_HOOKS_NTFY_TOKEN
-        CLAUDE_HOOKS_NTFY_TOKEN="$(cat "${config.age.secrets."ntfy-token".path}")"
+        export CC_TOOLS_NTFY_URL
+        CC_TOOLS_NTFY_URL="$(cat "${config.age.secrets."ntfy-url".path}")"
+        export CC_TOOLS_NTFY_TOKEN
+        CC_TOOLS_NTFY_TOKEN="$(cat "${config.age.secrets."ntfy-token".path}")"
         exec ${cc-tools}/bin/cc-tools notifyd
       '';
       Restart = "on-failure";

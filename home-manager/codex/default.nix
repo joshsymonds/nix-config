@@ -1,4 +1,10 @@
-{inputs, ...}: {
+{
+  inputs,
+  pkgs,
+  ...
+}: let
+  cc-tools = inputs.cc-tools.packages.${pkgs.stdenv.hostPlatform.system}.default;
+in {
   # Declarative Codex CLI config. The /statusline interactive picker won't
   # be able to save changes (config.toml is a Nix-store symlink); edit this
   # file and rebuild instead.
@@ -9,6 +15,11 @@
   home.file.".codex/config.toml".text = ''
     model = "gpt-5.6-sol"
     model_reasoning_effort = "xhigh"
+
+    # Codex passes agent-turn-complete JSON as one argv value. cc-tools
+    # normalizes that into the same ntfy delivery path Claude's stdin hooks
+    # use, without invoking the Claude transcript/judge pipeline.
+    notify = ["${cc-tools}/bin/cc-tools", "notify"]
 
     # Equivalent to --dangerously-bypass-approvals-and-sandbox. This machine
     # is intentionally configured to let Codex work outside the repo without
@@ -23,6 +34,12 @@
     trust_level = "trusted"
 
     [tui]
+    # External notify owns turn-complete delivery. Keep Codex's built-in
+    # terminal notification only for approvals, which external notify does
+    # not currently emit.
+    notifications = ["approval-requested"]
+    notification_condition = "unfocused"
+    notification_method = "auto"
     status_line = [
       "model-with-reasoning",
       "current-dir",
@@ -37,6 +54,5 @@
   # Keep the submission helper pinned with the rest of the Codex install.
   # It lives in the OpenAI Developers plugin upstream, but does not require
   # installing that plugin's Platform connector or its unrelated skills.
-  home.file.".codex/skills/chatgpt-app-submission".source =
-    "${inputs.openai-plugins}/plugins/openai-developers/skills/chatgpt-app-submission";
+  home.file.".codex/skills/chatgpt-app-submission".source = "${inputs.openai-plugins}/plugins/openai-developers/skills/chatgpt-app-submission";
 }

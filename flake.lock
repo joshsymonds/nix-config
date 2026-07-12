@@ -2382,6 +2382,23 @@
         "type": "github"
       }
     },
+    "openai-plugins": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783641078,
+        "narHash": "sha256-Fw6hUdvyiNYwd7SKxwnJe2mUzf1CiSI9GTR0gG/fNEk=",
+        "owner": "openai",
+        "repo": "plugins",
+        "rev": "bd2122cb92f2ade874d8c2b1d00383976ab9415b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "openai",
+        "repo": "plugins",
+        "rev": "bd2122cb92f2ade874d8c2b1d00383976ab9415b",
+        "type": "github"
+      }
+    },
     "pre-commit": {
       "inputs": {
         "flake-compat": "flake-compat_5",
@@ -2565,6 +2582,7 @@
         "nixpkgs": "nixpkgs_9",
         "nixpkgs-codex": "nixpkgs-codex",
         "nixpkgs-inference": "nixpkgs-inference",
+        "openai-plugins": "openai-plugins",
         "redlib-fork": "redlib-fork",
         "rust-overlay": "rust-overlay_5",
         "savecraft": "savecraft",

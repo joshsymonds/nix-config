@@ -21,6 +21,14 @@
     # independently via `nix flake update nixpkgs-codex`.
     nixpkgs-codex.url = "github:nixos/nixpkgs/nixos-unstable";
 
+    # Official Codex plugin sources. Consumed as a plain source tree so
+    # individual skills can be installed declaratively without mutable
+    # `codex plugin add` state.
+    openai-plugins = {
+      url = "github:openai/plugins/bd2122cb92f2ade874d8c2b1d00383976ab9415b";
+      flake = false;
+    };
+
     # Flake-parts - modular flake outputs
     flake-parts = {
       url = "github:hercules-ci/flake-parts";

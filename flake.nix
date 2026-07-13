@@ -21,6 +21,14 @@
     # independently via `nix flake update nixpkgs-codex`.
     nixpkgs-codex.url = "github:nixos/nixpkgs/nixos-unstable";
 
+    # Unofficial Linux packaging for OpenAI's official ChatGPT Desktop app.
+    # This converts the upstream macOS artifact into a native Linux Electron
+    # package; overlays/default.nix adds our local launcher policy.
+    chatgpt-desktop = {
+      url = "github:ilysenko/codex-desktop-linux";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Official Codex plugin sources. Consumed as a plain source tree so
     # individual skills can be installed declaratively without mutable
     # `codex plugin add` state.

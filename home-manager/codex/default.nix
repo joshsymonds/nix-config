@@ -16,6 +16,14 @@
     if gambitHasCodex
     then inputs.gambit.lib.version
     else "unavailable";
+  gambitCodexCache =
+    if gambitHasCodex
+    then
+      pkgs.runCommand "gambit-codex-cache-${gambitVersion}" {} ''
+        mkdir -p "$out/${gambitVersion}"
+        cp -R ${gambitCodex}/. "$out/${gambitVersion}/"
+      ''
+    else null;
   codexConfig = pkgs.writeText "codex-managed-config.toml" ''
     model = "gpt-5.6-sol"
     model_reasoning_effort = "xhigh"
@@ -205,16 +213,13 @@ in {
   # Gambit's Codex-native bundle is exposed through the implicit personal
   # marketplace. The marketplace path is rooted at $HOME, so
   # ./plugins/gambit resolves to the Nix-managed ~/plugins/gambit symlink.
-  # The recursive cache entry plus the enabled config block avoid mutable
-  # `codex plugin add` state; INSTALLED_BY_DEFAULT records the same policy in
-  # the marketplace UI.
+  # Codex ignores symlinked SKILL.md files during discovery. Build the whole
+  # versioned cache as one immutable tree so its directories and files are
+  # real; Home Manager then symlinks only the cache root. The enabled config
+  # block avoids mutable `codex plugin add` state, while INSTALLED_BY_DEFAULT
+  # records the same policy in the marketplace UI.
   home.file."plugins/gambit" = lib.mkIf gambitHasCodex {source = gambitCodex;};
-  home.file.".codex/plugins/cache/personal/gambit/${gambitVersion}" = lib.mkIf gambitHasCodex {
-    source = gambitCodex;
-    # Codex intentionally ignores a cache version that is itself a symlink.
-    # Build a real directory whose contents link into the immutable bundle.
-    recursive = true;
-  };
+  home.file.".codex/plugins/cache/personal/gambit" = lib.mkIf gambitHasCodex {source = gambitCodexCache;};
   home.file.".agents/plugins/marketplace.json" = lib.mkIf gambitHasCodex {
     text = builtins.toJSON {
       name = "personal";

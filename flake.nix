@@ -21,14 +21,6 @@
     # independently via `nix flake update nixpkgs-codex`.
     nixpkgs-codex.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    # Unofficial Linux packaging for OpenAI's official ChatGPT Desktop app.
-    # This converts the upstream macOS artifact into a native Linux Electron
-    # package; overlays/default.nix adds our local launcher policy.
-    chatgpt-desktop = {
-      url = "github:ilysenko/codex-desktop-linux";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     # Official Codex plugin sources. Consumed as a plain source tree so
     # individual skills can be installed declaratively without mutable
     # `codex plugin add` state.
@@ -603,12 +595,22 @@
         # Keep this fast — anything that needs to boot a VM goes in
         # packages above, not here. treefmt-nix's flakeModule adds
         # checks.formatting; we merge.
-        checks = lib.optionalAttrs (system == "x86_64-linux") {
+        checks = lib.optionalAttrs (system == "x86_64-linux") (let
+          checkPkgs = import nixpkgs {
+            inherit system;
+            config.allowUnfree = true;
+            overlays = [self.outputs.overlays.default];
+          };
+        in {
+          chatgpt-desktop = import ./tests/chatgpt-desktop.nix {
+            pkgs = checkPkgs;
+            chatgptDesktop = checkPkgs.chatgpt-desktop;
+          };
           installer-kit-fixture = import ./tests/installer-kit-fixture.nix {
             inherit pkgs;
             flakeSource = self.outPath;
           };
-        };
+        });
 
         # mkShellNoCC + a tiny package set keeps the direnv shell closure
         # small, so a flake.lock bump re-pulls megabytes, not gigabytes.

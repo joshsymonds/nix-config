@@ -453,7 +453,7 @@ in {
     };
     "${mod}+G" = {
       hotkey-overlay.title = "Focus or Launch ChatGPT";
-      action.spawn = ["focus-or-spawn" "--app-id" "codex-desktop" "--" "codex-desktop"];
+      action.spawn = ["focus-or-spawn" "--app-id" "chatgpt" "--" "chatgpt"];
     };
     "${mod}+O" = {
       hotkey-overlay.title = "Focus or Launch Claude";

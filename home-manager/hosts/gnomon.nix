@@ -74,9 +74,9 @@
     # pkgs/claude-desktop/default.nix (version + hashes).
     claude-desktop
 
-    # ChatGPT Desktop (Chat + Work + Codex). OpenAI does not publish a Linux
-    # installer, so overlays/default.nix wraps the maintained Linux conversion
-    # of the official app and pins its CLI bridge to this config's Codex CLI.
+    # ChatGPT Desktop: a chat-only Chromium wrapper around chatgpt.com, with
+    # its own persistent browser profile. This deliberately excludes the
+    # unified desktop app's Work and coding interfaces.
     chatgpt-desktop
 
     # Obsidian — Markdown notes / vaults. The headless flavor on

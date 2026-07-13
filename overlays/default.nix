@@ -203,47 +203,10 @@ in {
       signal-desktop = electronNoScrollAnchoring prev.signal-desktop "signal-desktop";
       vesktop = electronNoScrollAnchoring prev.vesktop "vesktop";
 
-      # ChatGPT Desktop: consume the maintained Linux conversion of OpenAI's
-      # official Electron app, then apply the same thin-wrapper pattern we
-      # used for Claude before its native Linux release. Keep the desktop
-      # entry pointed at this output so GUI launches inherit both the pinned
-      # Codex CLI and niri's scroll-anchoring workaround.
-      chatgpt-desktop =
-        if final.stdenv.hostPlatform.isLinux
-        then let
-          base = inputs.chatgpt-desktop.packages.${final.stdenv.hostPlatform.system}.codex-desktop;
-        in
-          final.symlinkJoin {
-            name = "chatgpt-desktop-${base.version}";
-            paths = [base];
-            nativeBuildInputs = [final.makeWrapper];
-            postBuild = ''
-              rm "$out/bin/codex-desktop"
-              makeWrapper "${base}/bin/codex-desktop" "$out/bin/codex-desktop" \
-                --set-default CODEX_CLI_PATH "${final.codex}/bin/codex" \
-                --add-flags "--disable-blink-features=ScrollAnchoring"
-
-              desktopFile="$out/share/applications/codex-desktop.desktop"
-              desktopTarget="$(readlink -f "$desktopFile")"
-              rm "$desktopFile"
-              substitute "$desktopTarget" "$desktopFile" \
-                --replace-fail "${base}/bin/codex-desktop" "$out/bin/codex-desktop" \
-                --replace-fail "${base}/share/applications/codex-desktop.desktop" "$desktopFile"
-
-              # Updates are managed by the flake input. Remove upstream's
-              # mutable updater actions, whose /usr/bin helper does not exist
-              # on NixOS and must not mutate an immutable store installation.
-              sed -i 's/^Actions=.*/Actions=new-window;/' "$desktopFile"
-              sed -i '/^\[Desktop Action CheckForUpdates\]/,$d' "$desktopFile"
-            '';
-            meta =
-              (base.meta or {})
-              // {
-                description = "OpenAI ChatGPT Desktop for Linux";
-                mainProgram = "codex-desktop";
-              };
-          }
-        else throw "chatgpt-desktop is only supported on Linux";
+      # ChatGPT Desktop: a dedicated Chromium app-mode window for the normal
+      # chatgpt.com conversation UI. The local package owns its isolated
+      # browser profile, desktop entry, icon, and niri window class.
+      chatgpt-desktop = final.callPackage ../pkgs/chatgpt-desktop {};
 
       # Claude Desktop (the chat app — not Claude Code): Anthropic's official
       # native-Linux build, packaged locally from their apt repo. See

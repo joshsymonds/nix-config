@@ -74,6 +74,11 @@
     # pkgs/claude-desktop/default.nix (version + hashes).
     claude-desktop
 
+    # ChatGPT Desktop: a chat-only Chromium wrapper around chatgpt.com, with
+    # its own persistent browser profile. This deliberately excludes the
+    # unified desktop app's Work and coding interfaces.
+    chatgpt-desktop
+
     # Obsidian — Markdown notes / vaults. The headless flavor on
     # ultraviolet (hosts/ultraviolet/services/obsidian.nix) is a
     # separate, Xvfb-driven daemon for Sync; this is the native

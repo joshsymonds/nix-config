@@ -8,3 +8,6 @@
 - For Gnomon changes, commit and push the branch, SSH to
   `joshsymonds@gnomon`, pull the branch there, and run the build or
   `nixos-rebuild` locally on Gnomon.
+- Never invoke `sudo nixos-rebuild ... .#gnomon` directly from another
+  host's shell. The rebuild command itself must be inside the SSH command
+  sent to `joshsymonds@gnomon`.

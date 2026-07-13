@@ -6,6 +6,18 @@
     url = "https://images.ctfassets.net/j22is2dtoxu1/intercom-img-d177d076c9a5453052925143/49d5d812b0a6fcc20a14faa8c629d9fb/icon-ios-1024_401x.png";
     hash = "sha256-55ni+g1BSaLsKPxZXIv7SZC8u0eGSXkbQqz/fN5ugF4=";
   };
+
+  recordingChromium = pkgs.writeShellApplication {
+    name = "chromium";
+    text = ''
+      : "''${CHATGPT_TEST_ARGV:?}"
+      printf '%s\n' "$@" > "$CHATGPT_TEST_ARGV"
+    '';
+  };
+
+  behavioralChatgptDesktop = pkgs.callPackage ../pkgs/chatgpt-desktop {
+    chromium = recordingChromium;
+  };
 in
   pkgs.runCommand "chatgpt-desktop-check" {
     nativeBuildInputs = [pkgs.coreutils pkgs.findutils pkgs.gnugrep];
@@ -36,10 +48,11 @@ in
       exit 1
     fi
     grep -F -- 'profile_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/chatgpt-desktop"' "$launcher"
-    if ! grep -F -- '${pkgs.coreutils}/bin/mkdir -p "$profile_dir"' "$launcher"; then
+    if ! grep -F -- '${pkgs.coreutils}/bin/mkdir -p -- "$profile_dir"' "$launcher"; then
       echo "ASSERT FAIL: launcher does not reference ${pkgs.coreutils}/bin/mkdir" >&2
       exit 1
     fi
+    grep -F -- '${pkgs.coreutils}/bin/chmod 0700 -- "$profile_dir"' "$launcher"
     grep -F -- '--user-data-dir="$profile_dir"' "$launcher"
 
     grep -Fx 'Name=ChatGPT' "$desktop"
@@ -59,6 +72,16 @@ in
     fi
     if grep -RiE 'codex|update(r|s|check)' ${chatgptDesktop}; then
       echo "ASSERT FAIL: ChatGPT wrapper contains Codex or updater residue" >&2
+      exit 1
+    fi
+
+    behavioral_launcher=${behavioralChatgptDesktop}/bin/chatgpt
+    export CHATGPT_TEST_ARGV="$PWD/argv"
+    export XDG_DATA_HOME="$PWD/xdg-data"
+    "$behavioral_launcher"
+    profile_mode="$(stat -c '%a' "$XDG_DATA_HOME/chatgpt-desktop")"
+    if test "$profile_mode" != 700; then
+      echo "ASSERT FAIL: ChatGPT profile mode is $profile_mode, expected 700" >&2
       exit 1
     fi
 

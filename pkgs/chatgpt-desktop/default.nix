@@ -17,7 +17,8 @@
     name = "chatgpt";
     text = ''
       profile_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/chatgpt-desktop"
-      ${lib.getExe' coreutils "mkdir"} -p "$profile_dir"
+      ${lib.getExe' coreutils "mkdir"} -p -- "$profile_dir"
+      ${lib.getExe' coreutils "chmod"} 0700 -- "$profile_dir"
 
       exec ${lib.getExe chromium} \
         --app=https://chatgpt.com/ \

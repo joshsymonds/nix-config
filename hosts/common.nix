@@ -229,11 +229,11 @@ in {
       (lib.mkIf (!builtins.elem config.networking.hostName ["bluedesert" "echelon"]) {
         "/mnt/creative" = nfs "${nas.ip}:${nas.shares.creative}";
       })
-      # Claude Code transcripts. Only the three hosts I actually run Claude on
-      # mount this; the share isn't exported to the others either. Idle-timeout
-      # is bumped to 1 hour (vs 10 min on the media shares) because the
-      # cache-warm timer + active Claude sessions hit this every few minutes,
-      # so frequent remount-thrash would be wasteful.
+      # Claude Code and Codex transcripts. Only the three hosts I actually run
+      # these agents on mount this; the share isn't exported to the others
+      # either. Idle-timeout is bumped to 1 hour (vs 10 min on the media shares)
+      # because the cache-warm timer + active agent sessions hit this every few
+      # minutes, so frequent remount-thrash would be wasteful.
       (lib.mkIf (builtins.elem config.networking.hostName ["gnomon" "ultraviolet" "vermissian"]) {
         "/mnt/claude" = {
           device = "${nas.ip}:${nas.shares.claude}";
@@ -247,10 +247,10 @@ in {
             # Revalidate file attributes within 10s (vs the ~60s NFS default)
             # so gnomon's widget notices a remote host's freshly-rewritten
             # summary.json promptly instead of serving a stale cached mtime.
-            # Mount-wide on purpose: the per-profile projects/sessions/todos/
-            # tasks dirs are symlinked onto this same mount (claude-code/
-            # default.nix), so live transcript I/O revalidates 6x more often
-            # too — cheap (GETATTRs are tiny next to the JSONL writes) and fine.
+            # Mount-wide on purpose: Claude's per-profile state dirs and Codex's
+            # rollout dirs are symlinked onto this same mount, so live transcript
+            # I/O revalidates 6x more often too — cheap (GETATTRs are tiny next
+            # to the JSONL writes) and fine.
             "actimeo=10"
           ];
         };

@@ -1,4 +1,5 @@
 {
+  hostname,
   inputs,
   lib,
   pkgs,
@@ -15,15 +16,7 @@
     if gambitHasCodex
     then inputs.gambit.lib.version
     else "unavailable";
-in {
-  # Declarative Codex CLI config. The /statusline interactive picker won't
-  # be able to save changes (config.toml is a Nix-store symlink); edit this
-  # file and rebuild instead.
-  #
-  # Status line items mirror what's portable from the cc-tools chip set —
-  # model, dir, git branch, context, rate limits. Codex has no native
-  # equivalent for the host/AWS/GCloud/K8s chips, so they're absent here.
-  home.file.".codex/config.toml".text = ''
+  codexConfig = pkgs.writeText "codex-managed-config.toml" ''
     model = "gpt-5.6-sol"
     model_reasoning_effort = "xhigh"
 
@@ -45,9 +38,6 @@ in {
       enabled = true
     ''}
 
-    # Trust is normally persisted by codex rewriting config.toml, which
-    # fails against this read-only store symlink — declare trusted
-    # projects here instead (one table per directory).
     [projects."/home/joshsymonds/nix-config"]
     trust_level = "trusted"
 
@@ -68,6 +58,143 @@ in {
     ]
     status_line_use_colors = true
   '';
+in {
+  # Codex persists project trust, hook hashes, and interactive settings by
+  # rewriting ~/.codex/config.toml. Keep that file real and writable, while
+  # treating codexConfig as an authoritative baseline for the keys declared
+  # above. Runtime-only keys survive each activation; declared keys are
+  # reasserted, matching the mutable-state merge discipline used for Claude.
+  #
+  # yq-go provides a lossless-enough TOML <-> JSON bridge for Codex's config
+  # types; jq's recursive object merge lets the Nix baseline win without
+  # deleting hooks.state or additional projects written by Codex.
+  home.activation.codexConfig = lib.hm.dag.entryAfter ["linkGeneration"] ''
+    (
+    set -euo pipefail
+
+    BASE="${codexConfig}"
+    TARGET="$HOME/.codex/config.toml"
+    WORK="$(${pkgs.coreutils}/bin/mktemp -d)"
+    trap '${pkgs.coreutils}/bin/rm -rf "$WORK"' EXIT
+
+    ${pkgs.coreutils}/bin/mkdir -p "$HOME/.codex"
+    ${pkgs.yq-go}/bin/yq -p=toml -o=json '.' "$BASE" > "$WORK/base.json"
+
+    if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
+      if ! ${pkgs.yq-go}/bin/yq -p=toml -o=json '.' "$TARGET" > "$WORK/current.json"; then
+        echo "codexConfig: $TARGET is not valid TOML; preserving it unchanged." >&2
+        exit 0
+      fi
+    else
+      echo '{}' > "$WORK/current.json"
+    fi
+
+    ${pkgs.jq}/bin/jq -s '.[0] * .[1]' \
+      "$WORK/current.json" "$WORK/base.json" > "$WORK/merged.json"
+
+    current="$(${pkgs.jq}/bin/jq -Sc . "$WORK/current.json")"
+    merged="$(${pkgs.jq}/bin/jq -Sc . "$WORK/merged.json")"
+    if [ ! -L "$TARGET" ] && [ "$current" = "$merged" ]; then
+      exit 0
+    fi
+
+    ${pkgs.yq-go}/bin/yq -p=json -o=toml '.' "$WORK/merged.json" > "$WORK/config.toml"
+    ${pkgs.coreutils}/bin/chmod 600 "$WORK/config.toml"
+    ${pkgs.coreutils}/bin/mv -f "$WORK/config.toml" "$TARGET"
+    )
+  '';
+
+  # Codex's rollout JSONL files are its transcripts. Mirror Claude's storage
+  # split: active and archived transcripts live in this host's NAS bucket,
+  # while SQLite databases, caches, logs, history, and shell snapshots remain
+  # local (SQLite and high-churn small files are poor NFS workloads).
+  #
+  # Migration is deliberately conservative: do nothing if the NAS is down;
+  # wait for active Codex processes before moving local data; refuse to merge
+  # two non-empty trees; and retain migrated local data as a timestamped
+  # backup instead of deleting it.
+  home.activation.codexTranscriptState = lib.hm.dag.entryAfter ["writeBoundary"] (let
+    inScope = builtins.elem hostname ["gnomon" "ultraviolet" "vermissian"];
+  in
+    if !inScope
+    then ''
+      echo "codexTranscriptState: ${hostname} out of scope; skipping." >&2
+    ''
+    else ''
+      (
+      set -euo pipefail
+
+      BUCKET="/mnt/claude/${hostname}/codex"
+
+      # Trigger the automount, then verify it before touching any local path.
+      ${pkgs.coreutils}/bin/ls /mnt/claude >/dev/null 2>&1 || true
+      if ! ${pkgs.util-linux}/bin/mountpoint -q /mnt/claude; then
+        echo "codexTranscriptState: /mnt/claude not mounted (NAS down?). Refusing to touch ~/.codex transcript symlinks." >&2
+        exit 0
+      fi
+
+      for d in sessions archived_sessions; do
+        ${pkgs.coreutils}/bin/mkdir -p "$BUCKET/$d"
+      done
+
+      has_content() {
+        [ -d "$1" ] && [ -n "$(${pkgs.findutils}/bin/find "$1" -mindepth 1 -print -quit 2>/dev/null)" ]
+      }
+
+      needs_rescue=false
+      for d in sessions archived_sessions; do
+        target="$HOME/.codex/$d"
+        if [ -d "$target" ] && [ ! -L "$target" ] && has_content "$target"; then
+          needs_rescue=true
+          break
+        fi
+      done
+
+      if [ "$needs_rescue" = true ]; then
+        if ${pkgs.procps}/bin/pgrep -u "$USER" -fa 'codex' 2>/dev/null \
+            | ${pkgs.gnugrep}/bin/grep -qE '(^|/| )codex([^/ ]*|)( |$)'; then
+          echo "codexTranscriptState: local transcripts still need migration and an active Codex process was detected on ${hostname}." >&2
+          echo "codexTranscriptState: stop all Codex sessions, then re-run 'update'; no transcript paths were changed." >&2
+          exit 0
+        fi
+      fi
+
+      ensure_linked() {
+        local target="$1" want="$2"
+        if [ -L "$target" ]; then
+          current="$(${pkgs.coreutils}/bin/readlink "$target")"
+          if [ "$current" != "$want" ]; then
+            ${pkgs.coreutils}/bin/rm "$target"
+            ${pkgs.coreutils}/bin/ln -s "$want" "$target"
+          fi
+          return
+        fi
+
+        if [ -d "$target" ]; then
+          if has_content "$target"; then
+            if has_content "$want"; then
+              echo "codexTranscriptState: BOTH $target and $want have data; leaving the local directory in place. Resolve manually." >&2
+              return
+            fi
+            echo "codexTranscriptState: migrating $target -> $want" >&2
+            ${pkgs.rsync}/bin/rsync -a "$target/" "$want/"
+            backup="$target.bak-$(${pkgs.coreutils}/bin/date +%Y%m%d-%H%M%S)"
+            ${pkgs.coreutils}/bin/mv "$target" "$backup"
+            echo "codexTranscriptState: retained previous local data at $backup" >&2
+          else
+            ${pkgs.coreutils}/bin/rmdir "$target"
+          fi
+        fi
+
+        ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$target")"
+        ${pkgs.coreutils}/bin/ln -s "$want" "$target"
+      }
+
+      for d in sessions archived_sessions; do
+        ensure_linked "$HOME/.codex/$d" "$BUCKET/$d"
+      done
+      )
+    '');
 
   # Keep the submission helper pinned with the rest of the Codex install.
   # It lives in the OpenAI Developers plugin upstream, but does not require

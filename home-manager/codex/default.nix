@@ -1,9 +1,20 @@
 {
   inputs,
+  lib,
   pkgs,
   ...
 }: let
   cc-tools = inputs.cc-tools.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  gambitPackages = inputs.gambit.packages.${pkgs.stdenv.hostPlatform.system};
+  gambitHasCodex = gambitPackages ? codex && inputs.gambit ? lib && inputs.gambit.lib ? version;
+  gambitCodex =
+    if gambitHasCodex
+    then gambitPackages.codex
+    else null;
+  gambitVersion =
+    if gambitHasCodex
+    then inputs.gambit.lib.version
+    else "unavailable";
 in {
   # Declarative Codex CLI config. The /statusline interactive picker won't
   # be able to save changes (config.toml is a Nix-store symlink); edit this
@@ -26,6 +37,13 @@ in {
     # interrupting for per-command or per-directory confirmation.
     approval_policy = "never"
     sandbox_mode = "danger-full-access"
+
+    ${lib.optionalString gambitHasCodex ''
+        # Home Manager also materializes the matching cache entry below, so
+        # Gambit is installed and enabled without mutable `codex plugin add` state.
+      [plugins."gambit@personal"]
+      enabled = true
+    ''}
 
     # Trust is normally persisted by codex rewriting config.toml, which
     # fails against this read-only store symlink — declare trusted
@@ -55,4 +73,38 @@ in {
   # It lives in the OpenAI Developers plugin upstream, but does not require
   # installing that plugin's Platform connector or its unrelated skills.
   home.file.".codex/skills/chatgpt-app-submission".source = "${inputs.openai-plugins}/plugins/openai-developers/skills/chatgpt-app-submission";
+
+  # Gambit's Codex-native bundle is exposed through the implicit personal
+  # marketplace. The marketplace path is rooted at $HOME, so
+  # ./plugins/gambit resolves to the Nix-managed ~/plugins/gambit symlink.
+  # The recursive cache entry plus the enabled config block avoid mutable
+  # `codex plugin add` state; INSTALLED_BY_DEFAULT records the same policy in
+  # the marketplace UI.
+  home.file."plugins/gambit" = lib.mkIf gambitHasCodex {source = gambitCodex;};
+  home.file.".codex/plugins/cache/personal/gambit/${gambitVersion}" = lib.mkIf gambitHasCodex {
+    source = gambitCodex;
+    # Codex intentionally ignores a cache version that is itself a symlink.
+    # Build a real directory whose contents link into the immutable bundle.
+    recursive = true;
+  };
+  home.file.".agents/plugins/marketplace.json" = lib.mkIf gambitHasCodex {
+    text = builtins.toJSON {
+      name = "personal";
+      interface.displayName = "Personal";
+      plugins = [
+        {
+          name = "gambit";
+          source = {
+            source = "local";
+            path = "./plugins/gambit";
+          };
+          policy = {
+            installation = "INSTALLED_BY_DEFAULT";
+            authentication = "ON_INSTALL";
+          };
+          category = "Coding";
+        }
+      ];
+    };
+  };
 }

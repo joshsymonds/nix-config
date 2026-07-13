@@ -31,7 +31,10 @@ in
     grep -F -- '--class=chatgpt' "$launcher"
     grep -F -- '--no-first-run' "$launcher"
     grep -F -- '--no-default-browser-check' "$launcher"
-    grep -F -- '--disable-blink-features=ScrollAnchoring' "$launcher"
+    if grep -F -- '--disable-blink-features=ScrollAnchoring' "$launcher"; then
+      echo "ASSERT FAIL: launcher contains unsupported ScrollAnchoring flag" >&2
+      exit 1
+    fi
     grep -F -- 'profile_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/chatgpt-desktop"' "$launcher"
     if ! grep -F -- '${pkgs.coreutils}/bin/mkdir -p "$profile_dir"' "$launcher"; then
       echo "ASSERT FAIL: launcher does not reference ${pkgs.coreutils}/bin/mkdir" >&2

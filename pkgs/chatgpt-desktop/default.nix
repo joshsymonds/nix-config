@@ -24,8 +24,7 @@
         --class=chatgpt \
         --user-data-dir="$profile_dir" \
         --no-first-run \
-        --no-default-browser-check \
-        --disable-blink-features=ScrollAnchoring
+        --no-default-browser-check
     '';
   };
 

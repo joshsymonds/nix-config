@@ -76,12 +76,49 @@ in
     fi
 
     behavioral_launcher=${behavioralChatgptDesktop}/bin/chatgpt
-    export CHATGPT_TEST_ARGV="$PWD/argv"
+    export CHATGPT_TEST_ARGV="$PWD/argv-xdg"
     export XDG_DATA_HOME="$PWD/xdg-data"
     "$behavioral_launcher"
+    expected_argv="$(printf '%s\n' \
+      '--app=https://chatgpt.com/' \
+      '--class=chatgpt' \
+      "--user-data-dir=$XDG_DATA_HOME/chatgpt-desktop" \
+      '--no-first-run' \
+      '--no-default-browser-check')"
+    actual_argv="$(<"$CHATGPT_TEST_ARGV")"
+    if test "$actual_argv" != "$expected_argv"; then
+      echo "ASSERT FAIL: launcher passed unexpected arguments with XDG_DATA_HOME set" >&2
+      exit 1
+    fi
     profile_mode="$(stat -c '%a' "$XDG_DATA_HOME/chatgpt-desktop")"
     if test "$profile_mode" != 700; then
       echo "ASSERT FAIL: ChatGPT profile mode is $profile_mode, expected 700" >&2
+      exit 1
+    fi
+
+    unset XDG_DATA_HOME
+    export HOME="$PWD/home"
+    export CHATGPT_TEST_ARGV="$PWD/argv-default"
+    default_profile="$HOME/.local/share/chatgpt-desktop"
+    mkdir -p "$default_profile"
+    chmod 0755 "$default_profile"
+    touch "$default_profile/existing-state"
+    "$behavioral_launcher"
+    expected_argv="$(printf '%s\n' \
+      '--app=https://chatgpt.com/' \
+      '--class=chatgpt' \
+      "--user-data-dir=$default_profile" \
+      '--no-first-run' \
+      '--no-default-browser-check')"
+    actual_argv="$(<"$CHATGPT_TEST_ARGV")"
+    if test "$actual_argv" != "$expected_argv"; then
+      echo "ASSERT FAIL: launcher passed unexpected arguments with XDG_DATA_HOME unset" >&2
+      exit 1
+    fi
+    test -e "$default_profile/existing-state"
+    profile_mode="$(stat -c '%a' "$default_profile")"
+    if test "$profile_mode" != 700; then
+      echo "ASSERT FAIL: existing ChatGPT profile mode is $profile_mode, expected 700" >&2
       exit 1
     fi
 

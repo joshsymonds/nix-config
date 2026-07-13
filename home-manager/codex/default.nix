@@ -177,7 +177,8 @@ in {
               return
             fi
             echo "codexTranscriptState: migrating $target -> $want" >&2
-            ${pkgs.rsync}/bin/rsync -a "$target/" "$want/"
+            # The NAS export forbids chgrp/chown; -a would fail with exit 23.
+            ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$target/" "$want/"
             backup="$target.bak-$(${pkgs.coreutils}/bin/date +%Y%m%d-%H%M%S)"
             ${pkgs.coreutils}/bin/mv "$target" "$backup"
             echo "codexTranscriptState: retained previous local data at $backup" >&2

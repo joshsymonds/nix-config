@@ -726,7 +726,7 @@ in {
             name="$(${pkgs.coreutils}/bin/basename "$proj")"
             local dest_profile=personal
             is_work_dir "$name" && dest_profile=work
-            ${pkgs.rsync}/bin/rsync -a "$proj/" "$BUCKET/$dest_profile/projects/$name/" || true
+            ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$proj/" "$BUCKET/$dest_profile/projects/$name/" || true
           done
         }
 
@@ -740,7 +740,7 @@ in {
             echo "claudeUnifiedState: migrating $SHARED -> $BUCKET (projects split by ~/Work/attain rule)" >&2
             split_projects "$SHARED/projects"
             for d in sessions todos tasks; do
-              [ -d "$SHARED/$d" ] && ${pkgs.rsync}/bin/rsync -a "$SHARED/$d/" "$BUCKET/personal/$d/" || true
+              [ -d "$SHARED/$d" ] && ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$SHARED/$d/" "$BUCKET/personal/$d/" || true
             done
             for d in file-history shell-snapshots; do
               [ -d "$SHARED/$d" ] && ${pkgs.rsync}/bin/rsync -a "$SHARED/$d/" "$LOCAL/$d/" || true
@@ -778,7 +778,7 @@ in {
                 return
               fi
               echo "claudeUnifiedState: rescuing $target -> $want" >&2
-              ${pkgs.rsync}/bin/rsync -a "$target/" "$want/" || true
+              ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$target/" "$want/" || true
             fi
             ${pkgs.coreutils}/bin/rm -rf "$target"
           fi

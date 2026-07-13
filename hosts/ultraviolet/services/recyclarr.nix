@@ -7,27 +7,29 @@
       tv:
         base_url: http://localhost:8989
         api_key: !secret sonarr_apikey
-        delete_old_custom_formats: true
-        replace_existing_custom_formats: true
-        include:
-          - template: sonarr-quality-definition-series
-          - template: sonarr-v4-quality-profile-web-1080p
-          - template: sonarr-v4-custom-formats-web-1080p
-          - template: sonarr-v4-quality-profile-web-2160p
-          - template: sonarr-v4-custom-formats-web-2160p
+        quality_definition:
+          type: series
+        quality_profiles:
+          - trash_id: 72dae194fc92bf828f32cde7744e51a1  # WEB-1080p
+            reset_unmatched_scores:
+              enabled: true
+          - trash_id: d1498e7d189fbe6c7110ceaabb7473e6  # WEB-2160p
+            reset_unmatched_scores:
+              enabled: true
 
     radarr:
       movies:
         base_url: http://localhost:7878
         api_key: !secret radarr_apikey
-        delete_old_custom_formats: true
-        replace_existing_custom_formats: true
-        include:
-          - template: radarr-quality-definition-movie
-          - template: radarr-quality-profile-hd-bluray-web
-          - template: radarr-custom-formats-hd-bluray-web
-          - template: radarr-quality-profile-uhd-bluray-web
-          - template: radarr-custom-formats-uhd-bluray-web
+        quality_definition:
+          type: movie
+        quality_profiles:
+          - trash_id: d1d67249d3890e49bc12e275d989a7e9  # HD Bluray + WEB
+            reset_unmatched_scores:
+              enabled: true
+          - trash_id: 64fb5f9858489bdac2af690e27c8f42f  # UHD Bluray + WEB
+            reset_unmatched_scores:
+              enabled: true
   '';
 in {
   systemd.services.recyclarr = {
@@ -71,9 +73,8 @@ in {
         done
 
         echo "Syncing TRaSH Guide profiles..."
-        ${pkgs.recyclarr}/bin/recyclarr sync \
-          --config "$CONFIG_DIR/recyclarr.yml" \
-          --app-data "$CONFIG_DIR"
+        RECYCLARR_CONFIG_DIR="$CONFIG_DIR" ${pkgs.recyclarr}/bin/recyclarr sync \
+          --config "$CONFIG_DIR/recyclarr.yml"
       '';
     };
   };

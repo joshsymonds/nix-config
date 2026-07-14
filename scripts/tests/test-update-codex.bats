@@ -3,6 +3,7 @@
 bats_require_minimum_version 1.5.0
 
 UPDATE_CODEX_PATH="${BATS_TEST_DIRNAME}/../update-codex.sh"
+CODEX_PACKAGE_PATH="${BATS_TEST_DIRNAME}/../../pkgs/codex"
 
 setup() {
   FIXTURE="$(mktemp -d)"
@@ -18,14 +19,20 @@ setup() {
   cp "$REPO/pkgs/codex/sources.json" "$FIXTURE/sources.before"
 
   export CURL_CALLS="$FIXTURE/curl.calls"
+  export CURL_ARGS="$FIXTURE/curl.args"
+  export NIX_CALLS="$FIXTURE/nix.calls"
   export API_RESPONSE="$FIXTURE/api.json"
   export CHECKSUM_MANIFEST="$FIXTURE/codex-package_SHA256SUMS"
   export CURL_FAILURE=""
   export NIX_HASH_FAILURE=""
+  export NIX_INVALID_SRI_HASH=""
+  export NIX_INVALID_SRI_OUTPUT=""
   export JQ_GENERATION_FAILURE=""
   export REAL_JQ
   REAL_JQ="$(command -v jq)"
   : >"$CURL_CALLS"
+  : >"$CURL_ARGS"
+  : >"$NIX_CALLS"
 
   cat >"$API_RESPONSE" <<'EOF'
 {"tag_name":"rust-v1.2.3","prerelease":false,"draft":false}
@@ -57,6 +64,7 @@ for argument in "$@"; do
   esac
 done
 printf '%s\n' "$url" >>"$CURL_CALLS"
+printf '%s\n' "$*" >>"$CURL_ARGS"
 
 if [ "$CURL_FAILURE" = "api" ] && [ "$url" = "https://api.github.com/repos/openai/codex/releases/latest" ]; then
   echo "simulated API failure" >&2
@@ -83,6 +91,7 @@ EOF
 
   cat >"$FAKE_BIN/nix" <<'EOF'
 #!/usr/bin/env bash
+printf '%s\n' "$*" >>"$NIX_CALLS"
 if [ -n "$NIX_HASH_FAILURE" ]; then
   echo "simulated hash conversion failure" >&2
   exit 1
@@ -92,6 +101,10 @@ hash=""
 for argument in "$@"; do
   hash="$argument"
 done
+if [ -n "$NIX_INVALID_SRI_HASH" ] && [ "$hash" = "$NIX_INVALID_SRI_HASH" ]; then
+  printf '%s\n' "$NIX_INVALID_SRI_OUTPUT"
+  exit 0
+fi
 case "$hash" in
   1111111111111111111111111111111111111111111111111111111111111111)
     echo 'sha256-ERERERERERERERERERERERERERERERERERERERERERE='
@@ -131,10 +144,14 @@ EOF
 run_updater() {
   run env PATH="$FAKE_BIN:$PATH" \
     CURL_CALLS="$CURL_CALLS" \
+    CURL_ARGS="$CURL_ARGS" \
+    NIX_CALLS="$NIX_CALLS" \
     API_RESPONSE="$API_RESPONSE" \
     CHECKSUM_MANIFEST="$CHECKSUM_MANIFEST" \
     CURL_FAILURE="$CURL_FAILURE" \
     NIX_HASH_FAILURE="$NIX_HASH_FAILURE" \
+    NIX_INVALID_SRI_HASH="$NIX_INVALID_SRI_HASH" \
+    NIX_INVALID_SRI_OUTPUT="$NIX_INVALID_SRI_OUTPUT" \
     JQ_GENERATION_FAILURE="$JQ_GENERATION_FAILURE" \
     REAL_JQ="$REAL_JQ" \
     bash "$REPO/scripts/update-codex.sh" "$@"
@@ -251,6 +268,53 @@ assert_sources_unchanged() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"failed to convert checksum"* ]]
   assert_sources_unchanged
+}
+
+@test "invalid SRI conversion output preserves existing sources" {
+  export NIX_INVALID_SRI_HASH="3333333333333333333333333333333333333333333333333333333333333333"
+  export NIX_INVALID_SRI_OUTPUT="not-an-sri-hash"
+  run_updater "1.2.3"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"failed to convert checksum"* ]]
+  assert_sources_unchanged
+}
+
+@test "hash conversion explicitly declares base16 input for every platform" {
+  run_updater "1.2.3"
+
+  [ "$status" -eq 0 ]
+  [ "$(wc -l <"$NIX_CALLS" | tr -d ' ')" -eq 4 ]
+  grep -qx 'hash convert --hash-algo sha256 --from base16 --to sri 1111111111111111111111111111111111111111111111111111111111111111' "$NIX_CALLS"
+  grep -qx 'hash convert --hash-algo sha256 --from base16 --to sri 2222222222222222222222222222222222222222222222222222222222222222' "$NIX_CALLS"
+  grep -qx 'hash convert --hash-algo sha256 --from base16 --to sri 3333333333333333333333333333333333333333333333333333333333333333' "$NIX_CALLS"
+  grep -qx 'hash convert --hash-algo sha256 --from base16 --to sri 4444444444444444444444444444444444444444444444444444444444444444' "$NIX_CALLS"
+}
+
+@test "release metadata downloads use bounded connection and overall timeouts" {
+  run_updater
+
+  [ "$status" -eq 0 ]
+  grep -qx -- '-fsSL --connect-timeout 10 --max-time 60 https://api.github.com/repos/openai/codex/releases/latest' "$CURL_ARGS"
+  grep -qx -- '-fsSL --connect-timeout 10 --max-time 60 https://github.com/openai/codex/releases/download/rust-v1.2.3/codex-package_SHA256SUMS' "$CURL_ARGS"
+}
+
+@test "install check rejects a longer version sharing the pinned prefix" {
+  pinned_version="$("$REAL_JQ" -r .version "$CODEX_PACKAGE_PATH/sources.json")"
+  install_check_phase="$(nix-instantiate --eval --strict --json -E "let pkgs = import <nixpkgs> {}; drv = pkgs.callPackage $CODEX_PACKAGE_PATH {}; in drv.installCheckPhase" | "$REAL_JQ" -r .)"
+  fake_out="$FIXTURE/codex-out"
+  mkdir -p "$fake_out/bin" "$fake_out/codex-path" "$fake_out/codex-resources"
+  touch "$fake_out/bin/codex-code-mode-host" "$fake_out/codex-path/rg" "$fake_out/codex-resources/bwrap" "$fake_out/codex-package.json"
+  cat >"$fake_out/bin/codex" <<'EOF'
+#!/usr/bin/env bash
+printf 'codex-cli %s0\n' "$PINNED_VERSION"
+EOF
+  chmod +x "$fake_out/bin/codex" "$fake_out/bin/codex-code-mode-host" "$fake_out/codex-path/rg" "$fake_out/codex-resources/bwrap"
+
+  run env out="$fake_out" PINNED_VERSION="$pinned_version" INSTALL_CHECK_PHASE="$install_check_phase" bash -c 'runHook() { :; }; eval "$INSTALL_CHECK_PHASE"'
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"codex --version did not report $pinned_version"* ]]
 }
 
 @test "generated JSON contains all four system targets and SRI hashes" {

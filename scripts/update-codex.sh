@@ -2,6 +2,8 @@
 set -euo pipefail
 
 LATEST_RELEASE_URL="https://api.github.com/repos/openai/codex/releases/latest"
+CURL_CONNECT_TIMEOUT=10
+CURL_MAX_TIME=60
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SOURCES_FILE="$SCRIPT_DIR/../pkgs/codex/sources.json"
 TMP_FILE=""
@@ -39,7 +41,7 @@ fi
 requested_version="${1:-latest}"
 if [ "$requested_version" = "latest" ]; then
   echo "resolving latest stable release..." >&2
-  if ! release_json="$(curl -fsSL "$LATEST_RELEASE_URL")"; then
+  if ! release_json="$(curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" "$LATEST_RELEASE_URL")"; then
     die "failed to resolve latest Codex release"
   fi
   if ! printf '%s\n' "$release_json" | jq -e '.draft == false and .prerelease == false' >/dev/null; then
@@ -73,7 +75,7 @@ SRI_HASHES=()
 
 manifest_url="https://github.com/openai/codex/releases/download/rust-v${version}/codex-package_SHA256SUMS"
 echo "fetching checksums for Codex ${version}..." >&2
-if ! manifest="$(curl -fsSL "$manifest_url")"; then
+if ! manifest="$(curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" "$manifest_url")"; then
   die "failed to download checksum manifest for Codex $version"
 fi
 
@@ -94,7 +96,7 @@ for index in "${!SYSTEMS[@]}"; do
   fi
 
   checksum="$(printf '%s\n' "$matches" | tr 'A-F' 'a-f')"
-  if ! sri_hash="$(nix hash convert --hash-algo sha256 --to sri "$checksum")"; then
+  if ! sri_hash="$(nix hash convert --hash-algo sha256 --from base16 --to sri "$checksum")"; then
     die "failed to convert checksum for $asset"
   fi
   if ! printf '%s\n' "$sri_hash" | grep -Eq '^sha256-[A-Za-z0-9+/]{43}=$'; then

@@ -14,7 +14,7 @@ case "$VERSION" in
     exit 1
     ;;
 esac
-if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[^[:space:]]+)?$'; then
+if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$'; then
   echo "error: invalid Claude Code version: $VERSION" >&2
   exit 1
 fi
@@ -61,6 +61,8 @@ fi
 
 GCS_BASE="https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/${VERSION}"
 MANIFEST_URL="${GCS_BASE}/manifest.json"
+CURL_CONNECT_TIMEOUT=10
+CURL_MAX_TIME=60
 
 SYSTEMS=(
   "aarch64-darwin"
@@ -77,7 +79,7 @@ PLATFORMS=(
 HASHES=()
 
 echo "fetching checksums for Claude Code ${VERSION}..." >&2
-if ! manifest="$(curl -fsSL "$MANIFEST_URL")"; then
+if ! manifest="$(curl -fsSL --connect-timeout "$CURL_CONNECT_TIMEOUT" --max-time "$CURL_MAX_TIME" "$MANIFEST_URL")"; then
   die "failed to download Claude Code manifest for $VERSION"
 fi
 if ! printf '%s\n' "$manifest" | jq -e '.version | select(type == "string")' >/dev/null; then
@@ -158,6 +160,7 @@ if ! awk \
       print
 
       if (current_system != "" && $0 ~ /^[[:space:]]*};[[:space:]]*$/) {
+        close_counts[current_system]++
         current_system = ""
       }
     }
@@ -175,6 +178,10 @@ if ! awk \
         }
         if (hash_counts[system_name] != 1) {
           print "error: expected exactly one hash assignment for " system_name > "/dev/stderr"
+          failed = 1
+        }
+        if (close_counts[system_name] != 1) {
+          print "error: expected exactly one closing anchor for " system_name > "/dev/stderr"
           failed = 1
         }
       }

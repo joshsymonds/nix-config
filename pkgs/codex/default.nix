@@ -46,7 +46,7 @@ in
       ${lib.optionalString (stdenvNoCC.buildPlatform.canExecute stdenvNoCC.hostPlatform) ''
         versionOutput="$("$out/bin/codex" --version)"
         case "$versionOutput" in
-          *"${sources.version}"*) ;;
+          "codex-cli ${sources.version}") ;;
           *)
             echo "codex --version did not report ${sources.version}: $versionOutput" >&2
             exit 1

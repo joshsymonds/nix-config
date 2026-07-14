@@ -15,6 +15,7 @@ setup() {
   cp "$REPO/pkgs/claude-code-cli/default.nix" "$FIXTURE/package.before"
 
   export CURL_CALLS="$FIXTURE/curl.calls"
+  export CURL_ARGS="$FIXTURE/curl.args"
   export NIX_CALLS="$FIXTURE/nix.calls"
   export MANIFEST="$FIXTURE/manifest.json"
   export EXPECTED_VERSION="9.8.7"
@@ -25,6 +26,7 @@ setup() {
   export REAL_JQ
   REAL_JQ="$(command -v jq)"
   : >"$CURL_CALLS"
+  : >"$CURL_ARGS"
   : >"$NIX_CALLS"
 
   write_valid_manifest
@@ -91,6 +93,7 @@ for argument in "$@"; do
   esac
 done
 printf '%s\n' "$url" >>"$CURL_CALLS"
+printf '%s\n' "$*" >>"$CURL_ARGS"
 
 if [ -n "$CURL_FAILURE" ]; then
   echo "simulated manifest network failure" >&2
@@ -156,6 +159,7 @@ EOF
 run_updater() {
   run env PATH="$FAKE_BIN:$PATH" \
     CURL_CALLS="$CURL_CALLS" \
+    CURL_ARGS="$CURL_ARGS" \
     NIX_CALLS="$NIX_CALLS" \
     MANIFEST="$MANIFEST" \
     EXPECTED_VERSION="$EXPECTED_VERSION" \
@@ -169,6 +173,30 @@ run_updater() {
 
 assert_package_unchanged() {
   cmp -s "$FIXTURE/package.before" "$REPO/pkgs/claude-code-cli/default.nix"
+}
+
+assert_system_hash() {
+  system_name="$1"
+  expected_hash="$2"
+  awk -v system_name="$system_name" -v expected_hash="$expected_hash" '
+    {
+      stripped = $0
+      sub(/^[[:space:]]*/, "", stripped)
+      sub(/[[:space:]]*$/, "", stripped)
+    }
+    stripped == "\"" system_name "\" = fetchurl {" {
+      in_system = 1
+      next
+    }
+    in_system && $0 ~ /^[[:space:]]*hash = / {
+      line = $0
+      sub(/^[[:space:]]*/, "", line)
+      sub(/[[:space:]]*$/, "", line)
+      found = line == "hash = \"" expected_hash "\";"
+      exit
+    }
+    END { exit !found }
+  ' "$REPO/pkgs/claude-code-cli/default.nix"
 }
 
 rewrite_manifest() {
@@ -201,10 +229,10 @@ make_package_current() {
 
   [ "$status" -eq 0 ]
   grep -q 'version = "9.8.7";' "$REPO/pkgs/claude-code-cli/default.nix"
-  grep -q 'hash = "sha256-ERERERERERERERERERERERERERERERERERERERERERE=";' "$REPO/pkgs/claude-code-cli/default.nix"
-  grep -q 'hash = "sha256-IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI=";' "$REPO/pkgs/claude-code-cli/default.nix"
-  grep -q 'hash = "sha256-MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM=";' "$REPO/pkgs/claude-code-cli/default.nix"
-  grep -q 'hash = "sha256-REREREREREREREREREREREREREREREREREREREREREQ=";' "$REPO/pkgs/claude-code-cli/default.nix"
+  assert_system_hash "aarch64-darwin" "sha256-ERERERERERERERERERERERERERERERERERERERERERE="
+  assert_system_hash "x86_64-darwin" "sha256-IiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiI="
+  assert_system_hash "x86_64-linux" "sha256-MzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzM="
+  assert_system_hash "aarch64-linux" "sha256-REREREREREREREREREREREREREREREREREREREREREQ="
   [ "$(wc -l <"$CURL_CALLS" | tr -d ' ')" -eq 1 ]
   grep -qx 'https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/9.8.7/manifest.json' "$CURL_CALLS"
   ! grep -q '/claude$' "$CURL_CALLS"
@@ -232,7 +260,7 @@ make_package_current() {
 }
 
 @test "malformed versions fail before invoking network or nix" {
-  for version in "1.2" "v1.2.3" "1.2.3-" "1.2.3 bad" $'1.2.3\nbad'; do
+  for version in "1.2" "v1.2.3" "1.2.3-" "1.2.3 bad" $'1.2.3\nbad' '9.8.7-${builtins.currentSystem}'; do
     : >"$CURL_CALLS"
     : >"$NIX_CALLS"
     run_updater "$version"
@@ -243,6 +271,13 @@ make_package_current() {
     [ ! -s "$NIX_CALLS" ]
     assert_package_unchanged
   done
+}
+
+@test "manifest download uses bounded connection and overall timeouts" {
+  run_updater "9.8.7"
+
+  [ "$status" -eq 0 ]
+  grep -qx -- '-fsSL --connect-timeout 10 --max-time 60 https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/9.8.7/manifest.json' "$CURL_ARGS"
 }
 
 @test "manifest network failure preserves the package" {
@@ -387,6 +422,23 @@ make_package_current() {
 
   [ "$status" -ne 0 ]
   [[ "$output" == *"expected exactly one hash assignment for x86_64-linux"* ]]
+  assert_package_unchanged
+}
+
+@test "missing platform closing anchor preserves the package" {
+  awk '
+    /^    "aarch64-darwin" = fetchurl \{/ { in_first_source = 1 }
+    in_first_source && /^    \};$/ && !removed { removed = 1; next }
+    { print }
+  ' "$REPO/pkgs/claude-code-cli/default.nix" >"$FIXTURE/package.tmp"
+  mv "$FIXTURE/package.tmp" "$REPO/pkgs/claude-code-cli/default.nix"
+  chmod 0644 "$REPO/pkgs/claude-code-cli/default.nix"
+  cp "$REPO/pkgs/claude-code-cli/default.nix" "$FIXTURE/package.before"
+
+  run_updater "9.8.7"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"expected exactly one closing anchor for aarch64-darwin"* ]]
   assert_package_unchanged
 }
 

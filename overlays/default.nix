@@ -44,15 +44,6 @@ in {
     // {
       devenv = devenvPkg;
 
-      # codex from the nixpkgs-codex side-channel input (see flake.nix) —
-      # the main nixpkgs lock lags OpenAI's weekly release cadence. Plain
-      # default-config import so the drv matches Hydra's and pulls from
-      # cache.nixos.org instead of building the Rust workspace locally.
-      codex =
-        (import inputs.nixpkgs-codex {
-          system = final.stdenv.hostPlatform.system;
-        }).codex;
-
       # redlib-veraticus needs flake inputs (crane, redlib-fork, rust-overlay)
       # so it isn't in pkgs/simple.nix's plain-callPackage set; pkgs/default.nix
       # (the `nix build .#redlib-veraticus` path) wires the same inputs

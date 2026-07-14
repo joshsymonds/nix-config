@@ -24,6 +24,69 @@
         cp -R ${gambitCodex}/. "$out/${gambitVersion}/"
       ''
     else null;
+  codexAgentRoles = {
+    escalation = {
+      description = "Escalate a previously blocked or failed task with the strongest available reasoning.";
+      instructions = "Follow the task and any referenced contract exactly. Use the additional reasoning budget to resolve the reported blocker without broadening scope.";
+      model = "gpt-5.6-sol";
+      reasoningEffort = "max";
+    };
+    explorer = {
+      description = "Answer a specific read-only codebase question quickly with file and line evidence.";
+      instructions = "Investigate read-only. Do not edit files. Answer only the requested question with checkable file:line evidence and report NOT FOUND when appropriate.";
+      model = "gpt-5.6-luna";
+      reasoningEffort = "max";
+      sandboxMode = "read-only";
+    };
+    finder = {
+      description = "Perform independent, high-recall code review using the referenced finder contract.";
+      instructions = "Read and follow the referenced finder contract before reviewing. Do not edit files. Report only evidence-backed findings within the supplied review boundary.";
+      model = "gpt-5.6-sol";
+      reasoningEffort = "xhigh";
+      sandboxMode = "read-only";
+    };
+    scout = {
+      description = "Perform bounded read-only discovery for a Gambit workflow with file and line evidence.";
+      instructions = "Read and follow the referenced scout contract before investigating. Do not edit files. Return file:line evidence or an explicit NOT FOUND result.";
+      model = "gpt-5.6-luna";
+      reasoningEffort = "max";
+      sandboxMode = "read-only";
+    };
+    test-runner = {
+      description = "Run an objective test, build, or lint command and report its exact result without editing source files.";
+      instructions = "Run only the requested verification commands. Make no source edits. Report the exit status, pass/fail counts, and relevant failure output exactly.";
+      model = "gpt-5.6-luna";
+      reasoningEffort = "low";
+    };
+    verifier = {
+      description = "Independently confirm or refute candidate review findings using the referenced verifier contract.";
+      instructions = "Read and follow the referenced verifier contract before acting. Do not edit files. Classify only the supplied candidates using fresh, quoted evidence.";
+      model = "gpt-5.6-sol";
+      reasoningEffort = "xhigh";
+      sandboxMode = "read-only";
+    };
+    worker = {
+      description = "Implement one bounded, well-specified coding task from a complete worker brief.";
+      instructions = "Read and follow the referenced worker contract before acting. Own only the files and responsibility assigned in the brief, and return the contract's required terminal state.";
+      model = "gpt-5.6-sol";
+      reasoningEffort = "xhigh";
+    };
+  };
+  # Codex 0.144.3 discovers standalone custom agent roles under
+  # ~/.codex/agents. The role owns the concrete model and effort so skills
+  # dispatch by agent_type without embedding provider-specific model IDs.
+  codexAgentFiles = lib.mapAttrs' (name: role:
+    lib.nameValuePair ".codex/agents/${name}.toml" {
+      text = ''
+        name = ${builtins.toJSON name}
+        description = ${builtins.toJSON role.description}
+        developer_instructions = ${builtins.toJSON role.instructions}
+        model = ${builtins.toJSON role.model}
+        model_reasoning_effort = ${builtins.toJSON role.reasoningEffort}
+        ${lib.optionalString (role ? sandboxMode) "sandbox_mode = ${builtins.toJSON role.sandboxMode}"}
+      '';
+    })
+  codexAgentRoles;
   codexConfig = pkgs.writeText "codex-managed-config.toml" ''
     model = "gpt-5.6-sol"
     model_reasoning_effort = "xhigh"
@@ -48,6 +111,13 @@
 
     [projects."/home/joshsymonds/nix-config"]
     trust_level = "trusted"
+
+    # MultiAgentV2 hides agent_type/model/reasoning_effort from spawn_agent
+    # unless this metadata is explicitly exposed. Gambit selects the named
+    # roles materialized below; each role file locks its own model and effort.
+    [features.multi_agent_v2]
+    enabled = true
+    hide_spawn_agent_metadata = false
 
     [tui]
     # External notify owns turn-complete delivery. Keep Codex's built-in
@@ -205,11 +275,6 @@ in {
       )
     '');
 
-  # Keep the submission helper pinned with the rest of the Codex install.
-  # It lives in the OpenAI Developers plugin upstream, but does not require
-  # installing that plugin's Platform connector or its unrelated skills.
-  home.file.".codex/skills/chatgpt-app-submission".source = "${inputs.openai-plugins}/plugins/openai-developers/skills/chatgpt-app-submission";
-
   # Gambit's Codex-native bundle is exposed through the implicit personal
   # marketplace. The marketplace path is rooted at $HOME, so
   # ./plugins/gambit resolves to the Nix-managed ~/plugins/gambit symlink.
@@ -218,26 +283,35 @@ in {
   # real; Home Manager then symlinks only the cache root. The enabled config
   # block avoids mutable `codex plugin add` state, while INSTALLED_BY_DEFAULT
   # records the same policy in the marketplace UI.
-  home.file."plugins/gambit" = lib.mkIf gambitHasCodex {source = gambitCodex;};
-  home.file.".codex/plugins/cache/personal/gambit" = lib.mkIf gambitHasCodex {source = gambitCodexCache;};
-  home.file.".agents/plugins/marketplace.json" = lib.mkIf gambitHasCodex {
-    text = builtins.toJSON {
-      name = "personal";
-      interface.displayName = "Personal";
-      plugins = [
-        {
-          name = "gambit";
-          source = {
-            source = "local";
-            path = "./plugins/gambit";
-          };
-          policy = {
-            installation = "INSTALLED_BY_DEFAULT";
-            authentication = "ON_INSTALL";
-          };
-          category = "Coding";
-        }
-      ];
+  home.file =
+    codexAgentFiles
+    // {
+      # Keep the submission helper pinned with the rest of the Codex install.
+      # It lives in the OpenAI Developers plugin upstream, but does not require
+      # installing that plugin's Platform connector or its unrelated skills.
+      ".codex/skills/chatgpt-app-submission".source = "${inputs.openai-plugins}/plugins/openai-developers/skills/chatgpt-app-submission";
+
+      "plugins/gambit" = lib.mkIf gambitHasCodex {source = gambitCodex;};
+      ".codex/plugins/cache/personal/gambit" = lib.mkIf gambitHasCodex {source = gambitCodexCache;};
+      ".agents/plugins/marketplace.json" = lib.mkIf gambitHasCodex {
+        text = builtins.toJSON {
+          name = "personal";
+          interface.displayName = "Personal";
+          plugins = [
+            {
+              name = "gambit";
+              source = {
+                source = "local";
+                path = "./plugins/gambit";
+              };
+              policy = {
+                installation = "INSTALLED_BY_DEFAULT";
+                authentication = "ON_INSTALL";
+              };
+              category = "Coding";
+            }
+          ];
+        };
+      };
     };
-  };
 }

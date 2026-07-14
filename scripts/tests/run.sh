@@ -7,4 +7,4 @@
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 exec nix-shell -p bats jq age openssh ssh-to-age \
-  --run "bats $(pwd)/test-prepare-host-kit.bats $(pwd)/test-bootstrap.bats $(pwd)/test-install-sh.bats $(pwd)/test-update-codex.bats"
+  --run "bats $(pwd)/test-prepare-host-kit.bats $(pwd)/test-bootstrap.bats $(pwd)/test-install-sh.bats $(pwd)/test-update-codex.bats $(pwd)/test-update-claude-code.bats"

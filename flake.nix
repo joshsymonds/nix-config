@@ -596,6 +596,10 @@
             overlays = [self.outputs.overlays.default];
           };
         in {
+          codex-multi-agent-config = import ./tests/codex-multi-agent-config.nix {
+            pkgs = checkPkgs;
+            codexModuleSource = ./home-manager/codex/default.nix;
+          };
           chatgpt-desktop = import ./tests/chatgpt-desktop.nix {
             pkgs = checkPkgs;
             chatgptDesktop = checkPkgs.chatgpt-desktop;

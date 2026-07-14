@@ -21,13 +21,13 @@
 }: let
   # Inbox Zero app image, shared by web and worker. Pinned by digest only — no
   # floating tag — so the deployed version changes exclusively via this line.
-  # Upstream stopped publishing version tags after v2.25.8; `latest` is the only
-  # tag for newer builds, so the digest is the version. This digest is upstream
-  # main @ ab9fc4f (2026-07-03).
-  # Bump deliberately:
-  #   skopeo inspect --format '{{.Digest}} {{index .Labels "org.opencontainers.image.revision"}}' \
-  #     docker://ghcr.io/elie222/inbox-zero:latest
-  # then update the digest and source-commit note here, rebuild, and restart
+  # Upstream's release tags dropped the "v" prefix after v2.25.8 (releases
+  # continue as e.g. 2.30.0 on both ghcr and Docker Hub). This digest is
+  # upstream main @ ab9fc4f (2026-07-03), newer than the 2.30.0 release.
+  # Bump deliberately, preferring a release tag:
+  #   skopeo inspect --format '{{.Digest}}' docker://ghcr.io/elie222/inbox-zero:2.30.0
+  # (or :latest with the .revision label for a main snapshot), then update the
+  # digest and version note here, rebuild, and restart
   # podman-inbox-zero-web + podman-inbox-zero-worker.
   inboxZeroImage = "ghcr.io/elie222/inbox-zero@sha256:3fba3e9c062dcc3fdc696f0337146c94b994de94469629bd8363063ca6378b8b";
 

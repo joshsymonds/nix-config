@@ -11,6 +11,7 @@
   nuclei = pkgs.callPackage ./nuclei {};
   mcp-atlassian = pkgs.callPackage ./mcp-atlassian {};
   claudeCodeCli = pkgs.callPackage ./claude-code-cli {};
+  codex = pkgs.callPackage ./codex {};
   claude-swap = pkgs.callPackage ./claude-swap {};
   deadcode = pkgs.callPackage ./deadcode {};
   golangciLintBin = pkgs.callPackage ./golangci-lint-bin {};

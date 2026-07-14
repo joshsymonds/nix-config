@@ -1,8 +1,13 @@
 {
+  ccTools,
+  gambitHasCodex,
+  lib,
   pkgs,
-  codexConfig,
 }: let
-  expectedSharedUsageHint = ''
+  # Codex 0.144.4's default guidance names the default collaboration
+  # namespace. Keep its complete role-specific semantics while pointing the
+  # tool example at the non-reserved namespace configured below.
+  multiAgentSharedUsageHint = ''
     Note that collaboration tools cannot be called from inside `functions.exec`. Call `spawn_agent`, `send_message`, `followup_task`, `wait_agent`, `interrupt_agent`, and `list_agents` only as direct tool calls using the recipient shown in their tool definitions, such as `to=functions.gambit_agents.spawn_agent`, since they are intentionally absent from the `functions.exec` `tools.*` namespace. Available tools in `functions.exec` are explicitly described with a `tools` namespace in the developer message.
 
     All agents share the same directory. In detail:
@@ -10,7 +15,7 @@
     - All agents use the same current working directory.
     - As a result, edits made by one agent are immediately visible to all other agents.
   '';
-  expectedRootUsageHint = ''
+  multiAgentRootUsageHint = ''
     You are `/root`, the primary agent in a team of agents collaborating to fulfill the user's goals.
 
     At the start of your turn, you are the active agent.
@@ -31,10 +36,10 @@
     ```
     They may be addressed as to=/root
 
-    ${expectedSharedUsageHint}
+    ${multiAgentSharedUsageHint}
     There are 4 available concurrency slots, meaning that up to 4 agents can be active at once, including you.
   '';
-  expectedSubagentUsageHint = ''
+  multiAgentSubagentUsageHint = ''
     You are an agent in a team of agents collaborating to complete a task.
 
     You can spawn sub-agents to handle subtasks, and those sub-agents can spawn their own sub-agents. All agents in the team, including the agents that you can assign tasks to, are equally intelligent and capable, and have access to the same set of tools.
@@ -54,28 +59,61 @@
     ```
     You may also see them addressed as to=/root/..., which indicates your identity is /root/...
 
-    ${expectedSharedUsageHint}
+    ${multiAgentSharedUsageHint}
     There are 4 available concurrency slots, meaning that up to 4 agents can be active at once, including you.
   '';
-  expectedRootUsageHintFile = pkgs.writeText "codex-expected-root-agent-usage-hint" expectedRootUsageHint;
-  expectedSubagentUsageHintFile = pkgs.writeText "codex-expected-subagent-usage-hint" expectedSubagentUsageHint;
 in
-  pkgs.runCommand "codex-multi-agent-config-check" {} ''
-    set -euo pipefail
+  pkgs.writeText "codex-managed-config.toml" ''
+    model = "gpt-5.6-sol"
+    model_reasoning_effort = "xhigh"
 
-    ${pkgs.yq-go}/bin/yq -p=toml -o=json '.' ${codexConfig} > config.json
+    # Codex passes agent-turn-complete JSON as one argv value. cc-tools
+    # normalizes that into the same ntfy delivery path Claude's stdin hooks
+    # use, without invoking the Claude transcript/judge pipeline.
+    notify = ["${ccTools}/bin/cc-tools", "notify"]
 
-    ${pkgs.jq}/bin/jq -e \
-      --rawfile expectedRoot ${expectedRootUsageHintFile} \
-      --rawfile expectedSubagent ${expectedSubagentUsageHintFile} \
-      '
-        .suppress_unstable_features_warning == true
-        and .features.multi_agent_v2.enabled == true
-        and .features.multi_agent_v2.tool_namespace == "gambit_agents"
-        and .features.multi_agent_v2.hide_spawn_agent_metadata == false
-        and .features.multi_agent_v2.root_agent_usage_hint_text == $expectedRoot
-        and .features.multi_agent_v2.subagent_usage_hint_text == $expectedSubagent
-      ' config.json >/dev/null
+    # Equivalent to --dangerously-bypass-approvals-and-sandbox. This machine
+    # is intentionally configured to let Codex work outside the repo without
+    # interrupting for per-command or per-directory confirmation.
+    approval_policy = "never"
+    sandbox_mode = "danger-full-access"
+    suppress_unstable_features_warning = true
 
-    touch "$out"
+    ${lib.optionalString gambitHasCodex ''
+        # Home Manager also materializes the matching cache entry below, so
+        # Gambit is installed and enabled without mutable `codex plugin add` state.
+      [plugins."gambit@personal"]
+      enabled = true
+    ''}
+
+    [projects."/home/joshsymonds/nix-config"]
+    trust_level = "trusted"
+
+    # Exposing metadata lets Gambit select the named roles materialized below,
+    # but changes spawn_agent's schema. The API reserves the default
+    # collaboration.spawn_agent schema, so profile-aware spawning must use a
+    # non-reserved namespace with matching usage hints.
+    [features.multi_agent_v2]
+    enabled = true
+    tool_namespace = "gambit_agents"
+    hide_spawn_agent_metadata = false
+    root_agent_usage_hint_text = ${builtins.toJSON multiAgentRootUsageHint}
+    subagent_usage_hint_text = ${builtins.toJSON multiAgentSubagentUsageHint}
+
+    [tui]
+    # External notify owns turn-complete delivery. Keep Codex's built-in
+    # terminal notification only for approvals, which external notify does
+    # not currently emit.
+    notifications = ["approval-requested"]
+    notification_condition = "unfocused"
+    notification_method = "auto"
+    status_line = [
+      "model-with-reasoning",
+      "current-dir",
+      "git-branch",
+      "context-remaining",
+      "five-hour-limit",
+      "weekly-limit",
+    ]
+    status_line_use_colors = true
   ''

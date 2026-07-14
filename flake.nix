@@ -598,7 +598,12 @@
         in {
           codex-multi-agent-config = import ./tests/codex-multi-agent-config.nix {
             pkgs = checkPkgs;
-            codexModuleSource = ./home-manager/codex/default.nix;
+            codexConfig = import ./home-manager/codex/managed-config.nix {
+              pkgs = checkPkgs;
+              lib = checkPkgs.lib;
+              ccTools = "/test/cc-tools";
+              gambitHasCodex = true;
+            };
           };
           chatgpt-desktop = import ./tests/chatgpt-desktop.nix {
             pkgs = checkPkgs;

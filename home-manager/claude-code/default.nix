@@ -15,6 +15,7 @@
   # updates with `nix flake update gambit`.
   gambitSrc = inputs.gambit.packages.${pkgs.stdenv.hostPlatform.system}.default;
   gambitRev = inputs.gambit.rev or "unknown";
+  codexExecutorConfig = import ./codex-executor-config.nix {inherit pkgs;};
 
   # Generate settings.json with gambit's marketplace entry injected at build
   # time, pointing at the Nix store path. Keeps a single source of truth
@@ -607,6 +608,11 @@ in {
       lib.mkMerge [
         (mkClaudeFiles ".claude" settingsJsonPersonal)
         (mkClaudeFiles ".claude-work" settingsJsonWork)
+        {
+          # External executors are intentionally personal-only. The work
+          # profile may run on Bedrock and must retain native Claude agents.
+          ".claude/gambit/executors.json".text = builtins.toJSON codexExecutorConfig.registry;
+        }
       ];
 
     # Unify stateful dirs across personal and work profiles AND across hosts.
@@ -864,6 +870,24 @@ in {
             "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
         fi
       done
+    '';
+
+    # Codex is a personal-profile executor, not a general MCP dependency.
+    # Use the pinned Nix binary so Claude never depends on PATH or a mutable
+    # Codex install. The server reuses this user's existing ~/.codex ChatGPT
+    # authentication and returns each completed Codex thread as a tool result.
+    activation.claudeCodexMcp = lib.hm.dag.entryAfter ["claudeShimmerMcp"] ''
+      set -euo pipefail
+      CODEX_MCP=${lib.escapeShellArg (builtins.toJSON codexExecutorConfig.mcpServer)}
+      prefs="$HOME/.claude.json"
+      mkdir -p "$(dirname "$prefs")"
+      [ -f "$prefs" ] || echo '{}' > "$prefs"
+      if ! ${pkgs.jq}/bin/jq -e --argjson c "$CODEX_MCP" \
+          '.mcpServers.codex == $c' "$prefs" >/dev/null 2>&1; then
+        ${pkgs.jq}/bin/jq --argjson c "$CODEX_MCP" \
+          '.mcpServers = ((.mcpServers // {}) + {codex: $c})' \
+          "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
+      fi
     '';
 
     # Clear the per-model "launch effort pin" in both profiles. When a new

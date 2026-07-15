@@ -28,6 +28,7 @@
     inherit gambitHasCodex lib pkgs;
     ccTools = cc-tools;
   };
+  subagentIsolation = import ./subagent-isolation.nix;
   codexAgentRoles = {
     escalation = {
       description = "Escalate a previously blocked or failed task with the strongest available reasoning.";
@@ -88,6 +89,7 @@
         model = ${builtins.toJSON role.model}
         model_reasoning_effort = ${builtins.toJSON role.reasoningEffort}
         ${lib.optionalString (role ? sandboxMode) "sandbox_mode = ${builtins.toJSON role.sandboxMode}"}
+        ${subagentIsolation}
       '';
     })
   codexAgentRoles;

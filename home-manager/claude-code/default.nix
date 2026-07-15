@@ -872,22 +872,25 @@ in {
       done
     '';
 
-    # Codex is a personal-profile executor, not a general MCP dependency.
-    # Use the pinned Nix binary so Claude never depends on PATH or a mutable
-    # Codex install. The server reuses this user's existing ~/.codex ChatGPT
-    # authentication and returns each completed Codex thread as a tool result.
+    # Codex is the Gambit worker/finder executor in BOTH profiles (the
+    # executor registry routes Gambit dispatch through it regardless of
+    # profile). Use the pinned Nix binary so Claude never depends on PATH
+    # or a mutable Codex install. The server reuses this user's existing
+    # ~/.codex ChatGPT authentication and returns each completed Codex
+    # thread as a tool result.
     activation.claudeCodexMcp = lib.hm.dag.entryAfter ["claudeShimmerMcp"] ''
       set -euo pipefail
       CODEX_MCP=${lib.escapeShellArg (builtins.toJSON codexExecutorConfig.mcpServer)}
-      prefs="$HOME/.claude.json"
-      mkdir -p "$(dirname "$prefs")"
-      [ -f "$prefs" ] || echo '{}' > "$prefs"
-      if ! ${pkgs.jq}/bin/jq -e --argjson c "$CODEX_MCP" \
-          '.mcpServers.codex == $c' "$prefs" >/dev/null 2>&1; then
-        ${pkgs.jq}/bin/jq --argjson c "$CODEX_MCP" \
-          '.mcpServers = ((.mcpServers // {}) + {codex: $c})' \
-          "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
-      fi
+      for prefs in "$HOME/.claude.json" "$HOME/.claude-work/.claude.json"; do
+        mkdir -p "$(dirname "$prefs")"
+        [ -f "$prefs" ] || echo '{}' > "$prefs"
+        if ! ${pkgs.jq}/bin/jq -e --argjson c "$CODEX_MCP" \
+            '.mcpServers.codex == $c' "$prefs" >/dev/null 2>&1; then
+          ${pkgs.jq}/bin/jq --argjson c "$CODEX_MCP" \
+            '.mcpServers = ((.mcpServers // {}) + {codex: $c})' \
+            "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
+        fi
+      done
     '';
 
     # Clear the per-model "launch effort pin" in both profiles. When a new

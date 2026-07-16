@@ -612,6 +612,11 @@ in {
           # External executors are intentionally personal-only. The work
           # profile may run on Bedrock and must retain native Claude agents.
           ".claude/gambit/executors.json".text = builtins.toJSON codexExecutorConfig.registry;
+          # Async-dispatch wrappers ride the cheap tier by default, but live
+          # acceptance showed haiku-class relays failing as transport (tool
+          # churn, terminated without the envelope). Sonnet-class relays cost
+          # effectively the same tokens and don't drop the call.
+          ".claude/gambit/models.json".text = builtins.toJSON {wrapper = "sonnet";};
         }
       ];
 

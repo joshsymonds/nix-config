@@ -1060,11 +1060,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1784151741,
-        "narHash": "sha256-xs+zqw/IIpw/JawFfc+G1xm3MYJ+wWY47afIk56+1Vs=",
+        "lastModified": 1784216944,
+        "narHash": "sha256-N9J/ScEB4BS30S/fFKlA8b68OMmZt8jC2ejqwd54EWQ=",
         "owner": "joshsymonds",
         "repo": "gambit",
-        "rev": "c66f56ad40f4eb82de8e42ab752aecf19642b7d0",
+        "rev": "c9f53cf4783a0adcbf18cb9d719fdda106c7135a",
         "type": "github"
       },
       "original": {

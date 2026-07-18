@@ -3,30 +3,8 @@
   lib,
   pkgs,
   ...
-}: let
-  chatgptLinuxFeatures = ["frameless-titlebar"];
-  upstreamChatgptDesktop = inputs.chatgpt-desktop-linux.packages.${pkgs.stdenv.hostPlatform.system}.codex-desktop.override {
-    linuxFeatureIds = chatgptLinuxFeatures;
-  };
-  chatgptDesktop = pkgs.symlinkJoin {
-    name = "${upstreamChatgptDesktop.name}-nix-managed";
-    paths = [upstreamChatgptDesktop];
-    postBuild = ''
-      desktopFile="$out/share/applications/codex-desktop.desktop"
-      desktopTarget="$(readlink -f "$desktopFile")"
-      rm "$desktopFile"
-      cp "$desktopTarget" "$desktopFile"
-      chmod u+w "$desktopFile"
-      substituteInPlace "$desktopFile" \
-        --replace-fail "${upstreamChatgptDesktop}/bin/codex-desktop" "$out/bin/codex-desktop"
-      sed -i 's/^Actions=.*/Actions=new-window;/' "$desktopFile"
-      sed -i '/^\[Desktop Action CheckForUpdates\]/,$d' "$desktopFile"
-    '';
-    meta = upstreamChatgptDesktop.meta;
-  };
-in {
+}: {
   imports = [
-    inputs.chatgpt-desktop-linux.homeManagerModules.default
     ../desktop-x86_64-linux.nix
     ../vesktop
     ../spicetify
@@ -96,6 +74,11 @@ in {
     # pkgs/claude-desktop/default.nix (version + hashes).
     claude-desktop
 
+    # ChatGPT Desktop: a chat-only Chromium wrapper around chatgpt.com, with
+    # its own persistent browser profile. This deliberately excludes the
+    # unified desktop app's Work and coding interfaces.
+    chatgpt-desktop
+
     # Obsidian — Markdown notes / vaults. The headless flavor on
     # ultraviolet (hosts/ultraviolet/services/obsidian.nix) is a
     # separate, Xvfb-driven daemon for Sync; this is the native
@@ -143,18 +126,6 @@ in {
     # deletes for real.
     gtrash
   ];
-
-  # OpenAI's unified ChatGPT Desktop app, converted for Linux by the pinned
-  # flake input. Pin the app's Codex bridge to the same declarative CLI package
-  # this configuration exposes on PATH.
-  programs.codexDesktopLinux = {
-    enable = true;
-    package = chatgptDesktop;
-    cliPackage = pkgs.codex;
-    # Niri owns window movement and controls, so omit Electron's native
-    # titlebar and its File/Edit/View menu chrome.
-    linuxFeatures = chatgptLinuxFeatures;
-  };
 
   # Same signing key vermissian uses — single user identity across machines
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";

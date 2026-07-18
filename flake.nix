@@ -15,14 +15,6 @@
     # `nix flake update nixpkgs-inference`.
     nixpkgs-inference.url = "github:nixos/nixpkgs/nixos-unstable";
 
-    # Unofficial Linux conversion of OpenAI's unified ChatGPT Desktop app.
-    # It follows the upstream macOS app and provides Chat, Work, and Codex;
-    # Gnomon consumes its Home Manager module below.
-    chatgpt-desktop-linux = {
-      url = "github:ilysenko/codex-desktop-linux";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     # Official Codex plugin sources. Consumed as a plain source tree so
     # individual skills can be installed declaratively without mutable
     # `codex plugin add` state.
@@ -620,6 +612,10 @@
             };
             subagentIsolation = import ./home-manager/codex/subagent-isolation.nix;
             gambit = inputs.gambit.packages.${system}.default;
+          };
+          chatgpt-desktop = import ./tests/chatgpt-desktop.nix {
+            pkgs = checkPkgs;
+            chatgptDesktop = checkPkgs.chatgpt-desktop;
           };
           installer-kit-fixture = import ./tests/installer-kit-fixture.nix {
             inherit pkgs;

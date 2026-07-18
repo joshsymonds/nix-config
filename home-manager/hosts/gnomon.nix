@@ -5,6 +5,7 @@
   ...
 }: {
   imports = [
+    inputs.chatgpt-desktop-linux.homeManagerModules.default
     ../desktop-x86_64-linux.nix
     ../vesktop
     ../spicetify
@@ -74,11 +75,6 @@
     # pkgs/claude-desktop/default.nix (version + hashes).
     claude-desktop
 
-    # ChatGPT Desktop: a chat-only Chromium wrapper around chatgpt.com, with
-    # its own persistent browser profile. This deliberately excludes the
-    # unified desktop app's Work and coding interfaces.
-    chatgpt-desktop
-
     # Obsidian — Markdown notes / vaults. The headless flavor on
     # ultraviolet (hosts/ultraviolet/services/obsidian.nix) is a
     # separate, Xvfb-driven daemon for Sync; this is the native
@@ -126,6 +122,14 @@
     # deletes for real.
     gtrash
   ];
+
+  # OpenAI's unified ChatGPT Desktop app, converted for Linux by the pinned
+  # flake input. Pin the app's Codex bridge to the same declarative CLI package
+  # this configuration exposes on PATH.
+  programs.codexDesktopLinux = {
+    enable = true;
+    cliPackage = pkgs.codex;
+  };
 
   # Same signing key vermissian uses — single user identity across machines
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";

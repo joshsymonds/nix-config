@@ -194,11 +194,6 @@ in {
       signal-desktop = electronNoScrollAnchoring prev.signal-desktop "signal-desktop";
       vesktop = electronNoScrollAnchoring prev.vesktop "vesktop";
 
-      # ChatGPT Desktop: a dedicated Chromium app-mode window for the normal
-      # chatgpt.com conversation UI. The local package owns its isolated
-      # browser profile, desktop entry, icon, and niri window class.
-      chatgpt-desktop = final.callPackage ../pkgs/chatgpt-desktop {};
-
       # Claude Desktop (the chat app — not Claude Code): Anthropic's official
       # native-Linux build, packaged locally from their apt repo. See
       # pkgs/claude-desktop/. The niri scroll-anchoring fix and the Wayland

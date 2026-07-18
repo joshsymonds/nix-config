@@ -3,7 +3,28 @@
   lib,
   pkgs,
   ...
-}: {
+}: let
+  chatgptLinuxFeatures = ["frameless-titlebar"];
+  upstreamChatgptDesktop = inputs.chatgpt-desktop-linux.packages.${pkgs.stdenv.hostPlatform.system}.codex-desktop.override {
+    linuxFeatureIds = chatgptLinuxFeatures;
+  };
+  chatgptDesktop = pkgs.symlinkJoin {
+    name = "${upstreamChatgptDesktop.name}-nix-managed";
+    paths = [upstreamChatgptDesktop];
+    postBuild = ''
+      desktopFile="$out/share/applications/codex-desktop.desktop"
+      desktopTarget="$(readlink -f "$desktopFile")"
+      rm "$desktopFile"
+      cp "$desktopTarget" "$desktopFile"
+      chmod u+w "$desktopFile"
+      substituteInPlace "$desktopFile" \
+        --replace-fail "${upstreamChatgptDesktop}/bin/codex-desktop" "$out/bin/codex-desktop"
+      sed -i 's/^Actions=.*/Actions=new-window;/' "$desktopFile"
+      sed -i '/^\[Desktop Action CheckForUpdates\]/,$d' "$desktopFile"
+    '';
+    meta = upstreamChatgptDesktop.meta;
+  };
+in {
   imports = [
     inputs.chatgpt-desktop-linux.homeManagerModules.default
     ../desktop-x86_64-linux.nix
@@ -128,7 +149,11 @@
   # this configuration exposes on PATH.
   programs.codexDesktopLinux = {
     enable = true;
+    package = chatgptDesktop;
     cliPackage = pkgs.codex;
+    # Niri owns window movement and controls, so omit Electron's native
+    # titlebar and its File/Edit/View menu chrome.
+    linuxFeatures = chatgptLinuxFeatures;
   };
 
   # Same signing key vermissian uses — single user identity across machines

@@ -31,8 +31,8 @@ in {
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = inputs.savecraft.packages.${pkgs.stdenv.hostPlatform.system}.savecraftd;
-      defaultText = lib.literalExpression "inputs.savecraft.packages.\${system}.savecraftd";
+      default = inputs.savecraft-client.packages.${pkgs.stdenv.hostPlatform.system}.savecraftd;
+      defaultText = lib.literalExpression "inputs.savecraft-client.packages.\${system}.savecraftd";
       description = "The savecraftd package to run.";
     };
 

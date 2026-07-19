@@ -235,8 +235,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Savecraft — game save parser + MCP server
-    savecraft.url = "github:joshsymonds/savecraft.gg";
+    # Savecraft — public client daemon + private commercial services
+    savecraft-client.url = "github:joshsymonds/savecraft-client";
+    savecraft.url = "git+ssh://git@github.com/joshsymonds/savecraft.git";
 
     # Mentat — personal assistant daemon (Claude as the brain)
     mentat = {

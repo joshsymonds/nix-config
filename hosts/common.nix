@@ -23,15 +23,15 @@ in {
   nix = {
     # Nix package is managed by Determinate Nix module
 
-    # Make nix3 commands consistent with flake. shimmer + scriptorium are
+    # Make nix3 commands consistent with flake. savecraft, shimmer, and scriptorium are
     # excluded because the registry assignment forces lazy evaluation of
     # inputs.<name>.flake, which triggers a fetch of git+ssh repos — and
     # any host that doesn't have ssh credentials to those repos (the
     # nixosTest VM, gnomon's first install before identity is in place)
     # fails with "Failed to fetch git repository". The services that
-    # consume these only run on hosts that DO have credentials (shimmer:
-    # ultraviolet; scriptorium: gnomon).
-    registry = lib.mapAttrs (_: value: {flake = value;}) (lib.removeAttrs inputs ["shimmer" "scriptorium"]);
+    # consume these only run on hosts that DO have credentials (savecraft:
+    # ultraviolet + vermissian; shimmer: ultraviolet; scriptorium: gnomon).
+    registry = lib.mapAttrs (_: value: {flake = value;}) (lib.removeAttrs inputs ["savecraft" "shimmer" "scriptorium"]);
 
     # Make legacy nix commands consistent too
     nixPath = lib.mapAttrsToList (key: value: "${key}=${value.to.path}") config.nix.registry;

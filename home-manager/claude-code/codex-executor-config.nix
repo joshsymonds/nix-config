@@ -2,10 +2,14 @@
   common = {
     executor = "codex";
     tool = "mcp__codex__codex";
-    model = "gpt-5.6-sol";
-    reasoning_effort = "xhigh";
     approval_policy = "never";
   };
+  solXhigh =
+    common
+    // {
+      model = "gpt-5.6-sol";
+      reasoning_effort = "xhigh";
+    };
 in {
   mcpServer = {
     type = "stdio";
@@ -18,7 +22,7 @@ in {
 
   registry = {
     steelman =
-      common
+      solXhigh
       // {
         sandbox = "read-only";
         web_search = "live";
@@ -26,10 +30,21 @@ in {
     worker =
       common
       // {
+        reply_tool = "mcp__codex__codex-reply";
+        model = "gpt-5.6-luna";
+        reasoning_effort = "high";
+        service_tier = "fast";
+        sandbox = "danger-full-access";
+      };
+    escalation =
+      common
+      // {
+        model = "gpt-5.6-sol";
+        reasoning_effort = "high";
         sandbox = "danger-full-access";
       };
     finder =
-      common
+      solXhigh
       // {
         sandbox = "read-only";
         web_search = "live";

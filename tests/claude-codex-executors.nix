@@ -23,19 +23,30 @@ in
     ' ${mcpServerJson} >/dev/null
 
     jq -e '
-      (keys | sort) == ["finder", "steelman", "worker"]
+      (keys | sort) == ["escalation", "finder", "steelman", "worker"]
       and all(.[];
         .executor == "codex"
         and .tool == "mcp__codex__codex"
-        and .model == "gpt-5.6-sol"
-        and .reasoning_effort == "xhigh"
         and .approval_policy == "never")
+      and .steelman.model == "gpt-5.6-sol"
+      and .steelman.reasoning_effort == "xhigh"
       and .steelman.sandbox == "read-only"
       and .steelman.web_search == "live"
-      and .worker.sandbox == "danger-full-access"
-      and (.worker | has("web_search") | not)
+      and .finder.model == "gpt-5.6-sol"
+      and .finder.reasoning_effort == "xhigh"
       and .finder.sandbox == "read-only"
       and .finder.web_search == "live"
+      and .worker.model == "gpt-5.6-luna"
+      and .worker.reasoning_effort == "high"
+      and .worker.service_tier == "fast"
+      and .worker.reply_tool == "mcp__codex__codex-reply"
+      and .worker.sandbox == "danger-full-access"
+      and (.worker | has("web_search") | not)
+      and .escalation.model == "gpt-5.6-sol"
+      and .escalation.reasoning_effort == "high"
+      and .escalation.sandbox == "danger-full-access"
+      and (.escalation | has("service_tier") | not)
+      and (.escalation | has("web_search") | not)
     ' ${registryJson} >/dev/null
 
     yq -p=toml -o=json '.' ${isolationToml} > isolation.json
@@ -43,7 +54,7 @@ in
       .plugins["gambit@personal"].enabled == false
       and .skills.include_instructions == false
       and .orchestrator.skills.enabled == false
-      and .features.collab == false
+      and .features.multi_agent == false
       and .features.multi_agent_v2.enabled == false
     ' isolation.json >/dev/null
 

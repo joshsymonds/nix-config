@@ -596,6 +596,9 @@
             overlays = [self.outputs.overlays.default];
           };
         in {
+          codex-agent-roster = import ./tests/codex-agent-roster.nix {
+            pkgs = checkPkgs;
+          };
           codex-multi-agent-config = import ./tests/codex-multi-agent-config.nix {
             pkgs = checkPkgs;
             codexConfig = import ./home-manager/codex/managed-config.nix {

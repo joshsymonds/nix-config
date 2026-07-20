@@ -29,7 +29,7 @@ in
     ' ${mcpServerJson} >/dev/null
 
     jq -e '
-      (keys | sort) == ["escalation", "finder", "steelman", "worker"]
+      (keys | sort) == ["escalation", "finder", "scout", "steelman", "test-runner", "verifier", "worker"]
       and all(.[];
         .executor == "codex"
         and .tool == "mcp__codex__codex"
@@ -38,10 +38,22 @@ in
       and .steelman.reasoning_effort == "xhigh"
       and .steelman.sandbox == "read-only"
       and .steelman.web_search == "live"
+      and .scout.model == "gpt-5.6-terra"
+      and .scout.reasoning_effort == "max"
+      and .scout.sandbox == "read-only"
+      and (.scout | has("web_search") | not)
       and .finder.model == "gpt-5.6-sol"
       and .finder.reasoning_effort == "xhigh"
       and .finder.sandbox == "read-only"
       and .finder.web_search == "live"
+      and .verifier.model == "gpt-5.6-sol"
+      and .verifier.reasoning_effort == "xhigh"
+      and .verifier.sandbox == "read-only"
+      and (.verifier | has("web_search") | not)
+      and .["test-runner"].model == "gpt-5.6-luna"
+      and .["test-runner"].reasoning_effort == "low"
+      and .["test-runner"].sandbox == "danger-full-access"
+      and (.["test-runner"] | has("web_search") | not)
       and .worker.model == "gpt-5.6-luna"
       and .worker.reasoning_effort == "high"
       and .worker.service_tier == "fast"

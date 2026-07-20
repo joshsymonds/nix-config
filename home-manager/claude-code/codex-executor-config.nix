@@ -27,6 +27,13 @@ in {
         sandbox = "read-only";
         web_search = "live";
       };
+    scout =
+      common
+      // {
+        model = "gpt-5.6-terra";
+        reasoning_effort = "max";
+        sandbox = "read-only";
+      };
     worker =
       common
       // {
@@ -48,6 +55,18 @@ in {
       // {
         sandbox = "read-only";
         web_search = "live";
+      };
+    verifier =
+      solXhigh
+      // {
+        sandbox = "read-only";
+      };
+    test-runner =
+      common
+      // {
+        model = "gpt-5.6-luna";
+        reasoning_effort = "low";
+        sandbox = "danger-full-access";
       };
   };
 }

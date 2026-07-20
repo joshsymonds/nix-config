@@ -8,6 +8,12 @@
   mcpServerJson = pkgs.writeText "claude-codex-mcp-server.json" (builtins.toJSON executorConfig.mcpServer);
   registryJson = pkgs.writeText "gambit-codex-executors.json" (builtins.toJSON executorConfig.registry);
   isolationToml = pkgs.writeText "codex-subagent-isolation.toml" subagentIsolation;
+  interactiveConfigToml = import ../home-manager/codex/managed-config.nix {
+    inherit pkgs;
+    lib = pkgs.lib;
+    ccTools = "/test/cc-tools";
+    gambitHasCodex = true;
+  };
 in
   pkgs.runCommand "claude-codex-executors-check" {
     nativeBuildInputs = [pkgs.jq pkgs.yq-go python];
@@ -58,6 +64,11 @@ in
       and .features.multi_agent_v2.enabled == false
       and .features.apps == false
     ' isolation.json >/dev/null
+
+    yq -p=toml -o=json '.' ${interactiveConfigToml} > interactive.json
+    jq -e '
+      ((.features | has("apps") | not) or .features.apps == true)
+    ' interactive.json >/dev/null
 
     python - <<'PY'
     import json

@@ -17,7 +17,7 @@ in
     jq -e '
       .type == "stdio"
       and .command == "${pkgs.codex}/bin/codex"
-      and .args == ["mcp-server"]
+      and .args == ["-c", "features.apps=false", "mcp-server"]
       and .timeout == 7200000
       and (keys | sort) == ["args", "command", "timeout", "type"]
     ' ${mcpServerJson} >/dev/null
@@ -56,6 +56,7 @@ in
       and .orchestrator.skills.enabled == false
       and .features.multi_agent == false
       and .features.multi_agent_v2.enabled == false
+      and .features.apps == false
     ' isolation.json >/dev/null
 
     python - <<'PY'
@@ -75,6 +76,6 @@ in
     PY
 
     test -x ${pkgs.codex}/bin/codex
-    ${pkgs.codex}/bin/codex mcp-server --help >/dev/null
+    ${pkgs.codex}/bin/codex -c features.apps=false mcp-server --help >/dev/null
     touch "$out"
   ''

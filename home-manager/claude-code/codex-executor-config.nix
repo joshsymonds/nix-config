@@ -14,7 +14,7 @@ in {
   mcpServer = {
     type = "stdio";
     command = "${pkgs.codex}/bin/codex";
-    args = ["mcp-server"];
+    args = ["-c" "features.apps=false" "mcp-server"];
     # Long implementation workers must not inherit Claude's ordinary MCP
     # timeout. Codex still owns its own per-turn and authentication limits.
     timeout = 7200000;

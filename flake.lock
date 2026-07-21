@@ -3562,11 +3562,11 @@
         "nixpkgs": "nixpkgs_14"
       },
       "locked": {
-        "lastModified": 1784619034,
-        "narHash": "sha256-PeA6P6PTlD0aIQe6puwzt6xwX+qPPh2+ZlFHMV77xIQ=",
+        "lastModified": 1784648749,
+        "narHash": "sha256-qyVUgzefq+Ip+2vkhojOIpUxVZt/FKy382+hihpGYMU=",
         "ref": "refs/heads/main",
-        "rev": "07b165891e5b0a315e10122206b6bbdc0d15e2c0",
-        "revCount": 1610,
+        "rev": "1e7f03afbaa698e2920a3225824fee1134160c82",
+        "revCount": 1625,
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/savecraft.git"
       },

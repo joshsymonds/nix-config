@@ -8,8 +8,8 @@
   explorer = {
     description = "Answer a specific read-only codebase question quickly with file and line evidence.";
     instructions = "Investigate read-only. Do not edit files. Answer only the requested question with checkable file:line evidence and report NOT FOUND when appropriate.";
-    model = "gpt-5.6-luna";
-    reasoningEffort = "max";
+    model = "gpt-5.6-terra";
+    reasoningEffort = "medium";
     sandboxMode = "read-only";
   };
   finder = {
@@ -22,8 +22,8 @@
   scout = {
     description = "Perform bounded read-only discovery for a Gambit workflow with file and line evidence.";
     instructions = "Read and follow the referenced scout contract before investigating. Do not edit files. Return file:line evidence or an explicit NOT FOUND result.";
-    model = "gpt-5.6-luna";
-    reasoningEffort = "max";
+    model = "gpt-5.6-terra";
+    reasoningEffort = "medium";
     sandboxMode = "read-only";
   };
   test-runner = {

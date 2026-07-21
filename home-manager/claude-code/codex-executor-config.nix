@@ -31,7 +31,7 @@ in {
       common
       // {
         model = "gpt-5.6-terra";
-        reasoning_effort = "max";
+        reasoning_effort = "medium";
         sandbox = "read-only";
       };
     worker =

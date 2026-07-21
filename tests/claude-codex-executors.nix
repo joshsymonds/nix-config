@@ -39,7 +39,7 @@ in
       and .steelman.sandbox == "read-only"
       and .steelman.web_search == "live"
       and .scout.model == "gpt-5.6-terra"
-      and .scout.reasoning_effort == "max"
+      and .scout.reasoning_effort == "medium"
       and .scout.sandbox == "read-only"
       and (.scout | has("web_search") | not)
       and .finder.model == "gpt-5.6-sol"

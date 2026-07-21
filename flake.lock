@@ -1405,11 +1405,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1784404274,
-        "narHash": "sha256-kae8qazSg4RsHWnkx26oWrpIbu1YOwCvpJlPCrJI21k=",
+        "lastModified": 1784576041,
+        "narHash": "sha256-Ald4EazJMB5tE0QnJCzjq0am7FLzchoNy1TON7aM5mI=",
         "owner": "joshsymonds",
         "repo": "gambit",
-        "rev": "8117921079f18df1b7e3ac8b6982ff40fcf2522e",
+        "rev": "e3b15255b877ab25c57ce849e5e07209e49aff62",
         "type": "github"
       },
       "original": {
@@ -3562,11 +3562,11 @@
         "nixpkgs": "nixpkgs_14"
       },
       "locked": {
-        "lastModified": 1784483063,
-        "narHash": "sha256-XvhL3dScvBMHAjKeehLEJ0rXGDXObhrKFYRwET1Zv7A=",
+        "lastModified": 1784614628,
+        "narHash": "sha256-Bi0rq9N1ZE5/pWyzH09vCI1Hqqk96ZaBB2Zy/wj2IHA=",
         "ref": "refs/heads/main",
-        "rev": "ce0a90132b8ff7eb61341c52bf02dd5ec0f1d9a3",
-        "revCount": 1600,
+        "rev": "28a7197f3b1ae7ebd057899c99a2ed41749ad794",
+        "revCount": 1607,
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/savecraft.git"
       },

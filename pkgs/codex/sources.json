@@ -1,21 +1,21 @@
 {
   "sources": {
     "aarch64-darwin": {
-      "hash": "sha256-MS5vooJllvsjzBGTww1RkCtlIsNszEOzZBdZDg69Uz0=",
+      "hash": "sha256-vL+nZlC2xYFQWqUXjB55nTf/EvxDo1/xbJC5f6dX5j8=",
       "target": "aarch64-apple-darwin"
     },
     "aarch64-linux": {
-      "hash": "sha256-sbxWGlv3T5xXZ8aYJ1roBDzuLORTQQmASLCwuLTiz8U=",
+      "hash": "sha256-tDWYlrtUjgL91y6gyzOV/oqI0g06SkIcRIHlBPjokn8=",
       "target": "aarch64-unknown-linux-musl"
     },
     "x86_64-darwin": {
-      "hash": "sha256-ZmZx++dh/h/VfXTnJcWjBnKfgfT778FqAaBZXmmGTUE=",
+      "hash": "sha256-2qPfN8igQSgPUqIZjb56y+rWSTayP4tmDt+diG31+do=",
       "target": "x86_64-apple-darwin"
     },
     "x86_64-linux": {
-      "hash": "sha256-0Ke9ssqCHJu19MwvsRpO2WAl22OyDRvd8eYyNhoQgiA=",
+      "hash": "sha256-ma5I5HQ9psUw7NmYqy9+ZlcsCS9BkMiNyoI2wHsGzh0=",
       "target": "x86_64-unknown-linux-musl"
     }
   },
-  "version": "0.144.4"
+  "version": "0.144.6"
 }

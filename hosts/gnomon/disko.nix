@@ -31,6 +31,8 @@
       "/var/lib/colord"
       "/var/lib/sbctl"
       "/var/lib/tailscale"
+      # Preserve WARP enrollment and device state across root rollback.
+      "/var/lib/cloudflare-warp"
       # nix-flatpak installs system Flatpaks here. Without persistence,
       # @root-blank rollback wipes the OSTree repo + state file every boot
       # and the activation re-downloads runtimes (~500 MB+) every time.

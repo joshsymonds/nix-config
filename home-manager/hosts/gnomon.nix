@@ -524,6 +524,24 @@
       video/mp4 video/x-matroska video/webm video/quicktime video/x-msvideo
   '';
 
+  # Cloudflare's packaged tray client. Keep the package unit's graphical
+  # session lifecycle and its /usr runtime mapping intact for niri/DMS.
+  systemd.user.services.warp-taskbar = {
+    Unit = {
+      Description = "Cloudflare Zero Trust Client Taskbar";
+      Requires = ["dbus.socket"];
+      After = ["dbus.socket"];
+      PartOf = ["graphical-session.target"];
+    };
+    Service = {
+      Type = "simple";
+      ExecStart = "${pkgs.cloudflare-warp}/bin/warp-taskbar";
+      Restart = "always";
+      BindReadOnlyPaths = ["${pkgs.cloudflare-warp}:/usr:"];
+    };
+    Install.WantedBy = ["graphical-session.target"];
+  };
+
   # Trash retention: prune anything trashed >7 days ago, once a day. 7 (vs
   # the GNOME/KDE-conventional 30) because nothing here cares about the
   # trash — a tighter bound keeps silent disk use low and the recovery

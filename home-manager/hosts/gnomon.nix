@@ -114,6 +114,11 @@
     # July 2025, still ships pre-stable alpha.6) so we don't use it.
     cosmic-files
 
+    (pkgs.catppuccin-papirus-folders.override {
+      flavor = "mocha";
+      accent = "mauve";
+    })
+
     # Trash reaper. cosmic-files has no "delete permanently" / disable-trash
     # config (only Shift+Delete), so plain Delete silently accumulates in
     # ~/.local/share/Trash forever — there is no DE here to age it out. The
@@ -523,6 +528,8 @@
     run ${pkgs.xdg-utils}/bin/xdg-mime default mpv.desktop \
       video/mp4 video/x-matroska video/webm video/quicktime video/x-msvideo
   '';
+
+  systemd.user.services.dms.Service.Environment = "QS_ICON_THEME=Papirus-Dark";
 
   xdg.dataFile."icons/hicolor/scalable/status/zero-trust-connected.svg".source =
     ../assets/cloudflare-warp/zero-trust-connected.svg;

@@ -524,6 +524,13 @@
       video/mp4 video/x-matroska video/webm video/quicktime video/x-msvideo
   '';
 
+  xdg.dataFile."icons/hicolor/scalable/status/zero-trust-connected.svg".source =
+    ../assets/cloudflare-warp/zero-trust-connected.svg;
+  xdg.dataFile."icons/hicolor/scalable/status/zero-trust-disconnected.svg".source =
+    ../assets/cloudflare-warp/zero-trust-disconnected.svg;
+  xdg.dataFile."icons/hicolor/scalable/status/zero-trust-error.svg".source =
+    ../assets/cloudflare-warp/zero-trust-error.svg;
+
   # Cloudflare's packaged tray client. Keep the package unit's graphical
   # session lifecycle and its /usr runtime mapping intact for niri/DMS.
   systemd.user.services.warp-taskbar = {

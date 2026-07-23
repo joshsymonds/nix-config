@@ -114,6 +114,11 @@
     # July 2025, still ships pre-stable alpha.6) so we don't use it.
     cosmic-files
 
+    (pkgs.catppuccin-papirus-folders.override {
+      flavor = "mocha";
+      accent = "mauve";
+    })
+
     # Trash reaper. cosmic-files has no "delete permanently" / disable-trash
     # config (only Shift+Delete), so plain Delete silently accumulates in
     # ~/.local/share/Trash forever — there is no DE here to age it out. The
@@ -523,6 +528,33 @@
     run ${pkgs.xdg-utils}/bin/xdg-mime default mpv.desktop \
       video/mp4 video/x-matroska video/webm video/quicktime video/x-msvideo
   '';
+
+  systemd.user.services.dms.Service.Environment = "QS_ICON_THEME=Papirus-Dark";
+
+  xdg.dataFile."icons/hicolor/scalable/status/zero-trust-connected.svg".source =
+    ../assets/cloudflare-warp/zero-trust-connected.svg;
+  xdg.dataFile."icons/hicolor/scalable/status/zero-trust-disconnected.svg".source =
+    ../assets/cloudflare-warp/zero-trust-disconnected.svg;
+  xdg.dataFile."icons/hicolor/scalable/status/zero-trust-error.svg".source =
+    ../assets/cloudflare-warp/zero-trust-error.svg;
+
+  # Cloudflare's packaged tray client. Keep the package unit's graphical
+  # session lifecycle and its /usr runtime mapping intact for niri/DMS.
+  systemd.user.services.warp-taskbar = {
+    Unit = {
+      Description = "Cloudflare Zero Trust Client Taskbar";
+      Requires = ["dbus.socket"];
+      After = ["dbus.socket"];
+      PartOf = ["graphical-session.target"];
+    };
+    Service = {
+      Type = "simple";
+      ExecStart = "${pkgs.cloudflare-warp}/bin/warp-taskbar";
+      Restart = "always";
+      BindReadOnlyPaths = ["${pkgs.cloudflare-warp}:/usr:"];
+    };
+    Install.WantedBy = ["graphical-session.target"];
+  };
 
   # Trash retention: prune anything trashed >7 days ago, once a day. 7 (vs
   # the GNOME/KDE-conventional 30) because nothing here cares about the

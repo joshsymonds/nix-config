@@ -539,6 +539,16 @@ in
       openFirewall = true;
     };
 
+    # WARP enrollment is interactive and local. In Traffic and DNS mode,
+    # Cloudflare processes system DNS while connected; tray Disconnect is the
+    # personal-DNS privacy boundary. Do not add ProtectSystem=strict here:
+    # Gnomon observed EROFS while WARP applied DNS because the upstream unit
+    # only allow-lists the existing /etc/resolv.conf, not its parent directory.
+    services.cloudflare-warp = {
+      enable = true;
+      openFirewall = false;
+    };
+
     environment.systemPackages = with pkgs; [sbctl tailscale];
 
     # Wired LAN comes up in 1-3s when the cable is live; without this cap,

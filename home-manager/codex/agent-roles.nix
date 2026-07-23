@@ -5,6 +5,12 @@
     model = "gpt-5.6-sol";
     reasoningEffort = "high";
   };
+  escalation-final = {
+    description = "Terminal escalation for a task that survived the fresh escalation attempt; repeats with updated evidence until the task verifies clean.";
+    instructions = "Follow the task and any referenced contract exactly. Use the maximum reasoning budget to resolve the reported defect without broadening scope.";
+    model = "gpt-5.6-sol";
+    reasoningEffort = "xhigh";
+  };
   explorer = {
     description = "Answer a specific read-only codebase question quickly with file and line evidence.";
     instructions = "Investigate read-only. Do not edit files. Answer only the requested question with checkable file:line evidence and report NOT FOUND when appropriate.";

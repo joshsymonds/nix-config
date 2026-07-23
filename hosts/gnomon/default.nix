@@ -542,7 +542,15 @@ in
     # WARP enrollment is interactive and local. In Traffic and DNS mode,
     # Cloudflare processes system DNS while connected; tray Disconnect is the
     # personal-DNS privacy boundary.
-    services.cloudflare-warp.enable = true;
+    services.cloudflare-warp = {
+      enable = true;
+      openFirewall = false;
+    };
+    systemd.services.cloudflare-warp.serviceConfig = {
+      ProtectSystem = "strict";
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+    };
 
     environment.systemPackages = with pkgs; [sbctl tailscale];
 

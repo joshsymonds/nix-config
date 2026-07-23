@@ -50,6 +50,11 @@ in {
         reasoning_effort = "high";
         sandbox = "danger-full-access";
       };
+    escalation-final =
+      solXhigh
+      // {
+        sandbox = "danger-full-access";
+      };
     finder =
       solXhigh
       // {

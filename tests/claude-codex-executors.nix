@@ -29,7 +29,7 @@ in
     ' ${mcpServerJson} >/dev/null
 
     jq -e '
-      (keys | sort) == ["escalation", "finder", "scout", "steelman", "test-runner", "verifier", "worker"]
+      (keys | sort) == ["escalation", "escalation-final", "finder", "scout", "steelman", "test-runner", "verifier", "worker"]
       and all(.[];
         .executor == "codex"
         and .tool == "mcp__codex__codex"

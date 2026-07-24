@@ -259,6 +259,23 @@ in
         tokenFile = config.age.secrets."cloudflared-token".path;
       };
 
+      # Cloudflare Zero Trust client (WARP). Enrollment is interactive and
+      # lives in /var/lib/cloudflare-warp, never in this repo — headless flow:
+      # `warp-cli registration new <team>` prints an auth URL, finish login in
+      # a browser on another machine, then paste the com.cloudflare.warp://
+      # callback URL into `warp-cli registration token '<url>'`. Toggle with
+      # `warp-cli connect` / `warp-cli disconnect`; disconnected, WARP touches
+      # neither traffic nor DNS. Tailscale coexistence is profile-side:
+      # 100.64.0.0/10 is split-tunnel excluded by default, and MagicDNS needs
+      # a Local Domain Fallback entry (tail82223.ts.net -> 100.100.100.100)
+      # while connected. Do not add ProtectSystem=strict hardening — gnomon
+      # hit EROFS applying DNS because the upstream unit only allow-lists
+      # /etc/resolv.conf itself, not its parent directory.
+      cloudflare-warp = {
+        enable = true;
+        openFirewall = false;
+      };
+
       savecraftDataRefresh.enable = true;
       savecraftDataRefresh.enableDatagen = true;
       savecraftDataRefresh.repoPath = "/home/joshsymonds/Personal/savecraft-worktrees/main";

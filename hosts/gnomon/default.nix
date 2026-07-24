@@ -16,6 +16,7 @@ in
       ./shutdown-hardening.nix
       ../../modules/desktop/dms-niri.nix
       ../../modules/hardware/gpu-nvidia.nix
+      ../../modules/services/cloudflare-warp-dns.nix
       ../../modules/services/inference-stack.nix
       ../../modules/services/keyd.nix
       ../../modules/services/yubikey-auth.nix
@@ -548,6 +549,11 @@ in
       enable = true;
       openFirewall = false;
     };
+
+    # WARP's own DNS handling stops at /etc/resolv.conf, which glibc never
+    # reads here; without this, Gateway sees no lookups and FQDN-based egress
+    # policies never match. See the module for the full reasoning.
+    services.cloudflareWarpDns.enable = true;
 
     environment.systemPackages = with pkgs; [sbctl tailscale];
 

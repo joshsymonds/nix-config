@@ -15,6 +15,7 @@ in
     imports = [
       ../../modules/services/cleanup-services.nix
       ../../modules/services/cloudflare-tunnel.nix
+      ../../modules/services/cloudflare-warp-dns.nix
       ./hardware-configuration.nix
       ./services/marvin-blackbox-reap.nix
 
@@ -275,6 +276,11 @@ in
         enable = true;
         openFirewall = false;
       };
+
+      # WARP's own DNS handling stops at /etc/resolv.conf, which glibc never
+      # reads here; without this, Gateway sees no lookups and FQDN-based
+      # egress policies never match. See the module for the full reasoning.
+      cloudflareWarpDns.enable = true;
 
       savecraftDataRefresh.enable = true;
       savecraftDataRefresh.enableDatagen = true;

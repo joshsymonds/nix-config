@@ -1,8 +1,8 @@
 {
   "companyAnnouncements": [],
   "viewMode": "default",
-  "model": "claude-fable-5",
-  "effortLevel": "high",
+  "model": "claude-opus-5",
+  "effortLevel": "xhigh",
   "preferredNotifChannel": "notifications_disabled",
   "permissions": {
     "defaultMode": "bypassPermissions"

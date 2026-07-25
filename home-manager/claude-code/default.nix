@@ -143,11 +143,17 @@
       unpinKey = "unpinFable5LaunchEffort";
       aliases = ["fable"];
     };
+    "opus-5" = {
+      model = "claude-opus-5";
+      defaultEffort = "xhigh";
+      unpinKey = "unpinOpus5LaunchEffort";
+      aliases = ["opus"];
+    };
     "opus-4-8" = {
       model = "claude-opus-4-8";
       defaultEffort = "xhigh";
       unpinKey = "unpinOpus48LaunchEffort";
-      aliases = ["opus"];
+      aliases = [];
     };
     "opus-4-7" = {
       model = "claude-opus-4-7";

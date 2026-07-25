@@ -29,7 +29,7 @@ in
     ' ${mcpServerJson} >/dev/null
 
     jq -e '
-      (keys | sort) == ["escalation", "escalation-final", "finder", "scout", "steelman", "test-runner", "verifier", "worker"]
+      (keys | sort) == ["escalation", "finder", "scout", "steelman", "test-runner", "verifier", "worker"]
       and all(.[];
         .executor == "codex"
         and .tool == "mcp__codex__codex"
@@ -54,18 +54,23 @@ in
       and .["test-runner"].reasoning_effort == "low"
       and .["test-runner"].sandbox == "danger-full-access"
       and (.["test-runner"] | has("web_search") | not)
-      and .worker.model == "gpt-5.6-luna"
-      and .worker.reasoning_effort == "high"
+      and .worker.model == "gpt-5.6-sol"
+      and .worker.reasoning_effort == "low"
       and .worker.service_tier == "fast"
       and .worker.reply_tool == "mcp__codex__codex-reply"
       and .worker.sandbox == "danger-full-access"
       and (.worker | has("web_search") | not)
-      and .escalation.model == "gpt-5.6-sol"
-      and .escalation.reasoning_effort == "high"
+      and .escalation.model == "gpt-5.6-terra"
+      and .escalation.reasoning_effort == "medium"
       and .escalation.sandbox == "danger-full-access"
       and (.escalation | has("service_tier") | not)
       and (.escalation | has("web_search") | not)
     ' ${registryJson} >/dev/null
+
+    # escalation-final must stay absent so gambit resolves the terminal rung to
+    # native Claude at most-capable. A configured entry would silently pin the
+    # ladder's last rung back onto Codex.
+    jq -e 'has("escalation-final") | not' ${registryJson} >/dev/null
 
     yq -p=toml -o=json '.' ${isolationToml} > isolation.json
     jq -e '

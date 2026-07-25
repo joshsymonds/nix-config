@@ -1405,11 +1405,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1784790619,
-        "narHash": "sha256-6p2o2bzjaL3/TtI27jsJ599/qfHsCNZDq6TtOynsA3Q=",
+        "lastModified": 1784952979,
+        "narHash": "sha256-O5EEDDvRv+B9JHZHjXsEE6KjuU91wmBcui4/es6REmI=",
         "owner": "joshsymonds",
         "repo": "gambit",
-        "rev": "a2f079b00613c046dd7db9bd8a4931fa75b403a1",
+        "rev": "42f1b715c1d22d5d9254cc7af4cfedb77929525d",
         "type": "github"
       },
       "original": {

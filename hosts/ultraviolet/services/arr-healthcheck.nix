@@ -122,6 +122,46 @@
       fi
     }
 
+    # Check SABnzbd (podman container sharing Gluetun's network namespace).
+    #
+    # Unlike every other check here, "not running" is a fault rather than a
+    # reason to skip. podman-sabnzbd carries Requires=mnt-video.mount, so a
+    # boot where the NAS misses the 10s automount timeout cancels the start
+    # job with result 'dependency' — and systemd never retries a cancelled
+    # start job. SABnzbd then stays dead indefinitely while every *arr still
+    # reports healthy, because each only probes its own API. Starting the
+    # unit here re-triggers the automount, so SABnzbd comes back on the first
+    # pass after the NAS answers.
+    check_sabnzbd() {
+      if ! ${pkgs.systemd}/bin/systemctl is-active --quiet podman-sabnzbd; then
+        echo "sabnzbd: not running, starting"
+        if ${pkgs.systemd}/bin/systemctl start podman-sabnzbd 2>/dev/null; then
+          echo "sabnzbd: started"
+        else
+          echo "sabnzbd: start failed (NAS share likely still unreachable)"
+        fi
+        return
+      fi
+
+      # SABnzbd can stall its web interface while unpacking, and a gluetun
+      # restart leaves it alive with a dead network namespace. Retry before
+      # declaring it wedged so a busy-but-fine instance is never bounced
+      # mid-download.
+      local http_code=""
+      for _ in 1 2 3; do
+        http_code=$(${pkgs.curl}/bin/curl -s -m 10 -o /dev/null -w "%{http_code}" \
+          "http://localhost:8080/api?mode=version" 2>/dev/null)
+        if [[ "$http_code" == "200" ]]; then
+          echo "sabnzbd: healthy"
+          return
+        fi
+        sleep 5
+      done
+
+      echo "sabnzbd: unhealthy (HTTP $http_code)"
+      graceful_restart "podman-sabnzbd"
+    }
+
     # Run all checks
     ${builtins.concatStringsSep "\n" (map (svc: ''
         check_arr "${svc.name}" "${toString svc.port}" "${svc.configXml}" "${svc.apiVersion}"
@@ -129,10 +169,11 @@
       arrServices)}
     check_jellyfin
     check_jellyseerr
+    check_sabnzbd
   '';
 in {
   systemd.services.media-healthcheck = {
-    description = "Health check for media services (Sonarr, Radarr, Readarr, Prowlarr, Jellyfin, Jellyseerr)";
+    description = "Health check for media services (Sonarr, Radarr, Readarr, Prowlarr, Jellyfin, Jellyseerr, SABnzbd)";
     serviceConfig = {
       Type = "oneshot";
       ExecStart = healthCheckScript;

@@ -1,5 +1,4 @@
 {
-  ccTools,
   gambitHasCodex,
   lib,
   pkgs,
@@ -67,11 +66,6 @@ in
     model = "gpt-5.6-sol"
     model_reasoning_effort = "xhigh"
 
-    # Codex passes agent-turn-complete JSON as one argv value. cc-tools
-    # normalizes that into the same ntfy delivery path Claude's stdin hooks
-    # use, without invoking the Claude transcript/judge pipeline.
-    notify = ["${ccTools}/bin/cc-tools", "notify"]
-
     # Equivalent to --dangerously-bypass-approvals-and-sandbox. This machine
     # is intentionally configured to let Codex work outside the repo without
     # interrupting for per-command or per-directory confirmation.
@@ -101,9 +95,9 @@ in
     subagent_usage_hint_text = ${builtins.toJSON multiAgentSubagentUsageHint}
 
     [tui]
-    # External notify owns turn-complete delivery. Keep Codex's built-in
-    # terminal notification only for approvals, which external notify does
-    # not currently emit.
+    # Turn-complete notifications are intentionally off (no external notify
+    # command, no "agent-turn-complete" here). Built-in terminal notification
+    # covers approvals only.
     notifications = ["approval-requested"]
     notification_condition = "unfocused"
     notification_method = "auto"

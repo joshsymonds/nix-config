@@ -44,11 +44,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.claude/bin/cc-tools notify",
-            "timeout": 90
-          },
-          {
-            "type": "command",
             "command": "~/.claude/hooks/usage-summary-refresh.sh"
           }
         ]

@@ -5,7 +5,6 @@
   pkgs,
   ...
 }: let
-  cc-tools = inputs.cc-tools.packages.${pkgs.stdenv.hostPlatform.system}.default;
   gambitPackages = inputs.gambit.packages.${pkgs.stdenv.hostPlatform.system};
   gambitHasCodex = gambitPackages ? codex && inputs.gambit ? lib && inputs.gambit.lib ? version;
   gambitCodex =
@@ -26,7 +25,6 @@
     else null;
   codexConfig = import ./managed-config.nix {
     inherit gambitHasCodex lib pkgs;
-    ccTools = cc-tools;
   };
   subagentIsolation = import ./subagent-isolation.nix;
   codexAgentRoles = import ./agent-roles.nix;

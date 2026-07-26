@@ -1018,10 +1018,10 @@ in {
   };
 
   # notifyd — the per-user notification daemon. The `cc-tools notify` hook
-  # (settings.json Stop/Notification/SessionEnd) is now a fire-and-forget
-  # client that hands each hook payload to this daemon over a unix socket at
-  # $XDG_RUNTIME_DIR/cc-tools/notifyd.sock and exits in milliseconds, so a
-  # turn-end hook never blocks the agent on the ~18s judge compose. The
+  # (settings.json Notification/SessionEnd; the Stop turn-end hook was
+  # removed 2026-07) is a fire-and-forget client that hands each hook
+  # payload to this daemon over a unix socket at
+  # $XDG_RUNTIME_DIR/cc-tools/notifyd.sock and exits in milliseconds. The
   # daemon owns decide/judge/dedupe/watchdog/delivery in one serialized
   # process; if it is unreachable the client falls back inline (deterministic
   # send, no judge) so a ping is never lost.

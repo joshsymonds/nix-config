@@ -605,7 +605,6 @@
             codexConfig = import ./home-manager/codex/managed-config.nix {
               pkgs = checkPkgs;
               lib = checkPkgs.lib;
-              ccTools = "/test/cc-tools";
               gambitHasCodex = true;
             };
           };

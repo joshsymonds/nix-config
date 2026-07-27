@@ -11,7 +11,6 @@
   interactiveConfigToml = import ../home-manager/codex/managed-config.nix {
     inherit pkgs;
     lib = pkgs.lib;
-    ccTools = "/test/cc-tools";
     gambitHasCodex = true;
   };
 in

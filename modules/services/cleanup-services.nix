@@ -32,6 +32,18 @@ in {
       default = true;
       description = "Run 'nix-collect-garbage --delete-older-than 3d' + 'nix-store --gc' in the cleanup pass.";
     };
+
+    tmpBuildCachePrune = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = "Delete stale per-run build caches in /tmp (Go caches, arena-run dirs, scratch dirs) left behind by agent runs.";
+    };
+
+    tmpBuildCacheAgeDays = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 3;
+      description = "Minimum age in days before a /tmp build-cache dir is deleted.";
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -62,6 +74,16 @@ in {
               ${pkgs.podman}/bin/podman system prune -a --volumes -f || true
               echo "Podman cleanup completed"
             fi
+          ''}
+
+          ${lib.optionalString cfg.tmpBuildCachePrune ''
+            echo "Pruning stale build caches in /tmp..."
+            ${pkgs.findutils}/bin/find /tmp -mindepth 1 -maxdepth 1 \
+              \( -name '*cache*' -o -name '*go-build*' -o -name 'arena-run-*' \
+                 -o -name 'tmp.*' -o -name '*-scratch' -o -name '*shared-target*' \) \
+              -mtime +${toString cfg.tmpBuildCacheAgeDays} \
+              -exec rm -rf {} + || true
+            echo "/tmp build-cache prune completed"
           ''}
 
           ${lib.optionalString cfg.nixGC ''

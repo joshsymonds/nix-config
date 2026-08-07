@@ -15,6 +15,11 @@
     # `nix flake update nixpkgs-inference`.
     nixpkgs-inference.url = "github:nixos/nixpkgs/nixos-unstable";
 
+    # Open WebUI moves quickly and chat transport fixes often land between
+    # nixos-unstable staging cycles. Keep it on a narrow master side channel
+    # so updating the UI does not pull the rest of the system forward.
+    nixpkgs-open-webui.url = "github:nixos/nixpkgs/master";
+
     # Official Codex plugin sources. Consumed as a plain source tree so
     # individual skills can be installed declaratively without mutable
     # `codex plugin add` state.

@@ -2682,11 +2682,11 @@
     },
     "nixpkgs-inference": {
       "locked": {
-        "lastModified": 1782959384,
-        "narHash": "sha256-xnJJk+ct+D2+wdRxj1wk36w5zV9RVESwRqcklPdt3fM=",
+        "lastModified": 1785090369,
+        "narHash": "sha256-m0pDuRJG7EDo9ri+4Ksu83VsI+PlxNC9lNBfydejce4=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "65179426c83bb3f6bc14898b42ea1c6f01d374b0",
+        "rev": "624af665418d3c65d544145b4d34ad696439570e",
         "type": "github"
       },
       "original": {
@@ -2708,6 +2708,22 @@
       "original": {
         "owner": "nix-community",
         "repo": "nixpkgs.lib",
+        "type": "github"
+      }
+    },
+    "nixpkgs-open-webui": {
+      "locked": {
+        "lastModified": 1785356796,
+        "narHash": "sha256-ljIw3TvUqNPVl6QXyGM+NZlALimRQcmds86LB87QIH4=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "0cfaf6be452abc059d891c7083f094eb1ade5f0b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "master",
+        "repo": "nixpkgs",
         "type": "github"
       }
     },
@@ -3395,6 +3411,7 @@
         "nix-gaming-edge": "nix-gaming-edge",
         "nixpkgs": "nixpkgs_9",
         "nixpkgs-inference": "nixpkgs-inference",
+        "nixpkgs-open-webui": "nixpkgs-open-webui",
         "openai-plugins": "openai-plugins",
         "redlib-fork": "redlib-fork",
         "rust-overlay": "rust-overlay_5",
@@ -3582,11 +3599,11 @@
         "nixpkgs": "nixpkgs_19"
       },
       "locked": {
-        "lastModified": 1784487125,
-        "narHash": "sha256-wjVwwCV9PjLy3rWguYNGzAXI9uopxMf+h3QhELZD+2k=",
+        "lastModified": 1785542943,
+        "narHash": "sha256-JkKbn/CPi+n1UhwoH5Ea/Y8yeq/nBhz0WfrO9pz8iH4=",
         "owner": "joshsymonds",
         "repo": "savecraft-client",
-        "rev": "238c7d0c979882b9cbf1fe05160246ba25ce9693",
+        "rev": "43055ea71a125bd7f95b351621aa6cecf32ea385",
         "type": "github"
       },
       "original": {

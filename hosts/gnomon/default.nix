@@ -136,6 +136,11 @@ in
         # Dense Gemma 4 12B, Heretic-abliterated by igorls (0/100 genuine
         # refusals at KL 0.0284). Single-file GGUFs; llama.cpp reads them direct.
         base12 = "https://huggingface.co/igorls/gemma-4-12B-it-heretic-GGUF/resolve/main";
+        # Qwen 3.6 27B Fable Fusion, Heretic-abliterated and tuned by DavidAU.
+        # The LOW MTP IQ4_XS is the highest-quality build sized for a 16 GB
+        # GPU. Upstream llama.cpp runs the same architecture about 14x faster
+        # than KoboldCpp did on gnomon, so use the stack's standard backend.
+        baseQwen36 = "https://huggingface.co/DavidAU/Qwen3.6-27B-Fable-Fusion-711-Uncensored-Heretic-NM-DAU-NEO-MAX-MTP-GGUF/resolve/main";
         # Sampling params from Google's Gemma 4 partner recommendation
         # (model card + Unsloth docs).
         samplerFlags = [
@@ -164,9 +169,9 @@ in
             "--mlock"
             "--no-mmap"
             "-b"
-            "2048"
+            "512"
             "-ub"
-            "2048"
+            "512"
             "-ctk"
             "q8_0"
             "-ctv"
@@ -204,6 +209,43 @@ in
         "gemma4-12b-it" = {
           ggufUrl = "https://huggingface.co/ggml-org/gemma-4-12B-it-GGUF/resolve/main/gemma-4-12B-it-Q8_0.gguf";
           flags = commonFlags ++ ["--fit-ctx" "32768" "--reasoning-budget" "0"];
+        };
+        # Dense 27B at LOW MTP IQ4_XS (~14.1 GiB). Qwen 3.6 has full attention
+        # on only 16/64 layers, making 32k context practical; Q4 KV and
+        # llama.cpp autofit minimize the amount that cannot remain in VRAM.
+        "qwen3.6-fable-27b-iq4xs-mtp" = {
+          ggufUrl = "${baseQwen36}/Qwen3.6-27B-Fable-Fus-711-UnHeretic-NM-DAU-NEO-MAX-NEO-LOW-MTP-IQ4_XS.gguf";
+          flags = [
+            "--fit"
+            "on"
+            "--fit-target"
+            "256"
+            "-c"
+            "32768"
+            "-np"
+            "1"
+            "-fa"
+            "on"
+            "--mlock"
+            "--no-mmap"
+            "-b"
+            "2048"
+            "-ub"
+            "2048"
+            "-ctk"
+            "q4_0"
+            "-ctv"
+            "q4_0"
+            "--spec-type"
+            "draft-mtp"
+            "--spec-draft-n-max"
+            "2"
+            "--spec-draft-type-k"
+            "q4_0"
+            "--spec-draft-type-v"
+            "q4_0"
+            "--jinja"
+          ];
         };
       };
     };

@@ -18,7 +18,15 @@
     config = {
       allowUnfree = true;
       cudaSupport = true;
+      # Gnomon's RTX 5070 Ti is Blackwell compute capability 12.0. Keeping the
+      # side-channel closure host-specific avoids sandboxed `-arch=native`
+      # falling back to sm_75 and avoids compiling eight irrelevant targets.
+      cudaCapabilities = ["12.0"];
     };
+  };
+  openWebUIPkgs = import inputs.nixpkgs-open-webui {
+    system = pkgs.stdenv.hostPlatform.system;
+    config.allowUnfree = true;
   };
   llamaCpp = inferencePkgs.llama-cpp;
   llamaSwap = inferencePkgs.llama-swap;
@@ -163,6 +171,7 @@ in {
         # blocked by default sandbox; widen capabilities.
         AmbientCapabilities = ["CAP_IPC_LOCK"];
         CapabilityBoundingSet = ["CAP_IPC_LOCK"];
+        LimitMEMLOCK = "infinity";
         # Loosen MemoryDenyWriteExecute — CUDA runtime JIT-compiles kernels
         # and needs PROT_EXEC on anonymous mappings. Without this the first
         # llama-server invocation segfaults inside libcuda.
@@ -254,6 +263,9 @@ in {
     (lib.mkIf cfg.openWebUI.enable {
       services.open-webui = {
         enable = true;
+        # Chat response handling changes quickly upstream. Consume the narrow
+        # Open WebUI edge input without moving the host's primary nixpkgs pin.
+        package = openWebUIPkgs.open-webui;
         host = cfg.openWebUI.host;
         port = cfg.openWebUI.port;
         environment = {

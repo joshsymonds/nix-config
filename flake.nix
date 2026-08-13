@@ -243,6 +243,10 @@
     # Savecraft — public client daemon + private commercial services
     savecraft-client.url = "github:joshsymonds/savecraft-client";
     savecraft.url = "git+ssh://git@github.com/joshsymonds/savecraft.git";
+    savecraft-egress = {
+      url = "git+ssh://git@github.com/joshsymonds/savecraft-egress.git?ref=master&rev=936becb37d5eca3d7a9f97561e789774246517ad";
+      flake = false;
+    };
 
     # Mentat — personal assistant daemon (Claude as the brain)
     mentat = {
@@ -574,6 +578,11 @@
 
         packages =
           (import ./pkgs {inherit pkgs inputs;})
+          // {
+            savecraft-egress = pkgs.callPackage ./pkgs/savecraft-egress {
+              src = inputs.savecraft-egress;
+            };
+          }
           // lib.optionalAttrs (system == "x86_64-linux") {
             installerIso = self.nixosConfigurations.installer.config.system.build.isoImage;
             ultravioletInstallerIso = self.nixosConfigurations.ultraviolet-installer.config.system.build.isoImage;

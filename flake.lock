@@ -3417,6 +3417,7 @@
         "rust-overlay": "rust-overlay_5",
         "savecraft": "savecraft",
         "savecraft-client": "savecraft-client",
+        "savecraft-egress": "savecraft-egress",
         "scriptorium": "scriptorium",
         "shimmer": "shimmer",
         "sound-stage": "sound-stage",
@@ -3610,6 +3611,24 @@
         "owner": "joshsymonds",
         "repo": "savecraft-client",
         "type": "github"
+      }
+    },
+    "savecraft-egress": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1786644022,
+        "narHash": "sha256-Y1dHeKMZiW+qJkZXjwtun7eeve0+5nT6MgRL3eTCw7Y=",
+        "ref": "master",
+        "rev": "936becb37d5eca3d7a9f97561e789774246517ad",
+        "revCount": 1,
+        "type": "git",
+        "url": "ssh://git@github.com/joshsymonds/savecraft-egress.git"
+      },
+      "original": {
+        "ref": "master",
+        "rev": "936becb37d5eca3d7a9f97561e789774246517ad",
+        "type": "git",
+        "url": "ssh://git@github.com/joshsymonds/savecraft-egress.git"
       }
     },
     "scriptorium": {

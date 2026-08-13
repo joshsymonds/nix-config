@@ -40,6 +40,7 @@ in {
   "secrets/hosts/ultraviolet/inbox-zero-env.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/inbox-zero-db-password.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/atticd-env.age".publicKeys = keys.ultraviolet;
+  "secrets/hosts/ultraviolet/savecraft-egress-token.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/gnomon/mullvad-privatekey.age".publicKeys = keys.gnomon;
   "secrets/hosts/gnomon/mullvad-addresses.age".publicKeys = keys.gnomon;
   "secrets/hosts/vermissian/cloudflared-token.age".publicKeys = keys.vermissian;

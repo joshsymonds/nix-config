@@ -11,6 +11,11 @@ buildGoModule {
 
   vendorHash = null;
 
+  subPackages = [
+    "cmd/savecraft-egress"
+    "cmd/savecraft-egress-canary"
+  ];
+
   ldflags = [
     "-s"
     "-w"

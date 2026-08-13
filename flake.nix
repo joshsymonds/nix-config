@@ -244,7 +244,7 @@
     savecraft-client.url = "github:joshsymonds/savecraft-client";
     savecraft.url = "git+ssh://git@github.com/joshsymonds/savecraft.git";
     savecraft-egress = {
-      url = "git+ssh://git@github.com/joshsymonds/savecraft-egress.git?ref=master&rev=936becb37d5eca3d7a9f97561e789774246517ad";
+      url = "git+ssh://git@github.com/joshsymonds/savecraft-egress.git?ref=master&rev=27d5c9c4c07879f8daa670291bd23fb0e72a9bc4";
       flake = false;
     };
 

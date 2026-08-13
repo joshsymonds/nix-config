@@ -3616,17 +3616,17 @@
     "savecraft-egress": {
       "flake": false,
       "locked": {
-        "lastModified": 1786644022,
-        "narHash": "sha256-Y1dHeKMZiW+qJkZXjwtun7eeve0+5nT6MgRL3eTCw7Y=",
+        "lastModified": 1786653059,
+        "narHash": "sha256-O4D3NBVG/uTY6JbWXcQxx1D/FsQvAZPUMpG3QfO/pLk=",
         "ref": "master",
-        "rev": "936becb37d5eca3d7a9f97561e789774246517ad",
-        "revCount": 1,
+        "rev": "27d5c9c4c07879f8daa670291bd23fb0e72a9bc4",
+        "revCount": 2,
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/savecraft-egress.git"
       },
       "original": {
         "ref": "master",
-        "rev": "936becb37d5eca3d7a9f97561e789774246517ad",
+        "rev": "27d5c9c4c07879f8daa670291bd23fb0e72a9bc4",
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/savecraft-egress.git"
       }

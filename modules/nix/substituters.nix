@@ -58,7 +58,6 @@ in {
       ++ lib.optionals hasSteam [
         caches.tokidoki.url
         caches.lantian.url
-        caches.garnix.url
       ];
 
     extra-trusted-public-keys =
@@ -74,7 +73,6 @@ in {
       ++ lib.optionals hasSteam [
         caches.tokidoki.publicKey
         caches.lantian.publicKey
-        caches.garnix.publicKey
       ];
   };
 }

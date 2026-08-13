@@ -53,10 +53,4 @@
     url = "https://attic.xuyh0120.win/lantian";
     publicKey = "lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc=";
   };
-  # garnix: fallback for cache hits lantian Attic is missing (lantian
-  # is on a free Garnix plan + their own Hydra).
-  garnix = {
-    url = "https://cache.garnix.io";
-    publicKey = "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g=";
-  };
 }

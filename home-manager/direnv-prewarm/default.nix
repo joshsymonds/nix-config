@@ -16,11 +16,9 @@
     exec ${pkgs.direnv}/bin/direnv exec ${nixConfigDir} true
   '';
 in {
-  # Re-warm nix-direnv's cached devShell for ~/nix-config in the
-  # background whenever the flake changes, so an interactive cd hits a
-  # fresh cache and loads instantly instead of paying the eval + pull at
-  # the prompt. Only a cd within seconds of the change (before the
-  # prewarm finishes) still pays the normal reload.
+  # Re-warm nix-direnv's isolated shell for ~/nix-config in the background
+  # whenever its definition or nixpkgs pin changes. The shell deliberately
+  # does not evaluate or archive the root flake's unrelated inputs.
   systemd.user.services.direnv-prewarm = {
     Unit = {
       Description = "Pre-warm nix-direnv cache for ~/nix-config";
@@ -39,11 +37,12 @@ in {
   };
 
   systemd.user.paths.direnv-prewarm = {
-    Unit.Description = "Watch ~/nix-config flake files for direnv pre-warm";
+    Unit.Description = "Watch ~/nix-config dev-shell files for direnv pre-warm";
     Path.PathChanged = [
-      "${nixConfigDir}/flake.nix"
-      "${nixConfigDir}/flake.lock"
       "${nixConfigDir}/.envrc"
+      "${nixConfigDir}/dev-shell.nix"
+      "${nixConfigDir}/flake.lock"
+      "${nixConfigDir}/shell.nix"
     ];
     Install.WantedBy = ["default.target"];
   };

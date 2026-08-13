@@ -284,21 +284,19 @@
     # Wired in on gnomon ONLY — see hosts/gnomon/default.nix. The
     # nix-cachyos-kernel.legacyPackages API exposes the full
     # linuxPackages set per variant; we use linuxPackages-cachyos-
-    # latest (generic march). v3/v4-suffixed variants exist but are
-    # not on garnix.io's build matrix (only latest{,-lto} + lts{,-lto}
-    # are), so any march suffix means a 25-30 min from-source rebuild
-    # on every kernel bump for sub-1% kernel perf — see hosts/gnomon
-    # default.nix for the full reasoning. -lto is on garnix but breaks
-    # the out-of-tree it87 module without kernelModuleLLVMOverride.
+    # latest (generic march). v3/v4-suffixed variants exist but are not
+    # covered by the retained binary caches, so any march suffix means a
+    # 25-30 min from-source rebuild on every kernel bump for sub-1% kernel
+    # perf — see hosts/gnomon/default.nix for the full reasoning. -lto also
+    # breaks the out-of-tree it87 module without kernelModuleLLVMOverride.
     #
     # NB: deliberately NOT `inputs.nixpkgs.follows = "nixpkgs"`. The
     # upstream README warns ("there can be mismatch between patches and
     # kernel version") and their lantian Attic cache is built against
     # their pinned nixpkgs. Same reasoning as nix-gaming-edge above.
     #
-    # Cache: lantian Attic (https://attic.xuyh0120.win/lantian) is
-    # wired in on gnomon only via nix.settings. Garnix is a fallback
-    # for builds the lantian Attic doesn't have yet.
+    # Cache: lantian Attic (https://attic.xuyh0120.win/lantian) is wired in
+    # on gnomon only via nix.settings.
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
 
     # spicetify-nix — declarative Spotify customization via spicetify-cli.
@@ -625,10 +623,12 @@
             pkgs = checkPkgs;
             chatgptDesktop = checkPkgs.chatgpt-desktop;
           };
+          direnv-shell = import ./tests/direnv-shell.nix {inherit pkgs;};
           installer-kit-fixture = import ./tests/installer-kit-fixture.nix {
             inherit pkgs;
             flakeSource = self.outPath;
           };
+          substituters = import ./tests/substituters.nix {inherit pkgs;};
         });
 
         # mkShellNoCC + a tiny package set keeps the direnv shell closure
@@ -636,14 +636,7 @@
         # google-cloud-sdk used to live here (~700MB closure, re-fetched on
         # every lock bump); the host that actually uses gcloud (vermissian)
         # installs it system-wide in hosts/vermissian/default.nix.
-        devShells.default = pkgs.mkShellNoCC {
-          name = "nix-config-dev";
-          packages = with pkgs; [
-            statix
-            deadnix
-            git
-          ];
-        };
+        devShells.default = import ./dev-shell.nix {inherit pkgs;};
 
         treefmt = {
           projectRootFile = "flake.nix";

@@ -3417,7 +3417,6 @@
         "rust-overlay": "rust-overlay_5",
         "savecraft": "savecraft",
         "savecraft-client": "savecraft-client",
-        "savecraft-egress": "savecraft-egress",
         "scriptorium": "scriptorium",
         "shimmer": "shimmer",
         "sound-stage": "sound-stage",
@@ -3580,11 +3579,11 @@
         "nixpkgs": "nixpkgs_14"
       },
       "locked": {
-        "lastModified": 1786842415,
-        "narHash": "sha256-LUBHLBnYY00s3F6oy58zhelNUALFPtbgaRw+/hYP6WA=",
+        "lastModified": 1786643157,
+        "narHash": "sha256-A6pOVlsmbuosjNRLXioXV4s0cK+xe1LnJNRvVTlSHeg=",
         "ref": "refs/heads/main",
-        "rev": "6b87cff645d09bd53ee53ce370d8a50ec3a98a39",
-        "revCount": 2797,
+        "rev": "9b66694863ce6576260627558e96689ca2def722",
+        "revCount": 2638,
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/savecraft.git"
       },
@@ -3611,24 +3610,6 @@
         "owner": "joshsymonds",
         "repo": "savecraft-client",
         "type": "github"
-      }
-    },
-    "savecraft-egress": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1786653059,
-        "narHash": "sha256-O4D3NBVG/uTY6JbWXcQxx1D/FsQvAZPUMpG3QfO/pLk=",
-        "ref": "master",
-        "rev": "27d5c9c4c07879f8daa670291bd23fb0e72a9bc4",
-        "revCount": 2,
-        "type": "git",
-        "url": "ssh://git@github.com/joshsymonds/savecraft-egress.git"
-      },
-      "original": {
-        "ref": "master",
-        "rev": "27d5c9c4c07879f8daa670291bd23fb0e72a9bc4",
-        "type": "git",
-        "url": "ssh://git@github.com/joshsymonds/savecraft-egress.git"
       }
     },
     "scriptorium": {

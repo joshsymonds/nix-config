@@ -13,6 +13,7 @@
   claudeCodeCli = pkgs.callPackage ./claude-code-cli {};
   codex = pkgs.callPackage ./codex {};
   claude-swap = pkgs.callPackage ./claude-swap {};
+  cliproxyapi = pkgs.callPackage ./cliproxyapi {};
   deadcode = pkgs.callPackage ./deadcode {};
   golangciLintBin = pkgs.callPackage ./golangci-lint-bin {};
   coder = pkgs.callPackage ./coder-cli {inherit (pkgs) unzip;};

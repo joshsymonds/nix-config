@@ -129,12 +129,15 @@ in {
   config = lib.mkIf cfg.enable (lib.mkMerge [
     {
       # ── CLI clients ─────────────────────────────────────────────────────
-      # qwen-code rides the same bleeding-edge nixpkgs-inference input as
-      # llama-cpp: it's the headless coding-agent harness for the local
-      # models this stack serves (point it at llama-swap with
+      # qwen-code: the headless coding-agent harness for the local models
+      # this stack serves (point it at llama-swap with
       # OPENAI_BASE_URL=http://localhost:11434/v1, OPENAI_API_KEY=local,
-      # OPENAI_MODEL=<llama-swap entry>).
-      environment.systemPackages = [inferencePkgs.qwen-code];
+      # OPENAI_MODEL=<llama-swap entry>). Built from pkgs/qwen-code — a
+      # local bump to upstream latest; nixpkgs (even at the inference
+      # input's rev) is stuck five minor versions behind at 0.16.0.
+      environment.systemPackages = [
+        (inferencePkgs.callPackage ../../pkgs/qwen-code/package.nix {})
+      ];
 
       # ── llama-swap ──────────────────────────────────────────────────────
       # Hands `${PORT}` to llama-swap; llama-swap substitutes a free port

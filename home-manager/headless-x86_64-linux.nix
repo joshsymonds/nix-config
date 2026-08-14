@@ -42,6 +42,7 @@
 in {
   imports = [
     ./common.nix
+    ./claudex
     ./devspaces-host
     ./direnv-prewarm
     ./security-tools

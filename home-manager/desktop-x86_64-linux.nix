@@ -19,6 +19,7 @@
 in {
   imports = [
     ./common.nix
+    ./claudex
     ./devspaces-client
     ./direnv-prewarm
     ./firefox

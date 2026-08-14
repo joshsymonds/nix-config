@@ -37,6 +37,20 @@ in {
     mode = "0400";
   };
 
+  age.secrets."savecraft-canary-access-client-id" = {
+    file = ../../../secrets/hosts/ultraviolet/savecraft-canary-access-client-id.age;
+    owner = "root";
+    group = "root";
+    mode = "0400";
+  };
+
+  age.secrets."savecraft-canary-access-client-secret" = {
+    file = ../../../secrets/hosts/ultraviolet/savecraft-canary-access-client-secret.age;
+    owner = "root";
+    group = "root";
+    mode = "0400";
+  };
+
   users.users.savecraft-egress = {
     isSystemUser = true;
     group = "savecraft-egress";
@@ -96,7 +110,7 @@ in {
     serviceConfig = {
       Type = "oneshot";
       ExecStartPre = "${pkgs.coreutils}/bin/install -D -m 0600 %d/fixture /var/lib/savecraft-waf-canary/fixtures/blocked-request.json";
-      ExecStart = "${lib.getExe' savecraft-egress "savecraft-egress-canary"} -probe-worker-url https://egress-waf-probe.josh-cc0.workers.dev -probe-auth-file %d/probe-auth -proxy-url https://or-egress.husbuddies.gay -proxy-token-file %d/proxy-token -openrouter-key-file %d/openrouter-key -state-dir /var/lib/savecraft-waf-canary";
+      ExecStart = "${lib.getExe' savecraft-egress "savecraft-egress-canary"} -probe-worker-url https://egress-waf-probe.josh-cc0.workers.dev -probe-auth-file %d/probe-auth -proxy-url https://or-egress.husbuddies.gay -proxy-token-file %d/proxy-token -openrouter-key-file %d/openrouter-key -state-dir /var/lib/savecraft-waf-canary -access-client-id-file %d/access-client-id -access-client-secret-file %d/access-client-secret";
       StateDirectory = "savecraft-waf-canary";
       StateDirectoryMode = "0700";
 
@@ -105,6 +119,8 @@ in {
         "proxy-token:${config.age.secrets."savecraft-egress-token".path}"
         "openrouter-key:${config.age.secrets."savecraft-canary-openrouter-key".path}"
         "fixture:${config.age.secrets."savecraft-canary-fixture".path}"
+        "access-client-id:${config.age.secrets."savecraft-canary-access-client-id".path}"
+        "access-client-secret:${config.age.secrets."savecraft-canary-access-client-secret".path}"
       ];
 
       NoNewPrivileges = true;

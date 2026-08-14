@@ -127,6 +127,18 @@
         "--jinja"
         "--reasoning-format"
         "deepseek"
+        # Server-default sampling = Qwen's thinking-mode recommendation.
+        # Raw Tiltyard seats override per-request via extra_body; these
+        # defaults exist for harness clients (qwen-code) that don't send
+        # sampling parameters.
+        "--temp"
+        "1.0"
+        "--top-p"
+        "0.95"
+        "--top-k"
+        "20"
+        "--min-p"
+        "0.0"
       ];
     in {
       "qwen3.8-27b-iq4xs" = {

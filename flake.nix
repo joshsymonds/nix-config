@@ -631,6 +631,7 @@
           chatgpt-desktop = import ./tests/chatgpt-desktop.nix {
             pkgs = checkPkgs;
             chatgptDesktop = checkPkgs.chatgpt-desktop;
+            chatgptDesktopUnwrapped = checkPkgs.chatgpt-desktop-unwrapped;
           };
           direnv-shell = import ./tests/direnv-shell.nix {inherit pkgs;};
           installer-kit-fixture = import ./tests/installer-kit-fixture.nix {

@@ -1,126 +1,75 @@
 {
   pkgs,
   chatgptDesktop,
+  chatgptDesktopUnwrapped,
 }: let
-  expectedIcon = pkgs.fetchurl {
-    url = "https://images.ctfassets.net/j22is2dtoxu1/intercom-img-d177d076c9a5453052925143/49d5d812b0a6fcc20a14faa8c629d9fb/icon-ios-1024_401x.png";
-    hash = "sha256-55ni+g1BSaLsKPxZXIv7SZC8u0eGSXkbQqz/fN5ugF4=";
+  expectedSources = {
+    "x86_64-linux" = {
+      url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/pool/main/c/chatgpt/chatgpt_26.810.41047_amd64.deb";
+      hash = "sha256-eHFfo80Tb/ZwcNqnaBmtrsxbQumYUVWWWWRdzh+/KvM=";
+    };
+    "aarch64-linux" = {
+      url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/pool/main/c/chatgpt/chatgpt_26.810.41047_arm64.deb";
+      hash = "sha256-mW95PKA5dnb8uc0AIRTJd1XMN0GQfEAPf13c9scMCk4=";
+    };
   };
 
-  recordingChromium = pkgs.writeShellApplication {
-    name = "chromium";
-    text = ''
-      : "''${CHATGPT_TEST_ARGV:?}"
-      printf '%s\n' "$@" > "$CHATGPT_TEST_ARGV"
-    '';
-  };
-
-  behavioralChatgptDesktop = pkgs.callPackage ../pkgs/chatgpt-desktop {
-    chromium = recordingChromium;
-  };
+  # These are strings in passthru, not fetchurl derivations. The check can
+  # therefore inspect both architectures while evaluating only the host
+  # architecture's source.
+  sourceMetadata = chatgptDesktopUnwrapped.passthru.sourceMetadata;
+  hostPayload =
+    {
+      "x86_64-linux" = "linux-x64";
+      "aarch64-linux" = "linux-arm64";
+    }.${
+      pkgs.stdenv.hostPlatform.system
+    };
 in
-  pkgs.runCommand "chatgpt-desktop-check" {
-    nativeBuildInputs = [pkgs.coreutils pkgs.findutils pkgs.gnugrep];
-  } ''
-    set -euo pipefail
+  assert sourceMetadata == expectedSources;
+    pkgs.runCommand "chatgpt-desktop-check" {
+      nativeBuildInputs = [pkgs.coreutils pkgs.findutils pkgs.gnugrep];
+    } ''
+      set -euo pipefail
 
-    launcher=${chatgptDesktop}/bin/chatgpt
-    desktop=${chatgptDesktop}/share/applications/chatgpt.desktop
-    icon=${chatgptDesktop}/share/icons/hicolor/1024x1024/apps/chatgpt.png
+      wrapped=${chatgptDesktop}
+      unwrapped=${chatgptDesktopUnwrapped}
+      launcher="$wrapped/bin/chatgpt"
+      desktop="$wrapped/share/applications/chatgpt.desktop"
+      icon="$wrapped/share/icons/hicolor/256x256/apps/chatgpt.png"
 
-    if ! test -x "$launcher"; then
-      echo "ASSERT FAIL: missing executable $launcher" >&2
-      exit 1
-    fi
-    test -f "$desktop"
-    if ! test -s "$icon"; then
-      echo "ASSERT FAIL: missing icon $icon" >&2
-      exit 1
-    fi
+      test -x "$launcher"
+      test -f "$desktop"
+      test -s "$icon"
+      cmp "$unwrapped/lib/chatgpt/resources/icon-chatgpt.png" "$icon"
+      test -f "$unwrapped/lib/chatgpt/resources/app.asar"
 
-    grep -F -- '${pkgs.chromium}/bin/chromium' "$launcher"
-    grep -F -- '--app=https://chatgpt.com/' "$launcher"
-    grep -F -- '--class=chatgpt' "$launcher"
-    grep -F -- '--no-first-run' "$launcher"
-    grep -F -- '--no-default-browser-check' "$launcher"
-    if grep -F -- '--disable-blink-features=ScrollAnchoring' "$launcher"; then
-      echo "ASSERT FAIL: launcher contains unsupported ScrollAnchoring flag" >&2
-      exit 1
-    fi
-    grep -F -- 'profile_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/chatgpt-desktop"' "$launcher"
-    if ! grep -F -- '${pkgs.coreutils}/bin/mkdir -p -- "$profile_dir"' "$launcher"; then
-      echo "ASSERT FAIL: launcher does not reference ${pkgs.coreutils}/bin/mkdir" >&2
-      exit 1
-    fi
-    grep -F -- '${pkgs.coreutils}/bin/chmod 0700 -- "$profile_dir"' "$launcher"
-    grep -F -- '--user-data-dir="$profile_dir"' "$launcher"
+      test -n "$(find -L "$unwrapped/lib/chatgpt" -type f -name codex -perm -111 -print -quit)"
+      test -n "$(find -L "$unwrapped/lib/chatgpt" -type f -name rg -perm -111 -print -quit)"
+      test -n "$(find -L "$unwrapped/lib/chatgpt" -type f -name codex-code-mode-host -perm -111 -print -quit)"
 
-    grep -Fx 'Name=ChatGPT' "$desktop"
-    grep -Fx 'StartupWMClass=chatgpt' "$desktop"
-    desktop_exec="$(sed -n 's/^Exec=//p' "$desktop")"
-    test -x "$desktop_exec"
-    test "$(readlink -f "$desktop_exec")" = "$(readlink -f "$launcher")"
+      while IFS= read -r prebuild; do
+        case "$(basename "$prebuild")" in
+          ${hostPayload}) ;;
+          *)
+            echo "ASSERT FAIL: foreign direct prebuild directory remains: $prebuild" >&2
+            exit 1
+            ;;
+        esac
+      done < <(find -L "$unwrapped/lib/chatgpt" -type d -name prebuilds -exec find {} -mindepth 1 -maxdepth 1 -type d -print \;)
+      test -z "$(find -L "$unwrapped/lib/chatgpt" -type f -name '*.musl.node' -print -quit)"
 
-    cmp ${expectedIcon} "$icon"
+      grep -F -- '--disable-blink-features=ScrollAnchoring' "$unwrapped/bin/chatgpt"
+      grep -F -- '--ozone-platform-hint=auto' "$unwrapped/bin/chatgpt"
+      grep -F -- '--password-store=gnome-libsecret' "$unwrapped/bin/chatgpt"
+      grep -Fx 'Exec=chatgpt %U' "$desktop"
+      grep -Fx 'Icon=chatgpt' "$desktop"
+      grep -Fx 'StartupWMClass=Chatgpt' "$desktop"
 
-    test ! -e ${chatgptDesktop}/bin/codex-desktop
-    test ! -e ${chatgptDesktop}/share/applications/codex-desktop.desktop
-    residue_path="$(find -L ${chatgptDesktop} \( -iname '*codex*' -o -iname '*updat*' \) -print -quit)"
-    if test -n "$residue_path"; then
-      echo "ASSERT FAIL: ChatGPT wrapper contains residue path $residue_path" >&2
-      exit 1
-    fi
-    if grep -RiE 'codex|update(r|s|check)' ${chatgptDesktop}; then
-      echo "ASSERT FAIL: ChatGPT wrapper contains Codex or updater residue" >&2
-      exit 1
-    fi
+      if grep -E -i 'chromium|chatgpt\.com|--app=|--user-data-dir|chrome-chatgpt' "$launcher" "$desktop"; then
+        echo "ASSERT FAIL: native ChatGPT package contains Chromium app-mode/profile launcher behavior" >&2
+        exit 1
+      fi
 
-    behavioral_launcher=${behavioralChatgptDesktop}/bin/chatgpt
-    export CHATGPT_TEST_ARGV="$PWD/argv-xdg"
-    export XDG_DATA_HOME="$PWD/xdg-data"
-    "$behavioral_launcher"
-    expected_argv="$(printf '%s\n' \
-      '--app=https://chatgpt.com/' \
-      '--class=chatgpt' \
-      "--user-data-dir=$XDG_DATA_HOME/chatgpt-desktop" \
-      '--no-first-run' \
-      '--no-default-browser-check')"
-    actual_argv="$(<"$CHATGPT_TEST_ARGV")"
-    if test "$actual_argv" != "$expected_argv"; then
-      echo "ASSERT FAIL: launcher passed unexpected arguments with XDG_DATA_HOME set" >&2
-      exit 1
-    fi
-    profile_mode="$(stat -c '%a' "$XDG_DATA_HOME/chatgpt-desktop")"
-    if test "$profile_mode" != 700; then
-      echo "ASSERT FAIL: ChatGPT profile mode is $profile_mode, expected 700" >&2
-      exit 1
-    fi
-
-    unset XDG_DATA_HOME
-    export HOME="$PWD/home"
-    export CHATGPT_TEST_ARGV="$PWD/argv-default"
-    default_profile="$HOME/.local/share/chatgpt-desktop"
-    mkdir -p "$default_profile"
-    chmod 0755 "$default_profile"
-    touch "$default_profile/existing-state"
-    "$behavioral_launcher"
-    expected_argv="$(printf '%s\n' \
-      '--app=https://chatgpt.com/' \
-      '--class=chatgpt' \
-      "--user-data-dir=$default_profile" \
-      '--no-first-run' \
-      '--no-default-browser-check')"
-    actual_argv="$(<"$CHATGPT_TEST_ARGV")"
-    if test "$actual_argv" != "$expected_argv"; then
-      echo "ASSERT FAIL: launcher passed unexpected arguments with XDG_DATA_HOME unset" >&2
-      exit 1
-    fi
-    test -e "$default_profile/existing-state"
-    profile_mode="$(stat -c '%a' "$default_profile")"
-    if test "$profile_mode" != 700; then
-      echo "ASSERT FAIL: existing ChatGPT profile mode is $profile_mode, expected 700" >&2
-      exit 1
-    fi
-
-    touch "$out"
-  ''
+      touch "$out"
+    ''

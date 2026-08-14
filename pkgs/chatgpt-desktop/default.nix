@@ -1,55 +1,222 @@
+# OpenAI's official preview ChatGPT desktop app for Linux.
+#
+# This is the unwrapped derivation. The deployed package is the FHS wrapper in
+# ./fhs.nix, which gives the bundled Work/Codex subprocesses the tools they
+# expect on a normal Linux filesystem.
 {
   lib,
-  chromium,
-  coreutils,
+  stdenv,
   fetchurl,
-  makeDesktopItem,
-  runCommand,
-  symlinkJoin,
-  writeShellApplication,
+  dpkg,
+  autoPatchelfHook,
+  wrapGAppsHook3,
+  makeWrapper,
+  alsa-lib,
+  at-spi2-atk,
+  at-spi2-core,
+  atk,
+  cairo,
+  cups,
+  dbus,
+  expat,
+  fontconfig,
+  freetype,
+  graphite2,
+  gdk-pixbuf,
+  glib,
+  gtk3,
+  libcap_ng,
+  libGL,
+  libayatana-appindicator,
+  libdrm,
+  libgbm,
+  libglvnd,
+  libnotify,
+  libpulseaudio,
+  libseccomp,
+  libsecret,
+  libusb1,
+  libuuid,
+  libx11,
+  libxcb,
+  libxcomposite,
+  libxdamage,
+  libxext,
+  libxfixes,
+  libxi,
+  libxkbcommon,
+  libxrandr,
+  libxrender,
+  libxscrnsaver,
+  libxshmfence,
+  libxtst,
+  nspr,
+  nss,
+  pango,
+  systemd,
 }: let
-  icon = fetchurl {
-    url = "https://images.ctfassets.net/j22is2dtoxu1/intercom-img-d177d076c9a5453052925143/49d5d812b0a6fcc20a14faa8c629d9fb/icon-ios-1024_401x.png";
-    hash = "sha256-55ni+g1BSaLsKPxZXIv7SZC8u0eGSXkbQqz/fN5ugF4=";
+  version = "26.810.41047";
+  debBase = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/pool/main/c/chatgpt";
+
+  sourceMetadata = {
+    "x86_64-linux" = {
+      url = "${debBase}/chatgpt_${version}_amd64.deb";
+      hash = "sha256-eHFfo80Tb/ZwcNqnaBmtrsxbQumYUVWWWWRdzh+/KvM=";
+    };
+    "aarch64-linux" = {
+      url = "${debBase}/chatgpt_${version}_arm64.deb";
+      hash = "sha256-mW95PKA5dnb8uc0AIRTJd1XMN0GQfEAPf13c9scMCk4=";
+    };
   };
 
-  launcher = writeShellApplication {
-    name = "chatgpt";
-    text = ''
-      profile_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/chatgpt-desktop"
-      ${lib.getExe' coreutils "mkdir"} -p -- "$profile_dir"
-      ${lib.getExe' coreutils "chmod"} 0700 -- "$profile_dir"
-
-      exec ${lib.getExe chromium} \
-        --app=https://chatgpt.com/ \
-        --class=chatgpt \
-        --user-data-dir="$profile_dir" \
-        --no-first-run \
-        --no-default-browser-check
-    '';
-  };
-
-  desktopItem = makeDesktopItem {
-    name = "chatgpt";
-    desktopName = "ChatGPT";
-    exec = "${launcher}/bin/chatgpt";
-    icon = "chatgpt";
-    startupWMClass = "chatgpt";
-    categories = ["Network" "InstantMessaging"];
-  };
-
-  iconPackage = runCommand "chatgpt-icon" {} ''
-    install -Dm644 ${icon} "$out/share/icons/hicolor/1024x1024/apps/chatgpt.png"
-  '';
+  srcs = lib.mapAttrs (_: source: fetchurl source) sourceMetadata;
+  hostSystem = stdenv.hostPlatform.system;
+  hostPayload =
+    {
+      "x86_64-linux" = "linux-x64";
+      "aarch64-linux" = "linux-arm64";
+    }
+    .${
+      hostSystem
+    } or (throw "chatgpt-desktop: unsupported system ${hostSystem}");
 in
-  symlinkJoin {
-    name = "chatgpt-desktop";
-    paths = [launcher desktopItem iconPackage];
+  stdenv.mkDerivation (finalAttrs: {
+    pname = "chatgpt-desktop-unwrapped";
+    inherit version;
+
+    src = srcs.${hostSystem} or (throw "chatgpt-desktop: unsupported system ${hostSystem}");
+
+    nativeBuildInputs = [
+      dpkg
+      autoPatchelfHook
+      wrapGAppsHook3
+      makeWrapper
+    ];
+
+    buildInputs = [
+      alsa-lib
+      at-spi2-atk
+      at-spi2-core
+      atk
+      cairo
+      cups
+      dbus
+      expat
+      fontconfig
+      freetype
+      graphite2
+      gdk-pixbuf
+      glib
+      gtk3
+      libayatana-appindicator
+      libcap_ng
+      libdrm
+      libgbm
+      libnotify
+      libseccomp
+      libsecret
+      libusb1
+      libuuid
+      libx11
+      libxcb
+      libxcomposite
+      libxdamage
+      libxext
+      libxfixes
+      libxi
+      libxkbcommon
+      libxrandr
+      libxrender
+      libxscrnsaver
+      libxshmfence
+      libxtst
+      nspr
+      nss
+      pango
+      systemd
+      stdenv.cc.cc.lib
+    ];
+
+    runtimeDependencies = [
+      libGL
+      libglvnd
+      libpulseaudio
+      libsecret
+      (lib.getLib systemd)
+    ];
+
+    # Electron optionally dlopen()s these Qt Ozone shims when present in the
+    # upstream payload. They are not required on the GTK runtime path, so
+    # permit only their exact SONAMEs rather than masking unrelated misses.
+    autoPatchelfIgnoreMissingDeps = [
+      "libQt5Core.so.5"
+      "libQt5Gui.so.5"
+      "libQt5Widgets.so.5"
+      "libQt6Core.so.6"
+      "libQt6Gui.so.6"
+      "libQt6Widgets.so.6"
+    ];
+
+    dontConfigure = true;
+    dontBuild = true;
+    dontWrapGApps = true;
+
+    unpackPhase = ''
+      runHook preUnpack
+      dpkg-deb --fsys-tarfile "$src" | tar -x --no-same-owner --no-same-permissions
+      runHook postUnpack
+    '';
+
+    installPhase = ''
+      runHook preInstall
+
+      mkdir -p "$out"
+      mkdir -p "$out/lib"
+      cp -r usr/lib/chatgpt "$out/lib/"
+
+      # Keep only the native glibc prebuild. The upstream bundle carries
+      # platform and musl variants alongside it; pruning only direct children
+      # of `prebuilds` avoids touching unrelated application directories.
+      find "$out/lib/chatgpt" -type d -name prebuilds -print0 | while IFS= read -r -d "" prebuilds; do
+        find "$prebuilds" -mindepth 1 -maxdepth 1 -type d ! -name "${hostPayload}" -exec rm -rf {} +
+      done
+      find "$out/lib/chatgpt" -type f -name '*.musl.node' -delete
+
+      install -Dm644 usr/share/applications/chatgpt.desktop "$out/share/applications/chatgpt.desktop"
+      sed -i \
+        -e 's|^Exec=.*|Exec=chatgpt %U|' \
+        -e 's|^Icon=.*|Icon=chatgpt|' \
+        -e 's|^StartupWMClass=.*|StartupWMClass=Chatgpt|' \
+        "$out/share/applications/chatgpt.desktop"
+      grep -q '^Exec=' "$out/share/applications/chatgpt.desktop" || echo 'Exec=chatgpt %U' >> "$out/share/applications/chatgpt.desktop"
+      grep -q '^Icon=' "$out/share/applications/chatgpt.desktop" || echo 'Icon=chatgpt' >> "$out/share/applications/chatgpt.desktop"
+      grep -q '^StartupWMClass=' "$out/share/applications/chatgpt.desktop" || echo 'StartupWMClass=Chatgpt' >> "$out/share/applications/chatgpt.desktop"
+      install -Dm644 usr/lib/chatgpt/resources/icon-chatgpt.png \
+        "$out/share/icons/hicolor/256x256/apps/chatgpt.png"
+
+      runHook postInstall
+    '';
+
+    postFixup = ''
+      makeWrapper "$out/lib/chatgpt/codex-launcher" "$out/bin/chatgpt" \
+        "''${gappsWrapperArgs[@]}" \
+        --add-flags "--disable-blink-features=ScrollAnchoring" \
+        --add-flags "--ozone-platform-hint=auto" \
+        --add-flags "--password-store=gnome-libsecret"
+    '';
+
+    passthru = {
+      inherit sourceMetadata;
+      deb = finalAttrs.src;
+    };
 
     meta = {
-      description = "Chat-only ChatGPT web app for Chromium";
-      homepage = "https://chatgpt.com/";
-      platforms = lib.platforms.linux;
+      description = "Official preview ChatGPT desktop app with bundled ChatGPT, Work, and Codex";
+      homepage = "https://chatgpt.com";
+      downloadPage = "https://openai.com/chatgpt/download/";
+      license = lib.licenses.unfree;
+      sourceProvenance = [lib.sourceTypes.binaryNativeCode];
+      platforms = ["x86_64-linux" "aarch64-linux"];
       mainProgram = "chatgpt";
     };
-  }
+  })

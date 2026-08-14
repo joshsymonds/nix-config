@@ -194,10 +194,11 @@ in {
       signal-desktop = electronNoScrollAnchoring prev.signal-desktop "signal-desktop";
       vesktop = electronNoScrollAnchoring prev.vesktop "vesktop";
 
-      # ChatGPT Desktop: a dedicated Chromium app-mode window for the normal
-      # chatgpt.com conversation UI. The local package owns its isolated
-      # browser profile, desktop entry, icon, and niri window class.
-      chatgpt-desktop = final.callPackage ../pkgs/chatgpt-desktop {};
+      # ChatGPT Desktop: OpenAI's official native Linux preview with bundled
+      # ChatGPT, Work, and Codex. The unwrapped .deb package and FHS wrapper
+      # mirror the Claude Desktop packaging structure.
+      chatgpt-desktop-unwrapped = final.callPackage ../pkgs/chatgpt-desktop {};
+      chatgpt-desktop = final.callPackage ../pkgs/chatgpt-desktop/fhs.nix {};
 
       # Claude Desktop (the chat app — not Claude Code): Anthropic's official
       # native-Linux build, packaged locally from their apt repo. See

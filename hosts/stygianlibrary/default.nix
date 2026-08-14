@@ -97,11 +97,11 @@
     openWebUI.enable = false;
     models = let
       base = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main";
-      qwenFlags = [
-        "--fit"
-        "on"
-        "--fit-target"
-        "256"
+      # Explicit -ngl instead of --fit: fit mis-probes when anything else
+      # holds VRAM, and these splits are measured on this exact card
+      # (headless, 2026-08-14): iq4xs 64/65 = 36.4 tok/s gen / 243 pp;
+      # q3kxl 65/65 with -ub 2048 = 52.8 gen / 460 pp.
+      qwenCommon = [
         "-c"
         "32768"
         "-np"
@@ -110,10 +110,6 @@
         "on"
         "--mlock"
         "--no-mmap"
-        "-b"
-        "512"
-        "-ub"
-        "512"
         "-ctk"
         "q8_0"
         "-ctv"
@@ -125,11 +121,11 @@
     in {
       "qwen3.8-27b-iq4xs" = {
         ggufUrl = "${base}/Qwen3.8-27B-IQ4_XS.gguf";
-        flags = qwenFlags;
+        flags = qwenCommon ++ ["-ngl" "64" "-b" "512" "-ub" "512"];
       };
       "qwen3.8-27b-q3kxl" = {
         ggufUrl = "${base}/Qwen3.8-27B-UD-Q3_K_XL.gguf";
-        flags = qwenFlags;
+        flags = qwenCommon ++ ["-ngl" "999" "-b" "2048" "-ub" "2048"];
       };
     };
   };

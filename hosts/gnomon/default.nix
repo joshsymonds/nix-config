@@ -254,14 +254,16 @@ in
         # extra_body (llama-swap shell-parses cmd, so JSON flags can't
         # go here anyway — see gemma4-12b-it note above). --jinja for
         # tool calling; --reasoning-format deepseek streams thinking as
-        # reasoning_content, which tiltyard's decoder consumes.
+        # reasoning_content, which tiltyard's decoder consumes. Explicit
+        # -ngl (measured 2026-08-14 alongside the desktop's ~1.5 GB VRAM;
+        # --fit mis-probes when other processes hold VRAM): iq4xs 53/65
+        # ~= 12 tok/s gen, q3kxl 63/65 ~= 28 tok/s gen. stygianlibrary
+        # runs the same models headless at higher splits.
         "qwen3.8-27b-iq4xs" = {
           ggufUrl = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-IQ4_XS.gguf";
           flags = [
-            "--fit"
-            "on"
-            "--fit-target"
-            "256"
+            "-ngl"
+            "53"
             "-c"
             "32768"
             "-np"
@@ -286,10 +288,8 @@ in
         "qwen3.8-27b-q3kxl" = {
           ggufUrl = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-Q3_K_XL.gguf";
           flags = [
-            "--fit"
-            "on"
-            "--fit-target"
-            "256"
+            "-ngl"
+            "63"
             "-c"
             "32768"
             "-np"

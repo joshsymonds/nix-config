@@ -247,6 +247,70 @@ in
             "--jinja"
           ];
         };
+        # Qwen3.8-27B (released 2026-08-15 JST) — Tiltyard local-pilot
+        # seats. Unsloth GGUFs, arch qwen35, MTP tensors stripped (no
+        # spec-draft flags). NO sampler flags baked in: the Tiltyard
+        # cohorts pass sampling + chat_template_kwargs per-request via
+        # extra_body (llama-swap shell-parses cmd, so JSON flags can't
+        # go here anyway — see gemma4-12b-it note above). --jinja for
+        # tool calling; --reasoning-format deepseek streams thinking as
+        # reasoning_content, which tiltyard's decoder consumes.
+        "qwen3.8-27b-iq4xs" = {
+          ggufUrl = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-IQ4_XS.gguf";
+          flags = [
+            "--fit"
+            "on"
+            "--fit-target"
+            "256"
+            "-c"
+            "32768"
+            "-np"
+            "1"
+            "-fa"
+            "on"
+            "--mlock"
+            "--no-mmap"
+            "-b"
+            "512"
+            "-ub"
+            "512"
+            "-ctk"
+            "q8_0"
+            "-ctv"
+            "q8_0"
+            "--jinja"
+            "--reasoning-format"
+            "deepseek"
+          ];
+        };
+        "qwen3.8-27b-q3kxl" = {
+          ggufUrl = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-UD-Q3_K_XL.gguf";
+          flags = [
+            "--fit"
+            "on"
+            "--fit-target"
+            "256"
+            "-c"
+            "32768"
+            "-np"
+            "1"
+            "-fa"
+            "on"
+            "--mlock"
+            "--no-mmap"
+            "-b"
+            "512"
+            "-ub"
+            "512"
+            "-ctk"
+            "q8_0"
+            "-ctv"
+            "q8_0"
+            "--jinja"
+            "--reasoning-format"
+            "deepseek"
+          ];
+        };
       };
     };
 
@@ -455,16 +519,9 @@ in
       "amd_pstate=active"
       "mitigations=auto"
       "acpi_enforce_resources=lax"
-      # ── Quiet boot (Layer A) ──────────────────────────────────────────
-      # Suppress the kernel/initramfs text that scrolls between the
-      # firmware logo ending and DM/Plymouth/halmasuit taking over the
-      # framebuffer. The firmware-painted pixels stay on screen because
-      # simpledrm inherits the firmware framebuffer; nothing overwrites
-      # them until userspace does. To re-enable boot diagnostics on a
-      # one-off basis, remove "quiet" and "loglevel=3" via the
-      # systemd-boot editor (press 'e' at the boot menu); the journal
-      # always retains the messages regardless of console visibility.
-      "quiet"
+      # Quiet boot (Epic #42 Layer A) removed 2026-08-14: the suppressed
+      # console made the stygianlibrary boot-hang triage impossible —
+      # boot messages stay visible on both hosts now.
       # Epic #42 R6: previously this set `loglevel=1` here, but NixOS
       # appends `loglevel=${toString boot.consoleLogLevel}` AFTER the
       # explicit kernelParams, and consoleLogLevel defaults to 4. The
@@ -476,11 +533,6 @@ in
       # the cmdline and makes the suppression actually take effect.
       # Initramfs udev quiet (the gen-399 t+6.6s `nvidia: loading
       # out-of-tree module ...` line) and post-pivot udev quiet.
-      "rd.udev.log_priority=3"
-      "udev.log_level=3"
-      "rd.systemd.show_status=false"
-      "systemd.show_status=false"
-      "vt.global_cursor_default=0"
       "fbcon=nodefer"
       # ── Boot at panel native (Layer B) ────────────────────────────────
       # Hint the kernel to set the simpledrm framebuffer at the monitor's
@@ -493,17 +545,10 @@ in
       "video=2560x1440"
     ];
 
-    # Epic #42 R6: lower console_loglevel so kernel ERR/WARN (3/4) and
-    # NOTICE (5) don't reach the physical console between BIOS handoff
-    # and halmasuit's first frame. Only EMERG (0) prints at level 1.
-    # NixOS appends `loglevel=${toString boot.consoleLogLevel}` to
-    # kernelParams AFTER the list above — this option is the
-    # authoritative source for the `loglevel=` cmdline token. The
-    # `RDSEED32 is broken. Please update your firmware.` message from
-    # gen-404 (level 3 ERR) was visible because the default of 4 lets
-    # ERR through; 1 suppresses it. journalctl -k still records
-    # everything regardless of console visibility.
-    boot.consoleLogLevel = 1;
+    # consoleLogLevel left at the NixOS default (4): boot diagnostics
+    # visible on console (2026-08-14, same change as dropping quiet
+    # above). The Epic #42 R6 `loglevel=1` suppression is retired; the
+    # RDSEED32 firmware nag returns to the console, which is fine.
 
     # ── it87 fan tach / PWM (out-of-tree) ───────────────────────────────
     # Mainline it87 doesn't recognize the IT8689E/IT8696E chip IDs on

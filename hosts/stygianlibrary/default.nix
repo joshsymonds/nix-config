@@ -41,10 +41,15 @@
   imports = [
     ./disko.nix
     ./hardware-configuration.nix
-    # NO halmasuit, NO dms-niri, NO gpu-nvidia on the host: stygianlibrary
-    # is a VFIO HOST that passes the entire NVIDIA GPU to a guest VM
-    # where halmasuit runs. The host must NOT claim the GPU.
+    # Repurposed 2026-08-14 (halmasuit VFIO testing paused): the host now
+    # claims the GPU itself and runs the same llama-swap inference stack
+    # as gnomon, serving Tiltyard local-model pilots headless. VFIO
+    # binding removed below; re-add it if halmasuit testing resumes.
+    # Still NO halmasuit / dms-niri (headless is the point — the full
+    # 16 GB of VRAM stays free for model weights).
     # No lanzaboote (test rig, no sensitive data; saves install complexity).
+    ../../modules/hardware/gpu-nvidia.nix
+    ../../modules/services/inference-stack.nix
   ];
 
   # ── Performance ──────────────────────────────────────────────────────
@@ -55,54 +60,79 @@
   nixpkgs.hostPlatform = "x86_64-linux";
   nixpkgs.config.allowUnfree = true;
 
-  # ── VFIO: bind NVIDIA RTX 5070 Ti to vfio-pci at boot ────────────────
-  # The whole point of stygianlibrary as a halmasuit test rig: pass
-  # the 5070 Ti to a guest VM where halmasuit runs against real NVIDIA
-  # hardware, reproducing gnomon's behavior bit-for-bit. The host
-  # itself never uses the GPU — it's headless from the GPU's
-  # perspective, displaying only its TTY via simpledrm/fbcon on the
-  # motherboard's framebuffer (or nothing at all once VFIO claims).
-  #
-  # IOMMU group 13 on gnomon contains:
-  #   10de:2c05 — NVIDIA GB203 (RTX 5070 Ti) VGA controller
-  #   10de:22e9 — NVIDIA GB203 HDMI audio controller
-  # Both must be bound to vfio-pci (audio function is in the same
-  # group — kernel won't let us pass just one). The IDs are identical
-  # on hardware-identical stygianlibrary.
+  # ── Kernel params ────────────────────────────────────────────────────
+  # VFIO binding (vfio-pci.ids=…) removed 2026-08-14 — the host claims
+  # the 5070 Ti for the inference stack now. Quiet-boot suppression
+  # also removed (same change as gnomon): the silent console made the
+  # 2026-08-14 "boot hang" (actually a dark VFIO'd display) undiagnosable
+  # at the machine.
   boot.kernelParams = [
     "amd_pstate=active"
     "mitigations=auto"
     "acpi_enforce_resources=lax"
-
-    # IOMMU: required for VFIO. amd_iommu=on for AMD; iommu=pt
-    # (pass-through) skips DMA-remapping for host devices (faster +
-    # avoids quirks). Has zero effect on the passed-through guest
-    # devices.
-    "amd_iommu=on"
-    "iommu=pt"
-
-    # Bind the NVIDIA GPU + audio to vfio-pci BEFORE the nvidia driver
-    # has a chance to claim them. This is the key VFIO directive on
-    # single-GPU passthrough systems.
-    "vfio-pci.ids=10de:2c05,10de:22e9"
-
-    "quiet"
-    "rd.udev.log_priority=3"
-    "udev.log_level=3"
-    "rd.systemd.show_status=false"
-    "systemd.show_status=false"
-    "vt.global_cursor_default=0"
     "fbcon=nodefer"
   ];
 
-  # Load vfio-pci in initrd so it claims the NVIDIA device before
-  # any in-tree driver gets a chance. Order matters: vfio_pci AFTER
-  # vfio_iommu_type1, both BEFORE anything that would touch the GPU.
-  boot.initrd.kernelModules = [
-    "vfio_pci"
-    "vfio"
-    "vfio_iommu_type1"
-  ];
+  # ── GPU: host-claimed NVIDIA for llama.cpp ───────────────────────────
+  # Same 610.43.02 new-feature-branch pin as gnomon (Blackwell fixes;
+  # see gnomon/default.nix for the Xid 109 rationale). Same cachyos
+  # kernel, so the pin carries over verbatim.
+  hardware.gpu-nvidia = {
+    enable = true;
+    package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
+      version = "610.43.02";
+      sha256_64bit = "sha256-MDSgVLtM33dS/43CclZMsQVROAS/9TU4lFkBsWyndGM=";
+      openSha256 = "sha256-hP5NVZZ4vGsACHLmUDKq4uckpd/kn1GxCSYnnJfAuBs=";
+      settingsSha256 = "sha256-0YAhufRgjDW+uR+kjaTb154fibpcDw8QowfrucoZsKE=";
+      persistencedSha256 = "sha256-Whgv9X+v2fRhzliOl2LzltY9v1SxDafFfv3IUPqj/hk=";
+    };
+  };
+
+  # ── Inference stack: llama-swap + llama-server (mirror of gnomon) ────
+  # Headless llama-swap on 11434 (loopback; reach it over an SSH
+  # tunnel), no Open-WebUI. Model entries mirror gnomon's qwen3.8
+  # pair — flag rationale lives with gnomon's entries.
+  services.inference-stack = {
+    enable = true;
+    openWebUI.enable = false;
+    models = let
+      base = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main";
+      qwenFlags = [
+        "--fit"
+        "on"
+        "--fit-target"
+        "256"
+        "-c"
+        "32768"
+        "-np"
+        "1"
+        "-fa"
+        "on"
+        "--mlock"
+        "--no-mmap"
+        "-b"
+        "512"
+        "-ub"
+        "512"
+        "-ctk"
+        "q8_0"
+        "-ctv"
+        "q8_0"
+        "--jinja"
+        "--reasoning-format"
+        "deepseek"
+      ];
+    in {
+      "qwen3.8-27b-iq4xs" = {
+        ggufUrl = "${base}/Qwen3.8-27B-IQ4_XS.gguf";
+        flags = qwenFlags;
+      };
+      "qwen3.8-27b-q3kxl" = {
+        ggufUrl = "${base}/Qwen3.8-27B-UD-Q3_K_XL.gguf";
+        flags = qwenFlags;
+      };
+    };
+  };
 
   # Add joshsymonds to libvirtd / kvm groups so they can drive VMs
   # without sudo every time. Mirror's NixOS's standard libvirtd UX.

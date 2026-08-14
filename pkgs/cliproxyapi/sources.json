@@ -1,0 +1,21 @@
+{
+  "version": "7.2.131",
+  "sources": {
+    "x86_64-linux": {
+      "asset": "linux_amd64",
+      "hash": "sha256-iqC1/r9Tx+8qJZi3FufzJqLs95I+q7TNAFYXGwYjvco="
+    },
+    "aarch64-linux": {
+      "asset": "linux_aarch64",
+      "hash": "sha256-4d4ERLR1KMDnEl213gnxUTQ+WsJslrvLx+8koaJhuGc="
+    },
+    "x86_64-darwin": {
+      "asset": "darwin_amd64",
+      "hash": "sha256-NibEJ7oFJvbSXYMGMZW8QY9bJCsQjeB3jYh+C43jMj8="
+    },
+    "aarch64-darwin": {
+      "asset": "darwin_aarch64",
+      "hash": "sha256-7GOk+Z2gKe0E2Dc8FxUidNhfUkySwbLaNrnHDLrdCv4="
+    }
+  }
+}

@@ -99,11 +99,16 @@
       base = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main";
       # Explicit -ngl instead of --fit: fit mis-probes when anything else
       # holds VRAM, and these splits are measured on this exact card
-      # (headless, 2026-08-14): iq4xs 64/65 = 36.4 tok/s gen / 243 pp;
-      # q3kxl 65/65 with -ub 2048 = 52.8 gen / 460 pp.
+      # (headless, 2026-08-14): iq4xs 58/65 at 96k ctx = 20.6 tok/s gen /
+      # 134 pp (64/65 at 32k did 36.4/243); q3kxl 65/65 = 52.8 gen / 460 pp.
+      # 96k window + q4 KV: attempt1 of the Tiltyard pilot truncated the
+      # subagent-chain scenario at 32k. q4_0 KV keeps the bigger window
+      # affordable (q8 at 96k cost 3.1 GB); -ctxcp/--cache-ram give the
+      # hybrid-SSM arch restorable prompt states so interleaved eval
+      # cells stop reprocessing full transcripts every swap.
       qwenCommon = [
         "-c"
-        "32768"
+        "98304"
         "-np"
         "1"
         "-fa"
@@ -111,9 +116,14 @@
         "--mlock"
         "--no-mmap"
         "-ctk"
-        "q8_0"
+        "q4_0"
         "-ctv"
-        "q8_0"
+        "q4_0"
+        "-ctxcp"
+        "8"
+        "--cache-ram"
+        "16384"
+        "--no-context-shift"
         "--jinja"
         "--reasoning-format"
         "deepseek"
@@ -121,11 +131,11 @@
     in {
       "qwen3.8-27b-iq4xs" = {
         ggufUrl = "${base}/Qwen3.8-27B-IQ4_XS.gguf";
-        flags = qwenCommon ++ ["-ngl" "64" "-b" "512" "-ub" "512"];
+        flags = qwenCommon ++ ["-ngl" "58" "-b" "512" "-ub" "512"];
       };
       "qwen3.8-27b-q3kxl" = {
         ggufUrl = "${base}/Qwen3.8-27B-UD-Q3_K_XL.gguf";
-        flags = qwenCommon ++ ["-ngl" "999" "-b" "2048" "-ub" "2048"];
+        flags = qwenCommon ++ ["-ngl" "62" "-b" "512" "-ub" "512"];
       };
     };
   };

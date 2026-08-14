@@ -61,8 +61,10 @@ Before searching, gather:
 - **What the user already tried**
 
 For NixOS + proton-cachyos + Blackwell + niri specifically: most "X is
-broken in gamescope" reports translate to "use `PROTON_USE_WAYLAND=1` and
-skip gamescope, then check the title-specific fix."
+broken in gamescope" reports translate to "start with proton-cachyos's
+compatibility-first X11/Xwayland default and skip gamescope." When research
+identifies native Wine Wayland as the title-specific fix, opt that title in
+with `PROTON_USE_WAYLAND=1 %command%`.
 
 ### Phase 2: Six-Source Research (30 min, time-boxed)
 

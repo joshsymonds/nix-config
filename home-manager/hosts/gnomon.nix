@@ -160,10 +160,10 @@
     - niri + DankMaterialShell desktop, Wayland, lanzaboote-signed boot
 
     ## Role
-    Linux gaming + GPU workstation. Steam/Proton (native Wayland), 1Password GUI,
-    Bluetooth controllers/headphones. The RTX 5070 Ti makes this the local
-    CUDA / inference box. The 9800X3D is tuned for game latency, not parallel
-    throughput.
+    Linux gaming + GPU workstation. Steam/Proton (Xwayland by default; native
+    Wine Wayland per-title), 1Password GUI, Bluetooth controllers/headphones.
+    The RTX 5070 Ti makes this the local CUDA / inference box. The 9800X3D is
+    tuned for game latency, not parallel throughput.
   '';
 
   # Caps Lock → Escape is handled by keyd at the evdev layer (see
@@ -364,14 +364,14 @@
     };
   };
 
-  # Proton/game env defaults (PROTON_USE_WAYLAND, NVAPI, vkd3d/dxvk iGPU
-  # filter) live in the proton-cachyos user_settings.py baked by the gaming
-  # overlay (overlays/default.nix), NOT here. They were previously set as niri
-  # session env vars on the theory that niri import-environment'd them to
-  # Steam — it doesn't, and Steam isn't spawned from niri's env anyway, so
-  # they never reached Proton games (the game ran on XWayland, not winewayland).
-  # Per-game override still works via Steam launch options, e.g.
-  # `PROTON_USE_WAYLAND=0 %command%`.
+  # Proton's NVAPI and vkd3d/dxvk iGPU-filter defaults live in the
+  # proton-cachyos user_settings.py baked by the gaming overlay
+  # (overlays/default.nix), NOT here. PROTON_USE_WAYLAND is deliberately
+  # omitted there, so games inherit proton-cachyos's compatibility-first
+  # X11/Xwayland display driver. Opt individual titles into native Wine
+  # Wayland with the Steam launch option `PROTON_USE_WAYLAND=1 %command%`.
+  # These settings were previously niri session env vars, but Steam isn't
+  # spawned from niri's environment, so they never reached Proton games.
 
   programs.niri.settings.window-rules = [
     # Zoom on XWayland (via xwayland-satellite). xdg-decoration doesn't
@@ -403,12 +403,12 @@
       open-floating = true;
     }
     # Pin Steam/Proton games to the leftmost monitor (the gaming monitor,
-    # CDL25Z3 at x=0). Native-Wayland Proton games capture the FPS camera
-    # with a oneshot zwp_locked_pointer; moving such a window across outputs
-    # (meta+shift+h/l) transiently drops pointer focus, which destroys the
-    # oneshot lock — niri's follow-the-window cursor warp doesn't re-arm it,
-    # so the cursor escapes and clicks stop registering. Opening games on the
-    # monitor we actually play on sidesteps the cross-output move entirely.
+    # CDL25Z3 at x=0). Proton titles opted into native Wine Wayland capture the
+    # FPS camera with a oneshot zwp_locked_pointer; moving such a window across
+    # outputs (meta+shift+h/l) transiently drops pointer focus, which destroys
+    # the oneshot lock — niri's follow-the-window cursor warp doesn't re-arm
+    # it, so the cursor escapes and clicks stop registering. Opening games on
+    # the monitor we actually play on sidesteps the cross-output move entirely.
     # Every Steam title reports app-id steam_app_<id> (Satisfactory = 526870).
     {
       matches = [{app-id = "^steam_app_";}];

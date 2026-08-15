@@ -389,18 +389,21 @@ in
     # the default in Steam → Settings → Compatibility ("Run other titles
     # with…").
     #
-    # The shared gaming overlay bakes the NVAPI / iGPU-filter defaults into
-    # proton-cachyos's user_settings.py. It intentionally omits
-    # PROTON_USE_WAYLAND, inheriting proton-cachyos's compatibility-first X11
-    # driver through Xwayland. A per-title Steam launch option can opt into
-    # native Wine Wayland with `PROTON_USE_WAYLAND=1 %command%`.
+    # The native-Wayland / NVAPI / iGPU-filter defaults that proton games want
+    # are set declaratively as niri session env vars (home-manager/hosts/
+    # gnomon.nix → programs.niri.settings.environment), not a wrapper compat
+    # tool: PROTON_USE_WAYLAND (winewayland.drv straight to niri — the path
+    # that reliably renders RE Engine titles), PROTON_ENABLE_NVAPI (DLSS/RT in
+    # PRAGMATA, RE4R, MH Wilds, DD2), and VKD3D/DXVK device filters (hide the
+    # Raphael iGPU so UE5 doesn't software-render on its fake-huge GTT "VRAM").
+    # Per-game overrides still work via Steam launch options, e.g.
+    # `PROTON_USE_WAYLAND=0 %command%` for a title whose winewayland breaks.
     #
-    # We do NOT use gamescope. For titles opted into native Wine Wayland,
-    # nesting it forces them back onto XWayland (gamescope never exposes
-    # wl_subcompositor, which Wine's wayland driver needs), and on this niri +
-    # NVIDIA stack it never presents anyway (the game hangs at startup and no
-    # window maps). niri provides natively the only things it would have given
-    # us — fullscreen, VRR, HDR.
+    # We do NOT use gamescope. Nesting it forces games off winewayland onto
+    # XWayland (gamescope never exposes wl_subcompositor, which Wine's wayland
+    # driver needs), and on this niri + NVIDIA stack it never presents anyway
+    # (the game hangs at startup and no window maps). niri provides natively
+    # the only things it would have given us — fullscreen, VRR, HDR.
     #
     # NOTE: programs.steam.gamescopeSession is deliberately NOT enabled.
     # It installs a second wayland-sessions entry (steam.desktop); with

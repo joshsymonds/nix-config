@@ -274,17 +274,20 @@ in
         # base checkpoint; abliteration re-saves through transformers and
         # drops mtp.*). Refusals 98->12/100, MMLU/ARC/HS/WG mean -0.5 vs
         # base. IQ4_XS is the same size as the stock unsloth IQ4_XS above,
-        # so it takes the same -ngl split; the fused MTP block adds ~1 GB
-        # (blk.64 q8_0 + draft KV), hence -ngl 52. Speculative decoding via
-        # the inline MTP draft: the model card measures draft-mtp n_max 1-2
-        # at 1.15-1.28x generation on this exact model and n_max>=3 as a
-        # net loss, so n_max is pinned to 2. Replaces the Qwen 3.6 Fable
-        # heretic entry (2026-08-17).
+        # but the fused MTP block needs its own draft context (~1.2 GB incl.
+        # compute buffers): 52 layers OOMs at "failed to create MTP context"
+        # beside the desktop's ~2.6 GB, 48 fits (15.0 GB used). Measured
+        # 2026-08-17 on this file at -ngl 48: 7.8 tok/s without spec-decode
+        # vs 14.9 tok/s with draft-mtp n_max 2 (62% draft acceptance) —
+        # bigger than the card's 1.2x because each accepted draft token
+        # skips a CPU-side layer pass in partial offload. n_max>=3 measures
+        # as a net loss on the card, so it stays at 2. Replaces the Qwen 3.6
+        # Fable heretic entry.
         "qwen3.8-27b-uncensored-iq4xs-mtp" = {
           ggufUrl = "https://huggingface.co/JonathanColetti/Qwen3.8-27B-Uncensored-GGUF/resolve/main/Qwen3.8-27B-Uncensored-IQ4_XS.gguf";
           flags = [
             "-ngl"
-            "52"
+            "48"
             "-c"
             "32768"
             "-np"

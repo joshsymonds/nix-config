@@ -118,6 +118,8 @@
       # affordable (q8 at 96k cost 3.1 GB); -ctxcp/--cache-ram give the
       # hybrid-SSM arch restorable prompt states so interleaved eval
       # cells stop reprocessing full transcripts every swap.
+      # Entries may override -c per model (llama-server takes the last
+      # occurrence of a repeated flag); the uncensored entry runs 50k.
       qwenCommon = [
         "-c"
         "98304"
@@ -165,16 +167,31 @@
       # (JonathanColetti; see gnomon's entry for provenance and the
       # spec-decode rationale). Same 14.3 GB IQ4_XS footprint as the
       # stock entry above, plus ~1.2 GB for the fused MTP draft context;
-      # measured headless 2026-08-17: 60 -> 41.7 tok/s (15.1 GB), 62 ->
-      # 53.1 tok/s (15.5 GB), 64 -> OOM at "failed to create MTP context".
-      # (gnomon desktop: 48 -> 14.9 tok/s.)
+      # Chat-tuned entry (Open-WebUI use), measured headless 2026-08-17:
+      #   32k ctx: 60 -> 41.7 tok/s, 62 -> 53.1 tok/s, 64 -> OOM (MTP ctx)
+      #   50k ctx: 60 -> OOM, 58 -> 37.0 tok/s (15.5 GB)   <- deployed
+      # 50k q8 KV = 1.7 GB + MTP KV; the extra ~1 GB over 32k costs 4
+      # layers. (Merge note: it now inherits q4_0 KV + -ctxcp/--cache-ram
+      # from qwenCommon — smaller KV than the q8 these figures measured,
+      # so -ngl 58 still fits; per-entry -c/-ngl below override the
+      # common 96k via last-flag-wins.)
+      # Sampling = Qwen 3.8 card, thinking mode (temp 1.0, top-p
+      # 0.95, top-k 20, min-p 0, presence 0); llama-server's own defaults
+      # (temp 0.8 / top-k 40 / min-p 0.05) made multi-turn thinking spiral.
+      # Thinking stays on but capped at 4k tokens per turn with a
+      # budget message, which is the fix for runaway chains-of-thought on
+      # the abliterated weights (Heretic cleans the direct path; the CoT
+      # can still wander). Open-WebUI can still turn thinking off per chat.
+      # (gnomon desktop, 32k: 48 -> 14.9 tok/s.)
       "qwen3.8-27b-uncensored-iq4xs-mtp" = {
         ggufUrl = "https://huggingface.co/JonathanColetti/Qwen3.8-27B-Uncensored-GGUF/resolve/main/Qwen3.8-27B-Uncensored-IQ4_XS.gguf";
         flags =
           qwenCommon
           ++ [
+            "-c"
+            "51200"
             "-ngl"
-            "62"
+            "58"
             "-b"
             "512"
             "-ub"
@@ -187,6 +204,24 @@
             "q8_0"
             "--spec-draft-type-v"
             "q8_0"
+            "--temp"
+            "1.0"
+            "--top-p"
+            "0.95"
+            "--top-k"
+            "20"
+            "--min-p"
+            "0"
+            "--presence-penalty"
+            "0"
+            "--repeat-penalty"
+            "1.0"
+            "--reasoning-budget"
+            "4096"
+            # llama-swap shell-parses cmd: the message must be one
+            # double-quoted token (no inner quotes) to survive as one arg.
+            "--reasoning-budget-message"
+            "\"You have reached your thinking budget. Stop reasoning and write your response now.\""
           ];
       };
     };

@@ -88,13 +88,25 @@
     };
   };
 
-  # ── Inference stack: llama-swap + llama-server (mirror of gnomon) ────
-  # Headless llama-swap on 11434 (loopback; reach it over an SSH
-  # tunnel), no Open-WebUI. Model entries mirror gnomon's qwen3.8
-  # pair — flag rationale lives with gnomon's entries.
+  # ── Inference stack: llama-swap + llama-server + Open-WebUI ─────────
+  # Headless serving with the full 16 GB free for weights. Since
+  # 2026-08-17 both llama-swap (11434) and Open-WebUI (8080) bind all
+  # interfaces and the module opens their firewall ports, so the rig is
+  # usable directly from a browser (http://stygianlibrary:8080) and as a
+  # second OpenAI-compatible backend for gnomon's Open-WebUI. Neither
+  # service authenticates; the exposure is the home LAN + tailnet only
+  # (tailscale0 is already a trusted interface below). Model entries
+  # mirror gnomon's qwen3.8 set — flag rationale lives with gnomon's
+  # entries; -ngl values here are the headless splits.
   services.inference-stack = {
     enable = true;
-    openWebUI.enable = false;
+    openFirewall = true;
+    swap.host = "0.0.0.0";
+    openWebUI = {
+      enable = true;
+      host = "0.0.0.0";
+      port = 8080;
+    };
     models = let
       base = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main";
       # Explicit -ngl instead of --fit: fit mis-probes when anything else
@@ -148,6 +160,33 @@
       "qwen3.8-27b-q3kxl" = {
         ggufUrl = "${base}/Qwen3.8-27B-UD-Q3_K_XL.gguf";
         flags = qwenCommon ++ ["-ngl" "62" "-b" "512" "-ub" "512"];
+      };
+      # Heretic-abliterated Qwen3.8-27B with the MTP head retained
+      # (JonathanColetti; see gnomon's entry for provenance and the
+      # spec-decode rationale). Same 14.3 GB IQ4_XS footprint as the
+      # stock entry above, plus ~1.2 GB for the fused MTP draft context;
+      # headless the stock IQ4_XS fit 64/65, so start at 60 and tune up
+      # once measured on this rig (gnomon desktop: 48 -> 14.9 tok/s).
+      "qwen3.8-27b-uncensored-iq4xs-mtp" = {
+        ggufUrl = "https://huggingface.co/JonathanColetti/Qwen3.8-27B-Uncensored-GGUF/resolve/main/Qwen3.8-27B-Uncensored-IQ4_XS.gguf";
+        flags =
+          qwenCommon
+          ++ [
+            "-ngl"
+            "60"
+            "-b"
+            "512"
+            "-ub"
+            "512"
+            "--spec-type"
+            "draft-mtp"
+            "--spec-draft-n-max"
+            "2"
+            "--spec-draft-type-k"
+            "q8_0"
+            "--spec-draft-type-v"
+            "q8_0"
+          ];
       };
     };
   };

@@ -75,7 +75,13 @@ in {
       host = lib.mkOption {
         type = lib.types.str;
         default = "127.0.0.1";
-        description = "Host/interface llama-swap listens on. Open-WebUI talks to this.";
+        description = ''
+          Address llama-swap's OpenAI-compatible listener binds. Only the
+          llama-swap front door widens with this; the per-model llama-server
+          backends and Open-WebUI's upstream URL always use 127.0.0.1, so
+          setting "0.0.0.0" exposes exactly one unauthenticated port
+          (`swap.port`) — pair it with `openFirewall` deliberately.
+        '';
       };
       port = lib.mkOption {
         type = lib.types.port;
@@ -148,6 +154,7 @@ in {
       services.llama-swap = {
         enable = true;
         package = llamaSwap;
+        listenAddress = cfg.swap.host;
         port = cfg.swap.port;
         settings = {
           # Drop idle backends to free VRAM after some inactivity. 5 min
@@ -157,8 +164,11 @@ in {
             lib.mapAttrs (name: m: {
               cmd = lib.concatStringsSep " " ([
                   llamaServer
+                  # Backends stay on loopback regardless of swap.host: only
+                  # llama-swap fronts them, and each spawns on an ephemeral
+                  # port that must not become a second unauthenticated door.
                   "--host"
-                  cfg.swap.host
+                  "127.0.0.1"
                   "--port"
                   "\${PORT}"
                   "-m"
@@ -284,7 +294,10 @@ in {
           # Open-WebUI's OpenAI client adds /v1 to whatever's configured
           # via the *_URLS env vars itself when the value already ends
           # in /v1 it doesn't double up. Pass it explicitly for clarity.
-          OPENAI_API_BASE_URLS = "http://${cfg.swap.host}:${toString cfg.swap.port}/v1";
+          # Always loopback: Open-WebUI is co-located with llama-swap, and
+          # swap.host may be a wildcard bind address that is not a valid
+          # connect target.
+          OPENAI_API_BASE_URLS = "http://127.0.0.1:${toString cfg.swap.port}/v1";
           # llama-swap doesn't require auth. Open-WebUI requires SOMETHING
           # in the keys list; supply a placeholder.
           OPENAI_API_KEYS = "sk-llama-swap-no-auth";

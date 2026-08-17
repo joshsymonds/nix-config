@@ -136,11 +136,6 @@ in
         # Dense Gemma 4 12B, Heretic-abliterated by igorls (0/100 genuine
         # refusals at KL 0.0284). Single-file GGUFs; llama.cpp reads them direct.
         base12 = "https://huggingface.co/igorls/gemma-4-12B-it-heretic-GGUF/resolve/main";
-        # Qwen 3.6 27B Fable Fusion, Heretic-abliterated and tuned by DavidAU.
-        # The LOW MTP IQ4_XS is the highest-quality build sized for a 16 GB
-        # GPU. Upstream llama.cpp runs the same architecture about 14x faster
-        # than KoboldCpp did on gnomon, so use the stack's standard backend.
-        baseQwen36 = "https://huggingface.co/DavidAU/Qwen3.6-27B-Fable-Fusion-711-Uncensored-Heretic-NM-DAU-NEO-MAX-MTP-GGUF/resolve/main";
         # Sampling params from Google's Gemma 4 partner recommendation
         # (model card + Unsloth docs).
         samplerFlags = [
@@ -210,43 +205,6 @@ in
           ggufUrl = "https://huggingface.co/ggml-org/gemma-4-12B-it-GGUF/resolve/main/gemma-4-12B-it-Q8_0.gguf";
           flags = commonFlags ++ ["--fit-ctx" "32768" "--reasoning-budget" "0"];
         };
-        # Dense 27B at LOW MTP IQ4_XS (~14.1 GiB). Qwen 3.6 has full attention
-        # on only 16/64 layers, making 32k context practical; Q4 KV and
-        # llama.cpp autofit minimize the amount that cannot remain in VRAM.
-        "qwen3.6-fable-27b-iq4xs-mtp" = {
-          ggufUrl = "${baseQwen36}/Qwen3.6-27B-Fable-Fus-711-UnHeretic-NM-DAU-NEO-MAX-NEO-LOW-MTP-IQ4_XS.gguf";
-          flags = [
-            "--fit"
-            "on"
-            "--fit-target"
-            "256"
-            "-c"
-            "32768"
-            "-np"
-            "1"
-            "-fa"
-            "on"
-            "--mlock"
-            "--no-mmap"
-            "-b"
-            "2048"
-            "-ub"
-            "2048"
-            "-ctk"
-            "q4_0"
-            "-ctv"
-            "q4_0"
-            "--spec-type"
-            "draft-mtp"
-            "--spec-draft-n-max"
-            "2"
-            "--spec-draft-type-k"
-            "q4_0"
-            "--spec-draft-type-v"
-            "q4_0"
-            "--jinja"
-          ];
-        };
         # Qwen3.8-27B (released 2026-08-15 JST) — Tiltyard local-pilot
         # seats. Unsloth GGUFs, arch qwen35, MTP tensors stripped (no
         # spec-draft flags). NO sampler flags baked in: the Tiltyard
@@ -305,6 +263,51 @@ in
             "-ctk"
             "q8_0"
             "-ctv"
+            "q8_0"
+            "--jinja"
+            "--reasoning-format"
+            "deepseek"
+          ];
+        };
+        # Heretic-abliterated Qwen3.8-27B (JonathanColetti), the only build
+        # that documents MTP-head survival per file (grafted back from the
+        # base checkpoint; abliteration re-saves through transformers and
+        # drops mtp.*). Refusals 98->12/100, MMLU/ARC/HS/WG mean -0.5 vs
+        # base. IQ4_XS is the same size as the stock unsloth IQ4_XS above,
+        # so it takes the same -ngl split; the fused MTP block adds ~1 GB
+        # (blk.64 q8_0 + draft KV), hence -ngl 52. Speculative decoding via
+        # the inline MTP draft: the model card measures draft-mtp n_max 1-2
+        # at 1.15-1.28x generation on this exact model and n_max>=3 as a
+        # net loss, so n_max is pinned to 2. Replaces the Qwen 3.6 Fable
+        # heretic entry (2026-08-17).
+        "qwen3.8-27b-uncensored-iq4xs-mtp" = {
+          ggufUrl = "https://huggingface.co/JonathanColetti/Qwen3.8-27B-Uncensored-GGUF/resolve/main/Qwen3.8-27B-Uncensored-IQ4_XS.gguf";
+          flags = [
+            "-ngl"
+            "52"
+            "-c"
+            "32768"
+            "-np"
+            "1"
+            "-fa"
+            "on"
+            "--mlock"
+            "--no-mmap"
+            "-b"
+            "512"
+            "-ub"
+            "512"
+            "-ctk"
+            "q8_0"
+            "-ctv"
+            "q8_0"
+            "--spec-type"
+            "draft-mtp"
+            "--spec-draft-n-max"
+            "2"
+            "--spec-draft-type-k"
+            "q8_0"
+            "--spec-draft-type-v"
             "q8_0"
             "--jinja"
             "--reasoning-format"

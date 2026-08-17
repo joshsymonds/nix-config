@@ -165,15 +165,16 @@
       # (JonathanColetti; see gnomon's entry for provenance and the
       # spec-decode rationale). Same 14.3 GB IQ4_XS footprint as the
       # stock entry above, plus ~1.2 GB for the fused MTP draft context;
-      # headless the stock IQ4_XS fit 64/65, so start at 60 and tune up
-      # once measured on this rig (gnomon desktop: 48 -> 14.9 tok/s).
+      # measured headless 2026-08-17: 60 -> 41.7 tok/s (15.1 GB), 62 ->
+      # 53.1 tok/s (15.5 GB), 64 -> OOM at "failed to create MTP context".
+      # (gnomon desktop: 48 -> 14.9 tok/s.)
       "qwen3.8-27b-uncensored-iq4xs-mtp" = {
         ggufUrl = "https://huggingface.co/JonathanColetti/Qwen3.8-27B-Uncensored-GGUF/resolve/main/Qwen3.8-27B-Uncensored-IQ4_XS.gguf";
         flags =
           qwenCommon
           ++ [
             "-ngl"
-            "60"
+            "62"
             "-b"
             "512"
             "-ub"

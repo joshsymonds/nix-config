@@ -423,6 +423,22 @@
       matches = [{app-id = "^steam_app_";}];
       open-on-output = "Dell Inc. DELL U2724D CDL25Z3";
     }
+    # Two Point Museum (native Linux Unity 6 build, X11 backend under
+    # xwayland-satellite, app-id is the binary name, not steam_app_*).
+    # Unity enumerates Xwayland outputs in creation order and treats the
+    # first (DP-2, x=2560) as Display 0. With UnitySelectMonitor=0 it
+    # requests its borderless-fullscreen window at (2560,0) and caches that
+    # as its origin; rootless Xwayland ignores the position and niri drops
+    # the window on the focused output. If that's DP-3 (x=0), Unity's Input
+    # System subtracts the wrong origin from pointer root coords and every
+    # click hit-tests off-window — cursor renders fine, nothing responds
+    # (2026-08-17; XI2 capture showed ButtonPress reaching the window).
+    # Pair with Steam launch option `-monitor 2` (Unity's 1-based index →
+    # Display 1 = DP-3) so Unity's belief and niri's placement agree.
+    {
+      matches = [{app-id = "^TPM\\.x86_64$";}];
+      open-on-output = "Dell Inc. DELL U2724D CDL25Z3";
+    }
   ];
 
   # Shadow the flatpak's us.zoom.Zoom.desktop entry. The flatpak's wrapper

@@ -62,6 +62,18 @@ in {
         # to have any effect.
         use_external_ip = false;
         node_ip = tailnetIPv4;
+        # node_ip alone does not stop candidate gathering on other
+        # interfaces: first live test (2026-08-19) showed the server pairing
+        # against LAN IPv6 ULAs and the client's public srflx (a NAT hairpin
+        # that never answers) while ICE failed to converge. Gather on the
+        # tailnet interface only — plus loopback, which the co-located
+        # mentat-voice agent needs for its own media (its data channels died
+        # in the same test).
+        interfaces.includes = [
+          "tailscale0"
+          "lo"
+        ];
+        enable_loopback_candidate = true;
       };
     };
   };

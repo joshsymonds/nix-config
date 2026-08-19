@@ -45,6 +45,7 @@ in
       ./services/shimmer.nix
       ./services/mentat.nix
       ./services/voice-stt.nix
+      ./services/livekit.nix
       ./services/inbox-zero.nix
       ./services/inbox-zero-alerts.nix
       ./services/download-proxies.nix

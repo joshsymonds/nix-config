@@ -34,6 +34,7 @@ in {
   "secrets/hosts/ultraviolet/shimmer-env.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/mentat-env.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/livekit-keys.age".publicKeys = keys.ultraviolet;
+  "secrets/hosts/ultraviolet/mentat-voice-env.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/invidious-companion-key.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/x11vnc-password.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/mullvad-privatekey.age".publicKeys = keys.ultraviolet;

@@ -143,9 +143,15 @@ in {
           exit 1
         fi
 
+        # Handed over in the environment, never on lk's argv:
+        # /proc/<pid>/cmdline is world-readable, so --api-secret would leak
+        # the SFU secret to every local user for as long as lk runs. lk
+        # documents $LIVEKIT_API_KEY/$LIVEKIT_API_SECRET as the fallback for
+        # exactly these flags. No LIVEKIT_URL: minting a token is local.
+        export LIVEKIT_API_KEY="$api_key"
+        export LIVEKIT_API_SECRET="$api_secret"
+
         token=$(${pkgs.livekit-cli}/bin/lk token create \
-          --api-key "$api_key" \
-          --api-secret "$api_secret" \
           --join \
           --room office \
           --identity gnomon \

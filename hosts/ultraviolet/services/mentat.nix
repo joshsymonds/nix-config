@@ -29,6 +29,27 @@
     mode = "0400";
   };
 
+  # LIVEKIT_API_KEY/LIVEKIT_API_SECRET (the SFU keypair, the same values
+  # livekit-keys carries) plus LIVEKIT_INFERENCE_API_KEY/SECRET for LiveKit
+  # Cloud's hosted STT/TTS.
+  #
+  # The inference pair ships as REPLACE_ME placeholders on purpose: the
+  # LiveKit Cloud project is created by hand, and the user swaps the values
+  # in with `agenix -e`. A placeholder key fails per-job at STT
+  # construction, not as a unit crashloop — so the agent deploys, stays up,
+  # and only the individual voice job errors until the real keys land.
+  #
+  # root:root 0400 rather than the service user: the module runs
+  # mentat-voice under DynamicUser, so there is no stable UID to own this,
+  # and systemd opens EnvironmentFile as PID 1 before dropping to the
+  # transient user (same reason as livekit-keys).
+  age.secrets."mentat-voice-env" = {
+    file = ../../../secrets/hosts/ultraviolet/mentat-voice-env.age;
+    owner = "root";
+    group = "root";
+    mode = "0400";
+  };
+
   services.mentat = {
     enable = true;
     claudePackage = pkgs.claudeCodeCli;
@@ -43,12 +64,22 @@
       url = "https://ultraviolet.tail82223.ts.net:8443/mcp";
     };
     reminder.enable = true; # 09:00 daily
+
+    # The LiveKit voice agent. livekitUrl and mentatUrl are left at their
+    # defaults on purpose — both services are loopback-bound on this very
+    # host (ws://127.0.0.1:7880 is livekit.nix's signalPort, and mentatd
+    # listens on 8484).
+    voice = {
+      enable = true;
+      environmentFile = config.age.secrets."mentat-voice-env".path;
+    };
   };
 
   # Restart on secret rotation: the .age ciphertext store path changes on
   # re-encryption (the module can't do this itself — it only sees the
   # constant /run/agenix runtime path).
   systemd.services.mentatd.restartTriggers = [config.age.secrets."mentat-env".file];
+  systemd.services.mentat-voice.restartTriggers = [config.age.secrets."mentat-voice-env".file];
 
   # Tailnet ingress: mentatd binds loopback only (the API is
   # unauthenticated by design); `tailscale serve` is the only way in.

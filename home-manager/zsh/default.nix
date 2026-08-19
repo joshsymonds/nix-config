@@ -317,6 +317,9 @@ in {
       ${lib.optionalString (config.services.patchbay.enable or false) ''
         if [ -r /run/agenix/patchbay-caller-key ]; then
           export ANTHROPIC_CUSTOM_HEADERS="X-Patchbay-Key: $(cat /run/agenix/patchbay-caller-key)"
+          # The patchbay CLI (contexts/routes/resolve/project) authenticates to
+          # the daemon with the same key, located via this path-valued variable.
+          export PATCHBAY_CALLER_KEY_FILE=/run/agenix/patchbay-caller-key
         fi
       ''}
 

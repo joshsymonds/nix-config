@@ -66,6 +66,29 @@ in
         patchelf --set-interpreter "$(cat ${stdenv.cc}/nix-support/dynamic-linker)" "$out/bin/claude"
       ''
       + ''
+        # Teach Claude Code the true per-model context window for non-Claude
+        # ("foreign") models via three length-preserving substitutions in the
+        # embedded JS (same bun-no-integrity-check property the fleet patch above
+        # relies on). The script verifies every anchor BEFORE editing and, on any
+        # drift (a version bump renamed the minified symbols), applies none and
+        # ships the stock binary with a loud warning — the build does not fail,
+        # and stock still honours CLAUDE_CODE_MAX_CONTEXT_TOKENS natively.
+        #
+        # Back up the proven stock binary first (already fleet-patched and, on
+        # Linux, patchelf'd, so it is runnable) so the sanity gate below can fall
+        # back to it if the patched binary won't start.
+        cp "$out/bin/claude" "$TMPDIR/claude.stock"
+        perl ${./patch-context-window.pl} "$out/bin/claude"
+
+        # Runnable sanity gate: the patched binary must still start. On failure,
+        # restore the stock backup (do not fail the build).
+        export HOME="$TMPDIR"
+        if ! timeout 120 "$out/bin/claude" --version >/dev/null 2>&1; then
+          echo "warning: [cc-window] patched claude --version failed sanity; restoring stock binary" >&2
+          cp "$TMPDIR/claude.stock" "$out/bin/claude"
+        fi
+        rm -f "$TMPDIR/claude.stock"
+
         runHook postInstall
       '';
 

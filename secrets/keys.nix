@@ -59,16 +59,12 @@ let
     ++ allUserKeys;
 
   # Hosts that run patchbay and therefore need the shared OpenRouter key.
+  # Single source of truth: hosts/common.nix imports patchbayHostNames for
+  # its age.secrets guard, and patchbayHosts is derived from the same list.
   # When adding a host here, re-key secrets/shared/patchbay-openrouter-key.age
   # (do not bulk re-key — see CLAUDE.md).
-  patchbayHosts =
-    [
-      hosts.gnomon
-      hosts.ultraviolet
-      hosts.vermissian
-      hosts.stygianlibrary
-    ]
-    ++ allUserKeys;
+  patchbayHostNames = ["gnomon" "ultraviolet" "vermissian" "stygianlibrary"];
+  patchbayHosts = (map (n: hosts.${n}) patchbayHostNames) ++ allUserKeys;
 in {
   # Per-host: host key (for boot-time agenix decryption) + EVERY user key
   # (so any of josh's machines can edit any host's secrets). When a new
@@ -89,6 +85,7 @@ in {
   inherit publisherHosts;
 
   # Hosts that run the patchbay gateway.
-  # Used by secrets/shared/patchbay-openrouter-key.age.
-  inherit patchbayHosts;
+  # patchbayHosts (recipient keys) is used by secrets/shared/patchbay-openrouter-key.age;
+  # patchbayHostNames (bare hostnames) is used by hosts/common.nix's age.secrets guard.
+  inherit patchbayHosts patchbayHostNames;
 }

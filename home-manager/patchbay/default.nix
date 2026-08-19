@@ -25,17 +25,22 @@
     src = inputs.patchbay;
   };
 
+  # Shared claudex coordinates (port/key/model ids), the single source of
+  # truth home-manager/claudex also imports — kept there so these can never
+  # drift between the running service and these routes at it.
+  claudex = import ../../lib/claudex.nix;
+
   # The CLIProxyAPI listener key. It only gates a localhost socket and is
   # deliberately not an agenix secret — see home-manager/claudex/default.nix
   # for the same value and the same reasoning (anyone with local shell
   # access already holds the Codex OAuth creds it fronts).
-  chatgptKeyFile = pkgs.writeText "patchbay-chatgpt-key" "claudex-local";
+  chatgptKeyFile = pkgs.writeText "patchbay-chatgpt-key" claudex.apiKey;
 
   # The ChatGPT/Codex subscription upstream: the cli-proxy-api user service
   # from home-manager/claudex, translating Anthropic Messages to the Codex
   # OAuth backend.
   chatgptRoute = model: {
-    base_url = "http://127.0.0.1:8317";
+    base_url = "http://127.0.0.1:${toString claudex.port}";
     auth = "inject";
     api_key_env_file = "PATCHBAY_CHATGPT_KEY_FILE";
     inherit model;
@@ -61,8 +66,8 @@
       max_input_tokens = 1050000;
     };
 
-    "chatgpt/sol" = chatgptRoute "gpt-5.6-sol";
-    "chatgpt/luna" = chatgptRoute "gpt-5.6-luna";
+    "chatgpt/sol" = chatgptRoute claudex.model;
+    "chatgpt/luna" = chatgptRoute claudex.fastModel;
 
     # Bare-model-id aliases, identical to the chatgpt/* routes above.
     #
@@ -74,18 +79,21 @@
     # as ANTHROPIC_MODEL / ANTHROPIC_SMALL_FAST_MODEL. These two aliases
     # route them on to CLIProxyAPI unchanged, so claudex keeps working
     # exactly as before instead of falling through to Anthropic.
-    "gpt-5.6-sol" = chatgptRoute "gpt-5.6-sol";
-    "gpt-5.6-luna" = chatgptRoute "gpt-5.6-luna";
+    ${claudex.model} = chatgptRoute claudex.model;
+    ${claudex.fastModel} = chatgptRoute claudex.fastModel;
   };
 
   registryFile = (pkgs.formats.json {}).generate "patchbay-routes.json" {
     inherit routes;
   };
 
-  # The ledger directory patchbay writes to. Systemd user units don't
-  # inherit the session's XDG_STATE_HOME, so patchbay falls back to its
-  # $HOME-relative default — mirror that exact path here.
-  ledgerDir = "$HOME/.local/state/patchbay/ledger";
+  # The ledger directory patchbay writes to, home-relative. Systemd user
+  # units don't inherit the session's XDG_STATE_HOME, so patchbay falls back
+  # to this $HOME-relative default. One string derives both the PATCHBAY_LEDGER_DIR
+  # the unit pins (%h/${ledgerSubdir}) and the path the rsync shipper reads
+  # ($HOME/${ledgerSubdir}), so pinning and shipping agree by construction.
+  ledgerSubdir = ".local/state/patchbay/ledger";
+  ledgerDir = "$HOME/${ledgerSubdir}";
 
   # Ship the ledger to the host's NFS bucket so spend across the fleet can
   # be summed in one place. /mnt/claude is a lazy systemd automount; the
@@ -140,6 +148,13 @@ in {
           "PATCHBAY_LISTEN=127.0.0.1:${toString cfg.port}"
           "PATCHBAY_OPENROUTER_KEY_FILE=/run/agenix/patchbay-openrouter-key"
           "PATCHBAY_CHATGPT_KEY_FILE=${chatgptKeyFile}"
+          # Pin patchbay's ledger + registry paths to the same locations it
+          # would otherwise fall back to, so the agreement holds by construction.
+          # systemd expands %h to the user's home; the ledger path shares
+          # ledgerSubdir with the rsync shipper, and the registry matches the
+          # xdg.configFile."patchbay/routes.json" target below.
+          "PATCHBAY_LEDGER_DIR=%h/${ledgerSubdir}"
+          "PATCHBAY_REGISTRY=%h/.config/patchbay/routes.json"
         ];
       };
       Install.WantedBy = ["default.target"];
@@ -159,9 +174,10 @@ in {
     systemd.user.timers.patchbay-ledger-sync = lib.mkIf cfg.ledgerShipper.enable {
       Unit.Description = "Ship patchbay's ledger every 10 minutes";
       Timer = {
+        # No Persistent: systemd only honors it on OnCalendar= timers, and
+        # this is monotonic. OnBootSec=2min already provides after-boot catch-up.
         OnBootSec = "2min";
         OnUnitActiveSec = "10min";
-        Persistent = true;
         Unit = "patchbay-ledger-sync.service";
       };
       Install.WantedBy = ["timers.target"];

@@ -7,6 +7,7 @@
 }: let
   network = import ../lib/network.nix;
   nas = network.infra.nas;
+  keys = import ../secrets/keys.nix;
 in {
   imports = [
     ../modules/linux-base
@@ -196,7 +197,7 @@ in {
     # It is a system-level secret owned by joshsymonds because patchbay runs
     # as a systemd USER service (home-manager/patchbay) and reads the
     # decrypted file out of /run/agenix at request time.
-    (lib.mkIf (builtins.elem config.networking.hostName ["gnomon" "ultraviolet" "vermissian" "stygianlibrary"]) {
+    (lib.mkIf (builtins.elem config.networking.hostName keys.patchbayHostNames) {
       "patchbay-openrouter-key" = {
         file = ../secrets/shared/patchbay-openrouter-key.age;
         owner = "joshsymonds";

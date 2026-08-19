@@ -17,12 +17,12 @@
   pkgs,
   ...
 }: let
-  port = 8317;
-  apiKey = "claudex-local";
-  model = "gpt-5.6-sol";
-  # Fast tier for haiku-slot work (summaries, small tool calls). Confirmed
-  # present in the codex channel's /v1/models.
-  fastModel = "gpt-5.6-luna";
+  # Shared claudex coordinates (port/key/model ids) live in lib/claudex.nix
+  # so home-manager/patchbay routes at the exact same values.
+  # fastModel is the fast tier for haiku-slot work (summaries, small tool
+  # calls). Confirmed present in the codex channel's /v1/models.
+  claudexLib = import ../../lib/claudex.nix;
+  inherit (claudexLib) port apiKey model fastModel;
 
   proxyConfig = (pkgs.formats.yaml {}).generate "cliproxyapi-config.yaml" {
     host = "127.0.0.1";

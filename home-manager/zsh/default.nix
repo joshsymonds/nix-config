@@ -30,57 +30,54 @@
   brewShellenvCache = "${config.xdg.cacheHome}/zsh/brew-shellenv.zsh";
 
   # ── Work-profile LLM backend toggle ────────────────────────────────────
-  # ~/.claude-work is a SINGLE config dir; its backend (AWS Bedrock vs the
-  # Anthropic OAuth account) is a runtime mode persisted in
-  # ~/.claude-work/.backend (default "bedrock"). The launch env below is
-  # exported by the claude()/cw/cwa wrappers and INHERITED by the bg-agent
-  # daemon + every spare worker — verified that workers never re-read
-  # settings.json, they freeze the launch env (a daemon left up across a
-  # 4-7->4-8 bump kept serving 4-7). So flipping backend means: rewrite the
-  # frozen --model baked into each job's respawnFlags, then bounce the
-  # daemon. `cwswitch` does both. cm/cw/cwa are the explicit overrides.
+  # ~/.claude-work is a SINGLE config dir; its backend (the employer's AWS
+  # Bedrock account vs the Anthropic OAuth account) is a runtime mode
+  # persisted in ~/.claude-work/.backend (default "bedrock"). Both modes now
+  # ride patchbay and differ only in which registry context the base URL
+  # selects: /ctx/attain-bedrock signs into the Attain AWS account with
+  # SigV4, /ctx/attain forwards to Anthropic. Claude Code itself never speaks
+  # Bedrock any more — no CLAUDE_CODE_USE_BEDROCK, no AWS env, no ARNs on
+  # this side; patchbay's model map translates the Anthropic model ids to
+  # inference profiles server-side.
   #
-  # bedrock<->anthropic model equivalents (the only backend-specific bit in
-  # a job) live in an agenix secret: JSON of tier -> {anthropic, bedrock}
-  # with tiers fable/opus/sonnet/haiku. The bedrock side is my per-user
-  # application-inference-profile ARNs (cost governance: the us.*/global.*
-  # system profiles are denied per principal). The ARNs embed the Attain
-  # AWS account id and this repo is public, so they are never written into
-  # the repo or the nix store — the launch wrapper and cwswitch read the
-  # decrypted file at runtime. The secret stores BARE ids/ARNs; the [1m]
-  # suffix (client-side 1M-context hint, stripped before the request) is
-  # applied in code. haiku has no 1M variant. us-east-2 is where the attain
-  # account's profiles live. In anthropic mode NONE of the backend env is
-  # exported, so Claude Code falls back to the OAuth account's normal model
-  # selection.
+  # The launch env below is exported by the claude()/cw/cwa wrappers and
+  # INHERITED by the bg-agent daemon + every spare worker — verified that
+  # workers never re-read settings.json, they freeze the launch env (a daemon
+  # left up across a 4-7->4-8 bump kept serving 4-7). So flipping backend
+  # means: persist the new mode, re-render settings.json, and bounce the
+  # daemon. `cwswitch` does that. cm/cw/cwa are the explicit overrides.
+  #
+  # The model map is an agenix secret: JSON of tier -> {anthropic, bedrock}
+  # with tiers fable/opus/sonnet/haiku. Only the .anthropic side is read here
+  # now; the .bedrock side (per-user application-inference-profile ARNs
+  # embedding the Attain AWS account id, which is why this is encrypted at
+  # all in a public repo) is what patchbay's own model-map secret carries.
+  # The secret stores BARE ids; the [1m] suffix (client-side 1M-context hint,
+  # stripped before the request) is applied in code, and haiku has no 1M
+  # variant.
   bedrockModelsFile = config.age.secrets."claude-bedrock-models".path;
+
+  # Emitted into __cc_work only where a local patchbay actually listens;
+  # hosts without one (darwin, echelon) keep the vendor endpoint.
+  workBaseUrlLine =
+    lib.optionalString (config.services.patchbay.enable or false) ''
+      pfx+=( ANTHROPIC_BASE_URL="http://127.0.0.1:${toString config.services.patchbay.port}/ctx/$ctx" )'';
 
   cwswitch = pkgs.writeShellApplication {
     name = "cwswitch";
     runtimeInputs = [pkgs.jq pkgs.coreutils pkgs.procps config.programs.claudeCode.cwrenderPackage];
     text = ''
-      # Flip the ~/.claude-work LLM backend between Bedrock and the Anthropic
-      # OAuth account. Rewrites the frozen --model in every job's
-      # respawnFlags, persists the new mode, re-renders the work profile's
-      # settings.json via cwrender (spare workers get a scrubbed env and read
-      # their backend from settings.json's env block — see the cwrender
-      # comment in home-manager/claude-code), and bounces the bg-agent daemon
-      # so new/resumed workers pick up the new backend.
+      # Flip the ~/.claude-work patchbay context between the Attain Bedrock
+      # account and the Anthropic OAuth account. Persists the new mode,
+      # re-renders the work profile's settings.json via cwrender (spare
+      # workers get a scrubbed env and read their backend from settings.json's
+      # env block — see the cwrender comment in home-manager/claude-code), and
+      # bounces the bg-agent daemon so new/resumed workers pick up the new
+      # context. Jobs' frozen --model flags need no rewriting: the model ids
+      # are Anthropic-side in both modes and patchbay does the translation.
       work="$HOME/.claude-work"
       pointer="$work/.backend"
       jobs="$work/jobs"
-
-      # Model maps come from the agenix secret at runtime (bare ids/ARNs;
-      # any [1m] suffix on a job's --model is preserved across the flip).
-      # Double quotes: the agenix path contains a literal ''${XDG_RUNTIME_DIR}
-      # that must expand at runtime.
-      models_file="${bedrockModelsFile}"
-      if [ ! -r "$models_file" ]; then
-        echo "cwswitch: model map $models_file unreadable — is the claude-bedrock-models agenix secret deployed?" >&2
-        exit 1
-      fi
-      to_anthropic=$(jq -c '[.[] | {key: .bedrock, value: .anthropic}] | from_entries' "$models_file")
-      to_bedrock=$(jq -c '[.[] | {key: .anthropic, value: .bedrock}] | from_entries' "$models_file")
 
       cur=bedrock
       [ -f "$pointer" ] && cur=$(tr -d '[:space:]' < "$pointer")
@@ -98,70 +95,30 @@
           ;;
       esac
 
-      # Same-target runs still do the job-rewrite loop below (repair mode):
-      # a job created while the launch env disagreed with the pointer keeps
-      # a frozen --model from the wrong backend, and skipping here would
-      # strand it forever. Only the daemon bounce is conditional on an
-      # actual backend change.
+      # A same-target run still re-renders settings.json below (repair mode):
+      # a render left stale by a failed activation would otherwise strand
+      # spare workers on the wrong context forever. Only the daemon bounce is
+      # conditional on an actual backend change.
       repair=no
       [ "$target" = "$cur" ] && repair=yes
 
-      if [ "$target" = anthropic ]; then map=$to_anthropic; else map=$to_bedrock; fi
-
-      changed=0
-      unknown=0
       active=0
       if [ -d "$jobs" ]; then
         for sj in "$jobs"/*/state.json; do
           [ -f "$sj" ] || continue
           if grep -q '"state": *"working"' "$sj"; then active=$((active + 1)); fi
-          # Warn (don't mangle) on any --model value we don't recognise
-          # (lookup is on the base id, with any [1m] suffix stripped).
-          # Known = a key of either direction's map: source-side ids get
-          # rewritten, target-side ids are already correct — only ids from
-          # neither backend are truly unknown.
-          while IFS= read -r m; do
-            [ -n "$m" ] || continue
-            base=''${m%"[1m]"}
-            if ! printf '%s%s' "$to_anthropic" "$to_bedrock" | jq -e -s --arg k "$base" 'any(has($k))' >/dev/null 2>&1; then
-              echo "warn: $(basename "$(dirname "$sj")"): unrecognised model '$m' left unchanged" >&2
-              unknown=$((unknown + 1))
-            fi
-          done < <(jq -r '.respawnFlags as $f | range(1;($f|length)) | select($f[.-1]=="--model") | $f[.]' "$sj" 2>/dev/null || true)
-
-          tmp="$sj.cwswitch.$$"
-          if jq --argjson m "$map" '
-            .respawnFlags |= ( . as $f | [ range(0;length) | . as $i |
-              if $i > 0 and $f[$i-1] == "--model"
-              then ( $f[$i] as $v
-                   | ($v | sub("\\[1m\\]$"; "")) as $base
-                   | (if ($v | endswith("[1m]")) then "[1m]" else "" end) as $sfx
-                   | if $m[$base] != null then ($m[$base] + $sfx) else $v end )
-              else $f[$i] end ] )
-          ' "$sj" > "$tmp" 2>/dev/null; then
-            # Count only real model changes: cmp on whole files would count
-            # jq's whitespace re-serialization as a rewrite.
-            before=$(jq -c '[.respawnFlags as $f | range(1;($f|length)) | select($f[.-1]=="--model") | $f[.]]' "$sj" 2>/dev/null || echo '[]')
-            after=$(jq -c '[.respawnFlags as $f | range(1;($f|length)) | select($f[.-1]=="--model") | $f[.]]' "$tmp" 2>/dev/null || echo '[]')
-            [ "$before" = "$after" ] || changed=$((changed + 1))
-            mv "$tmp" "$sj"
-          else
-            rm -f "$tmp"
-            echo "warn: failed to rewrite $sj — left unchanged" >&2
-          fi
         done
       fi
 
       printf '%s\n' "$target" > "$pointer.$$" && mv "$pointer.$$" "$pointer"
 
       # Re-render settings.json for the (possibly unchanged) backend: spare
-      # workers read their backend env from here at spawn, so repair mode
+      # workers read their context from here at spawn, so repair mode
       # re-renders too — a stale render is exactly the strand this fixes.
       cwrender
 
       # Repair mode: backend unchanged, so the daemon's inherited env is
-      # already correct — bounce nothing. Workers pick up rewritten
-      # respawnFlags on their next respawn regardless.
+      # already correct — bounce nothing.
       bounced=no
       if [ "$repair" = no ]; then
         if [ "$active" != 0 ]; then
@@ -179,9 +136,9 @@
       fi
 
       if [ "$repair" = yes ]; then
-        echo "work backend already '$target' — repaired stranded jobs instead  (jobs rewritten: $changed, unknown left: $unknown)"
+        echo "work backend already '$target' — re-rendered settings.json anyway"
       else
-        echo "work backend: $cur -> $target  (jobs rewritten: $changed, unknown left: $unknown, daemon bounced: $bounced)"
+        echo "work backend: $cur -> $target  (daemon bounced: $bounced)"
         echo "next: run 'claude agents' in a work dir and resume workers — they respawn on $target."
       fi
     '';
@@ -286,31 +243,38 @@ in {
         emulate -L zsh
         local mode=bedrock
         [[ -r $HOME/.claude-work/.backend ]] && mode=$(<$HOME/.claude-work/.backend)
-        # Work sessions bypass patchbay (they hit Bedrock/Anthropic directly),
-        # so clear the patchbay caller header — it must never be sent from a
-        # work launch (cw/cwa, marker-file dispatch, or the bg-agent daemon).
-        local -a pfx=( CLAUDE_CONFIG_DIR=$HOME/.claude-work ANTHROPIC_CUSTOM_HEADERS= )
-        if [[ $mode == bedrock ]]; then
-          # ARNs come from the agenix secret at launch (see the workBackend
-          # block in this module's `let`). Fable is the primary; [1m] is the
-          # client-side 1M-context hint (haiku has no 1M variant).
-          local models="${bedrockModelsFile}"
-          if [[ -r $models ]]; then
-            local fable opus sonnet haiku
-            IFS=$'\t' read -r fable opus sonnet haiku < <(
-              jq -r '[.fable.bedrock, .opus.bedrock, .sonnet.bedrock, .haiku.bedrock] | @tsv' "$models"
-            )
-            pfx+=(
-              CLAUDE_CODE_USE_BEDROCK=1 AWS_REGION=us-east-2 AWS_PROFILE=attain
-              ANTHROPIC_MODEL="''${fable}[1m]"
-              ANTHROPIC_DEFAULT_FABLE_MODEL="''${fable}[1m]"
-              ANTHROPIC_DEFAULT_OPUS_MODEL="''${opus}[1m]"
-              ANTHROPIC_DEFAULT_SONNET_MODEL="''${sonnet}[1m]"
-              ANTHROPIC_DEFAULT_HAIKU_MODEL="$haiku"
-            )
-          else
-            print -u2 "claude-work: $models unreadable (claude-bedrock-models agenix secret not deployed?) — launching WITHOUT Bedrock env; this session will use the Anthropic OAuth backend despite .backend=bedrock."
-          fi
+        local -a pfx=( CLAUDE_CONFIG_DIR=$HOME/.claude-work )
+        # Work sessions ride patchbay like personal ones; the backend mode is
+        # just which registry context the base URL selects. They therefore
+        # need the SAME caller-key header the interactive personal shell
+        # exports — without it patchbay refuses every inject and sigv4
+        # request. Read straight from the agenix file so the header is right
+        # even in a launch whose environment was scrubbed.
+        if [[ -r /run/agenix/patchbay-caller-key ]]; then
+          pfx+=( ANTHROPIC_CUSTOM_HEADERS="X-Patchbay-Key: $(</run/agenix/patchbay-caller-key)" )
+        fi
+        local ctx=attain
+        [[ $mode == bedrock ]] && ctx=attain-bedrock
+        ${workBaseUrlLine}
+        # Model ids are always the Anthropic-side ones; patchbay's model map
+        # translates them to Bedrock inference profiles server-side. Fable is
+        # the primary; [1m] is the client-side 1M-context hint (haiku has no
+        # 1M variant).
+        local models="${bedrockModelsFile}"
+        if [[ -r $models ]]; then
+          local fable opus sonnet haiku
+          IFS=$'\t' read -r fable opus sonnet haiku < <(
+            jq -r '[.fable.anthropic, .opus.anthropic, .sonnet.anthropic, .haiku.anthropic] | @tsv' "$models"
+          )
+          pfx+=(
+            ANTHROPIC_MODEL="''${fable}[1m]"
+            ANTHROPIC_DEFAULT_FABLE_MODEL="''${fable}[1m]"
+            ANTHROPIC_DEFAULT_OPUS_MODEL="''${opus}[1m]"
+            ANTHROPIC_DEFAULT_SONNET_MODEL="''${sonnet}[1m]"
+            ANTHROPIC_DEFAULT_HAIKU_MODEL="$haiku"
+          )
+        else
+          print -u2 "claude-work: $models unreadable (claude-bedrock-models agenix secret not deployed?) — launching WITHOUT the per-tier model pins; this session still routes through the '$ctx' patchbay context."
         fi
         command env "''${pfx[@]}" claude "$@"
       }

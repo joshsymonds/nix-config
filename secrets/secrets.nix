@@ -22,6 +22,7 @@ in {
   "secrets/user/morgen-api-key.age".publicKeys = keys.joshsymonds;
   "secrets/user/morgen-mirror-trigger-url.age".publicKeys = keys.joshsymonds;
   "secrets/user/claude-bedrock-models.age".publicKeys = keys.joshsymonds;
+  "secrets/user/patchbay-bedrock-model-map.age".publicKeys = keys.joshsymonds;
 
   # Host-specific secrets
   "secrets/hosts/ultraviolet/cloudflare-api-token.age".publicKeys = keys.ultraviolet;

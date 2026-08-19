@@ -48,53 +48,65 @@
       lib.recursiveUpdate settingsJsonWithGambit overlay
     ));
 
-  # Personal profile only, by design: work sessions must never route through
-  # patchbay (see settingsJsonWork below — that profile's backend is a
-  # runtime-toggled Bedrock/Anthropic choice and stays on the vendor
-  # endpoint). `or false` keeps hosts that never import home-manager/patchbay
-  # — darwin (ninuan), echelon — evaluating.
+  # Both profiles ride patchbay now; they differ in which registry context
+  # answers. `or false` keeps hosts that never import home-manager/patchbay —
+  # darwin (ninuan), echelon — evaluating, and null there means "no local
+  # gateway", leaving the vendor endpoint in place.
+  patchbayBaseUrl =
+    if (config.services.patchbay.enable or false)
+    then "http://127.0.0.1:${toString config.services.patchbay.port}"
+    else null;
+
+  # No /ctx prefix: a prefix-less path selects the personal context
+  # implicitly, which is exactly what this profile wants.
   settingsJsonPersonal = mkSettingsJson "personal" (
-    lib.optionalAttrs (config.services.patchbay.enable or false) {
-      env.ANTHROPIC_BASE_URL = "http://127.0.0.1:${toString config.services.patchbay.port}";
+    lib.optionalAttrs (patchbayBaseUrl != null) {
+      env.ANTHROPIC_BASE_URL = patchbayBaseUrl;
     }
   );
 
   # The work profile (~/.claude-work) is a SINGLE config dir whose LLM
-  # backend (AWS Bedrock vs Anthropic OAuth) is a runtime-toggled mode, not
-  # a baked setting. Home-manager therefore deploys this file as
-  # settings.base.json (never settings.json), and `cwrender` (below) merges
-  # it with the runtime backend mode into a REAL ~/.claude-work/settings.json
-  # at activation time and on every `cwswitch` flip.
+  # backend (the employer's AWS Bedrock account vs the Anthropic OAuth
+  # account) is a runtime-toggled mode, not a baked setting. Home-manager
+  # therefore deploys this file as settings.base.json (never settings.json),
+  # and `cwrender` (below) merges it with the runtime backend mode into a
+  # REAL ~/.claude-work/settings.json at activation time and on every
+  # `cwswitch` flip.
+  #
+  # Both modes now go through patchbay; the ONLY difference is which registry
+  # context the base URL selects — /ctx/attain-bedrock (a sigv4 default route
+  # into the Attain AWS account) or /ctx/attain (the built-in Anthropic
+  # forward). Claude Code never speaks Bedrock itself any more: no
+  # CLAUDE_CODE_USE_BEDROCK, no AWS env, no ARNs on this side. The model ids
+  # are always the Anthropic-side ones and patchbay's model map translates
+  # them to inference-profile ARNs server-side, which is also why the ARNs
+  # (they embed the Attain AWS account id, and this repo is public) no longer
+  # need to reach a Claude Code process at all.
   #
   # Why settings.json and not just launch env: the bg-agent daemon inherits
   # the launch env, but the spare workers it forks get a SCRUBBED env —
-  # CLAUDE_CODE_USE_BEDROCK, ANTHROPIC_MODEL, and ANTHROPIC_DEFAULT_*_MODEL
-  # are exactly the vars stripped (observed on CLI 2.1.204 via /proc environ
-  # diff, 2026-07-09; an older CLI did inherit them, which is how this went
-  # unnoticed). Spares DO read settings.json's `env` block at spawn, so the
-  # backend env must live there for resumed/background sessions to hit
-  # Bedrock. settings.local.json is NOT an option: its `env` block is
-  # ignored entirely (probed empirically, same date). The launch-time zsh
-  # wrapper exports remain as the interactive-session path; cwrender is the
-  # worker path. The Bedrock model ARNs embed the Attain AWS account id and
-  # this repo is public, so they are never baked in here — cwrender reads
-  # them from the claude-bedrock-models agenix secret at runtime.
+  # ANTHROPIC_MODEL and ANTHROPIC_DEFAULT_*_MODEL are among the vars stripped
+  # (observed on CLI 2.1.204 via /proc environ diff, 2026-07-09; an older CLI
+  # did inherit them, which is how this went unnoticed). Spares DO read
+  # settings.json's `env` block at spawn, so the backend selection must live
+  # there for resumed/background sessions to reach the right context.
+  # settings.local.json is NOT an option: its `env` block is ignored entirely
+  # (probed empirically, same date). The launch-time zsh wrapper exports
+  # remain as the interactive-session path; cwrender is the worker path.
   settingsJsonWork = mkSettingsJson "work" {};
 
   # tier -> {anthropic, bedrock} model map (declared in home-manager/zsh,
-  # shared here for cwrender).
+  # shared here for cwrender). Only the .anthropic side is read now.
   bedrockModelsFile = config.age.secrets."claude-bedrock-models".path;
 
   # cwrender — render ~/.claude-work/settings.json from the HM-deployed
-  # settings.base.json plus the runtime backend pointer (.backend). In
-  # bedrock mode the env block gets CLAUDE_CODE_USE_BEDROCK + region/profile
-  # + per-tier model ARNs from the agenix secret ([1m] 1M-context suffix on
-  # everything but haiku, matching the zsh launch wrapper exactly); in
-  # anthropic mode the base is written through untouched, so NO backend env
-  # leaks into OAuth sessions. Output is always a real, writable file
-  # replaced atomically — never a store symlink — because spare workers
-  # re-read it at spawn and cwswitch must be able to re-render without a
-  # rebuild.
+  # settings.base.json plus the runtime backend pointer (.backend). The env
+  # block gets the patchbay context URL for the current mode plus the
+  # per-tier Anthropic model ids from the agenix secret ([1m] 1M-context
+  # suffix on everything but haiku, matching the zsh launch wrapper exactly).
+  # Output is always a real, writable file replaced atomically — never a
+  # store symlink — because spare workers re-read it at spawn and cwswitch
+  # must be able to re-render without a rebuild.
   cwrender = pkgs.writeShellApplication {
     name = "cwrender";
     runtimeInputs = [pkgs.jq pkgs.coreutils];
@@ -112,29 +124,36 @@
       [ -f "$work/.backend" ] && mode=$(tr -d '[:space:]' < "$work/.backend")
       [ -n "$mode" ] || mode=bedrock
 
+      # The backend mode IS the patchbay context. An empty prefix (a host
+      # with no local gateway) leaves ANTHROPIC_BASE_URL unset entirely.
+      if [ "$mode" = bedrock ]; then ctx=attain-bedrock; else ctx=attain; fi
+      prefix="${lib.optionalString (patchbayBaseUrl != null) patchbayBaseUrl}"
+      base_url=""
+      [ -n "$prefix" ] && base_url="$prefix/ctx/$ctx"
+
       models="${bedrockModelsFile}"
       tmp="$out.cwrender.$$"
 
-      if [ "$mode" = bedrock ] && [ -r "$models" ]; then
-        jq --slurpfile m "$models" '
-          .env += {
-            CLAUDE_CODE_USE_BEDROCK: "1",
-            AWS_REGION: "us-east-2",
-            AWS_PROFILE: "attain",
-            ANTHROPIC_MODEL: ($m[0].fable.bedrock + "[1m]"),
-            ANTHROPIC_DEFAULT_FABLE_MODEL: ($m[0].fable.bedrock + "[1m]"),
-            ANTHROPIC_DEFAULT_OPUS_MODEL: ($m[0].opus.bedrock + "[1m]"),
-            ANTHROPIC_DEFAULT_SONNET_MODEL: ($m[0].sonnet.bedrock + "[1m]"),
-            ANTHROPIC_DEFAULT_HAIKU_MODEL: $m[0].haiku.bedrock
-          }' "$base" > "$tmp"
+      if [ -r "$models" ]; then
+        jq --slurpfile m "$models" --arg base_url "$base_url" '
+          .env += (
+            {
+              ANTHROPIC_MODEL: ($m[0].fable.anthropic + "[1m]"),
+              ANTHROPIC_DEFAULT_FABLE_MODEL: ($m[0].fable.anthropic + "[1m]"),
+              ANTHROPIC_DEFAULT_OPUS_MODEL: ($m[0].opus.anthropic + "[1m]"),
+              ANTHROPIC_DEFAULT_SONNET_MODEL: ($m[0].sonnet.anthropic + "[1m]"),
+              ANTHROPIC_DEFAULT_HAIKU_MODEL: $m[0].haiku.anthropic
+            }
+            + (if $base_url == "" then {} else {ANTHROPIC_BASE_URL: $base_url} end)
+          )' "$base" > "$tmp"
       else
-        if [ "$mode" = bedrock ]; then
-          echo "cwrender: model map $models unreadable (claude-bedrock-models agenix secret not deployed?) — rendering WITHOUT Bedrock env; work workers will use the Anthropic OAuth backend despite .backend=bedrock." >&2
-        fi
-        jq . "$base" > "$tmp"
+        echo "cwrender: model map $models unreadable (claude-bedrock-models agenix secret not deployed?) — rendering WITHOUT the per-tier model pins; the context selection below still applies." >&2
+        jq --arg base_url "$base_url" '
+          .env += (if $base_url == "" then {} else {ANTHROPIC_BASE_URL: $base_url} end)
+        ' "$base" > "$tmp"
       fi
       mv "$tmp" "$out"
-      echo "cwrender: $out rendered for backend '$mode'"
+      echo "cwrender: $out rendered for context '$ctx'"
     '';
   };
 

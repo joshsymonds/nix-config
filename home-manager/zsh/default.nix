@@ -244,17 +244,24 @@ in {
         local mode=bedrock
         [[ -r $HOME/.claude-work/.backend ]] && mode=$(<$HOME/.claude-work/.backend)
         local -a pfx=( CLAUDE_CONFIG_DIR=$HOME/.claude-work )
+        local ctx=attain
+        [[ $mode == bedrock ]] && ctx=attain-bedrock
         # Work sessions ride patchbay like personal ones; the backend mode is
         # just which registry context the base URL selects. They therefore
         # need the SAME caller-key header the interactive personal shell
         # exports — without it patchbay refuses every inject and sigv4
         # request. Read straight from the agenix file so the header is right
-        # even in a launch whose environment was scrubbed.
+        # even in a launch whose environment was scrubbed. Gated on a local
+        # patchbay (same guard as workBaseUrlLine): on a host without one the
+        # request goes straight to api.anthropic.com and the key must never
+        # ride along.
+        ${lib.optionalString (config.services.patchbay.enable or false) ''
         if [[ -r /run/agenix/patchbay-caller-key ]]; then
           pfx+=( ANTHROPIC_CUSTOM_HEADERS="X-Patchbay-Key: $(</run/agenix/patchbay-caller-key)" )
+        else
+          print -u2 "claude-work: /run/agenix/patchbay-caller-key unreadable — patchbay will refuse every request in the '$ctx' context"
         fi
-        local ctx=attain
-        [[ $mode == bedrock ]] && ctx=attain-bedrock
+      ''}
         ${workBaseUrlLine}
         # Model ids are always the Anthropic-side ones; patchbay's model map
         # translates them to Bedrock inference profiles server-side. Fable is
@@ -305,9 +312,13 @@ in {
       # gateway with this header before it will inject a foreign model key. The
       # value is read at shell start from the agenix runtime file (0400), so the
       # secret never enters the world-readable Nix store — only this command does.
-      if [ -r /run/agenix/patchbay-caller-key ]; then
-        export ANTHROPIC_CUSTOM_HEADERS="X-Patchbay-Key: $(cat /run/agenix/patchbay-caller-key)"
-      fi
+      # Emitted only on hosts that run a local patchbay; elsewhere the endpoint
+      # is api.anthropic.com and the key must never be sent there.
+      ${lib.optionalString (config.services.patchbay.enable or false) ''
+        if [ -r /run/agenix/patchbay-caller-key ]; then
+          export ANTHROPIC_CUSTOM_HEADERS="X-Patchbay-Key: $(cat /run/agenix/patchbay-caller-key)"
+        fi
+      ''}
 
       t() {
         if [[ $# -eq 0 ]]; then

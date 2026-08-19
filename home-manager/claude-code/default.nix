@@ -22,10 +22,13 @@
   # between settings.json's extraKnownMarketplaces and the runtime
   # known_marketplaces.json populated by activation.
   #
-  # Two variants get built: a vanilla one for the personal profile
-  # (~/.claude) and one with the AWS Bedrock env overlay for the work
-  # profile (~/.claude-work). Work-profile sessions route through the
-  # Attain AWS account; personal sessions stay on Anthropic OAuth.
+  # Two variants get built, and they differ only in which patchbay registry
+  # context they select: the personal profile (~/.claude) takes the
+  # prefix-less path, and the work profile (~/.claude-work) rides
+  # /ctx/attain[-bedrock] through the local patchbay. Nothing AWS-shaped
+  # lives on the client side any more — no CLAUDE_CODE_USE_BEDROCK, no AWS
+  # credentials or region, no inference-profile ARNs; patchbay owns the
+  # translation into the Attain AWS account server-side.
   settingsJsonBase = builtins.fromJSON (builtins.readFile ./settings.json);
 
   settingsJsonWithGambit =
@@ -85,14 +88,16 @@
   #
   # Why settings.json and not just launch env: the bg-agent daemon inherits
   # the launch env, but the spare workers it forks get a SCRUBBED env —
-  # ANTHROPIC_MODEL and ANTHROPIC_DEFAULT_*_MODEL are among the vars stripped
-  # (observed on CLI 2.1.204 via /proc environ diff, 2026-07-09; an older CLI
-  # did inherit them, which is how this went unnoticed). Spares DO read
-  # settings.json's `env` block at spawn, so the backend selection must live
-  # there for resumed/background sessions to reach the right context.
-  # settings.local.json is NOT an option: its `env` block is ignored entirely
-  # (probed empirically, same date). The launch-time zsh wrapper exports
-  # remain as the interactive-session path; cwrender is the worker path.
+  # ANTHROPIC_MODEL, ANTHROPIC_DEFAULT_*_MODEL and ANTHROPIC_CUSTOM_HEADERS
+  # are among the vars stripped (observed on CLI 2.1.204 via /proc environ
+  # diff, 2026-07-09; an older CLI did inherit them, which is how this went
+  # unnoticed). Spares DO read settings.json's `env` block at spawn, so both
+  # the backend selection AND the patchbay caller-key header must live there
+  # — a spare that loses the header gets refused by patchbay's gate on every
+  # request. settings.local.json is NOT an option: its `env` block is ignored
+  # entirely (probed empirically, same date). The launch-time zsh wrapper
+  # exports remain as the interactive-session path; cwrender is the worker
+  # path.
   settingsJsonWork = mkSettingsJson "work" {};
 
   # tier -> {anthropic, bedrock} model map (declared in home-manager/zsh,
@@ -101,12 +106,14 @@
 
   # cwrender — render ~/.claude-work/settings.json from the HM-deployed
   # settings.base.json plus the runtime backend pointer (.backend). The env
-  # block gets the patchbay context URL for the current mode plus the
-  # per-tier Anthropic model ids from the agenix secret ([1m] 1M-context
-  # suffix on everything but haiku, matching the zsh launch wrapper exactly).
-  # Output is always a real, writable file replaced atomically — never a
-  # store symlink — because spare workers re-read it at spawn and cwswitch
-  # must be able to re-render without a rebuild.
+  # block gets the patchbay context URL for the current mode, the patchbay
+  # caller-key header, and the per-tier Anthropic model ids from the agenix
+  # secret ([1m] 1M-context suffix on everything but haiku, matching the zsh
+  # launch wrapper exactly). Output is always a real, writable file replaced
+  # atomically — never a store symlink — because spare workers re-read it at
+  # spawn and cwswitch must be able to re-render without a rebuild. It is
+  # chmod 600: it carries the caller key's VALUE, which is fine in $HOME (a
+  # runtime file) and would never be fine in the world-readable Nix store.
   cwrender = pkgs.writeShellApplication {
     name = "cwrender";
     runtimeInputs = [pkgs.jq pkgs.coreutils];
@@ -131,11 +138,28 @@
       base_url=""
       [ -n "$prefix" ] && base_url="$prefix/ctx/$ctx"
 
+      # The caller key rides the rendered env block, not just the launch
+      # env, because the bg-agent daemon's spare workers spawn with a
+      # SCRUBBED environment and read settings.json instead — without the
+      # header here patchbay's gate refuses every spare-worker request.
+      # Emitted only on hosts that actually run a local patchbay: with no
+      # gateway the request goes straight to api.anthropic.com and the key
+      # must never ride along.
+      caller_key=""
+      ${lib.optionalString (patchbayBaseUrl != null) ''
+        key_file=/run/agenix/patchbay-caller-key
+        if [ -r "$key_file" ]; then
+          caller_key=$(cat "$key_file")
+        else
+          echo "cwrender: caller key $key_file unreadable (patchbay-caller-key agenix secret not deployed?) — rendering WITHOUT the X-Patchbay-Key header; patchbay will refuse every request in the '$ctx' context." >&2
+        fi
+      ''}
+
       models="${bedrockModelsFile}"
       tmp="$out.cwrender.$$"
 
       if [ -r "$models" ]; then
-        jq --slurpfile m "$models" --arg base_url "$base_url" '
+        jq --slurpfile m "$models" --arg base_url "$base_url" --arg caller_key "$caller_key" '
           .env += (
             {
               ANTHROPIC_MODEL: ($m[0].fable.anthropic + "[1m]"),
@@ -145,13 +169,18 @@
               ANTHROPIC_DEFAULT_HAIKU_MODEL: $m[0].haiku.anthropic
             }
             + (if $base_url == "" then {} else {ANTHROPIC_BASE_URL: $base_url} end)
+            + (if $caller_key == "" then {} else {ANTHROPIC_CUSTOM_HEADERS: ("X-Patchbay-Key: " + $caller_key)} end)
           )' "$base" > "$tmp"
       else
         echo "cwrender: model map $models unreadable (claude-bedrock-models agenix secret not deployed?) — rendering WITHOUT the per-tier model pins; the context selection below still applies." >&2
-        jq --arg base_url "$base_url" '
-          .env += (if $base_url == "" then {} else {ANTHROPIC_BASE_URL: $base_url} end)
+        jq --arg base_url "$base_url" --arg caller_key "$caller_key" '
+          .env += (
+            (if $base_url == "" then {} else {ANTHROPIC_BASE_URL: $base_url} end)
+            + (if $caller_key == "" then {} else {ANTHROPIC_CUSTOM_HEADERS: ("X-Patchbay-Key: " + $caller_key)} end)
+          )
         ' "$base" > "$tmp"
       fi
+      chmod 600 "$tmp"
       mv "$tmp" "$out"
       echo "cwrender: $out rendered for context '$ctx'"
     '';

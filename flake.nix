@@ -629,14 +629,6 @@
               gambitHasCodex = true;
             };
           };
-          claude-codex-executors = import ./tests/claude-codex-executors.nix {
-            pkgs = checkPkgs;
-            executorConfig = import ./home-manager/claude-code/codex-executor-config.nix {
-              pkgs = checkPkgs;
-            };
-            subagentIsolation = import ./home-manager/codex/subagent-isolation.nix;
-            gambit = inputs.gambit.packages.${system}.default;
-          };
           chatgpt-desktop = import ./tests/chatgpt-desktop.nix {
             pkgs = checkPkgs;
             chatgptDesktop = checkPkgs.chatgpt-desktop;

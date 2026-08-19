@@ -15,7 +15,12 @@
   # updates with `nix flake update gambit`.
   gambitSrc = inputs.gambit.packages.${pkgs.stdenv.hostPlatform.system}.default;
   gambitRev = inputs.gambit.rev or "unknown";
-  codexExecutorConfig = import ./codex-executor-config.nix {inherit pkgs;};
+
+  # Whether this host runs the ChatGPT/Codex upstream, and therefore whether
+  # patchbay publishes the chatgpt/* routes the gambit rung agents point at.
+  # `or false` keeps hosts that never import home-manager/patchbay — darwin
+  # (ninuan), echelon — evaluating.
+  codexUpstream = config.services.patchbay.codexUpstream.enable or false;
 
   # Generate settings.json with gambit's marketplace entry injected at build
   # time, pointing at the Nix store path. Keeps a single source of truth
@@ -482,6 +487,195 @@
     '';
   };
 
+  # ── Gambit rung agents ──────────────────────────────────────────────────
+  # Gambit's non-Claude ladder rungs ship as Claude Code SUBAGENT
+  # DEFINITIONS, not as model parameters. The Agent tool's `model:` argument
+  # is enum-locked (sonnet/opus/haiku/fable/inherit), so a patchbay route id
+  # like chatgpt/sol can only reach the wire through a subagent's
+  # frontmatter, whose `model` field accepts a full model id. Gambit
+  # dispatches a rung by subagent_type and passes the real contract by path
+  # in the prompt, so these bodies stay deliberately generic and minimal.
+  #
+  # Each rung ships in two variants: the plain one inherits the full default
+  # toolset, and the -ro one is the advisory read-only variant the
+  # scout/steelman/finder/verifier roles take. Read-only is enforced with
+  # `disallowedTools`, a denylist resolved before any `tools` allowlist
+  # (Claude Code sub-agents reference).
+  gambitRungs = {
+    "luna-low" = {
+      route = "chatgpt/luna";
+      effort = "low";
+    };
+    "sol-low" = {
+      route = "chatgpt/sol";
+      effort = "low";
+    };
+    "terra-medium" = {
+      route = "chatgpt/terra";
+      effort = "medium";
+    };
+    "sol-xhigh" = {
+      route = "chatgpt/sol";
+      effort = "xhigh";
+    };
+  };
+
+  # The description is quoted because it contains a colon; an unquoted YAML
+  # plain scalar cannot carry ": ".
+  mkRungAgent = rung: readonly: let
+    inherit (gambitRungs.${rung}) route effort;
+    agentName = rung + lib.optionalString readonly "-ro";
+  in
+    pkgs.writeText "gambit-rung-${agentName}.md" (lib.concatStringsSep "\n" (
+      [
+        "---"
+        "name: ${agentName}"
+        ''description: "Gambit rung: GPT-5.6 ${route} at ${effort} effort via patchbay${lib.optionalString readonly ", read-only advisory variant"}"''
+        "model: ${route}"
+        "effort: ${effort}"
+      ]
+      ++ lib.optional readonly "disallowedTools: Edit, Write, NotebookEdit"
+      ++ [
+        "---"
+        ""
+        "You are a gambit rung agent. Follow the contract and brief given in your prompt exactly."
+        ""
+      ]
+    ));
+
+  # Agents dir as a linkFarm, mirroring skillsDir: the checked-in ./agents
+  # definitions plus, on Codex-upstream hosts only, the eight generated rung
+  # agents. Off those hosts the chatgpt/* routes are not published, so a rung
+  # agent would point at a port nothing listens on — hence the gate.
+  agentsDir = let
+    staticAgents = lib.attrNames (
+      lib.filterAttrs (
+        name: type: type == "regular" && lib.hasSuffix ".md" name
+      ) (builtins.readDir ./agents)
+    );
+    rungAgents = lib.concatMap (
+      rung:
+        map (readonly: {
+          name = "${rung + lib.optionalString readonly "-ro"}.md";
+          path = mkRungAgent rung readonly;
+        }) [false true]
+    ) (lib.attrNames gambitRungs);
+  in
+    pkgs.linkFarm "claude-agents" (
+      (map (n: {
+          name = n;
+          path = ./agents + "/${n}";
+        })
+        staticAgents)
+      ++ lib.optionals codexUpstream rungAgents
+    );
+
+  # ── Gambit rung/role map ────────────────────────────────────────────────
+  # <profile>/gambit/models.json: what gambit reads to turn a role into a
+  # dispatch. Two kinds of rung entry:
+  #   - {agent, readonly_agent} — dispatch subagent_type=<agent> and NO model
+  #     parameter; a readonly role takes readonly_agent instead. This is the
+  #     only way a foreign model id reaches the wire (see mkRungAgent above).
+  #   - {model} — dispatch general-purpose/Explore with that enum model.
+  # A role names its entry rung, plus the escalation ladder where it has one;
+  # `readonly = true` marks an advisory role that must not write.
+  gambitModelsFull = {
+    rungs = {
+      "luna-low" = {
+        agent = "luna-low";
+        readonly_agent = "luna-low-ro";
+      };
+      "sol-low" = {
+        agent = "sol-low";
+        readonly_agent = "sol-low-ro";
+      };
+      "terra-medium" = {
+        agent = "terra-medium";
+        readonly_agent = "terra-medium-ro";
+      };
+      "sol-xhigh" = {
+        agent = "sol-xhigh";
+        readonly_agent = "sol-xhigh-ro";
+      };
+      sonnet.model = "sonnet";
+      opus.model = "opus";
+      fable.model = "fable";
+    };
+    roles = {
+      worker = {
+        entry = "sol-low";
+        ladder = ["sol-low" "terra-medium" "sol-xhigh" "opus"];
+      };
+      escalation = {
+        entry = "terra-medium";
+        ladder = ["terra-medium" "sol-xhigh" "opus"];
+      };
+      scout = {
+        entry = "terra-medium";
+        readonly = true;
+      };
+      steelman = {
+        entry = "sol-xhigh";
+        readonly = true;
+      };
+      finder = {
+        entry = "sol-xhigh";
+        readonly = true;
+      };
+      verifier = {
+        entry = "sol-xhigh";
+        readonly = true;
+      };
+      "test-runner".entry = "luna-low";
+    };
+  };
+
+  # Claude-only map: no GPT rungs at all. Used on hosts without the Codex
+  # upstream, and in the work profile everywhere — no attain-side GPT
+  # credential exists, and a work session must never spend the personal
+  # ChatGPT subscription.
+  gambitModelsClaudeOnly = {
+    rungs = {
+      sonnet.model = "sonnet";
+      opus.model = "opus";
+      fable.model = "fable";
+    };
+    roles = {
+      worker = {
+        entry = "opus";
+        ladder = ["opus" "fable"];
+      };
+      escalation = {
+        entry = "fable";
+        ladder = ["fable"];
+      };
+      scout = {
+        entry = "sonnet";
+        readonly = true;
+      };
+      steelman = {
+        entry = "fable";
+        readonly = true;
+      };
+      finder = {
+        entry = "fable";
+        readonly = true;
+      };
+      verifier = {
+        entry = "fable";
+        readonly = true;
+      };
+      "test-runner".entry = "sonnet";
+    };
+  };
+
+  gambitModelsJson = personal:
+    builtins.toJSON (
+      if personal && codexUpstream
+      then gambitModelsFull
+      else gambitModelsClaudeOnly
+    );
+
   # Skills dir as a linkFarm derivation: nix-managed skills + the
   # team-status skill at an out-of-store writable path so iteration
   # on team-status does not require a rebuild. New skills added under
@@ -650,7 +844,7 @@ in {
             "${dir}/CLAUDE.md".text = claudeMdText;
             "${dir}/host.md".text = cfg.hostContext;
             "${dir}/fleet.md".source = ./fleet.md;
-            "${dir}/agents".source = ./agents;
+            "${dir}/agents".source = agentsDir;
             "${dir}/skills".source = skillsDir;
             "${dir}/bin/cc-tools-statusline".source = "${cc-tools}/bin/cc-tools-statusline";
             "${dir}/bin/cc-tools".source = "${cc-tools}/bin/cc-tools";
@@ -676,14 +870,11 @@ in {
         (mkClaudeFiles ".claude" settingsJsonPersonal)
         (mkClaudeFiles ".claude-work" settingsJsonWork)
         {
-          # External executors are intentionally personal-only. The work
-          # profile may run on Bedrock and must retain native Claude agents.
-          ".claude/gambit/executors.json".text = builtins.toJSON codexExecutorConfig.registry;
-          # Async-dispatch wrappers ride the cheap tier by default, but live
-          # acceptance showed haiku-class relays failing as transport (tool
-          # churn, terminated without the envelope). Sonnet-class relays cost
-          # effectively the same tokens and don't drop the call.
-          ".claude/gambit/models.json".text = builtins.toJSON {wrapper = "sonnet";};
+          # The rung/role map gambit dispatches from. The personal profile
+          # gets the GPT rungs wherever the Codex upstream runs; the work
+          # profile is Claude-only everywhere. See gambitModelsFull above.
+          ".claude/gambit/models.json".text = gambitModelsJson true;
+          ".claude-work/gambit/models.json".text = gambitModelsJson false;
         }
       ];
 
@@ -944,23 +1135,25 @@ in {
       done
     '';
 
-    # Codex is the Gambit worker/finder executor in BOTH profiles (the
-    # executor registry routes Gambit dispatch through it regardless of
-    # profile). Use the pinned Nix binary so Claude never depends on PATH
-    # or a mutable Codex install. The server reuses this user's existing
-    # ~/.codex ChatGPT authentication and returns each completed Codex
-    # thread as a tool result.
-    activation.claudeCodexMcp = lib.hm.dag.entryAfter ["claudeShimmerMcp"] ''
+    # Retire the Codex MCP server from both profiles' runtime prefs.
+    # Gambit's non-Claude rungs are subagent definitions now (see the rung
+    # agent block above), so nothing dispatches through mcp__codex__* any
+    # more. But the activation that used to live here MERGED the server into
+    # ~/.claude.json and ~/.claude-work/.claude.json — runtime-mutable user
+    # prefs Nix never regenerates. Dropping the generator alone would orphan
+    # the entry, and every session would go on spawning the Codex MCP server
+    # forever. So delete exactly that one key, preserving everything else in
+    # the file and its permissions. Idempotent, silent when absent.
+    activation.claudeCodexMcpCleanup = lib.hm.dag.entryAfter ["claudeShimmerMcp"] ''
       set -euo pipefail
-      CODEX_MCP=${lib.escapeShellArg (builtins.toJSON codexExecutorConfig.mcpServer)}
       for prefs in "$HOME/.claude.json" "$HOME/.claude-work/.claude.json"; do
-        mkdir -p "$(dirname "$prefs")"
-        [ -f "$prefs" ] || echo '{}' > "$prefs"
-        if ! ${pkgs.jq}/bin/jq -e --argjson c "$CODEX_MCP" \
-            '.mcpServers.codex == $c' "$prefs" >/dev/null 2>&1; then
-          ${pkgs.jq}/bin/jq --argjson c "$CODEX_MCP" \
-            '.mcpServers = ((.mcpServers // {}) + {codex: $c})' \
-            "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
+        [ -f "$prefs" ] || continue
+        if ${pkgs.jq}/bin/jq -e '.mcpServers | has("codex")' "$prefs" >/dev/null 2>&1; then
+          tmp="$prefs.codex-cleanup.$$"
+          ${pkgs.jq}/bin/jq 'del(.mcpServers.codex)' "$prefs" > "$tmp"
+          ${pkgs.coreutils}/bin/chmod --reference="$prefs" "$tmp"
+          mv "$tmp" "$prefs"
+          echo "claudeCodexMcpCleanup: removed .mcpServers.codex from $prefs" >&2
         fi
       done
     '';

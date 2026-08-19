@@ -36,6 +36,9 @@
   # calls). Confirmed present in the codex channel's /v1/models.
   codexModel = "gpt-5.6-sol";
   codexFastModel = "gpt-5.6-luna";
+  # The middle rung of the gambit ladder. Also confirmed present in the codex
+  # channel's /v1/models.
+  codexMidModel = "gpt-5.6-terra";
 
   # The CLIProxyAPI listener key. It is world-readable in /nix/store and only
   # gates the loopback listener — loopback is reachable by host-network
@@ -88,6 +91,7 @@
     // lib.optionalAttrs cfg.codexUpstream.enable {
       "chatgpt/sol" = chatgptRoute codexModel;
       "chatgpt/luna" = chatgptRoute codexFastModel;
+      "chatgpt/terra" = chatgptRoute codexMidModel;
     };
 
   # The Attain Bedrock default route: Claude models in the attain-bedrock

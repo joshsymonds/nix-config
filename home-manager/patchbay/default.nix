@@ -25,22 +25,29 @@
     src = inputs.patchbay;
   };
 
-  # Shared claudex coordinates (port/key/model ids), the single source of
-  # truth home-manager/claudex also imports — kept there so these can never
-  # drift between the running service and these routes at it.
-  claudex = import ../../lib/claudex.nix;
+  # CLIProxyAPI coordinates. This module both runs the proxy (below, under
+  # codexUpstream) and routes at it, so these are defined once here and can
+  # never drift between the service and the routes.
+  codexPort = 8317;
+  codexListenerKey = "patchbay-local";
+  # fastModel is the fast tier for haiku-slot work (summaries, small tool
+  # calls). Confirmed present in the codex channel's /v1/models.
+  codexModel = "gpt-5.6-sol";
+  codexFastModel = "gpt-5.6-luna";
 
-  # The CLIProxyAPI listener key. It only gates a localhost socket and is
-  # deliberately not an agenix secret — see home-manager/claudex/default.nix
-  # for the same value and the same reasoning (anyone with local shell
-  # access already holds the Codex OAuth creds it fronts).
-  chatgptKeyFile = pkgs.writeText "patchbay-chatgpt-key" claudex.apiKey;
+  # The CLIProxyAPI listener key. It is world-readable in /nix/store and only
+  # gates the loopback listener — loopback is reachable by host-network
+  # containers on the same machine, so treat it as a label, not a secret. The
+  # actual credential is the Codex OAuth state in ~/.cli-proxy-api, which only
+  # exists on hosts where codexUpstream is enabled; that per-host gating is the
+  # real containment.
+  chatgptKeyFile = pkgs.writeText "patchbay-chatgpt-key" codexListenerKey;
 
   # The ChatGPT/Codex subscription upstream: the cli-proxy-api user service
-  # from home-manager/claudex, translating Anthropic Messages to the Codex
-  # OAuth backend.
+  # this module runs when codexUpstream is enabled, translating Anthropic
+  # Messages to the Codex OAuth backend.
   chatgptRoute = model: {
-    base_url = "http://127.0.0.1:${toString claudex.port}";
+    base_url = "http://127.0.0.1:${toString codexPort}";
     auth = "inject";
     api_key_env_file = "PATCHBAY_CHATGPT_KEY_FILE";
     inherit model;
@@ -48,39 +55,51 @@
     max_input_tokens = 372000;
   };
 
-  routes = {
-    # OpenRouter, paid per-token from the household key. Model ids and
-    # context lengths verified against https://openrouter.ai/api/v1/models.
-    "openrouter/sol" = {
-      base_url = "https://openrouter.ai/api";
-      auth = "inject";
-      api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
-      model = "openai/gpt-5.6-sol";
-      max_input_tokens = 1050000;
-    };
-    "openrouter/luna" = {
-      base_url = "https://openrouter.ai/api";
-      auth = "inject";
-      api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
-      model = "openai/gpt-5.6-luna";
-      max_input_tokens = 1050000;
+  routes =
+    {
+      # OpenRouter, paid per-token from the household key. Model ids and
+      # context lengths verified against https://openrouter.ai/api/v1/models.
+      "openrouter/sol" = {
+        base_url = "https://openrouter.ai/api";
+        auth = "inject";
+        api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
+        model = "openai/gpt-5.6-sol";
+        max_input_tokens = 1050000;
+      };
+      "openrouter/luna" = {
+        base_url = "https://openrouter.ai/api";
+        auth = "inject";
+        api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
+        model = "openai/gpt-5.6-luna";
+        max_input_tokens = 1050000;
+      };
+    }
+    # Only published on hosts that actually run the Codex upstream; elsewhere
+    # these routes would point at a port nothing listens on.
+    // lib.optionalAttrs cfg.codexUpstream.enable {
+      "chatgpt/sol" = chatgptRoute codexModel;
+      "chatgpt/luna" = chatgptRoute codexFastModel;
     };
 
-    "chatgpt/sol" = chatgptRoute claudex.model;
-    "chatgpt/luna" = chatgptRoute claudex.fastModel;
-
-    # Bare-model-id aliases, identical to the chatgpt/* routes above.
-    #
-    # The personal profile's settings.json sets ANTHROPIC_BASE_URL to
-    # patchbay, and a settings-file `env` entry beats a shell export in
-    # Claude Code — so the `claudex` wrapper's exported ANTHROPIC_BASE_URL
-    # (which points at CLIProxyAPI directly) loses. Claudex sessions
-    # therefore arrive at patchbay asking for the bare ids it also exports
-    # as ANTHROPIC_MODEL / ANTHROPIC_SMALL_FAST_MODEL. These two aliases
-    # route them on to CLIProxyAPI unchanged, so claudex keeps working
-    # exactly as before instead of falling through to Anthropic.
-    ${claudex.model} = chatgptRoute claudex.model;
-    ${claudex.fastModel} = chatgptRoute claudex.fastModel;
+  # CLIProxyAPI: an Anthropic-compatible endpoint over the ChatGPT Codex
+  # subscription. It runs as a user service bound to loopback. OAuth state
+  # lives in ~/.cli-proxy-api (mutable, like ~/.codex) — authenticate once per
+  # machine:
+  #   cli-proxy-api --config ~/.config/cliproxyapi/config.yaml --codex-login
+  # (or --codex-device-login on headless hosts; it prints a URL + code to enter
+  # from any browser).
+  proxyConfig = (pkgs.formats.yaml {}).generate "cliproxyapi-config.yaml" {
+    host = "127.0.0.1";
+    port = codexPort;
+    auth-dir = "~/.cli-proxy-api";
+    api-keys = [codexListenerKey];
+    # Empty secret-key disables the management API and its control panel
+    # (which otherwise auto-downloads a web UI from GitHub at runtime).
+    remote-management = {
+      allow-remote = false;
+      secret-key = "";
+      disable-control-panel = true;
+    };
   };
 
   registryFile = (pkgs.formats.json {}).generate "patchbay-routes.json" {
@@ -127,12 +146,42 @@ in {
       shipping patchbay's request ledger to /mnt/claude/<host>/patchbay.
       Only for hosts that actually mount the NFS claude share
     '';
+
+    codexUpstream.enable = lib.mkEnableOption ''
+      the Codex subscription upstream: runs CLIProxyAPI (cli-proxy-api) on
+      loopback :${toString codexPort}, translating Anthropic Messages to the
+      ChatGPT-subscription Codex OAuth backend, and publishes the chatgpt/*
+      routes at it. Enable only on hosts holding Codex OAuth creds in
+      ~/.cli-proxy-api
+    '';
   };
 
   config = lib.mkIf cfg.enable {
-    home.packages = [patchbay];
+    # cliproxyapi is also the one-time login CLI:
+    #   cli-proxy-api --config ~/.config/cliproxyapi/config.yaml --codex-login
+    # (--codex-device-login on headless hosts), so it belongs on PATH wherever
+    # the upstream runs.
+    home.packages = [patchbay] ++ lib.optional cfg.codexUpstream.enable pkgs.cliproxyapi;
 
     xdg.configFile."patchbay/routes.json".source = registryFile;
+
+    xdg.configFile."cliproxyapi/config.yaml" = lib.mkIf cfg.codexUpstream.enable {
+      source = proxyConfig;
+    };
+
+    systemd.user.services.cli-proxy-api = lib.mkIf cfg.codexUpstream.enable {
+      Unit = {
+        Description = "CLIProxyAPI — Anthropic-compatible endpoint over the ChatGPT Codex subscription";
+        After = ["network-online.target"];
+        Wants = ["network-online.target"];
+      };
+      Service = {
+        ExecStart = "${lib.getExe pkgs.cliproxyapi} --config ${config.xdg.configHome}/cliproxyapi/config.yaml";
+        Restart = "on-failure";
+        RestartSec = 5;
+      };
+      Install.WantedBy = ["default.target"];
+    };
 
     systemd.user.services.patchbay = {
       Unit = {
@@ -144,19 +193,20 @@ in {
         ExecStart = lib.getExe patchbay;
         Restart = "on-failure";
         RestartSec = 5;
-        Environment = [
-          "PATCHBAY_LISTEN=127.0.0.1:${toString cfg.port}"
-          "PATCHBAY_OPENROUTER_KEY_FILE=/run/agenix/patchbay-openrouter-key"
-          "PATCHBAY_CALLER_KEY_FILE=/run/agenix/patchbay-caller-key"
-          "PATCHBAY_CHATGPT_KEY_FILE=${chatgptKeyFile}"
-          # Pin patchbay's ledger + registry paths to the same locations it
-          # would otherwise fall back to, so the agreement holds by construction.
-          # systemd expands %h to the user's home; the ledger path shares
-          # ledgerSubdir with the rsync shipper, and the registry matches the
-          # xdg.configFile."patchbay/routes.json" target below.
-          "PATCHBAY_LEDGER_DIR=%h/${ledgerSubdir}"
-          "PATCHBAY_REGISTRY=%h/.config/patchbay/routes.json"
-        ];
+        Environment =
+          [
+            "PATCHBAY_LISTEN=127.0.0.1:${toString cfg.port}"
+            "PATCHBAY_OPENROUTER_KEY_FILE=/run/agenix/patchbay-openrouter-key"
+            "PATCHBAY_CALLER_KEY_FILE=/run/agenix/patchbay-caller-key"
+            # Pin patchbay's ledger + registry paths to the same locations it
+            # would otherwise fall back to, so the agreement holds by construction.
+            # systemd expands %h to the user's home; the ledger path shares
+            # ledgerSubdir with the rsync shipper, and the registry matches the
+            # xdg.configFile."patchbay/routes.json" target below.
+            "PATCHBAY_LEDGER_DIR=%h/${ledgerSubdir}"
+            "PATCHBAY_REGISTRY=%h/.config/patchbay/routes.json"
+          ]
+          ++ lib.optional cfg.codexUpstream.enable "PATCHBAY_CHATGPT_KEY_FILE=${chatgptKeyFile}";
       };
       Install.WantedBy = ["default.target"];
     };

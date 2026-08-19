@@ -23,6 +23,9 @@
   services.patchbay = {
     enable = true;
     ledgerShipper.enable = true;
+    # Holds Codex OAuth creds in ~/.cli-proxy-api, so it runs the CLIProxyAPI
+    # upstream and publishes the chatgpt/* routes.
+    codexUpstream.enable = true;
   };
 
   # Watch this gaming box's game saves (Satisfactory et al.) and push parsed

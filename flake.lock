@@ -3170,17 +3170,17 @@
     "patchbay": {
       "flake": false,
       "locked": {
-        "lastModified": 1787087759,
-        "narHash": "sha256-AUUYcok0jXxo7WrBO+/HjIVaravMBj8Ee+/Jn8scwOs=",
+        "lastModified": 1787113256,
+        "narHash": "sha256-JCUzLKV3tedRx41Qa8qqAMJq1L2ZPNcj0vmMmWYkIDk=",
         "ref": "main",
-        "rev": "4303fe713055ffa9302ab3cb792076834fd97e10",
-        "revCount": 8,
+        "rev": "acd704d2c2235e60bc1c7fe36be791e9c8826c36",
+        "revCount": 10,
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/patchbay.git"
       },
       "original": {
         "ref": "main",
-        "rev": "4303fe713055ffa9302ab3cb792076834fd97e10",
+        "rev": "acd704d2c2235e60bc1c7fe36be791e9c8826c36",
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/patchbay.git"
       }

@@ -204,6 +204,16 @@ in {
         group = "users";
         mode = "0400";
       };
+      # Shared caller key: Claude Code sends it as the X-Patchbay-Key header
+      # and patchbay validates it before injecting a foreign model key. Same
+      # recipients + ownership as the OpenRouter key above; read from
+      # /run/agenix at request time by the systemd user service.
+      "patchbay-caller-key" = {
+        file = ../secrets/shared/patchbay-caller-key.age;
+        owner = "joshsymonds";
+        group = "users";
+        mode = "0400";
+      };
     })
   ];
 

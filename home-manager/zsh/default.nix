@@ -286,7 +286,10 @@ in {
         emulate -L zsh
         local mode=bedrock
         [[ -r $HOME/.claude-work/.backend ]] && mode=$(<$HOME/.claude-work/.backend)
-        local -a pfx=( CLAUDE_CONFIG_DIR=$HOME/.claude-work )
+        # Work sessions bypass patchbay (they hit Bedrock/Anthropic directly),
+        # so clear the patchbay caller header — it must never be sent from a
+        # work launch (cw/cwa, marker-file dispatch, or the bg-agent daemon).
+        local -a pfx=( CLAUDE_CONFIG_DIR=$HOME/.claude-work ANTHROPIC_CUSTOM_HEADERS= )
         if [[ $mode == bedrock ]]; then
           # ARNs come from the agenix secret at launch (see the workBackend
           # block in this module's `let`). Fable is the primary; [1m] is the
@@ -333,6 +336,14 @@ in {
       cw() { cwswitch bedrock && __cc_work "$@" }
       cwa() { cwswitch anthropic && __cc_work "$@" }
       cm() { ( unset CLAUDE_CONFIG_DIR && command claude "$@" ) }
+
+      # patchbay caller key: Claude Code authenticates to the local patchbay
+      # gateway with this header before it will inject a foreign model key. The
+      # value is read at shell start from the agenix runtime file (0400), so the
+      # secret never enters the world-readable Nix store — only this command does.
+      if [ -r /run/agenix/patchbay-caller-key ]; then
+        export ANTHROPIC_CUSTOM_HEADERS="X-Patchbay-Key: $(cat /run/agenix/patchbay-caller-key)"
+      fi
 
       t() {
         if [[ $# -eq 0 ]]; then

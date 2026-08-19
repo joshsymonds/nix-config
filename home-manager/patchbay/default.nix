@@ -147,6 +147,7 @@ in {
         Environment = [
           "PATCHBAY_LISTEN=127.0.0.1:${toString cfg.port}"
           "PATCHBAY_OPENROUTER_KEY_FILE=/run/agenix/patchbay-openrouter-key"
+          "PATCHBAY_CALLER_KEY_FILE=/run/agenix/patchbay-caller-key"
           "PATCHBAY_CHATGPT_KEY_FILE=${chatgptKeyFile}"
           # Pin patchbay's ledger + registry paths to the same locations it
           # would otherwise fall back to, so the agreement holds by construction.

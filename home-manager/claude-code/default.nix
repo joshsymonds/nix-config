@@ -195,7 +195,11 @@
   # non-null — for activation to clear its launch-default effort pin.
   modelRegistry = {
     "fable-5" = {
-      model = "claude-fable-5";
+      # The [1m] marker is client-side only (stripped before the wire): CC
+      # 2.1.234's static native-1M table predates fable-5, so the plain id
+      # resolves a 200k window and the context bar pegs 100% past 200k while
+      # the API happily serves the real 1M. The marker forces 1M resolution.
+      model = "claude-fable-5[1m]";
       defaultEffort = "high";
       unpinKey = "unpinFable5LaunchEffort";
       aliases = ["fable"];

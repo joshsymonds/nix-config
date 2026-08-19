@@ -79,12 +79,47 @@
     };
   };
 
-  # The personal-identity route set: OpenRouter plus, where the Codex
-  # upstream actually runs, the ChatGPT subscription. The chatgpt/* routes
-  # are only published on hosts that run that upstream; elsewhere they would
-  # point at a port nothing listens on.
+  # The RunPod H100 pod, reachable only over the tailnet: SGLang serving
+  # Qwen3.8-27B with DFlash2. Its address is constant across pod recreates
+  # because tailscale state lives on the pod's network volume, so this is a
+  # plain constant rather than anything host-derived.
+  #
+  # insecure: the base_url is plain http, but every byte of it rides
+  # WireGuard — the tailnet IS the encrypted link, and the pod carries
+  # tag:runpod with dead-end ACLs so nothing but my machines can open it.
+  # Terminating TLS on the pod would add a certificate to rotate and protect
+  # exactly nothing.
+  #
+  # strip_cache_control: prompt caching is Anthropic's; SGLang rejects the
+  # marker outright, so it has to come off before the request leaves here.
+  #
+  # max_input_tokens is PROVISIONAL. The model's window is 262144; 131072 is
+  # deliberately half that, because what this pod will actually serve depends
+  # on how much KV cache the H100 has left after the weights, not on what the
+  # model can nominally take. The shakedown reads the server's real
+  # max-total-tokens and this number gets corrected then. See tiltyard
+  # ops/runpod-dflash2/README.md for that handoff.
+  runpodRoutes = {
+    "runpod/qwen3.8" = {
+      base_url = "http://runpod-qwen.tail82223.ts.net:8000";
+      auth = "inject";
+      api_key_env_file = "PATCHBAY_RUNPOD_KEY_FILE";
+      model = "Qwen/Qwen3.8-27B";
+      max_input_tokens = 131072;
+      insecure = true;
+      strip_cache_control = true;
+    };
+  };
+
+  # The personal-identity route set: OpenRouter and the RunPod pod plus,
+  # where the Codex upstream actually runs, the ChatGPT subscription. The
+  # chatgpt/* routes are only published on hosts that run that upstream;
+  # elsewhere they would point at a port nothing listens on. runpod/* is
+  # unconditional — the pod answers to the whole tailnet, so every host that
+  # publishes it can actually reach it.
   subscriptionRoutes =
     openrouterRoutes
+    // runpodRoutes
     // lib.optionalAttrs cfg.codexUpstream.enable (
       lib.mapAttrs (_: chatgptRoute) chatgptModels
     );
@@ -269,6 +304,11 @@ in {
             "PATCHBAY_OPENROUTER_KEY_FILE=/run/agenix/patchbay-openrouter-key"
             "PATCHBAY_CALLER_KEY_FILE=/run/agenix/patchbay-caller-key"
             "PATCHBAY_BEDROCK_MODEL_MAP_FILE=${bedrockModelMapPath}"
+            # Unconditional: tiltyard's scripts/runpod-qwen.sh writes this key
+            # when it launches the pod, and patchbay reads key files per
+            # request — so on a host where it never appears, the cost is a 500
+            # on that one route, not a unit that refuses to start.
+            "PATCHBAY_RUNPOD_KEY_FILE=%h/.config/patchbay/runpod-qwen.key"
             # Pin patchbay's ledger + registry paths to the same locations it
             # would otherwise fall back to, so the agreement holds by construction.
             # systemd expands %h to the user's home; the ledger path shares

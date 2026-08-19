@@ -250,7 +250,7 @@
 
     # Patchbay — per-host Anthropic Messages API gateway (Claude Code → per-project models)
     patchbay = {
-      url = "git+ssh://git@github.com/joshsymonds/patchbay.git?ref=main&rev=8bf468dd754272291b95bab1396e5c3f732b9be9";
+      url = "git+ssh://git@github.com/joshsymonds/patchbay.git?ref=main&rev=cfcda9e2f9924aecaa3937af43cffc5fb7283466";
       flake = false;
     };
 

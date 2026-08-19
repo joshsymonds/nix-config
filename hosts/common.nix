@@ -180,13 +180,31 @@ in {
     p7zip
   ];
 
-  # atticd-cache: every NixOS host pulls from + pushes to ultraviolet's cache.
-  age.secrets."atticd-push-token" = {
-    file = ../secrets/shared/atticd-push-token.age;
-    owner = "root";
-    group = "root";
-    mode = "0400";
-  };
+  age.secrets = lib.mkMerge [
+    # atticd-cache: every NixOS host pulls from + pushes to ultraviolet's cache.
+    {
+      "atticd-push-token" = {
+        file = ../secrets/shared/atticd-push-token.age;
+        owner = "root";
+        group = "root";
+        mode = "0400";
+      };
+    }
+    # patchbay's OpenRouter key, only on the four hosts that run the gateway
+    # (the others aren't recipients of the .age file — see secrets/keys.nix
+    # patchbayHosts — so declaring it everywhere would fail activation).
+    # It is a system-level secret owned by joshsymonds because patchbay runs
+    # as a systemd USER service (home-manager/patchbay) and reads the
+    # decrypted file out of /run/agenix at request time.
+    (lib.mkIf (builtins.elem config.networking.hostName ["gnomon" "ultraviolet" "vermissian" "stygianlibrary"]) {
+      "patchbay-openrouter-key" = {
+        file = ../secrets/shared/patchbay-openrouter-key.age;
+        owner = "joshsymonds";
+        group = "users";
+        mode = "0400";
+      };
+    })
+  ];
 
   services.atticd-cache = {
     consumer.enable = true;

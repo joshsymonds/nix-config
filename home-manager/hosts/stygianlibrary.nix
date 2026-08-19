@@ -10,7 +10,13 @@
   imports = [
     ../headless-x86_64-linux.nix
     ../claude-code/transcripts.nix
+    ../patchbay
   ];
+
+  # Per-host Anthropic API gateway. No ledger shipper: stygianlibrary does
+  # not mount /mnt/claude (hosts/common.nix gates that share to gnomon,
+  # ultraviolet and vermissian).
+  services.patchbay.enable = true;
 
   home.packages = with pkgs; [
     # Minimal: enough to debug halmasuit from a remote SSH session.

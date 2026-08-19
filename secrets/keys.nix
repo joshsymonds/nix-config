@@ -57,6 +57,18 @@ let
       hosts.stygianlibrary
     ]
     ++ allUserKeys;
+
+  # Hosts that run patchbay and therefore need the shared OpenRouter key.
+  # When adding a host here, re-key secrets/shared/patchbay-openrouter-key.age
+  # (do not bulk re-key — see CLAUDE.md).
+  patchbayHosts =
+    [
+      hosts.gnomon
+      hosts.ultraviolet
+      hosts.vermissian
+      hosts.stygianlibrary
+    ]
+    ++ allUserKeys;
 in {
   # Per-host: host key (for boot-time agenix decryption) + EVERY user key
   # (so any of josh's machines can edit any host's secrets). When a new
@@ -75,4 +87,8 @@ in {
   # Hosts that participate in the household atticd cache (pull + push).
   # Used by secrets/shared/atticd-push-token.age.
   inherit publisherHosts;
+
+  # Hosts that run the patchbay gateway.
+  # Used by secrets/shared/patchbay-openrouter-key.age.
+  inherit patchbayHosts;
 }

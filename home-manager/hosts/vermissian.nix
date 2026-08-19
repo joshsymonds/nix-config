@@ -3,7 +3,15 @@
     ../headless-x86_64-linux.nix
     ../claude-code/transcripts.nix
     ../go
+    ../patchbay
   ];
+
+  # Per-host Anthropic API gateway. Mounts /mnt/claude, so it also ships its
+  # request ledger to the NAS bucket.
+  services.patchbay = {
+    enable = true;
+    ledgerShipper.enable = true;
+  };
 
   home.packages = with pkgs; [
     jq

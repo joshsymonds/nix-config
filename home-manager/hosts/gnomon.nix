@@ -14,7 +14,16 @@
     ../claude-code/aggregator.nix
     ../ntfy-notify
     ../savecraftd
+    ../patchbay
   ];
+
+  # Per-host Anthropic API gateway. The personal Claude Code profile points
+  # ANTHROPIC_BASE_URL here; gnomon mounts /mnt/claude, so it also ships its
+  # request ledger to the NAS bucket.
+  services.patchbay = {
+    enable = true;
+    ledgerShipper.enable = true;
+  };
 
   # Watch this gaming box's game saves (Satisfactory et al.) and push parsed
   # state to Savecraft. Links to the production account; the daemon logs a

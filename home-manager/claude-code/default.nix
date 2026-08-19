@@ -48,7 +48,16 @@
       lib.recursiveUpdate settingsJsonWithGambit overlay
     ));
 
-  settingsJsonPersonal = mkSettingsJson "personal" {};
+  # Personal profile only, by design: work sessions must never route through
+  # patchbay (see settingsJsonWork below — that profile's backend is a
+  # runtime-toggled Bedrock/Anthropic choice and stays on the vendor
+  # endpoint). `or false` keeps hosts that never import home-manager/patchbay
+  # — darwin (ninuan), echelon — evaluating.
+  settingsJsonPersonal = mkSettingsJson "personal" (
+    lib.optionalAttrs (config.services.patchbay.enable or false) {
+      env.ANTHROPIC_BASE_URL = "http://127.0.0.1:${toString config.services.patchbay.port}";
+    }
+  );
 
   # The work profile (~/.claude-work) is a SINGLE config dir whose LLM
   # backend (AWS Bedrock vs Anthropic OAuth) is a runtime-toggled mode, not

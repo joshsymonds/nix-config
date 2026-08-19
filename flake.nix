@@ -248,6 +248,12 @@
       flake = false;
     };
 
+    # Patchbay — per-host Anthropic Messages API gateway (Claude Code → per-project models)
+    patchbay = {
+      url = "git+ssh://git@github.com/joshsymonds/patchbay.git?ref=main&rev=4303fe713055ffa9302ab3cb792076834fd97e10";
+      flake = false;
+    };
+
     # Mentat — personal assistant daemon (Claude as the brain)
     mentat = {
       url = "github:joshsymonds/mentat";
@@ -581,6 +587,9 @@
           // {
             savecraft-egress = pkgs.callPackage ./pkgs/savecraft-egress {
               src = inputs.savecraft-egress;
+            };
+            patchbay = pkgs.callPackage ./pkgs/patchbay {
+              src = inputs.patchbay;
             };
           }
           // lib.optionalAttrs (system == "x86_64-linux") {

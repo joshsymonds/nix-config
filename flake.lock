@@ -3167,6 +3167,24 @@
         "type": "github"
       }
     },
+    "patchbay": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1787087759,
+        "narHash": "sha256-AUUYcok0jXxo7WrBO+/HjIVaravMBj8Ee+/Jn8scwOs=",
+        "ref": "main",
+        "rev": "4303fe713055ffa9302ab3cb792076834fd97e10",
+        "revCount": 8,
+        "type": "git",
+        "url": "ssh://git@github.com/joshsymonds/patchbay.git"
+      },
+      "original": {
+        "ref": "main",
+        "rev": "4303fe713055ffa9302ab3cb792076834fd97e10",
+        "type": "git",
+        "url": "ssh://git@github.com/joshsymonds/patchbay.git"
+      }
+    },
     "pre-commit": {
       "inputs": {
         "flake-compat": "flake-compat_5",
@@ -3413,6 +3431,7 @@
         "nixpkgs-inference": "nixpkgs-inference",
         "nixpkgs-open-webui": "nixpkgs-open-webui",
         "openai-plugins": "openai-plugins",
+        "patchbay": "patchbay",
         "redlib-fork": "redlib-fork",
         "rust-overlay": "rust-overlay_5",
         "savecraft": "savecraft",

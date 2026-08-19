@@ -487,79 +487,42 @@
     '';
   };
 
-  # ── Gambit rung agents ──────────────────────────────────────────────────
-  # Gambit's non-Claude ladder rungs ship as Claude Code SUBAGENT
-  # DEFINITIONS, not as model parameters. The Agent tool's `model:` argument
-  # is enum-locked (sonnet/opus/haiku/fable/inherit), so a patchbay route id
-  # like chatgpt/sol can only reach the wire through a subagent's
-  # frontmatter, whose `model` field accepts a full model id. Gambit
-  # dispatches a rung by subagent_type and passes the real contract by path
-  # in the prompt, so these bodies stay deliberately generic and minimal.
+  # ── Gambit rungs ────────────────────────────────────────────────────────
+  # The rung definitions, the subagent renderer, and both rung/role maps live
+  # in ./gambit-rungs.nix so tests/gambit-rung-agents.nix can import the same
+  # data this module installs. See that file for what a rung is and why it
+  # has to be a subagent definition.
   #
-  # Each rung ships in two variants: the plain one inherits the full default
-  # toolset, and the -ro one is the advisory read-only variant the
-  # scout/steelman/finder/verifier roles take. Read-only is enforced with
-  # `disallowedTools`, a denylist resolved before any `tools` allowlist
-  # (Claude Code sub-agents reference).
-  gambitRungs = {
-    "luna-low" = {
-      route = "chatgpt/luna";
-      effort = "low";
-    };
-    "sol-low" = {
-      route = "chatgpt/sol";
-      effort = "low";
-    };
-    "terra-medium" = {
-      route = "chatgpt/terra";
-      effort = "medium";
-    };
-    "sol-xhigh" = {
-      route = "chatgpt/sol";
-      effort = "xhigh";
-    };
-  };
-
-  # The description is quoted because it contains a colon; an unquoted YAML
-  # plain scalar cannot carry ": ".
-  mkRungAgent = rung: readonly: let
-    inherit (gambitRungs.${rung}) route effort;
-    agentName = rung + lib.optionalString readonly "-ro";
-  in
-    pkgs.writeText "gambit-rung-${agentName}.md" (lib.concatStringsSep "\n" (
-      [
-        "---"
-        "name: ${agentName}"
-        ''description: "Gambit rung: GPT-5.6 ${route} at ${effort} effort via patchbay${lib.optionalString readonly ", read-only advisory variant"}"''
-        "model: ${route}"
-        "effort: ${effort}"
-      ]
-      ++ lib.optional readonly "disallowedTools: Edit, Write, NotebookEdit"
-      ++ [
-        "---"
-        ""
-        "You are a gambit rung agent. Follow the contract and brief given in your prompt exactly."
-        ""
-      ]
-    ));
+  # On the -ro variants: "read-only" here is a denylist plus a prompt-level
+  # directive, and that is strictly weaker than the OS-level
+  # `sandbox = "read-only"` the deleted Codex executor path used to get.
+  # `disallowedTools` removes the editing tools, sub-dispatch, and every MCP
+  # server, but Bash survives — the read-only contracts (scout, steelman,
+  # finder, verifier) need git and search inspection, so the variant's body
+  # spells out the bounded command set instead. A determined prompt could
+  # still talk Bash into writing; the destructive-guard hook is what backstops
+  # the worst of that.
+  inherit
+    (import ./gambit-rungs.nix {inherit lib pkgs;})
+    rungAgentEntries
+    gambitModelsFull
+    gambitModelsClaudeOnly
+    ;
 
   # Agents dir as a linkFarm, mirroring skillsDir: the checked-in ./agents
-  # definitions plus, on Codex-upstream hosts only, the eight generated rung
-  # agents. Off those hosts the chatgpt/* routes are not published, so a rung
-  # agent would point at a port nothing listens on — hence the gate.
-  agentsDir = let
+  # definitions plus, in the personal profile on Codex-upstream hosts, the
+  # eight generated rung agents. Both gates matter. Off a Codex-upstream host
+  # the chatgpt/* routes are not published, so a rung agent would point at a
+  # port nothing listens on. And in the work profile a rung agent would be a
+  # live path for a work session to spend the personal ChatGPT subscription —
+  # the same invariant gambitModelsJson enforces for models.json, which is
+  # worthless if the agents ship anyway.
+  agentsDir = personal: let
     staticAgents = lib.attrNames (
       lib.filterAttrs (
         name: type: type == "regular" && lib.hasSuffix ".md" name
       ) (builtins.readDir ./agents)
     );
-    rungAgents = lib.concatMap (
-      rung:
-        map (readonly: {
-          name = "${rung + lib.optionalString readonly "-ro"}.md";
-          path = mkRungAgent rung readonly;
-        }) [false true]
-    ) (lib.attrNames gambitRungs);
   in
     pkgs.linkFarm "claude-agents" (
       (map (n: {
@@ -567,107 +530,8 @@
           path = ./agents + "/${n}";
         })
         staticAgents)
-      ++ lib.optionals codexUpstream rungAgents
+      ++ lib.optionals (personal && codexUpstream) rungAgentEntries
     );
-
-  # ── Gambit rung/role map ────────────────────────────────────────────────
-  # <profile>/gambit/models.json: what gambit reads to turn a role into a
-  # dispatch. Two kinds of rung entry:
-  #   - {agent, readonly_agent} — dispatch subagent_type=<agent> and NO model
-  #     parameter; a readonly role takes readonly_agent instead. This is the
-  #     only way a foreign model id reaches the wire (see mkRungAgent above).
-  #   - {model} — dispatch general-purpose/Explore with that enum model.
-  # A role names its entry rung, plus the escalation ladder where it has one;
-  # `readonly = true` marks an advisory role that must not write.
-  gambitModelsFull = {
-    rungs = {
-      "luna-low" = {
-        agent = "luna-low";
-        readonly_agent = "luna-low-ro";
-      };
-      "sol-low" = {
-        agent = "sol-low";
-        readonly_agent = "sol-low-ro";
-      };
-      "terra-medium" = {
-        agent = "terra-medium";
-        readonly_agent = "terra-medium-ro";
-      };
-      "sol-xhigh" = {
-        agent = "sol-xhigh";
-        readonly_agent = "sol-xhigh-ro";
-      };
-      sonnet.model = "sonnet";
-      opus.model = "opus";
-      fable.model = "fable";
-    };
-    roles = {
-      worker = {
-        entry = "sol-low";
-        ladder = ["sol-low" "terra-medium" "sol-xhigh" "opus"];
-      };
-      escalation = {
-        entry = "terra-medium";
-        ladder = ["terra-medium" "sol-xhigh" "opus"];
-      };
-      scout = {
-        entry = "terra-medium";
-        readonly = true;
-      };
-      steelman = {
-        entry = "sol-xhigh";
-        readonly = true;
-      };
-      finder = {
-        entry = "sol-xhigh";
-        readonly = true;
-      };
-      verifier = {
-        entry = "sol-xhigh";
-        readonly = true;
-      };
-      "test-runner".entry = "luna-low";
-    };
-  };
-
-  # Claude-only map: no GPT rungs at all. Used on hosts without the Codex
-  # upstream, and in the work profile everywhere — no attain-side GPT
-  # credential exists, and a work session must never spend the personal
-  # ChatGPT subscription.
-  gambitModelsClaudeOnly = {
-    rungs = {
-      sonnet.model = "sonnet";
-      opus.model = "opus";
-      fable.model = "fable";
-    };
-    roles = {
-      worker = {
-        entry = "opus";
-        ladder = ["opus" "fable"];
-      };
-      escalation = {
-        entry = "fable";
-        ladder = ["fable"];
-      };
-      scout = {
-        entry = "sonnet";
-        readonly = true;
-      };
-      steelman = {
-        entry = "fable";
-        readonly = true;
-      };
-      finder = {
-        entry = "fable";
-        readonly = true;
-      };
-      verifier = {
-        entry = "fable";
-        readonly = true;
-      };
-      "test-runner".entry = "sonnet";
-    };
-  };
 
   gambitModelsJson = personal:
     builtins.toJSON (
@@ -827,6 +691,9 @@ in {
       # and lets cwrender produce the real settings.json (see the cwrender
       # comment above for why it can't be a store symlink).
       mkClaudeFiles = dir: settings: let
+        # Which profile this is. The GPT rung agents are personal-only for
+        # the same reason models.json's rungs are (see agentsDir).
+        personal = dir == ".claude";
         commandFileAttrs =
           lib.mapAttrs' (
             name: _: lib.nameValuePair "${dir}/commands/${name}" {source = ./commands/${name};}
@@ -844,7 +711,7 @@ in {
             "${dir}/CLAUDE.md".text = claudeMdText;
             "${dir}/host.md".text = cfg.hostContext;
             "${dir}/fleet.md".source = ./fleet.md;
-            "${dir}/agents".source = agentsDir;
+            "${dir}/agents".source = agentsDir personal;
             "${dir}/skills".source = skillsDir;
             "${dir}/bin/cc-tools-statusline".source = "${cc-tools}/bin/cc-tools-statusline";
             "${dir}/bin/cc-tools".source = "${cc-tools}/bin/cc-tools";
@@ -1149,10 +1016,20 @@ in {
       for prefs in "$HOME/.claude.json" "$HOME/.claude-work/.claude.json"; do
         [ -f "$prefs" ] || continue
         if ${pkgs.jq}/bin/jq -e '.mcpServers | has("codex")' "$prefs" >/dev/null 2>&1; then
-          tmp="$prefs.codex-cleanup.$$"
-          ${pkgs.jq}/bin/jq 'del(.mcpServers.codex)' "$prefs" > "$tmp"
-          ${pkgs.coreutils}/bin/chmod --reference="$prefs" "$tmp"
-          mv "$tmp" "$prefs"
+          # Subshell so the cleanup trap is scoped to this rewrite and cannot
+          # outlive it into the rest of the activation script. The umask is
+          # inside its own subshell because the SHELL creates $tmp for the
+          # redirect, before jq or chmod --reference ever run: .claude.json
+          # carries OAuth state, and it must not exist world-readable even for
+          # that instant. Any failure under set -e removes $tmp rather than
+          # stranding a half-written copy of the prefs next to the original.
+          (
+            tmp="$prefs.codex-cleanup.$$"
+            trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+            (umask 077; ${pkgs.jq}/bin/jq 'del(.mcpServers.codex)' "$prefs" > "$tmp")
+            ${pkgs.coreutils}/bin/chmod --reference="$prefs" "$tmp"
+            mv "$tmp" "$prefs"
+          )
           echo "claudeCodexMcpCleanup: removed .mcpServers.codex from $prefs" >&2
         fi
       done

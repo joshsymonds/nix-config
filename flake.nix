@@ -635,6 +635,9 @@
             chatgptDesktopUnwrapped = checkPkgs.chatgpt-desktop-unwrapped;
           };
           direnv-shell = import ./tests/direnv-shell.nix {inherit pkgs;};
+          gambit-rung-agents = import ./tests/gambit-rung-agents.nix {
+            pkgs = checkPkgs;
+          };
           installer-kit-fixture = import ./tests/installer-kit-fixture.nix {
             inherit pkgs;
             flakeSource = self.outPath;

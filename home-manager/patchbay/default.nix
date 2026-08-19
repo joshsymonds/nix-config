@@ -32,13 +32,10 @@
   # never drift between the service and the routes.
   codexPort = 8317;
   codexListenerKey = "patchbay-local";
-  # fastModel is the fast tier for haiku-slot work (summaries, small tool
-  # calls). Confirmed present in the codex channel's /v1/models.
-  codexModel = "gpt-5.6-sol";
-  codexFastModel = "gpt-5.6-luna";
-  # The middle rung of the gambit ladder. Also confirmed present in the codex
-  # channel's /v1/models.
-  codexMidModel = "gpt-5.6-terra";
+  # Route key -> upstream model id for the ChatGPT/Codex subscription. Its own
+  # file because the gambit rung agents name these keys and a check asserts
+  # they agree (home-manager/claude-code/gambit-rungs.nix).
+  chatgptModels = import ./chatgpt-models.nix;
 
   # The CLIProxyAPI listener key. It is world-readable in /nix/store and only
   # gates the loopback listener — loopback is reachable by host-network
@@ -88,11 +85,9 @@
   # point at a port nothing listens on.
   subscriptionRoutes =
     openrouterRoutes
-    // lib.optionalAttrs cfg.codexUpstream.enable {
-      "chatgpt/sol" = chatgptRoute codexModel;
-      "chatgpt/luna" = chatgptRoute codexFastModel;
-      "chatgpt/terra" = chatgptRoute codexMidModel;
-    };
+    // lib.optionalAttrs cfg.codexUpstream.enable (
+      lib.mapAttrs (_: chatgptRoute) chatgptModels
+    );
 
   # The Attain Bedrock default route: Claude models in the attain-bedrock
   # context are signed with SigV4 from the `attain` AWS profile instead of

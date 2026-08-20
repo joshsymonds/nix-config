@@ -96,27 +96,30 @@
     };
   };
 
-  # The RunPod H100 pod, reachable only over the tailnet: SGLang serving
-  # Qwen3.8-27B with DFlash2. Its address is constant across pod recreates
-  # because tailscale state lives on the pod's network volume, so this is a
-  # plain constant rather than anything host-derived.
+  # The RunPod H100 pods, reachable only over the tailnet: two servings of the
+  # same Qwen3.8-27B target, so the study can compare them across one gateway
+  # on one key. What differs between them is per-route below.
   #
   # insecure: the base_url is plain http, but every byte of it rides
-  # WireGuard — the tailnet IS the encrypted link, and the pod carries
-  # tag:runpod with dead-end ACLs so nothing but my machines can open it.
-  # Terminating TLS on the pod would add a certificate to rotate and protect
+  # WireGuard — the tailnet IS the encrypted link, and the pods carry
+  # tag:runpod with dead-end ACLs so nothing but my machines can open them.
+  # Terminating TLS on a pod would add a certificate to rotate and protect
   # exactly nothing.
   #
-  # strip_cache_control: prompt caching is Anthropic's; SGLang rejects the
-  # marker outright, so it has to come off before the request leaves here.
+  # strip_cache_control: prompt caching is Anthropic's, and neither SGLang nor
+  # llama.cpp implements it, so the marker comes off before the request leaves
+  # here.
   #
-  # max_input_tokens is PROVISIONAL. The model's window is 262144; 131072 is
-  # deliberately half that, because what this pod will actually serve depends
-  # on how much KV cache the H100 has left after the weights, not on what the
-  # model can nominally take. The shakedown reads the server's real
-  # max-total-tokens and this number gets corrected then. See tiltyard
+  # max_input_tokens is PROVISIONAL on both. The model's window is 262144;
+  # 131072 is deliberately half that, because what a pod will actually serve
+  # depends on how much KV cache the H100 has left after the weights, not on
+  # what the model can nominally take. The shakedown reads the server's real
+  # max-total-tokens and these numbers get corrected then. See tiltyard
   # ops/runpod-dflash2/README.md for that handoff.
   runpodRoutes = {
+    # bf16 on SGLang with DFlash2. Its address is constant across pod
+    # recreates because tailscale state lives on the pod's network volume, so
+    # this is a plain constant rather than anything host-derived.
     "runpod/qwen3.8" = {
       base_url = "http://runpod-qwen.tail82223.ts.net:8000";
       auth = "inject";
@@ -126,14 +129,33 @@
       insecure = true;
       strip_cache_control = true;
     };
+    # The second flavor: the UD-Q4_K_XL GGUF quant on llama.cpp, with the
+    # DFlash2 PR (#27342) pinned. This pod carries no network volume, so its
+    # tailnet identity is ephemeral — if a stale device record for the name is
+    # still registered when the pod comes back, tailscale hands it
+    # runpod-qwen-gguf-1, then -2, and this constant silently points at
+    # nothing. Delete the old machine from the tailnet before relaunching.
+    #
+    # model: llama-server ignores the model a request names, but patchbay
+    # requires one on an inject route, so this carries the target's HF id —
+    # what the quant was made from, and what the bf16 pod above serves.
+    "runpod/qwen-gguf" = {
+      base_url = "http://runpod-qwen-gguf.tail82223.ts.net:8000";
+      auth = "inject";
+      api_key_env_file = "PATCHBAY_RUNPOD_KEY_FILE";
+      model = "Qwen/Qwen3.8-27B";
+      max_input_tokens = 131072;
+      insecure = true;
+      strip_cache_control = true;
+    };
   };
 
-  # The personal-identity route set: OpenRouter and the RunPod pod plus,
+  # The personal-identity route set: OpenRouter and the RunPod pods plus,
   # where the Codex upstream actually runs, the ChatGPT subscription. The
   # chatgpt/* routes are only published on hosts that run that upstream;
   # elsewhere they would point at a port nothing listens on. runpod/* is
-  # unconditional — the pod answers to the whole tailnet, so every host that
-  # publishes it can actually reach it.
+  # unconditional — the pods answer to the whole tailnet, so every host that
+  # publishes them can actually reach them.
   subscriptionRoutes =
     openrouterRoutes
     // runpodRoutes

@@ -59,9 +59,6 @@
 
   # OpenRouter, paid per-token from the household key. Model ids and
   # context lengths verified against https://openrouter.ai/api/v1/models.
-  # Deliberately published in EVERY context, work included: reaching a
-  # non-Claude model from a work session still spends the household key, not
-  # the employer's, which is the escape hatch I want available everywhere.
   openrouterRoutes = {
     "openrouter/sol" = {
       base_url = "https://openrouter.ai/api";
@@ -163,61 +160,22 @@
       lib.mapAttrs (_: chatgptRoute) chatgptModels
     );
 
-  # The Attain Bedrock default route: Claude models in the attain
-  # context are signed with SigV4 from the `attain` AWS profile instead of
-  # forwarded to Anthropic. It names no base_url (the endpoint is derived
-  # from the region) and no model id — the caller's Claude id is translated
-  # through the model map file, which holds the per-user application-
-  # inference-profile ARNs. Those ARNs embed the Attain AWS account id and
-  # this repo is public, so they live in an agenix secret and only the env
-  # var naming that file appears here.
-  #
-  # 200000: the Bedrock Claude ids carry the same context window as their
-  # Anthropic-side equivalents. The 1M-context [1m] hint is a client-side
-  # suffix Claude Code strips before the request, so what reaches this route
-  # is always the base window.
-  attainBedrockDefaultRoute = {
-    auth = "sigv4";
-    aws_profile = "attain";
-    aws_region = "us-east-2";
-    model_map_env_file = "PATCHBAY_BEDROCK_MODEL_MAP_FILE";
-    max_input_tokens = 200000;
-  };
-
   # Registry v2: named contexts, selected per request by the /ctx/<name> URL
-  # prefix Claude Code's ANTHROPIC_BASE_URL carries. A context without a
-  # default_route rides patchbay's built-in Anthropic forward — the caller's
-  # own OAuth credentials, untouched. All three ship on every patchbay host;
-  # a sigv4 request on a machine with no `attain` AWS profile fails at
-  # credential exec with a clear 502 rather than routing somewhere wrong.
+  # prefix Claude Code's ANTHROPIC_BASE_URL carries. No context declares a
+  # default_route, so a Claude model rides patchbay's built-in Anthropic
+  # forward everywhere — the caller's own OAuth credentials, untouched.
   #
-  # Which account a context bills is its default_route. For attain that is
-  # the employer's Bedrock account; billing the personal Anthropic
-  # subscription instead is a one-line change — remove attain's
-  # default_route and rebuild. The registry hot-reloads when the store path
-  # moves, so the change takes effect on the next request, and no client
-  # notices: the model ids are Anthropic-side either way, translated
-  # server-side by the model map.
+  # All three carry the same routes and bill the same identity. What a
+  # context buys is the name the ledger records against each request, which
+  # is what keeps spend attributable per project.
   contexts = {
-    # ~/.claude, my own Anthropic account.
+    # ~/.claude, and everything outside a work checkout.
     personal.routes = subscriptionRoutes;
-    # Savecraft work, same personal identity and subscriptions.
+    # ~/Work/savecraft.
     savecraft.routes = subscriptionRoutes;
-    # Attain work, on the employer's Bedrock account.
-    attain = {
-      default_route = attainBedrockDefaultRoute;
-      routes = openrouterRoutes;
-    };
+    # ~/Work/attain.
+    attain.routes = subscriptionRoutes;
   };
-
-  # Bedrock model map: caller model id -> application-inference-profile ARN.
-  # Home-manager agenix, so its path is a literal "''${XDG_RUNTIME_DIR}/..."
-  # placeholder; systemd does NOT expand that in Environment=, but a user
-  # unit's %t specifier IS the runtime dir, so swap one for the other and the
-  # unit still derives its path from the secret declaration.
-  bedrockModelMapPath =
-    lib.replaceStrings ["\${XDG_RUNTIME_DIR}"] ["%t"]
-    config.age.secrets."patchbay-bedrock-model-map".path;
 
   # CLIProxyAPI: an Anthropic-compatible endpoint over the ChatGPT Codex
   # subscription. It runs as a user service bound to loopback. OAuth state
@@ -295,13 +253,6 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
-    # Caller model id -> Attain application-inference-profile ARN, for the
-    # attain context's sigv4 default route. Encrypted because the
-    # ARNs embed the Attain AWS account id and this repo is public.
-    age.secrets."patchbay-bedrock-model-map" = {
-      file = ../../secrets/user/patchbay-bedrock-model-map.age;
-    };
-
     # cliproxyapi is also the one-time login CLI:
     #   cli-proxy-api --config ~/.config/cliproxyapi/config.yaml --codex-login
     # (--codex-device-login on headless hosts), so it belongs on PATH wherever
@@ -340,15 +291,11 @@ in {
         RestartSec = 5;
         Environment =
           [
-            # The sigv4 default route exports AWS credentials by running
-            # `aws configure export-credentials`, so the aws CLI must be on
-            # the unit's PATH. Nothing else here needs a PATH: patchbay
-            # itself is started by absolute store path.
-            "PATH=${lib.makeBinPath [pkgs.awscli2]}"
+            # No PATH: patchbay is started by absolute store path and shells
+            # out to nothing.
             "PATCHBAY_LISTEN=127.0.0.1:${toString cfg.port}"
             "PATCHBAY_OPENROUTER_KEY_FILE=/run/agenix/patchbay-openrouter-key"
             "PATCHBAY_CALLER_KEY_FILE=/run/agenix/patchbay-caller-key"
-            "PATCHBAY_BEDROCK_MODEL_MAP_FILE=${bedrockModelMapPath}"
             # Unconditional: tiltyard's scripts/runpod-qwen.sh writes this key
             # when it launches the pod, and patchbay reads key files per
             # request — so on a host where it never appears, the cost is a 500

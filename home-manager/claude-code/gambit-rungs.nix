@@ -160,9 +160,7 @@
   };
 
   # Claude-only map: no GPT rungs at all. Used on hosts without the Codex
-  # upstream, and in the work profile everywhere — no attain-side GPT
-  # credential exists, and a work session must never spend the personal
-  # ChatGPT subscription.
+  # upstream, where patchbay publishes no chatgpt/* route for a rung to reach.
   gambitModelsClaudeOnly = {
     rungs = {
       sonnet.model = "sonnet";

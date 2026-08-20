@@ -432,10 +432,7 @@
   # Agents dir as a linkFarm, mirroring skillsDir: the checked-in ./agents
   # definitions plus, on Codex-upstream hosts, the generated rung agents.
   # Off a Codex-upstream host the chatgpt/* routes are not published, so a
-  # rung agent would point at a port nothing listens on. Contexts that do
-  # not publish chatgpt/* (attain) refuse a rung's model at the gateway, so
-  # a session there cannot spend the personal ChatGPT subscription even
-  # though the agent definitions are installed.
+  # rung agent would point at a port nothing listens on.
   agentsDir = let
     staticAgents = lib.attrNames (
       lib.filterAttrs (

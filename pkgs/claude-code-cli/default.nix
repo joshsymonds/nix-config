@@ -80,6 +80,13 @@ in
         cp "$out/bin/claude" "$TMPDIR/claude.stock"
         perl ${./patch-context-window.pl} "$out/bin/claude"
 
+        # Report which agent's transcript view is focused in the
+        # subagentStatusLine payload (per-task `focused` boolean), so cc-tools
+        # can swap the main statusline's model chip to the viewed agent's
+        # model. Same warn-and-ship-stock drift model; a stock binary just
+        # never sets `focused` and cc-tools falls back to the aggregate view.
+        perl ${./patch-agent-focus.pl} "$out/bin/claude"
+
         # Runnable sanity gate: the patched binary must still start. On failure,
         # restore the stock backup (do not fail the build).
         export HOME="$TMPDIR"

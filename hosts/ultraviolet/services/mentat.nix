@@ -72,6 +72,9 @@
     voice = {
       enable = true;
       environmentFile = config.age.secrets."mentat-voice-env".path;
+      # What token-route clients (the Android app) are told to connect to:
+      # the tailnet-published signal, not the loopback URL the agent uses.
+      publicLivekitUrl = "wss://ultraviolet.tail82223.ts.net:7443";
     };
   };
 

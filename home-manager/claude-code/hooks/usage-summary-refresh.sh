@@ -21,7 +21,7 @@
 #   A Stop hook fires once per completed top-level turn — not per tool call
 #   (that is PostToolUse) and not per sub-agent (that is SubagentStop); this
 #   hook is registered only on Stop.  Even so, back-to-back short turns, and
-#   simultaneous turns from concurrent sessions on the same host+profile, can
+#   simultaneous turns from concurrent sessions on the same host, can
 #   cluster.  We cap to one summarizer spawn per 60 seconds so a cluster can't
 #   hammer the platter-backed Synology with a write storm.  The 60s is purely
 #   write-storm protection — unrelated to any API cache window (the reader,
@@ -39,12 +39,12 @@
 #   tmpfs/SSD read.
 #
 # WHY THE GUARD
-#   This hook is deployed to ALL profiles on ALL in-scope hosts (gnomon,
-#   ultraviolet, vermissian) because settings.json is shared.  Only the
-#   hosts that import claude-code/transcripts.nix ship the
-#   `claude-usage-summary` binary.  On hosts or profiles without it the
-#   hook must be a silent no-op — not an error, not output to stdout
-#   (Claude parses hook stdout for control messages), not a delay.
+#   This hook is deployed to ALL in-scope hosts (gnomon, ultraviolet,
+#   vermissian) because settings.json is shared.  Only the hosts that
+#   import claude-code/transcripts.nix ship the `claude-usage-summary`
+#   binary.  On hosts without it the hook must be a silent no-op — not an
+#   error, not output to stdout (Claude parses hook stdout for control
+#   messages), not a delay.
 #
 # WHY CLAUDE_SUMMARIES_DIR
 #   The NFS bucket path (/mnt/claude) is controlled by the NFS automount
@@ -62,18 +62,18 @@
 set -eu
 
 # ---------------------------------------------------------------------------
-# GUARD — silent no-op on hosts/profiles without the summarizer binary.
+# GUARD — silent no-op on hosts without the summarizer binary.
 #
-# The hook deploys to every Claude profile (personal AND work) on every
-# in-scope host via the shared home.file block in default.nix.  Only
-# hosts that import transcripts.nix have claude-usage-summary on PATH.
-# An exit-0 here is the correct contract: the hook succeeded (nothing to
-# do), and Claude should proceed without treating this as a failure.
+# The hook deploys to every in-scope host via the home.file block in
+# default.nix.  Only hosts that import transcripts.nix have
+# claude-usage-summary on PATH.  An exit-0 here is the correct contract:
+# the hook succeeded (nothing to do), and Claude should proceed without
+# treating this as a failure.
 # ---------------------------------------------------------------------------
 command -v claude-usage-summary >/dev/null 2>&1 || exit 0
 
 # ---------------------------------------------------------------------------
-# BUCKET — where this host writes its per-profile summary files.
+# BUCKET — where this host writes its summary file.
 #
 # CLAUDE_SUMMARIES_DIR overrides /mnt/claude for offline testing without
 # touching production NFS.  The host segment is the raw hostname from
@@ -84,27 +84,10 @@ SUMMARIES_DIR="${CLAUDE_SUMMARIES_DIR:-/mnt/claude}"
 host="$(uname -n)"
 BUCKET="$SUMMARIES_DIR/$host"
 
-# ---------------------------------------------------------------------------
-# PROFILE DETECTION — personal vs work, definitively.
-#
-# Claude Code sets CLAUDE_CONFIG_DIR to the active profile's config
-# directory before invoking hooks.  Personal sessions use the default
-# (~/.claude), so CLAUDE_CONFIG_DIR is either unset or points elsewhere.
-# Work sessions set CLAUDE_CONFIG_DIR=$HOME/.claude-work (see the
-# __cc_work function in home-manager/zsh/default.nix).  Checking for the
-# substring "claude-work" is the canonical test — it is immune to HOME
-# being set differently across hosts, and it matches any future variant
-# of the work-profile path without additional configuration.
-# ---------------------------------------------------------------------------
-profile="personal"
-if [[ "${CLAUDE_CONFIG_DIR:-}" == *claude-work* ]]; then
-  profile="work"
-fi
-
-OUT="$BUCKET/$profile/summary.json"
+OUT="$BUCKET/personal/summary.json"
 
 # ---------------------------------------------------------------------------
-# DEBOUNCE + DETACHED SPAWN — at most one summarizer per 60s, per profile.
+# DEBOUNCE + DETACHED SPAWN — at most one summarizer per 60s.
 #
 # Keyed on a small LOCAL stamp (see WHY A LOCAL STAMP above), not $OUT: we
 # touch the stamp *before* spawning so a burst of turns during the child's
@@ -113,7 +96,7 @@ OUT="$BUCKET/$profile/summary.json"
 # or a manual cleanup always proceeds.
 #
 # The check-touch-spawn runs under flock on a sibling lockfile so two
-# concurrent hooks (simultaneous sessions on the same host+profile) can't both
+# concurrent hooks (simultaneous sessions on the same host) can't both
 # pass the age check and double-spawn.  The lock is held only for the few
 # syscalls here and released the instant the subshell exits — the setsid'd
 # child is reparented and runs on past it; we never wait on it.  The 10-min
@@ -126,7 +109,7 @@ OUT="$BUCKET/$profile/summary.json"
 # out of Claude's hook stream.
 # ---------------------------------------------------------------------------
 STAMP_DIR="${XDG_RUNTIME_DIR:-$HOME/.cache}"
-STAMP="$STAMP_DIR/claude-usage-refresh.$profile.stamp"
+STAMP="$STAMP_DIR/claude-usage-refresh.stamp"
 mkdir -p "$STAMP_DIR" 2>/dev/null || true
 
 (
@@ -139,7 +122,7 @@ mkdir -p "$STAMP_DIR" 2>/dev/null || true
   # Claim the window before spawning so overlapping turns can't double-fire.
   touch "$STAMP"
 
-  setsid claude-usage-summary --profile "$profile" --out "$OUT" \
+  setsid claude-usage-summary --profile personal --out "$OUT" \
     >/dev/null 2>&1 </dev/null &
 ) 9>"$STAMP.lock"
 

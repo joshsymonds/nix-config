@@ -1,9 +1,8 @@
 # Per-host transcript summarizer — bash script + systemd user timer.
 #
 # Each in-scope Claude host (gnomon, ultraviolet, vermissian) runs the
-# `claude-usage-summary` script every 10 minutes, once per profile, and
-# writes a small JSON file into its NFS bucket at
-# /mnt/claude/${hostname}/{personal,work}/summary.json.
+# `claude-usage-summary` script every 10 minutes and writes a small JSON
+# file into its NFS bucket at /mnt/claude/${hostname}/personal/summary.json.
 #
 # The DMS bar widget on gnomon reads those summary files via
 # `get-claude-usage` instead of crawling every host's JSONL. This keeps
@@ -27,21 +26,16 @@
   };
   bucket = "/mnt/claude/${hostname}";
 
-  # Run both profiles in one ExecStart with `|| true` between them so a
-  # failure in one profile doesn't fail the timer (e.g. work profile
-  # might not exist on every host yet, and that should be a quiet
-  # zero-summary, not a unit failure).
   runner = pkgs.writeShellScript "claude-usage-summary-runner" ''
     set -u
     ${claudeUsageSummary}/bin/claude-usage-summary --profile personal --out ${bucket}/personal/summary.json || true
-    ${claudeUsageSummary}/bin/claude-usage-summary --profile work     --out ${bucket}/work/summary.json     || true
   '';
 in {
   home.packages = [claudeUsageSummary];
 
   systemd.user.services.claude-usage-summary = {
     Unit = {
-      Description = "Per-host Claude Code transcript summary writer (personal + work)";
+      Description = "Per-host Claude Code transcript summary writer";
       # The NFS bucket has to be reachable; wait on the automount unit
       # so we don't spam stderr right after boot before /mnt/claude is
       # mounted on first access.

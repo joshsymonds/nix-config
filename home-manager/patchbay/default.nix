@@ -163,7 +163,7 @@
       lib.mapAttrs (_: chatgptRoute) chatgptModels
     );
 
-  # The Attain Bedrock default route: Claude models in the attain-bedrock
+  # The Attain Bedrock default route: Claude models in the attain
   # context are signed with SigV4 from the `attain` AWS profile instead of
   # forwarded to Anthropic. It names no base_url (the endpoint is derived
   # from the region) and no model id — the caller's Claude id is translated
@@ -187,18 +187,24 @@
   # Registry v2: named contexts, selected per request by the /ctx/<name> URL
   # prefix Claude Code's ANTHROPIC_BASE_URL carries. A context without a
   # default_route rides patchbay's built-in Anthropic forward — the caller's
-  # own OAuth credentials, untouched. All four ship on every patchbay host;
+  # own OAuth credentials, untouched. All three ship on every patchbay host;
   # a sigv4 request on a machine with no `attain` AWS profile fails at
   # credential exec with a clear 502 rather than routing somewhere wrong.
+  #
+  # Which account a context bills is its default_route. For attain that is
+  # the employer's Bedrock account; billing the personal Anthropic
+  # subscription instead is a one-line change — remove attain's
+  # default_route and rebuild. The registry hot-reloads when the store path
+  # moves, so the change takes effect on the next request, and no client
+  # notices: the model ids are Anthropic-side either way, translated
+  # server-side by the model map.
   contexts = {
     # ~/.claude, my own Anthropic account.
     personal.routes = subscriptionRoutes;
     # Savecraft work, same personal identity and subscriptions.
     savecraft.routes = subscriptionRoutes;
-    # Attain on the Anthropic OAuth account (the `cwswitch anthropic` half).
-    attain.routes = openrouterRoutes;
-    # Attain on the employer's Bedrock account (the `cwswitch bedrock` half).
-    "attain-bedrock" = {
+    # Attain work, on the employer's Bedrock account.
+    attain = {
       default_route = attainBedrockDefaultRoute;
       routes = openrouterRoutes;
     };
@@ -290,7 +296,7 @@ in {
 
   config = lib.mkIf cfg.enable {
     # Caller model id -> Attain application-inference-profile ARN, for the
-    # attain-bedrock context's sigv4 default route. Encrypted because the
+    # attain context's sigv4 default route. Encrypted because the
     # ARNs embed the Attain AWS account id and this repo is public.
     age.secrets."patchbay-bedrock-model-map" = {
       file = ../../secrets/user/patchbay-bedrock-model-map.age;

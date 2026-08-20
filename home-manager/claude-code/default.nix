@@ -26,14 +26,6 @@
   # time, pointing at the Nix store path. Keeps a single source of truth
   # between settings.json's extraKnownMarketplaces and the runtime
   # known_marketplaces.json populated by activation.
-  #
-  # Two variants get built, and they differ only in which patchbay registry
-  # context they select: the personal profile (~/.claude) takes the
-  # prefix-less path, and the work profile (~/.claude-work) rides
-  # /ctx/attain[-bedrock] through the local patchbay. Nothing AWS-shaped
-  # lives on the client side any more — no CLAUDE_CODE_USE_BEDROCK, no AWS
-  # credentials or region, no inference-profile ARNs; patchbay owns the
-  # translation into the Attain AWS account server-side.
   settingsJsonBase = builtins.fromJSON (builtins.readFile ./settings.json);
 
   settingsJsonWithGambit =
@@ -56,138 +48,75 @@
       lib.recursiveUpdate settingsJsonWithGambit overlay
     ));
 
-  # Both profiles ride patchbay now; they differ in which registry context
-  # answers. `or false` keeps hosts that never import home-manager/patchbay —
-  # darwin (ninuan), echelon — evaluating, and null there means "no local
-  # gateway", leaving the vendor endpoint in place.
+  # `or false` keeps hosts that never import home-manager/patchbay — darwin
+  # (ninuan), echelon — evaluating, and null there means "no local gateway",
+  # leaving the vendor endpoint in place.
   patchbayBaseUrl =
     if (config.services.patchbay.enable or false)
     then "http://127.0.0.1:${toString config.services.patchbay.port}"
     else null;
 
-  # No /ctx prefix: a prefix-less path selects the personal context
-  # implicitly, which is exactly what this profile wants.
-  settingsJsonPersonal = mkSettingsJson "personal" (
+  # The prefix-less base URL selects patchbay's personal context. A project
+  # that bills elsewhere selects its context with a /ctx/<name> base URL in
+  # its own .claude/settings.json — activation.claudeAttainContext below
+  # stamps the Attain repos.
+  settingsJson = mkSettingsJson "base" (
     lib.optionalAttrs (patchbayBaseUrl != null) {
       env.ANTHROPIC_BASE_URL = patchbayBaseUrl;
     }
   );
 
-  # The work profile (~/.claude-work) is a SINGLE config dir whose LLM
-  # backend (the employer's AWS Bedrock account vs the Anthropic OAuth
-  # account) is a runtime-toggled mode, not a baked setting. Home-manager
-  # therefore deploys this file as settings.base.json (never settings.json),
-  # and `cwrender` (below) merges it with the runtime backend mode into a
-  # REAL ~/.claude-work/settings.json at activation time and on every
-  # `cwswitch` flip.
+  # ccrender — render the real ~/.claude/settings.json from the HM-deployed
+  # settings.base.json, merging in the patchbay caller-key header.
   #
-  # Both modes now go through patchbay; the ONLY difference is which registry
-  # context the base URL selects — /ctx/attain-bedrock (a sigv4 default route
-  # into the Attain AWS account) or /ctx/attain (the built-in Anthropic
-  # forward). Claude Code never speaks Bedrock itself any more: no
-  # CLAUDE_CODE_USE_BEDROCK, no AWS env, no ARNs on this side. The model ids
-  # are always the Anthropic-side ones and patchbay's model map translates
-  # them to inference-profile ARNs server-side, which is also why the ARNs
-  # (they embed the Attain AWS account id, and this repo is public) no longer
-  # need to reach a Claude Code process at all.
+  # The header is a secret, so settings.json cannot be a store symlink. And
+  # it must be settings.json rather than launch env: the bg-agent daemon's
+  # spare workers spawn with a SCRUBBED env — ANTHROPIC_MODEL,
+  # ANTHROPIC_DEFAULT_*_MODEL and ANTHROPIC_CUSTOM_HEADERS are among the
+  # vars stripped (observed on CLI 2.1.204 via /proc environ diff,
+  # 2026-07-09) — and read settings.json's env block at spawn instead.
+  # Without the header there, patchbay's gate refuses every inject/sigv4
+  # request from any background session. settings.local.json cannot carry it
+  # either: its env block is ignored entirely (probed empirically, same
+  # date).
   #
-  # Why settings.json and not just launch env: the bg-agent daemon inherits
-  # the launch env, but the spare workers it forks get a SCRUBBED env —
-  # ANTHROPIC_MODEL, ANTHROPIC_DEFAULT_*_MODEL and ANTHROPIC_CUSTOM_HEADERS
-  # are among the vars stripped (observed on CLI 2.1.204 via /proc environ
-  # diff, 2026-07-09; an older CLI did inherit them, which is how this went
-  # unnoticed). Spares DO read settings.json's `env` block at spawn, so both
-  # the backend selection AND the patchbay caller-key header must live there
-  # — a spare that loses the header gets refused by patchbay's gate on every
-  # request. settings.local.json is NOT an option: its `env` block is ignored
-  # entirely (probed empirically, same date). The launch-time zsh wrapper
-  # exports remain as the interactive-session path; cwrender is the worker
-  # path.
-  settingsJsonWork = mkSettingsJson "work" {};
-
-  # tier -> {anthropic, bedrock} model map (declared in home-manager/zsh,
-  # shared here for cwrender). Only the .anthropic side is read now.
-  bedrockModelsFile = config.age.secrets."claude-bedrock-models".path;
-
-  # cwrender — render ~/.claude-work/settings.json from the HM-deployed
-  # settings.base.json plus the runtime backend pointer (.backend). The env
-  # block gets the patchbay context URL for the current mode, the patchbay
-  # caller-key header, and the per-tier Anthropic model ids from the agenix
-  # secret ([1m] 1M-context suffix on everything but haiku, matching the zsh
-  # launch wrapper exactly). Output is always a real, writable file replaced
-  # atomically — never a store symlink — because spare workers re-read it at
-  # spawn and cwswitch must be able to re-render without a rebuild. It is
-  # chmod 600: it carries the caller key's VALUE, which is fine in $HOME (a
-  # runtime file) and would never be fine in the world-readable Nix store.
-  cwrender = pkgs.writeShellApplication {
-    name = "cwrender";
+  # Output is a real file replaced atomically, chmod 600: it carries the
+  # caller key's VALUE, which is fine in $HOME (a runtime file) and would
+  # never be fine in the world-readable Nix store.
+  ccrender = pkgs.writeShellApplication {
+    name = "ccrender";
     runtimeInputs = [pkgs.jq pkgs.coreutils];
     text = ''
-      work="$HOME/.claude-work"
-      base="$work/settings.base.json"
-      out="$work/settings.json"
+      base="$HOME/.claude/settings.base.json"
+      out="$HOME/.claude/settings.json"
 
       if [ ! -r "$base" ]; then
-        echo "cwrender: $base missing or unreadable — is home-manager deployed?" >&2
+        echo "ccrender: $base missing or unreadable — is home-manager deployed?" >&2
         exit 1
       fi
 
-      mode=bedrock
-      [ -f "$work/.backend" ] && mode=$(tr -d '[:space:]' < "$work/.backend")
-      [ -n "$mode" ] || mode=bedrock
-
-      # The backend mode IS the patchbay context. An empty prefix (a host
-      # with no local gateway) leaves ANTHROPIC_BASE_URL unset entirely.
-      if [ "$mode" = bedrock ]; then ctx=attain-bedrock; else ctx=attain; fi
-      prefix="${lib.optionalString (patchbayBaseUrl != null) patchbayBaseUrl}"
-      base_url=""
-      [ -n "$prefix" ] && base_url="$prefix/ctx/$ctx"
-
-      # The caller key rides the rendered env block, not just the launch
-      # env, because the bg-agent daemon's spare workers spawn with a
-      # SCRUBBED environment and read settings.json instead — without the
-      # header here patchbay's gate refuses every spare-worker request.
-      # Emitted only on hosts that actually run a local patchbay: with no
-      # gateway the request goes straight to api.anthropic.com and the key
-      # must never ride along.
+      # Merged only on hosts that run a local patchbay: with no gateway the
+      # request goes straight to api.anthropic.com and the key must never
+      # ride along.
       caller_key=""
       ${lib.optionalString (patchbayBaseUrl != null) ''
         key_file=/run/agenix/patchbay-caller-key
         if [ -r "$key_file" ]; then
           caller_key=$(cat "$key_file")
         else
-          echo "cwrender: caller key $key_file unreadable (patchbay-caller-key agenix secret not deployed?) — rendering WITHOUT the X-Patchbay-Key header; patchbay will refuse every request in the '$ctx' context." >&2
+          echo "ccrender: caller key $key_file unreadable (patchbay-caller-key agenix secret not deployed?) — rendering WITHOUT the X-Patchbay-Key header; patchbay will refuse every inject/sigv4 request." >&2
         fi
       ''}
 
-      models="${bedrockModelsFile}"
-      tmp="$out.cwrender.$$"
-
-      if [ -r "$models" ]; then
-        jq --slurpfile m "$models" --arg base_url "$base_url" --arg caller_key "$caller_key" '
-          .env += (
-            {
-              ANTHROPIC_MODEL: ($m[0].fable.anthropic + "[1m]"),
-              ANTHROPIC_DEFAULT_FABLE_MODEL: ($m[0].fable.anthropic + "[1m]"),
-              ANTHROPIC_DEFAULT_OPUS_MODEL: ($m[0].opus.anthropic + "[1m]"),
-              ANTHROPIC_DEFAULT_SONNET_MODEL: ($m[0].sonnet.anthropic + "[1m]"),
-              ANTHROPIC_DEFAULT_HAIKU_MODEL: $m[0].haiku.anthropic
-            }
-            + (if $base_url == "" then {} else {ANTHROPIC_BASE_URL: $base_url} end)
-            + (if $caller_key == "" then {} else {ANTHROPIC_CUSTOM_HEADERS: ("X-Patchbay-Key: " + $caller_key)} end)
-          )' "$base" > "$tmp"
-      else
-        echo "cwrender: model map $models unreadable (claude-bedrock-models agenix secret not deployed?) — rendering WITHOUT the per-tier model pins; the context selection below still applies." >&2
-        jq --arg base_url "$base_url" --arg caller_key "$caller_key" '
-          .env += (
-            (if $base_url == "" then {} else {ANTHROPIC_BASE_URL: $base_url} end)
-            + (if $caller_key == "" then {} else {ANTHROPIC_CUSTOM_HEADERS: ("X-Patchbay-Key: " + $caller_key)} end)
-          )
-        ' "$base" > "$tmp"
-      fi
+      tmp="$out.ccrender.$$"
+      jq --arg caller_key "$caller_key" '
+        .env += (
+          if $caller_key == "" then {} else {ANTHROPIC_CUSTOM_HEADERS: ("X-Patchbay-Key: " + $caller_key)} end
+        )
+      ' "$base" > "$tmp"
       chmod 600 "$tmp"
       mv "$tmp" "$out"
-      echo "cwrender: $out rendered for context '$ctx'"
+      echo "ccrender: $out rendered"
     '';
   };
 
@@ -315,20 +244,15 @@
 
   # Registry-driven model/effort switcher for settings.json. See the
   # extensive comment on the `cmswitch` derivation itself (below) for full
-  # behavior; this mirrors cwswitch's shape (home-manager/zsh/default.nix)
-  # but edits+commits+deploys the Nix-tracked settings.json instead of
-  # rewriting runtime daemon state.
+  # behavior: it edits, commits, and deploys the Nix-tracked settings.json.
   cmswitch = pkgs.writeShellApplication {
     name = "cmswitch";
     runtimeInputs = [pkgs.jq pkgs.git pkgs.coreutils];
     text = ''
       # Switch the repo's home-manager/claude-code/settings.json to a
       # different model/effort, commit just that file, deploy via `update`,
-      # and bounce the Claude Code background-agent daemon in each profile
-      # (~/.claude, ~/.claude-work) so new work picks up the change —
-      # mirroring cwswitch's daemon-bounce step, but for the *default*
-      # model/effort baked into settings.json rather than the work-profile
-      # Bedrock/Anthropic backend.
+      # and bounce the Claude Code background-agent daemon so new work picks
+      # up the change.
       #
       # `update`/`claude` are user-profile binaries, not Nix store paths we
       # can reference at build time (this derivation's runtimeInputs only
@@ -459,29 +383,25 @@
         exit 1
       fi
 
-      # Bounce each profile's bg-agent daemon so new work picks up the new
-      # default — but only if nothing is actively "working" there (a bounce
-      # would kill in-flight work; leave the daemon up and let it pick up
-      # the new default on its own next restart instead). Mirrors the
-      # jobs/*/state.json scan in cwswitch (home-manager/zsh/default.nix).
-      for base in ".claude" ".claude-work"; do
-        profile_dir="$HOME/$base"
-        working=0
-        if [ -d "$profile_dir/jobs" ]; then
-          for state_file in "$profile_dir"/jobs/*/state.json; do
-            [ -f "$state_file" ] || continue
-            if grep -q '"state": *"working"' "$state_file" 2>/dev/null; then
-              working=$((working + 1))
-            fi
-          done
-        fi
-        if [ "$working" -gt 0 ]; then
-          echo "$base: $working job(s) working — daemon left running; new bg jobs may use the old default until it restarts"
-        else
-          CLAUDE_CONFIG_DIR="$profile_dir" claude daemon stop --any >/dev/null 2>&1 || true
-          echo "$base: bounce requested"
-        fi
-      done
+      # Bounce the bg-agent daemon so new work picks up the new default —
+      # but only if nothing is actively "working" (a bounce would kill
+      # in-flight work; leave the daemon up and let it pick up the new
+      # default on its own next restart instead).
+      working=0
+      if [ -d "$HOME/.claude/jobs" ]; then
+        for state_file in "$HOME"/.claude/jobs/*/state.json; do
+          [ -f "$state_file" ] || continue
+          if grep -q '"state": *"working"' "$state_file" 2>/dev/null; then
+            working=$((working + 1))
+          fi
+        done
+      fi
+      if [ "$working" -gt 0 ]; then
+        echo "$working job(s) working — daemon left running; new bg jobs may use the old default until it restarts"
+      else
+        claude daemon stop --any >/dev/null 2>&1 || true
+        echo "daemon bounce requested"
+      fi
 
       echo "''${cur_model:-(unset)} ''${cur_effort:-(unset)} -> $name $effort (commit $sha) deployed"
     '';
@@ -510,14 +430,13 @@
     ;
 
   # Agents dir as a linkFarm, mirroring skillsDir: the checked-in ./agents
-  # definitions plus, in the personal profile on Codex-upstream hosts, the
-  # eight generated rung agents. Both gates matter. Off a Codex-upstream host
-  # the chatgpt/* routes are not published, so a rung agent would point at a
-  # port nothing listens on. And in the work profile a rung agent would be a
-  # live path for a work session to spend the personal ChatGPT subscription —
-  # the same invariant gambitModelsJson enforces for models.json, which is
-  # worthless if the agents ship anyway.
-  agentsDir = personal: let
+  # definitions plus, on Codex-upstream hosts, the generated rung agents.
+  # Off a Codex-upstream host the chatgpt/* routes are not published, so a
+  # rung agent would point at a port nothing listens on. Contexts that do
+  # not publish chatgpt/* (attain) refuse a rung's model at the gateway, so
+  # a session there cannot spend the personal ChatGPT subscription even
+  # though the agent definitions are installed.
+  agentsDir = let
     staticAgents = lib.attrNames (
       lib.filterAttrs (
         name: type: type == "regular" && lib.hasSuffix ".md" name
@@ -530,15 +449,14 @@
           path = ./agents + "/${n}";
         })
         staticAgents)
-      ++ lib.optionals (personal && codexUpstream) rungAgentEntries
+      ++ lib.optionals codexUpstream rungAgentEntries
     );
 
-  gambitModelsJson = personal:
-    builtins.toJSON (
-      if personal && codexUpstream
-      then gambitModelsFull
-      else gambitModelsClaudeOnly
-    );
+  gambitModelsJson = builtins.toJSON (
+    if codexUpstream
+    then gambitModelsFull
+    else gambitModelsClaudeOnly
+  );
 
   # Skills dir as a linkFarm derivation: nix-managed skills + the
   # team-status skill at an out-of-store writable path so iteration
@@ -565,11 +483,11 @@
       ++ [
         {
           name = "team-status";
-          path = "/home/joshsymonds/.claude-work/team-status";
+          path = "/home/joshsymonds/.claude-local/skills/team-status";
         }
         {
           name = "harvest-weekly";
-          path = "/home/joshsymonds/.claude-work/harvest-weekly";
+          path = "/home/joshsymonds/.claude-local/skills/harvest-weekly";
         }
       ]
     );
@@ -578,20 +496,11 @@ in {
     type = lib.types.str;
     default = "";
     description = ''
-      Per-host markdown rendered to ~/.claude/host.md and ~/.claude-work/host.md,
+      Per-host markdown rendered to ~/.claude/host.md,
       then imported from CLAUDE.md via @host.md. Used to ground agents about
       which physical machine they're running on (hardware, role, capabilities).
       Empty string produces an empty file; the @-import is harmless in that case.
     '';
-  };
-
-  # Exposes the cwrender package so other modules (home-manager/zsh's
-  # cwswitch) can depend on the exact same renderer without duplicating it
-  # or reaching across module files.
-  options.programs.claudeCode.cwrenderPackage = lib.mkOption {
-    type = lib.types.package;
-    readOnly = true;
-    description = "The cwrender script that materializes ~/.claude-work/settings.json from settings.base.json + the runtime backend mode.";
   };
 
   options.programs.claudeCode.extraSkills = lib.mkOption {
@@ -605,8 +514,6 @@ in {
       Map entries: name → directory containing SKILL.md.
     '';
   };
-
-  config.programs.claudeCode.cwrenderPackage = cwrender;
 
   config.age.secrets."ntfy-url" = {
     file = ../../secrets/user/ntfy-url.age;
@@ -636,7 +543,7 @@ in {
         # Include cc-tools binaries
         cc-tools
       ])
-      ++ [pkgs.claudeCodeCli pkgs.claude-swap cmswitch cwrender];
+      ++ [pkgs.claudeCodeCli pkgs.claude-swap cmswitch ccrender];
 
     # Add npm global bin to PATH for user-installed packages
     sessionPath = lib.mkAfter [
@@ -660,11 +567,9 @@ in {
       DISABLE_AUTOUPDATER = "1";
     };
 
-    # Create and manage Claude Code config directories.
-    # Both ~/.claude (personal, default) and ~/.claude-work (Enterprise) receive
-    # identical Nix-managed static content; runtime state (.credentials.json,
-    # .claude.json, projects/, todos/, history.jsonl, plugins/installed_plugins.json)
-    # is owned by claude per-dir and selected at invocation time via CLAUDE_CONFIG_DIR.
+    # Create and manage the ~/.claude config directory. Runtime state
+    # (.credentials.json, ~/.claude.json, projects/, todos/, history.jsonl,
+    # plugins/installed_plugins.json) is owned by claude itself.
     file = let
       commandFiles = builtins.readDir ./commands;
       commandEntries =
@@ -674,9 +579,9 @@ in {
         commandFiles;
       # CLAUDE.md is written as text (not symlinked) so the trailing
       # @host.md and @fleet.md imports resolve relative to ~/.claude
-      # (or ~/.claude-work) rather than the nix store path the symlink
-      # would otherwise expose. Per Claude Code's memory docs, relative
-      # @-imports resolve relative to the file containing them.
+      # rather than the nix store path the symlink would otherwise expose.
+      # Per Claude Code's memory docs, relative @-imports resolve relative
+      # to the file containing them.
       claudeMdText =
         builtins.readFile ./CLAUDE.md
         + ''
@@ -686,71 +591,54 @@ in {
           @fleet.md
         '';
 
-      # settingsAttr: the personal profile symlinks settings.json straight
-      # to the store; the work profile deploys settings.base.json instead
-      # and lets cwrender produce the real settings.json (see the cwrender
-      # comment above for why it can't be a store symlink).
-      mkClaudeFiles = dir: settings: let
-        # Which profile this is. The GPT rung agents are personal-only for
-        # the same reason models.json's rungs are (see agentsDir).
-        personal = dir == ".claude";
-        commandFileAttrs =
-          lib.mapAttrs' (
-            name: _: lib.nameValuePair "${dir}/commands/${name}" {source = ./commands/${name};}
-          )
-          commandEntries;
-        settingsAttr =
-          if dir == ".claude-work"
-          then {"${dir}/settings.base.json".source = settings;}
-          else {"${dir}/settings.json".source = settings;};
-      in
-        lib.mkMerge [
-          commandFileAttrs
-          settingsAttr
-          {
-            "${dir}/CLAUDE.md".text = claudeMdText;
-            "${dir}/host.md".text = cfg.hostContext;
-            "${dir}/fleet.md".source = ./fleet.md;
-            "${dir}/agents".source = agentsDir personal;
-            "${dir}/skills".source = skillsDir;
-            "${dir}/bin/cc-tools-statusline".source = "${cc-tools}/bin/cc-tools-statusline";
-            "${dir}/bin/cc-tools".source = "${cc-tools}/bin/cc-tools";
-            "${dir}/hooks/aws-profile-mirror.sh" = {
-              source = ./hooks/aws-profile-mirror.sh;
-              executable = true;
-            };
-            "${dir}/hooks/destructive-guard.py" = {
-              source = ./hooks/destructive-guard.py;
-              executable = true;
-            };
-            "${dir}/hooks/usage-summary-refresh.sh" = {
-              source = ./hooks/usage-summary-refresh.sh;
-              executable = true;
-            };
-            "${dir}/.keep".text = "";
-            "${dir}/statsig/.keep".text = "";
-            "${dir}/commands/.keep".text = "";
-          }
-        ];
+      commandFileAttrs =
+        lib.mapAttrs' (
+          name: _: lib.nameValuePair ".claude/commands/${name}" {source = ./commands/${name};}
+        )
+        commandEntries;
     in
       lib.mkMerge [
-        (mkClaudeFiles ".claude" settingsJsonPersonal)
-        (mkClaudeFiles ".claude-work" settingsJsonWork)
+        commandFileAttrs
         {
-          # The rung/role map gambit dispatches from. The personal profile
-          # gets the GPT rungs wherever the Codex upstream runs; the work
-          # profile is Claude-only everywhere. See gambitModelsFull above.
-          ".claude/gambit/models.json".text = gambitModelsJson true;
-          ".claude-work/gambit/models.json".text = gambitModelsJson false;
+          # ccrender produces the real settings.json from this at activation
+          # (see the ccrender comment above for why it can't be a store
+          # symlink).
+          ".claude/settings.base.json".source = settingsJson;
+          ".claude/CLAUDE.md".text = claudeMdText;
+          ".claude/host.md".text = cfg.hostContext;
+          ".claude/fleet.md".source = ./fleet.md;
+          ".claude/agents".source = agentsDir;
+          ".claude/skills".source = skillsDir;
+          ".claude/bin/cc-tools-statusline".source = "${cc-tools}/bin/cc-tools-statusline";
+          ".claude/bin/cc-tools".source = "${cc-tools}/bin/cc-tools";
+          ".claude/hooks/aws-profile-mirror.sh" = {
+            source = ./hooks/aws-profile-mirror.sh;
+            executable = true;
+          };
+          ".claude/hooks/destructive-guard.py" = {
+            source = ./hooks/destructive-guard.py;
+            executable = true;
+          };
+          ".claude/hooks/usage-summary-refresh.sh" = {
+            source = ./hooks/usage-summary-refresh.sh;
+            executable = true;
+          };
+          ".claude/.keep".text = "";
+          ".claude/statsig/.keep".text = "";
+          ".claude/commands/.keep".text = "";
+          # The rung/role map gambit dispatches from: GPT rungs wherever the
+          # Codex upstream runs, Claude-only elsewhere. See gambitModelsFull
+          # above.
+          ".claude/gambit/models.json".text = gambitModelsJson;
         }
       ];
 
-    # Unify stateful dirs across personal and work profiles AND across hosts.
-    # Transcripts (projects, sessions, todos, tasks) live on NFS at
-    # /mnt/claude/${HOSTNAME}/{personal,work}/, so each host owns its bucket
-    # and gnomon can read every host's transcripts for the DMS bar widget.
-    # High-churn small-file state (file-history, shell-snapshots) stays
-    # LOCAL at ~/.claude-local/ to spare the NAS btrfs metadata storm.
+    # Unify stateful dirs across hosts. Transcripts (projects, sessions,
+    # todos, tasks) live on NFS at /mnt/claude/${HOSTNAME}/personal/, so
+    # each host owns its bucket and gnomon can read every host's transcripts
+    # for the DMS bar widget. High-churn small-file state (file-history,
+    # shell-snapshots) stays LOCAL at ~/.claude-local/ to spare the NAS
+    # btrfs metadata storm.
     #
     # Scoped to the three hosts that actually run Claude Code (gnomon,
     # ultraviolet, vermissian). Out-of-scope hosts skip this activation
@@ -790,12 +678,23 @@ in {
 
         # Always ensure bucket and local-state directories exist (cheap,
         # idempotent).
-        for profile in personal work; do
-          for d in projects sessions todos tasks; do
-            ${pkgs.coreutils}/bin/mkdir -p "$BUCKET/$profile/$d"
-          done
+        for d in projects sessions todos tasks; do
+          ${pkgs.coreutils}/bin/mkdir -p "$BUCKET/personal/$d"
         done
         ${pkgs.coreutils}/bin/mkdir -p "$LOCAL/file-history" "$LOCAL/shell-snapshots"
+
+        # One-shot migration: fold the retired /mnt/claude/<host>/work/
+        # bucket into personal/ so its sessions stay resumable. Copies,
+        # never deletes — the work/ tree stays behind for manual cleanup.
+        if [ -d "$BUCKET/work" ] && [ ! -f "$BUCKET/personal/.work-merged" ]; then
+          for d in projects sessions todos tasks; do
+            if [ -d "$BUCKET/work/$d" ]; then
+              ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$BUCKET/work/$d/" "$BUCKET/personal/$d/" || true
+            fi
+          done
+          ${pkgs.coreutils}/bin/touch "$BUCKET/personal/.work-merged"
+          echo "claudeUnifiedState: merged $BUCKET/work into $BUCKET/personal (originals left in place)" >&2
+        fi
 
         # Helper: report whether a path is a non-empty directory.
         has_content() {
@@ -805,23 +704,21 @@ in {
         # Detect whether any pre-NFS data needs rescuing. Two sources:
         #  (a) the old ~/.claude-shared/ unified dir (when it has real data
         #      and the marker is absent — the original layout on gnomon), or
-        #  (b) any ~/.claude{,-work}/{projects,sessions,todos,tasks} that is
-        #      itself a real directory with content (the layout on hosts
-        #      that never went through the .claude-shared intermediate step,
-        #      e.g. ultraviolet, vermissian).
+        #  (b) any ~/.claude/{projects,sessions,todos,tasks} that is itself
+        #      a real directory with content (the layout on hosts that never
+        #      went through the .claude-shared intermediate step, e.g.
+        #      ultraviolet, vermissian).
         needs_rescue=false
         if [ -d "$SHARED" ] && [ ! -L "$SHARED" ] && [ ! -f "$MARKER" ]; then
           has_content "$SHARED" && needs_rescue=true || true
         fi
         if [ "$needs_rescue" = false ]; then
-          for base in .claude .claude-work; do
-            for d in projects sessions todos tasks file-history shell-snapshots; do
-              tgt="$HOME/$base/$d"
-              if [ -d "$tgt" ] && [ ! -L "$tgt" ] && has_content "$tgt"; then
-                needs_rescue=true
-                break 2
-              fi
-            done
+          for d in projects sessions todos tasks file-history shell-snapshots; do
+            tgt="$HOME/.claude/$d"
+            if [ -d "$tgt" ] && [ ! -L "$tgt" ] && has_content "$tgt"; then
+              needs_rescue=true
+              break
+            fi
           done
         fi
 
@@ -839,43 +736,11 @@ in {
           fi
         fi
 
-        # Project-dir classifier. The Claude Code project dir name is
-        # the cwd with / replaced by -, so /home/joshsymonds/Work/attain
-        # becomes -home-joshsymonds-Work-attain (and -attain-* for subdirs).
-        # Only ~/Work/attain is Bedrock-billed work; every other Work/
-        # subdir is side projects on the personal Max sub.
-        is_work_dir() {
-          case "$1" in
-            -home-joshsymonds-Work-attain|-home-joshsymonds-Work-attain-*) return 0 ;;
-            *) return 1 ;;
-          esac
-        }
-
-        # Split projects/ by classifier into personal/ and work/.
-        # Caller passes the source dir; we walk its immediate subdirs.
-        split_projects() {
-          local src="$1"
-          [ -d "$src" ] || return 0
-          for proj in "$src"/*; do
-            [ -d "$proj" ] || continue
-            local name
-            name="$(${pkgs.coreutils}/bin/basename "$proj")"
-            local dest_profile=personal
-            is_work_dir "$name" && dest_profile=work
-            ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$proj/" "$BUCKET/$dest_profile/projects/$name/" || true
-          done
-        }
-
         # Rescue the legacy ~/.claude-shared/ layout into the bucket + local.
-        # projects/ gets split by is_work_dir; everything else goes to
-        # personal/ since sessions/todos/tasks are by sessionId and we
-        # can't recover the originating profile from name alone (and
-        # they're small, and personal is the safe default).
         if [ -d "$SHARED" ] && [ ! -L "$SHARED" ] && [ ! -f "$MARKER" ]; then
           if has_content "$SHARED"; then
-            echo "claudeUnifiedState: migrating $SHARED -> $BUCKET (projects split by ~/Work/attain rule)" >&2
-            split_projects "$SHARED/projects"
-            for d in sessions todos tasks; do
+            echo "claudeUnifiedState: migrating $SHARED -> $BUCKET" >&2
+            for d in projects sessions todos tasks; do
               [ -d "$SHARED/$d" ] && ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$SHARED/$d/" "$BUCKET/personal/$d/" || true
             done
             for d in file-history shell-snapshots; do
@@ -922,67 +787,103 @@ in {
           ${pkgs.coreutils}/bin/ln -s "$want" "$target"
         }
 
-        for base in .claude .claude-work; do
-          profile="personal"
-          [ "$base" = ".claude-work" ] && profile="work"
-          ${pkgs.coreutils}/bin/mkdir -p "$HOME/$base"
-          for d in projects sessions todos tasks; do
-            ensure_linked "$HOME/$base/$d" "$BUCKET/$profile/$d" bucket
-          done
-          ensure_linked "$HOME/$base/file-history" "$LOCAL/file-history" local
-          ensure_linked "$HOME/$base/shell-snapshots" "$LOCAL/shell-snapshots" local
+        ${pkgs.coreutils}/bin/mkdir -p "$HOME/.claude"
+        for d in projects sessions todos tasks; do
+          ensure_linked "$HOME/.claude/$d" "$BUCKET/personal/$d" bucket
         done
+        ensure_linked "$HOME/.claude/file-history" "$LOCAL/file-history" local
+        ensure_linked "$HOME/.claude/shell-snapshots" "$LOCAL/shell-snapshots" local
         )
       '');
 
-    # Render the work profile's real settings.json from settings.base.json +
-    # the current backend mode. Must run after linkGeneration so the new
-    # generation's settings.base.json is in place. On a first-ever activation
-    # the agenix mount may not exist yet; cwrender degrades to a no-Bedrock
-    # render with a loud warning and the next `cwswitch`/activation fixes it.
-    activation.claudeWorkSettingsRender = lib.hm.dag.entryAfter ["linkGeneration"] ''
+    # Render the real settings.json from settings.base.json. Must run after
+    # linkGeneration so the new generation's settings.base.json is in place.
+    # On a first-ever activation the agenix mount may not exist yet;
+    # ccrender degrades to a headerless render with a loud warning and the
+    # next activation fixes it.
+    activation.claudeSettingsRender = lib.hm.dag.entryAfter ["linkGeneration"] ''
       # Legacy cleanup: settings.json used to be an HM-managed store symlink;
-      # remove it so cwrender's atomic mv never writes through a stale link.
-      if [ -L "$HOME/.claude-work/settings.json" ]; then
-        run rm "$HOME/.claude-work/settings.json"
+      # remove it so ccrender writes a real file in its place.
+      if [ -L "$HOME/.claude/settings.json" ]; then
+        run rm "$HOME/.claude/settings.json"
       fi
-      run ${cwrender}/bin/cwrender || echo "claudeWorkSettingsRender: cwrender failed — work profile may lack a settings.json until the next activation or cwswitch." >&2
+      run ${ccrender}/bin/ccrender || echo "claudeSettingsRender: ccrender failed — ~/.claude may lack a settings.json until the next activation." >&2
     '';
+
+    # The writable skill working dirs (rosters, ledgers, tokens — state the
+    # skills accumulate at runtime) live outside the store at
+    # ~/.claude-local/skills/, where the skills linkFarm points. One-shot
+    # move from their previous home in the retired ~/.claude-work profile.
+    activation.claudeSkillState = lib.hm.dag.entryAfter ["writeBoundary"] ''
+      run mkdir -p "$HOME/.claude-local/skills"
+      for skill in team-status harvest-weekly; do
+        if [ -d "$HOME/.claude-work/$skill" ] && [ ! -e "$HOME/.claude-local/skills/$skill" ]; then
+          run mv "$HOME/.claude-work/$skill" "$HOME/.claude-local/skills/$skill"
+        fi
+      done
+    '';
+
+    # Stamp each Attain repo's project settings with the /ctx/attain
+    # patchbay context. Which account answers a request is registry policy,
+    # but WHICH context a session speaks to is the one fact patchbay cannot
+    # know — the base URL carries it, and a project's own
+    # .claude/settings.json is where Claude Code reads a per-project base
+    # URL from. Merges the env key into any existing file, preserving
+    # everything else; the file stays untracked in the employer repos.
+    activation.claudeAttainContext = lib.hm.dag.entryAfter ["writeBoundary"] (
+      lib.optionalString (patchbayBaseUrl != null) ''
+        attain_root="$HOME/Work/attain"
+        attain_url="${patchbayBaseUrl}/ctx/attain"
+        if [ -d "$attain_root" ]; then
+          for project in "$attain_root" "$attain_root"/*/; do
+            project="''${project%/}"
+            [ -d "$project" ] || continue
+            # The root itself (sessions launched at ~/Work/attain) and each
+            # git repo under it. Claude Code resolves a session's project
+            # root to the enclosing repo, so launches anywhere inside a repo
+            # read that repo's file.
+            if [ "$project" != "$attain_root" ] && [ ! -e "$project/.git" ]; then
+              continue
+            fi
+            sfile="$project/.claude/settings.json"
+            run mkdir -p "$project/.claude"
+            [ -f "$sfile" ] || echo '{}' > "$sfile"
+            if ! ${pkgs.jq}/bin/jq -e --arg u "$attain_url" '.env.ANTHROPIC_BASE_URL == $u' "$sfile" >/dev/null 2>&1; then
+              ${pkgs.jq}/bin/jq --arg u "$attain_url" '.env = ((.env // {}) + {ANTHROPIC_BASE_URL: $u})' "$sfile" > "$sfile.tmp" && mv "$sfile.tmp" "$sfile"
+            fi
+          done
+        fi
+      ''
+    );
 
     activation.claudeDirectoryPermissions = lib.hm.dag.entryAfter ["writeBoundary" "claudeUnifiedState"] ''
       set -euo pipefail
-      for base in ".claude" ".claude-work"; do
-        for dir in "$base" "$base/bin" "$base/commands" "$base/hooks" "$base/projects" "$base/statsig" "$base/todos"; do
-          # Skip symlinks: post-NFS rollout, projects/todos point at the
-          # NFS bucket which is owned by anonuid=1024 (all_squash). User
-          # can't chmod those, and the share permissions are governed
-          # Synology-side anyway.
-          if [ -d "$HOME/$dir" ] && [ ! -L "$HOME/$dir" ]; then
-            chmod 755 "$HOME/$dir"
-          fi
-        done
-        if [ ! -d "$HOME/$base/debug" ]; then
-          mkdir -p "$HOME/$base/debug"
-          chmod 755 "$HOME/$base/debug"
+      for dir in ".claude" ".claude/bin" ".claude/commands" ".claude/hooks" ".claude/projects" ".claude/statsig" ".claude/todos"; do
+        # Skip symlinks: post-NFS rollout, projects/todos point at the
+        # NFS bucket which is owned by anonuid=1024 (all_squash). User
+        # can't chmod those, and the share permissions are governed
+        # Synology-side anyway.
+        if [ -d "$HOME/$dir" ] && [ ! -L "$HOME/$dir" ]; then
+          chmod 755 "$HOME/$dir"
         fi
       done
+      if [ ! -d "$HOME/.claude/debug" ]; then
+        mkdir -p "$HOME/.claude/debug"
+        chmod 755 "$HOME/.claude/debug"
+      fi
 
-      # Remove vim mode if previously set in Claude Code preferences.
-      # Personal prefs live at ~/.claude.json (default when CLAUDE_CONFIG_DIR unset);
-      # work prefs live at ~/.claude-work/.claude.json.
-      for prefs in "$HOME/.claude.json" "$HOME/.claude-work/.claude.json"; do
-        if [ -f "$prefs" ] && ${pkgs.jq}/bin/jq -e '.editorMode == "vim"' "$prefs" >/dev/null 2>&1; then
-          ${pkgs.jq}/bin/jq 'del(.editorMode)' "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
-        fi
-      done
+      # Remove vim mode if previously set in Claude Code preferences
+      # (~/.claude.json).
+      prefs="$HOME/.claude.json"
+      if [ -f "$prefs" ] && ${pkgs.jq}/bin/jq -e '.editorMode == "vim"' "$prefs" >/dev/null 2>&1; then
+        ${pkgs.jq}/bin/jq 'del(.editorMode)' "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
+      fi
     '';
 
-    # Shimmer as a default user-scope MCP server in BOTH profiles. Claude
-    # Code reads user-scope MCP from .claude.json's top-level `mcpServers`
-    # (NOT settings.json, which only gates MCP permissions) — verified
-    # against `claude mcp add -s user` on 2.1.x. Personal config is
-    # $HOME/.claude.json (CLAUDE_CONFIG_DIR unset); work is
-    # $HOME/.claude-work/.claude.json. These files are runtime-mutable
+    # Shimmer as a default user-scope MCP server. Claude Code reads
+    # user-scope MCP from ~/.claude.json's top-level `mcpServers` (NOT
+    # settings.json, which only gates MCP permissions) — verified against
+    # `claude mcp add -s user` on 2.1.x. The file is runtime-mutable
     # (OAuth, caches), so we MERGE (never overwrite) and only rewrite when
     # the entry differs — idempotent, preserves any other servers.
     # Reachable only from tailnet machines authed as your Tailscale user;
@@ -990,87 +891,81 @@ in {
     activation.claudeShimmerMcp = lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
       set -euo pipefail
       SHIMMER_MCP='{"type":"http","url":"https://ultraviolet.tail82223.ts.net:8443/mcp"}'
-      for prefs in "$HOME/.claude.json" "$HOME/.claude-work/.claude.json"; do
-        mkdir -p "$(dirname "$prefs")"
-        [ -f "$prefs" ] || echo '{}' > "$prefs"
-        if ! ${pkgs.jq}/bin/jq -e --argjson s "$SHIMMER_MCP" \
-            '.mcpServers.shimmer == $s' "$prefs" >/dev/null 2>&1; then
-          ${pkgs.jq}/bin/jq --argjson s "$SHIMMER_MCP" \
-            '.mcpServers = ((.mcpServers // {}) + {shimmer: $s})' \
-            "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
-        fi
-      done
+      prefs="$HOME/.claude.json"
+      [ -f "$prefs" ] || echo '{}' > "$prefs"
+      if ! ${pkgs.jq}/bin/jq -e --argjson s "$SHIMMER_MCP" \
+          '.mcpServers.shimmer == $s' "$prefs" >/dev/null 2>&1; then
+        ${pkgs.jq}/bin/jq --argjson s "$SHIMMER_MCP" \
+          '.mcpServers = ((.mcpServers // {}) + {shimmer: $s})' \
+          "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
+      fi
     '';
 
-    # Retire the Codex MCP server from both profiles' runtime prefs.
-    # Gambit's non-Claude rungs are subagent definitions now (see the rung
-    # agent block above), so nothing dispatches through mcp__codex__* any
-    # more. But the activation that used to live here MERGED the server into
-    # ~/.claude.json and ~/.claude-work/.claude.json — runtime-mutable user
-    # prefs Nix never regenerates. Dropping the generator alone would orphan
-    # the entry, and every session would go on spawning the Codex MCP server
-    # forever. So delete exactly that one key, preserving everything else in
-    # the file and its permissions. Idempotent, silent when absent.
+    # Retire the Codex MCP server from the runtime prefs. Gambit's
+    # non-Claude rungs are subagent definitions now (see the rung agent
+    # block above), so nothing dispatches through mcp__codex__* any more.
+    # But the activation that used to live here MERGED the server into
+    # ~/.claude.json — runtime-mutable user prefs Nix never regenerates.
+    # Dropping the generator alone would orphan the entry, and every session
+    # would go on spawning the Codex MCP server forever. So delete exactly
+    # that one key, preserving everything else in the file and its
+    # permissions. Idempotent, silent when absent.
     activation.claudeCodexMcpCleanup = lib.hm.dag.entryAfter ["claudeShimmerMcp"] ''
       set -euo pipefail
-      for prefs in "$HOME/.claude.json" "$HOME/.claude-work/.claude.json"; do
-        [ -f "$prefs" ] || continue
-        if ${pkgs.jq}/bin/jq -e '.mcpServers | has("codex")' "$prefs" >/dev/null 2>&1; then
-          # Subshell so the cleanup trap is scoped to this rewrite and cannot
-          # outlive it into the rest of the activation script. The umask is
-          # inside its own subshell because the SHELL creates $tmp for the
-          # redirect, before jq or chmod --reference ever run: .claude.json
-          # carries OAuth state, and it must not exist world-readable even for
-          # that instant. Any failure under set -e removes $tmp rather than
-          # stranding a half-written copy of the prefs next to the original.
-          (
-            tmp="$prefs.codex-cleanup.$$"
-            trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
-            (umask 077; ${pkgs.jq}/bin/jq 'del(.mcpServers.codex)' "$prefs" > "$tmp")
-            ${pkgs.coreutils}/bin/chmod --reference="$prefs" "$tmp"
-            mv "$tmp" "$prefs"
-          )
-          echo "claudeCodexMcpCleanup: removed .mcpServers.codex from $prefs" >&2
-        fi
-      done
+      prefs="$HOME/.claude.json"
+      if [ -f "$prefs" ] && ${pkgs.jq}/bin/jq -e '.mcpServers | has("codex")' "$prefs" >/dev/null 2>&1; then
+        # Subshell so the cleanup trap is scoped to this rewrite and cannot
+        # outlive it into the rest of the activation script. The umask is
+        # inside its own subshell because the SHELL creates $tmp for the
+        # redirect, before jq or chmod --reference ever run: .claude.json
+        # carries OAuth state, and it must not exist world-readable even for
+        # that instant. Any failure under set -e removes $tmp rather than
+        # stranding a half-written copy of the prefs next to the original.
+        (
+          tmp="$prefs.codex-cleanup.$$"
+          trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+          (umask 077; ${pkgs.jq}/bin/jq 'del(.mcpServers.codex)' "$prefs" > "$tmp")
+          ${pkgs.coreutils}/bin/chmod --reference="$prefs" "$tmp"
+          mv "$tmp" "$prefs"
+        )
+        echo "claudeCodexMcpCleanup: removed .mcpServers.codex from $prefs" >&2
+      fi
     '';
 
-    # Clear the per-model "launch effort pin" in both profiles. When a new
-    # model ships (Opus 4.7/4.8, Fable 5), Claude Code pins it to a
-    # conservative launch-default effort and IGNORES the persisted
-    # effortLevel from settings.json until the user bumps effort for that
-    # model once — an acknowledgement recorded as unpin<Model>LaunchEffort
-    # in .claude.json (NOT settings.json). The resolver reads it at session
-    # start: pinned -> launch default; unpinned -> settings.json effortLevel.
+    # Clear the per-model "launch effort pin". When a new model ships
+    # (Opus 4.7/4.8, Fable 5), Claude Code pins it to a conservative
+    # launch-default effort and IGNORES the persisted effortLevel from
+    # settings.json until the user bumps effort for that model once — an
+    # acknowledgement recorded as unpin<Model>LaunchEffort in .claude.json
+    # (NOT settings.json). The resolver reads it at session start:
+    # pinned -> launch default; unpinned -> settings.json effortLevel.
     #
-    # Our settings.json is a read-only Nix store symlink, so the normal
-    # interactive unpin (/effort) fails with EROFS and can never write the
-    # flag — leaving settings.json's "xhigh" permanently overridden by the
-    # pin. We set the flags here so settings.json stays authoritative.
-    # Same merge discipline as claudeShimmerMcp: .claude.json is
-    # runtime-mutable, so MERGE and only rewrite when a flag is missing.
-    # The check/assignment expressions below are generated from
-    # modelRegistry's unpinKey field (see that `let`-block definition);
-    # new models pick up automatically once added there.
+    # Our settings.json is re-rendered from the Nix-managed base at every
+    # activation (see ccrender), so anything the interactive unpin (/effort)
+    # writes into it is transient. We set the flags here so settings.json's
+    # effortLevel stays authoritative. Same merge discipline as
+    # claudeShimmerMcp: .claude.json is runtime-mutable, so MERGE and only
+    # rewrite when a flag is missing. The check/assignment expressions below
+    # are generated from modelRegistry's unpinKey field (see that
+    # `let`-block definition); new models pick up automatically once added
+    # there.
     activation.claudeEffortUnpin = lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
       set -euo pipefail
-      for prefs in "$HOME/.claude.json" "$HOME/.claude-work/.claude.json"; do
-        mkdir -p "$(dirname "$prefs")"
-        [ -f "$prefs" ] || echo '{}' > "$prefs"
-        if ! ${pkgs.jq}/bin/jq -e \
-            '${unpinCheckExpr}' \
-            "$prefs" >/dev/null 2>&1; then
-          ${pkgs.jq}/bin/jq \
-            '${unpinAssignExpr}' \
-            "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
-        fi
-      done
+      prefs="$HOME/.claude.json"
+      [ -f "$prefs" ] || echo '{}' > "$prefs"
+      if ! ${pkgs.jq}/bin/jq -e \
+          '${unpinCheckExpr}' \
+          "$prefs" >/dev/null 2>&1; then
+        ${pkgs.jq}/bin/jq \
+          '${unpinAssignExpr}' \
+          "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
+      fi
     '';
 
-    # Declaratively install gambit into both profile dirs. Rather than shell
-    # out to `claude plugin install` (which wants to modify settings.json —
-    # not possible when it's a read-only Nix store symlink), we populate the
-    # runtime state by hand:
+    # Declaratively install gambit. Rather than shell out to
+    # `claude plugin install` (which wants to modify settings.json — futile
+    # when ccrender re-renders it from the Nix base at every activation), we
+    # populate the runtime state by hand:
     #   - known_marketplaces.json: gambit → directory source at ${gambitSrc}
     #   - plugins/cache/gambit/gambit/<version>: symlink to ${gambitSrc}
     #   - installed_plugins.json: gambit@gambit entry pointing at the cache
@@ -1086,51 +981,49 @@ in {
       GAMBIT_VERSION=$(${pkgs.jq}/bin/jq -r .version "$GAMBIT_SRC/.claude-plugin/plugin.json")
       NOW="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
 
-      for base in ".claude" ".claude-work"; do
-        mkdir -p "$HOME/$base/plugins"
-        KM="$HOME/$base/plugins/known_marketplaces.json"
-        INSTALLED="$HOME/$base/plugins/installed_plugins.json"
-        CACHE_PARENT="$HOME/$base/plugins/cache/gambit/gambit"
-        CACHE_DIR="$CACHE_PARENT/$GAMBIT_VERSION"
+      mkdir -p "$HOME/.claude/plugins"
+      KM="$HOME/.claude/plugins/known_marketplaces.json"
+      INSTALLED="$HOME/.claude/plugins/installed_plugins.json"
+      CACHE_PARENT="$HOME/.claude/plugins/cache/gambit/gambit"
+      CACHE_DIR="$CACHE_PARENT/$GAMBIT_VERSION"
 
-        # 1. known_marketplaces.json
-        [ -f "$KM" ] || echo '{}' > "$KM"
-        ${pkgs.jq}/bin/jq \
-          --arg path "$GAMBIT_SRC" \
-          --arg now "$NOW" \
-          '.gambit = {
-            source: {source: "directory", path: $path},
-            installLocation: $path,
-            lastUpdated: $now
-          }' "$KM" > "$KM.tmp" && mv "$KM.tmp" "$KM"
+      # 1. known_marketplaces.json
+      [ -f "$KM" ] || echo '{}' > "$KM"
+      ${pkgs.jq}/bin/jq \
+        --arg path "$GAMBIT_SRC" \
+        --arg now "$NOW" \
+        '.gambit = {
+          source: {source: "directory", path: $path},
+          installLocation: $path,
+          lastUpdated: $now
+        }' "$KM" > "$KM.tmp" && mv "$KM.tmp" "$KM"
 
-        # 2. plugin cache — symlink to the Nix store path. Replace any
-        # existing dir or mismatched symlink so the cache always reflects
-        # the current flake pin.
-        mkdir -p "$CACHE_PARENT"
-        if [ -L "$CACHE_DIR" ] || [ -e "$CACHE_DIR" ]; then
-          rm -rf "$CACHE_DIR"
-        fi
-        ln -s "$GAMBIT_SRC" "$CACHE_DIR"
+      # 2. plugin cache — symlink to the Nix store path. Replace any
+      # existing dir or mismatched symlink so the cache always reflects
+      # the current flake pin.
+      mkdir -p "$CACHE_PARENT"
+      if [ -L "$CACHE_DIR" ] || [ -e "$CACHE_DIR" ]; then
+        rm -rf "$CACHE_DIR"
+      fi
+      ln -s "$GAMBIT_SRC" "$CACHE_DIR"
 
-        # 3. installed_plugins.json — record gambit@gambit pointing at the
-        # cache symlink. Preserve installedAt if a prior entry exists;
-        # always refresh lastUpdated and gitCommitSha.
-        [ -f "$INSTALLED" ] || echo '{"version":2,"plugins":{}}' > "$INSTALLED"
-        ${pkgs.jq}/bin/jq \
-          --arg version "$GAMBIT_VERSION" \
-          --arg installPath "$CACHE_DIR" \
-          --arg rev "$GAMBIT_REV" \
-          --arg now "$NOW" \
-          '.plugins["gambit@gambit"] = [{
-            scope: "user",
-            installPath: $installPath,
-            version: $version,
-            installedAt: (.plugins["gambit@gambit"][0].installedAt // $now),
-            lastUpdated: $now,
-            gitCommitSha: $rev
-          }]' "$INSTALLED" > "$INSTALLED.tmp" && mv "$INSTALLED.tmp" "$INSTALLED"
-      done
+      # 3. installed_plugins.json — record gambit@gambit pointing at the
+      # cache symlink. Preserve installedAt if a prior entry exists;
+      # always refresh lastUpdated and gitCommitSha.
+      [ -f "$INSTALLED" ] || echo '{"version":2,"plugins":{}}' > "$INSTALLED"
+      ${pkgs.jq}/bin/jq \
+        --arg version "$GAMBIT_VERSION" \
+        --arg installPath "$CACHE_DIR" \
+        --arg rev "$GAMBIT_REV" \
+        --arg now "$NOW" \
+        '.plugins["gambit@gambit"] = [{
+          scope: "user",
+          installPath: $installPath,
+          version: $version,
+          installedAt: (.plugins["gambit@gambit"][0].installedAt // $now),
+          lastUpdated: $now,
+          gitCommitSha: $rev
+        }]' "$INSTALLED" > "$INSTALLED.tmp" && mv "$INSTALLED.tmp" "$INSTALLED"
     '';
 
     # Place a wrapper script at ~/.local/bin/claude that execs the Nix-patched binary.

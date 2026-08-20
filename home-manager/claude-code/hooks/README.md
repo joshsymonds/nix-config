@@ -1,6 +1,6 @@
 # Coding-agent hooks
 
-Hook scripts deployed verbatim to `~/.claude/hooks/` and `~/.claude-work/hooks/`
+Hook scripts deployed verbatim to `~/.claude/hooks/`
 by `../default.nix` (`mkClaudeFiles`), wired up in `../settings.json`:
 
 - `aws-profile-mirror.sh` — `PostToolUse`/`Bash` hook.

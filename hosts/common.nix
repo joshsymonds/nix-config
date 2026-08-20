@@ -298,6 +298,7 @@ in {
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEhL0xP1eFVuYEPAvO6t+Mb9ragHnk4dxeBd/1Tmka41 josh+phone@joshsymonds.com"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIORmNHlIFi2MWPh9H0olD2VBvPNK7+wJkA+A/3wCOtZN josh+vermissian@joshsymonds.com"
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKi6ZE7mq37XFkWvBDRAPP5eReUO5c0D2ngU4wEIhPhH josh+gnomon@joshsymonds.com"
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIELbMyB/RzUvvwx8cNITJc3BrOdYktFXG66383oAtXUF joshsymonds+bluedesert@joshsymonds.com"
     ];
   };
 

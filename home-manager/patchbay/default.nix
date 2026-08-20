@@ -77,6 +77,23 @@
       model = "openai/gpt-5.6-luna";
       max_input_tokens = 1050000;
     };
+    # DeepSeek V4 Flash, pinned to the 0731 snapshot: the tiltyard study's
+    # matched-comparison seat, and quota insurance — when a subscription runs
+    # dry mid-session this is a competent coding model one alias away, on the
+    # household key. Routed through patchbay rather than pointed at directly
+    # because the current Claude Code CLI makes a fatal auth probe at startup
+    # that a third-party endpoint 401s; patchbay answers it locally.
+    #
+    # 1048576, not the 1310720 the model listing headlines: that ceiling is
+    # one provider (Cloudflare) of the ~30 serving this id, while 1048576 is
+    # what top_provider, DeepSeek's own endpoint, and most of the rest serve.
+    "openrouter/deepseek-flash" = {
+      base_url = "https://openrouter.ai/api";
+      auth = "inject";
+      api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
+      model = "deepseek/deepseek-v4-flash-0731";
+      max_input_tokens = 1048576;
+    };
   };
 
   # The RunPod H100 pod, reachable only over the tailnet: SGLang serving

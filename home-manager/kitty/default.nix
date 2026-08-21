@@ -144,7 +144,7 @@ in {
       "background_opacity" = "0.8";
       "sync_to_monitor" = true;
       "hide_window_decorations" = true;
-      "scrollback_pager" = "moar --terminal-fg --wrap --no-statusbar --no-linenumbers --quit-if-one-screen +INPUT_LINE_NUMBER";
+      "scrollback_pager" = "moor --terminal-fg --wrap --no-statusbar --no-linenumbers --quit-if-one-screen +INPUT_LINE_NUMBER";
       "mouse_map ctrl+shift+right" = "press ungrabbed combine : mouse_select_command_output : show_last_visited_command_output";
       # Open URLs on plain left-click even when an app (tmux) has grabbed
       # the mouse. Default kitty restricts this to ungrabbed mode, so

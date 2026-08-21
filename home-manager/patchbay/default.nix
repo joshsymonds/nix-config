@@ -229,7 +229,8 @@
       // subagentSeats
       // lib.mapAttrs' (
         selector: seat: lib.nameValuePair (seatID selector) seat
-      ) subscriptionSeats;
+      )
+      subscriptionSeats;
     contexts = {
       # ~/.claude, and everything outside a work checkout.
       personal = context;

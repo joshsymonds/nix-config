@@ -66,7 +66,7 @@ in {
           kubernetes-helm
           kustomize
           fd
-          moar
+          moor
           ncdu
           nh
           nix-output-monitor

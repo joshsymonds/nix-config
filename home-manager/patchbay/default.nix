@@ -167,15 +167,52 @@
       lib.mapAttrs (_: chatgptSeat) chatgptModels
     );
 
+  # Marked-subagent Seats: Luna with the effort pinned in the model id
+  # itself — CLIProxyAPI translates a "(medium)"/"(low)" suffix to the OpenAI
+  # reasoning-effort parameter. These are subagent-only destinations, so they
+  # get no public selector: nothing outside the subagents policy below can
+  # name them, and /v1/models never lists them.
+  subagentSeats = lib.optionalAttrs cfg.codexUpstream.enable {
+    chatgpt-luna-medium = chatgptSeat "gpt-5.6-luna(medium)";
+    chatgpt-luna-low = chatgptSeat "gpt-5.6-luna(low)";
+  };
+
   # Every context binds the same selectors and defaults to the anthropic
   # forward Seat, so a Claude model rides the caller's own OAuth credentials
   # untouched. What a context buys is the name the ledger records against
   # each request, which is what keeps spend attributable per project.
+  #
+  # Marked subagent traffic (x-claude-code-agent-id) that no public selector
+  # already claims rides Luna instead of the subscription: default Explores
+  # and other unlisted subagents at medium effort, haiku-slot dispatches at
+  # low. Two exact pins carve out what must stay native:
+  #
+  #   * claude-opus-5 -> anthropic. Gambit's worker and escalation ladders
+  #     TERMINATE at the opus rung, and the ladder's 100%-solve invariant is
+  #     exactly that the terminal rung is native Claude. No gambit ladder ends
+  #     at fable, so fable needs no pin — fable-inheriting subagents (default
+  #     Explores, background forks) take the Luna default.
+  #   * Both haiku spellings appear on the wire and bindings are exact, so
+  #     the fast tier is pinned twice.
+  #
+  # Only on codexUpstream hosts: the Luna Seats live on the loopback proxy,
+  # and a subagents block naming an absent Seat invalidates the registry.
   bindings = lib.mapAttrs (selector: _: seatID selector) subscriptionSeats;
-  context = {
-    default_seat = "anthropic";
-    models = bindings;
-  };
+  context =
+    {
+      default_seat = "anthropic";
+      models = bindings;
+    }
+    // lib.optionalAttrs cfg.codexUpstream.enable {
+      subagents = {
+        default_seat = "chatgpt-luna-medium";
+        models = {
+          "claude-opus-5" = "anthropic";
+          "claude-haiku-4-5" = "chatgpt-luna-low";
+          "claude-haiku-4-5-20251001" = "chatgpt-luna-low";
+        };
+      };
+    };
 
   # The seat-based registry: global Seats, context-local selector bindings,
   # selected per request by the /ctx/<name> URL prefix Claude Code's
@@ -189,6 +226,7 @@
           auth_mode = "forward";
         };
       }
+      // subagentSeats
       // lib.mapAttrs' (
         selector: seat: lib.nameValuePair (seatID selector) seat
       ) subscriptionSeats;

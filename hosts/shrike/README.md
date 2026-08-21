@@ -17,15 +17,16 @@ GrapheneOS adds Pixel 11 support). After this, the phone converges with
 Open the app, let it bootstrap, then:
 
 ```bash
-# SSH key for GitHub (add as a deploy key or to the account):
-nix-shell -p openssh --run 'ssh-keygen -t ed25519 -C shrike'
-cat ~/.ssh/id_ed25519.pub
-
-# Clone and first switch (update doesn't exist yet — this creates it):
-nix-shell -p git openssh --run \
-  'git clone git@github.com:joshsymonds/nix-config.git ~/nix-config'
+# nix-config is public — anonymous https clone, no credentials on the
+# phone (it only ever pulls):
+nix-shell -p git --run \
+  'git clone https://github.com/joshsymonds/nix-config.git ~/nix-config'
 nix-on-droid switch --flake ~/nix-config#shrike
 ```
+
+If the phone ever needs to *push*, that's the moment to mint a key — and
+by then `ssh shrike` works, so the pubkey travels over the tailnet
+(`ssh shrike cat .ssh/id_ed25519.pub`), never through copy-paste.
 
 First switch downloads the closure from cache.nixos.org — do it on wifi.
 When the terminal settings change (font/colors), run

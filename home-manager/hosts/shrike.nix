@@ -1,0 +1,79 @@
+# shrike (Pixel 11, Nix-on-Droid) — the fleet terminal environment, phone
+# sized. Composed from individual modules rather than common.nix: that
+# layer is the server/desktop kit (docker, k8s, codex, agenix key
+# derivation) and none of it belongs in an app sandbox. Helix is enabled
+# lean (no LSP suite — ../helix drags terraform + typescript + gopls,
+# which is dev-machine weight, not quick-config-edit weight).
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}: let
+  # `t` in the zsh module shells out to tmux-devspace; on other hosts
+  # common.nix provides it. Same definition here.
+  tmuxDevspaceHelper =
+    pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ../tmux/scripts/tmux-devspace.sh);
+in {
+  imports = [
+    ../atuin
+    ../git
+    ../lazygit
+    ../ssh-config
+    ../starship
+    ../tmux
+    ../zsh
+  ];
+
+  home = {
+    stateVersion = "25.05";
+
+    # No coreutils-full here: nix-on-droid's base environment already ships
+    # coreutils, and its merged path buildEnv rejects the bin/ collision.
+    packages = with pkgs; [
+      bat
+      curl
+      eza
+      fd
+      fzf
+      htop
+      jq
+      moor
+      ncdu
+      openssh
+      ripgrep
+      tmuxDevspaceHelper
+      vivid
+      wget
+    ];
+
+    sessionVariables = {
+      EDITOR = "hx";
+      COLORTERM = "truecolor";
+    };
+  };
+
+  programs.helix.enable = true;
+
+  # Inbound ssh: same fleet keys as every NixOS host authorizes
+  # (hosts/common.nix imports the same list). nix-on-droid has no NixOS
+  # user machinery, so the file is written directly.
+  home.file.".ssh/authorized_keys".text =
+    lib.concatMapStrings (key: key + "\n") (import ../../lib/ssh-keys.nix);
+
+  # Arm sshd on the first shell after the app starts — there's no systemd
+  # and no boot hook on Android, so "open the app once" is the ritual that
+  # brings shrike reachable after a reboot. Idempotent and quiet.
+  programs.zsh.initContent = lib.mkAfter ''
+    command -v sshd-start >/dev/null 2>&1 && sshd-start --quiet || true
+  '';
+
+  # No systemd on Android. The tmux and atuin modules declare user units
+  # that could never run here; the zsh module's no-systemd fallback starts
+  # the atuin daemon, and tmux sessions are created on attach (`-A`).
+  systemd.user.services = lib.mkForce {};
+  systemd.user.timers = lib.mkForce {};
+
+  # https://github.com/nix-community/home-manager/issues/7935
+  manual.manpages.enable = false;
+}

@@ -57,6 +57,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Nix-on-Droid — Nix + home-manager userland on Android (shrike, the
+    # Pixel 11). Not NixOS-on-a-phone: it owns the terminal environment
+    # inside the com.termux.nix app sandbox; Android apps stay imperative,
+    # reconciled against hosts/shrike/apps.nix by shrike's `update`.
+    nix-on-droid = {
+      url = "github:nix-community/nix-on-droid";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.home-manager.follows = "home-manager";
+    };
+
     # Hardware-specific optimizations
     hardware.url = "github:nixos/nixos-hardware/master";
 
@@ -665,6 +675,19 @@
         };
 
         nixosConfigurations = lib.mapAttrs mkNixosHost nixosHostDefinitions;
+
+        # shrike — Pixel 11, Nix-on-Droid. Evaluated on demand by
+        # `nix-on-droid switch --flake ~/nix-config#shrike` on the phone;
+        # no host here builds aarch64-linux, so this config is eval-checked
+        # locally but built on-device (cache.nixos.org covers most of it).
+        nixOnDroidConfigurations.shrike = inputs.nix-on-droid.lib.nixOnDroidConfiguration {
+          pkgs = import nixpkgs {
+            system = "aarch64-linux";
+            config.allowUnfree = true;
+          };
+          extraSpecialArgs = mkSpecialArgs "aarch64-linux";
+          modules = [./hosts/shrike];
+        };
 
         darwinConfigurations.ninuan = darwin.lib.darwinSystem {
           system = "aarch64-darwin";

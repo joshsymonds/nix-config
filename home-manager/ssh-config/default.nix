@@ -59,6 +59,15 @@ _: {
         forwardX11 = true;
         forwardX11Trusted = true;
       };
+
+      # shrike (Pixel 11, nix-on-droid): tailnet-only, sshd on 8022 started
+      # by opening the app (see hosts/shrike). `ssh shrike update` converges
+      # the phone remotely.
+      "shrike" = {
+        hostname = "shrike";
+        user = "nix-on-droid";
+        port = 8022;
+      };
     };
   };
 }

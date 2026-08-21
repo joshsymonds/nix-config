@@ -13,6 +13,7 @@ Flake-based Nix configuration managing multiple systems.
 | echelon | NixOS (x86_64-linux) | Remote tailnet node |
 | stygianlibrary | NixOS (x86_64-linux) | halmasuit test rig, hardware-identical to gnomon |
 | ninuan | macOS (aarch64-darwin) | Aerospace WM; rarely powered on now that gnomon is primary |
+| shrike | Nix-on-Droid (aarch64-linux) | Pixel 11: terminal userland via nix-on-droid; Android app set declared in hosts/shrike/apps.nix, converged by on-phone `update` |
 | testhost | NixOS (x86_64-linux) | VM fixture for the installer test, not a real machine |
 | installer | NixOS (x86_64-linux) | Generic installer ISO output, not a deployed host |
 

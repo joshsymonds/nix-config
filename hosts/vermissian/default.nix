@@ -123,6 +123,10 @@ in
     };
 
     boot = {
+      # aarch64 user-mode emulation (qemu binfmt), same as gnomon: lets this
+      # host eval-check and build shrike's nix-on-droid closure. Agents do
+      # repo work here, so shrike verification has to work here too.
+      binfmt.emulatedSystems = ["aarch64-linux"];
       kernelModules = [
         "kvm-amd"
         "amdgpu"

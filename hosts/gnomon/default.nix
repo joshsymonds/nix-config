@@ -575,6 +575,13 @@ in
     ];
     boot.kernelModules = ["kvm-amd" "it87"];
 
+    # aarch64 user-mode emulation (qemu binfmt): lets gnomon eval-check and
+    # build shrike's nix-on-droid closure (nixOnDroidConfigurations.shrike).
+    # Their uid-discovery is an IFD that needs *an* aarch64 builder even
+    # just to evaluate; the phone re-evaluates on-device, so values built
+    # here never deploy anywhere.
+    boot.binfmt.emulatedSystems = ["aarch64-linux"];
+
     # NVIDIA modules in initrd avoid the simpledrm → nvidia-drm mode-switch
     # flash on boot. Keeps the kernel console text-mode but at the panel's
     # native resolution from the first frame. (modesetting.enable in

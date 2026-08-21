@@ -4,6 +4,13 @@
 # derivation) and none of it belongs in an app sandbox. Helix is enabled
 # lean (no LSP suite — ../helix drags terraform + typescript + gopls,
 # which is dev-machine weight, not quick-config-edit weight).
+#
+# CONSTRAINT: the phone has no GitHub credentials, so nothing imported
+# here (or in hosts/shrike) may dereference a private flake input
+# (shimmer, scriptorium, savecraft*, patchbay) — flake fetches are lazy,
+# and shrike's graph currently forces only nixpkgs, nix-on-droid, and
+# home-manager. Breaking this fails the phone's `update` with a fetch
+# error.
 {
   config,
   lib,

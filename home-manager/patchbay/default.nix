@@ -2,12 +2,11 @@
 #
 # One process per machine, bound to loopback, that Claude Code points
 # ANTHROPIC_BASE_URL at. The URL carries a /ctx/<name> prefix naming which
-# context of the registry below answers: within it, Claude models ride the
-# context's default route (the built-in Anthropic forward on the caller's own
-# credentials, unless the context names another) and anything matching an
-# alias gets re-pointed at a foreign upstream with a foreign key injected.
-# Every request is recorded to a local ledger so per-project model spend is
-# auditable.
+# Context of the registry below answers: within it, Claude models ride the
+# Context's default Seat (the Anthropic forward on the caller's own
+# credentials) and anything matching a public selector binds a foreign Seat —
+# another upstream with its own key injected. Every request is recorded to a
+# local ledger so per-project model spend is auditable.
 #
 # The registry is declarative: routes.json is generated here and lives in
 # /nix/store, and patchbay re-reads it whenever the symlink target moves.
@@ -29,13 +28,19 @@
 
   # CLIProxyAPI coordinates. This module both runs the proxy (below, under
   # codexUpstream) and routes at it, so these are defined once here and can
-  # never drift between the service and the routes.
+  # never drift between the service and the Seats.
   codexPort = 8317;
   codexListenerKey = "patchbay-local";
-  # Route key -> upstream model id for the ChatGPT/Codex subscription. Its own
-  # file because the gambit rung agents name these keys and a check asserts
-  # they agree (home-manager/claude-code/gambit-rungs.nix).
+  # Public selector -> upstream model id for the ChatGPT/Codex subscription.
+  # Its own file because the gambit rung agents name these selectors and a
+  # check asserts they agree (home-manager/claude-code/gambit-rungs.nix).
   chatgptModels = import ./chatgpt-models.nix;
+
+  # A Seat ID from a public selector: same name, spelled in the ID grammar
+  # (^[a-z0-9][a-z0-9-]*$), so "openrouter/sol" binds Seat "openrouter-sol".
+  # Deterministic and readable in the ledger, where the Seat ID is what each
+  # request is billed against.
+  seatID = selector: lib.replaceStrings ["/" "."] ["-" "-"] selector;
 
   # The CLIProxyAPI listener key. It is world-readable in /nix/store and only
   # gates the loopback listener — loopback is reachable by host-network
@@ -48,9 +53,9 @@
   # The ChatGPT/Codex subscription upstream: the cli-proxy-api user service
   # this module runs when codexUpstream is enabled, translating Anthropic
   # Messages to the Codex OAuth backend.
-  chatgptRoute = model: {
-    base_url = "http://127.0.0.1:${toString codexPort}";
-    auth = "inject";
+  chatgptSeat = model: {
+    upstream = "http://127.0.0.1:${toString codexPort}";
+    auth_mode = "inject";
     api_key_env_file = "PATCHBAY_CHATGPT_KEY_FILE";
     inherit model;
     # The Codex subscription's context window, not OpenRouter's larger one.
@@ -59,17 +64,19 @@
 
   # OpenRouter, paid per-token from the household key. Model ids and
   # context lengths verified against https://openrouter.ai/api/v1/models.
-  openrouterRoutes = {
+  # Keyed by public selector; the Seat itself lands in the registry under
+  # seatID of that selector.
+  openrouterSeats = {
     "openrouter/sol" = {
-      base_url = "https://openrouter.ai/api";
-      auth = "inject";
+      upstream = "https://openrouter.ai/api";
+      auth_mode = "inject";
       api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
       model = "openai/gpt-5.6-sol";
       max_input_tokens = 1050000;
     };
     "openrouter/luna" = {
-      base_url = "https://openrouter.ai/api";
-      auth = "inject";
+      upstream = "https://openrouter.ai/api";
+      auth_mode = "inject";
       api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
       model = "openai/gpt-5.6-luna";
       max_input_tokens = 1050000;
@@ -85,8 +92,8 @@
     # one provider (Cloudflare) of the ~30 serving this id, while 1048576 is
     # what top_provider, DeepSeek's own endpoint, and most of the rest serve.
     "openrouter/deepseek-flash" = {
-      base_url = "https://openrouter.ai/api";
-      auth = "inject";
+      upstream = "https://openrouter.ai/api";
+      auth_mode = "inject";
       api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
       model = "deepseek/deepseek-v4-flash-0731";
       max_input_tokens = 1048576;
@@ -113,13 +120,13 @@
   # what the model can nominally take. The shakedown reads the server's real
   # max-total-tokens and these numbers get corrected then. See tiltyard
   # ops/runpod-dflash2/README.md for that handoff.
-  runpodRoutes = {
+  runpodSeats = {
     # bf16 on SGLang with DFlash2. Its address is constant across pod
     # recreates because tailscale state lives on the pod's network volume, so
     # this is a plain constant rather than anything host-derived.
     "runpod/qwen3.8" = {
-      base_url = "http://runpod-qwen.tail82223.ts.net:8000";
-      auth = "inject";
+      upstream = "http://runpod-qwen.tail82223.ts.net:8000";
+      auth_mode = "inject";
       api_key_env_file = "PATCHBAY_RUNPOD_KEY_FILE";
       model = "Qwen/Qwen3.8-27B";
       max_input_tokens = 131072;
@@ -134,11 +141,11 @@
     # nothing. Delete the old machine from the tailnet before relaunching.
     #
     # model: llama-server ignores the model a request names, but patchbay
-    # requires one on an inject route, so this carries the target's HF id —
+    # requires one on an inject Seat, so this carries the target's HF id —
     # what the quant was made from, and what the bf16 pod above serves.
     "runpod/qwen-gguf" = {
-      base_url = "http://runpod-qwen-gguf.tail82223.ts.net:8000";
-      auth = "inject";
+      upstream = "http://runpod-qwen-gguf.tail82223.ts.net:8000";
+      auth_mode = "inject";
       api_key_env_file = "PATCHBAY_RUNPOD_KEY_FILE";
       model = "Qwen/Qwen3.8-27B";
       max_input_tokens = 131072;
@@ -147,34 +154,52 @@
     };
   };
 
-  # The personal-identity route set: OpenRouter and the RunPod pods plus,
-  # where the Codex upstream actually runs, the ChatGPT subscription. The
-  # chatgpt/* routes are only published on hosts that run that upstream;
-  # elsewhere they would point at a port nothing listens on. runpod/* is
-  # unconditional — the pods answer to the whole tailnet, so every host that
-  # publishes them can actually reach them.
-  subscriptionRoutes =
-    openrouterRoutes
-    // runpodRoutes
+  # The personal-identity Seat set, keyed by public selector: OpenRouter and
+  # the RunPod pods plus, where the Codex upstream actually runs, the ChatGPT
+  # subscription. The chatgpt/* selectors are only published on hosts that run
+  # that upstream; elsewhere they would point at a port nothing listens on.
+  # runpod/* is unconditional — the pods answer to the whole tailnet, so every
+  # host that publishes them can actually reach them.
+  subscriptionSeats =
+    openrouterSeats
+    // runpodSeats
     // lib.optionalAttrs cfg.codexUpstream.enable (
-      lib.mapAttrs (_: chatgptRoute) chatgptModels
+      lib.mapAttrs (_: chatgptSeat) chatgptModels
     );
 
-  # Registry v2: named contexts, selected per request by the /ctx/<name> URL
-  # prefix Claude Code's ANTHROPIC_BASE_URL carries. No context declares a
-  # default_route, so a Claude model rides patchbay's built-in Anthropic
-  # forward everywhere — the caller's own OAuth credentials, untouched.
-  #
-  # All three carry the same routes and bill the same identity. What a
-  # context buys is the name the ledger records against each request, which
-  # is what keeps spend attributable per project.
-  contexts = {
-    # ~/.claude, and everything outside a work checkout.
-    personal.routes = subscriptionRoutes;
-    # ~/Work/savecraft.
-    savecraft.routes = subscriptionRoutes;
-    # ~/Work/attain.
-    attain.routes = subscriptionRoutes;
+  # Every context binds the same selectors and defaults to the anthropic
+  # forward Seat, so a Claude model rides the caller's own OAuth credentials
+  # untouched. What a context buys is the name the ledger records against
+  # each request, which is what keeps spend attributable per project.
+  bindings = lib.mapAttrs (selector: _: seatID selector) subscriptionSeats;
+  context = {
+    default_seat = "anthropic";
+    models = bindings;
+  };
+
+  # The seat-based registry: global Seats, context-local selector bindings,
+  # selected per request by the /ctx/<name> URL prefix Claude Code's
+  # ANTHROPIC_BASE_URL carries. Bare /v1 requests ride default_context.
+  registry = {
+    default_context = "personal";
+    seats =
+      {
+        anthropic = {
+          upstream = "https://api.anthropic.com";
+          auth_mode = "forward";
+        };
+      }
+      // lib.mapAttrs' (
+        selector: seat: lib.nameValuePair (seatID selector) seat
+      ) subscriptionSeats;
+    contexts = {
+      # ~/.claude, and everything outside a work checkout.
+      personal = context;
+      # ~/Work/savecraft.
+      savecraft = context;
+      # ~/Work/attain.
+      attain = context;
+    };
   };
 
   # CLIProxyAPI: an Anthropic-compatible endpoint over the ChatGPT Codex
@@ -198,9 +223,7 @@
     };
   };
 
-  registryFile = (pkgs.formats.json {}).generate "patchbay-routes.json" {
-    inherit contexts;
-  };
+  registryFile = (pkgs.formats.json {}).generate "patchbay-routes.json" registry;
 
   # The ledger directory patchbay writes to, home-relative. Systemd user
   # units don't inherit the session's XDG_STATE_HOME, so patchbay falls back

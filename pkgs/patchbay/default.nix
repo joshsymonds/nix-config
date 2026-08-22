@@ -9,8 +9,8 @@ buildGoModule {
 
   inherit src;
 
-  # Stdlib-only (go.mod has no require block), so there are no vendored deps.
-  vendorHash = null;
+  # The usage SQLite database uses modernc.org/sqlite and its transitive Go modules.
+  vendorHash = "sha256-BAvfNq8jRMtxnNRnCfD4m3N9Yqc7o9dM/v6eVfK0Iag=";
 
   subPackages = [
     "cmd/patchbay"

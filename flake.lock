@@ -294,11 +294,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1787207209,
-        "narHash": "sha256-nc3k5Fok6L6zAf9wlO15gr63yIpZeBZjwDT8dVP8aZU=",
+        "lastModified": 1787355972,
+        "narHash": "sha256-+yW7fg9ukoOeJsJwmafASPtvJnIe28gyfQgUJIgRJtY=",
         "owner": "joshsymonds",
         "repo": "cc-tools",
-        "rev": "e9592726f9c24ed7a2b6223f75ecbfc3c797f071",
+        "rev": "3421201c2382c22c25c3b538e18d9dbda496aebf",
         "type": "github"
       },
       "original": {
@@ -3307,17 +3307,17 @@
     "patchbay": {
       "flake": false,
       "locked": {
-        "lastModified": 1787333183,
-        "narHash": "sha256-X5twPsundkqQ9WG2f1ZpTa1XVfad4ZhFEv10Bp9kCZE=",
+        "lastModified": 1787362449,
+        "narHash": "sha256-rPTzBzHsXW5paCOeUcKO107JHksFP0EXchWGcW79WiI=",
         "ref": "main",
-        "rev": "14ad04e94682a444b560f54a57604c71e8888d44",
-        "revCount": 28,
+        "rev": "243e065b70f3a7fdbcf39e6f816658c96be9eeba",
+        "revCount": 45,
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/patchbay.git"
       },
       "original": {
         "ref": "main",
-        "rev": "14ad04e94682a444b560f54a57604c71e8888d44",
+        "rev": "243e065b70f3a7fdbcf39e6f816658c96be9eeba",
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/patchbay.git"
       }

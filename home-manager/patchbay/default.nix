@@ -56,6 +56,7 @@
   chatgptSeat = model: {
     upstream = "http://127.0.0.1:${toString codexPort}";
     auth_mode = "inject";
+    billing = "subscription";
     api_key_env_file = "PATCHBAY_CHATGPT_KEY_FILE";
     inherit model;
     # The Codex subscription's context window, not OpenRouter's larger one.
@@ -70,6 +71,7 @@
     "openrouter/sol" = {
       upstream = "https://openrouter.ai/api";
       auth_mode = "inject";
+      billing = "metered";
       api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
       model = "openai/gpt-5.6-sol";
       max_input_tokens = 1050000;
@@ -77,6 +79,7 @@
     "openrouter/luna" = {
       upstream = "https://openrouter.ai/api";
       auth_mode = "inject";
+      billing = "metered";
       api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
       model = "openai/gpt-5.6-luna";
       max_input_tokens = 1050000;
@@ -94,6 +97,7 @@
     "openrouter/deepseek-flash" = {
       upstream = "https://openrouter.ai/api";
       auth_mode = "inject";
+      billing = "metered";
       api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
       model = "deepseek/deepseek-v4-flash-0731";
       max_input_tokens = 1048576;
@@ -127,6 +131,7 @@
     "runpod/qwen3.8" = {
       upstream = "http://runpod-qwen.tail82223.ts.net:8000";
       auth_mode = "inject";
+      billing = "self_hosted";
       api_key_env_file = "PATCHBAY_RUNPOD_KEY_FILE";
       model = "Qwen/Qwen3.8-27B";
       max_input_tokens = 131072;
@@ -146,6 +151,7 @@
     "runpod/qwen-gguf" = {
       upstream = "http://runpod-qwen-gguf.tail82223.ts.net:8000";
       auth_mode = "inject";
+      billing = "self_hosted";
       api_key_env_file = "PATCHBAY_RUNPOD_KEY_FILE";
       model = "Qwen/Qwen3.8-27B";
       max_input_tokens = 131072;
@@ -264,13 +270,56 @@
 
   registryFile = (pkgs.formats.json {}).generate "patchbay-routes.json" registry;
 
-  # The ledger directory patchbay writes to, home-relative. Systemd user
-  # units don't inherit the session's XDG_STATE_HOME, so patchbay falls back
-  # to this $HOME-relative default. One string derives both the PATCHBAY_LEDGER_DIR
-  # the unit pins (%h/${ledgerSubdir}) and the path the rsync shipper reads
-  # ($HOME/${ledgerSubdir}), so pinning and shipping agree by construction.
+  # OpenRouter has one cache-write price. The 5m and 1h fields deliberately
+  # mirror it so TTL-bucketed writes price at the same rate if ever reported.
+  rateCardsFile = (pkgs.formats.json {}).generate "patchbay-rate-cards.json" [
+    {
+      model = "openai/gpt-5.6-sol";
+      effective_from = "2026-08-21T00:00:00Z";
+      source = "openrouter.ai/api/v1/models 2026-08-21; base tier — the >272k-prompt override tier is not representable";
+      rates_usd_per_million = {
+        input = "2.00";
+        output = "10.00";
+        cache_read = "0.20";
+        cache_creation = "2.50";
+        cache_creation_5m = "2.50";
+        cache_creation_1h = "2.50";
+      };
+    }
+    {
+      model = "openai/gpt-5.6-luna";
+      effective_from = "2026-08-21T00:00:00Z";
+      source = "openrouter.ai/api/v1/models 2026-08-21; base tier — the >272k-prompt override tier is not representable";
+      rates_usd_per_million = {
+        input = "0.20";
+        output = "1.20";
+        cache_read = "0.02";
+        cache_creation = "0.25";
+        cache_creation_5m = "0.25";
+        cache_creation_1h = "0.25";
+      };
+    }
+    {
+      model = "deepseek/deepseek-v4-flash-0731";
+      effective_from = "2026-08-21T00:00:00Z";
+      source = "openrouter.ai/api/v1/models 2026-08-21; no separate cache-write price — writes billed as input";
+      rates_usd_per_million = {
+        input = "0.08";
+        output = "0.18";
+        cache_read = "0.016";
+        cache_creation = "0.08";
+        cache_creation_5m = "0.08";
+        cache_creation_1h = "0.08";
+      };
+    }
+  ];
+
+  # Systemd user units do not inherit the session's XDG_STATE_HOME. Shared
+  # strings keep the unit's paths and the NFS shippers in agreement.
   ledgerSubdir = ".local/state/patchbay/ledger";
   ledgerDir = "$HOME/${ledgerSubdir}";
+  usageDbSubpath = ".local/state/patchbay/usage.sqlite";
+  usageDb = "$HOME/${usageDbSubpath}";
 
   # Ship the ledger to the host's NFS bucket so spend across the fleet can
   # be summed in one place. /mnt/claude is a lazy systemd automount; the
@@ -287,6 +336,24 @@
     ${pkgs.coreutils}/bin/mkdir -p /mnt/claude/${hostname}/patchbay
     ${pkgs.rsync}/bin/rsync -a --no-owner --no-group ${ledgerDir}/ /mnt/claude/${hostname}/patchbay/
   '';
+
+  usageSnapshotSync = pkgs.writeShellScript "patchbay-usage-snapshot-sync" ''
+    set -eu
+    ${pkgs.util-linux}/bin/mountpoint -q /mnt/claude || exit 0
+    [ -e ${usageDb} ] || exit 0
+    workdir=$(${pkgs.coreutils}/bin/mktemp -d)
+    trap '${pkgs.coreutils}/bin/rm -rf "$workdir"' EXIT
+    snapshot="$workdir/usage-$(${pkgs.coreutils}/bin/date -u +%Y%m%dT%H%M%SZ).sqlite"
+    export PATCHBAY_USAGE_DB=${usageDb}
+    ${lib.getExe patchbay} usage snapshot "$snapshot"
+    snapshots=/mnt/claude/${hostname}/patchbay/snapshots
+    ${pkgs.coreutils}/bin/mkdir -p "$snapshots"
+    ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$snapshot" "$snapshots/"
+    ${pkgs.findutils}/bin/find "$snapshots" -maxdepth 1 -type f -name 'usage-*.sqlite' -printf '%f\n' \
+      | ${pkgs.coreutils}/bin/sort -r \
+      | ${pkgs.coreutils}/bin/tail -n +8 \
+      | while IFS= read -r name; do ${pkgs.coreutils}/bin/rm -f -- "$snapshots/$name"; done
+  '';
 in {
   options.services.patchbay = {
     enable = lib.mkEnableOption "the patchbay Anthropic Messages API gateway";
@@ -301,8 +368,9 @@ in {
     };
 
     ledgerShipper.enable = lib.mkEnableOption ''
-      shipping patchbay's request ledger to /mnt/claude/<host>/patchbay.
-      Only for hosts that actually mount the NFS claude share
+      shipping patchbay's request ledger and daily usage SQLite snapshots to
+      /mnt/claude/<host>/patchbay. Only for hosts that actually mount the NFS
+      claude share
     '';
 
     codexUpstream.enable = lib.mkEnableOption ''
@@ -363,12 +431,14 @@ in {
             # request — so on a host where it never appears, the cost is a 500
             # on that one route, not a unit that refuses to start.
             "PATCHBAY_RUNPOD_KEY_FILE=%h/.config/patchbay/runpod-qwen.key"
-            # Pin patchbay's ledger + registry paths to the same locations it
-            # would otherwise fall back to, so the agreement holds by construction.
-            # systemd expands %h to the user's home; the ledger path shares
-            # ledgerSubdir with the rsync shipper, and the registry matches the
+            # Pin patchbay's ledger, usage DB, rate-card, and registry paths to
+            # the same locations they would otherwise fall back to. systemd
+            # expands %h to the user's home; the ledger and usage DB subpaths
+            # share strings with their shippers, and the registry matches the
             # xdg.configFile."patchbay/routes.json" target below.
             "PATCHBAY_LEDGER_DIR=%h/${ledgerSubdir}"
+            "PATCHBAY_USAGE_DB=%h/${usageDbSubpath}"
+            "PATCHBAY_RATE_CARDS=${rateCardsFile}"
             "PATCHBAY_REGISTRY=%h/.config/patchbay/routes.json"
           ]
           ++ lib.optional cfg.codexUpstream.enable "PATCHBAY_CHATGPT_KEY_FILE=${chatgptKeyFile}";
@@ -395,6 +465,29 @@ in {
         OnBootSec = "2min";
         OnUnitActiveSec = "10min";
         Unit = "patchbay-ledger-sync.service";
+      };
+      Install.WantedBy = ["timers.target"];
+    };
+
+    systemd.user.services.patchbay-usage-snapshot-sync = lib.mkIf cfg.ledgerShipper.enable {
+      Unit = {
+        Description = "Ship a daily patchbay usage SQLite snapshot to the NFS claude bucket";
+        After = ["network-online.target"];
+      };
+      Service = {
+        Type = "oneshot";
+        ExecStart = "${usageSnapshotSync}";
+      };
+    };
+
+    systemd.user.timers.patchbay-usage-snapshot-sync = lib.mkIf cfg.ledgerShipper.enable {
+      Unit.Description = "Ship patchbay's daily usage SQLite snapshot";
+      Timer = {
+        # Persistent is honored for OnCalendar timers, unlike the monotonic
+        # ledger timer above, so a missed daily snapshot catches up at boot.
+        OnCalendar = "*-*-* 03:17:00";
+        Persistent = true;
+        Unit = "patchbay-usage-snapshot-sync.service";
       };
       Install.WantedBy = ["timers.target"];
     };

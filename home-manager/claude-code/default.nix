@@ -548,21 +548,26 @@ in {
     ];
 
     # Set npm prefix to user directory and cc-tools socket path
-    sessionVariables = {
-      NPM_CONFIG_PREFIX = "$HOME/.npm-global";
-      CC_TOOLS_SOCKET = "/run/user/\${UID}/cc-tools.sock";
-      CLAUDE_CODE_ENABLE_TASKS = "true";
-      CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
-      CLAUDE_CODE_NO_FLICKER = "1";
-      CLAUDE_CODE_TMUX_TRUECOLOR = "1";
-      # Shared by Claude's stdin hooks and Codex's argv notify command.
-      CC_TOOLS_NTFY_URL_FILE = config.age.secrets."ntfy-url".path;
-      CC_TOOLS_NTFY_TOKEN_FILE = config.age.secrets."ntfy-token".path;
-      # The only reliable way to disable auto-updates for native installs.
-      # settings.json autoUpdater.disabled is cosmetic; ~/.claude.json autoUpdates
-      # is bypassed by autoUpdatesProtectedForNative for native installMethod.
-      DISABLE_AUTOUPDATER = "1";
-    };
+    sessionVariables =
+      {
+        NPM_CONFIG_PREFIX = "$HOME/.npm-global";
+        CC_TOOLS_SOCKET = "/run/user/\${UID}/cc-tools.sock";
+        CLAUDE_CODE_ENABLE_TASKS = "true";
+        CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
+        CLAUDE_CODE_NO_FLICKER = "1";
+        CLAUDE_CODE_TMUX_TRUECOLOR = "1";
+        # Shared by Claude's stdin hooks and Codex's argv notify command.
+        CC_TOOLS_NTFY_URL_FILE = config.age.secrets."ntfy-url".path;
+        CC_TOOLS_NTFY_TOKEN_FILE = config.age.secrets."ntfy-token".path;
+        # The only reliable way to disable auto-updates for native installs.
+        # settings.json autoUpdater.disabled is cosmetic; ~/.claude.json autoUpdates
+        # is bypassed by autoUpdatesProtectedForNative for native installMethod.
+        DISABLE_AUTOUPDATER = "1";
+      }
+      // lib.optionalAttrs (patchbayBaseUrl != null) {
+        CC_TOOLS_PATCHBAY_URL = patchbayBaseUrl;
+        PATCHBAY_CALLER_KEY_FILE = "/run/agenix/patchbay-caller-key";
+      };
 
     # Create and manage the ~/.claude config directory. Runtime state
     # (.credentials.json, ~/.claude.json, projects/, todos/, history.jsonl,

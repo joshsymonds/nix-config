@@ -24,6 +24,18 @@
     pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ../tmux/scripts/tmux-devspace.sh);
 
   chromeHexrain = import ../../modules/desktop/chrome-hexrain {inherit lib;};
+
+  # stdin → Android clipboard via OSC 52, which the Termux-family
+  # terminal implements (no Termux:API needed). Inside tmux the escape
+  # rides a passthrough DCS. `cat file | clip`.
+  clip = pkgs.writeShellScriptBin "clip" ''
+    data=$(${pkgs.coreutils}/bin/base64 -w0)
+    if [ -n "''${TMUX:-}" ]; then
+      printf '\033Ptmux;\033\033]52;c;%s\007\033\\' "$data"
+    else
+      printf '\033]52;c;%s\007' "$data"
+    fi
+  '';
 in {
   imports = [
     ../atuin
@@ -60,6 +72,10 @@ in {
       tmuxDevspaceHelper
       vivid
       wget
+      # zsh's shared init sources `zoxide init` output, whose chpwd hook
+      # calls the bare binary — without it every cd errors.
+      zoxide
+      clip
       # Starship's right-side chips (host alias, clouds block with the
       # closing curve) shell out to cc-tools; without it the powerline
       # renders unfinished. Public repo, aarch64-linux is built.

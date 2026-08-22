@@ -226,9 +226,12 @@ in {
     # Same rationale as modules/nix/defaults.nix: an unreachable attic
     # (phone off-tailnet, ultraviolet rebooting) must cost 5s per nix
     # command, not the default hang-around — fall through to
-    # cache.nixos.org fast.
+    # cache.nixos.org fast. And flakes-by-default, so bare `nix` works
+    # like Determinate does on the rest of the fleet — the
+    # --extra-experimental-features incantation is bootstrap-only.
     extraOptions = ''
       connect-timeout = 5
+      experimental-features = nix-command flakes
     '';
   };
 

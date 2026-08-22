@@ -204,9 +204,11 @@ in {
     termux-wake-unlock.enable = true;
   };
 
-  # Nerd font so the starship prompt renders; catppuccin-mocha to match
-  # the rest of the fleet's terminals.
-  terminal.font = "${pkgs.nerd-fonts.jetbrains-mono}/share/fonts/truetype/NerdFonts/JetBrainsMono/JetBrainsMonoNerdFontMono-Regular.ttf";
+  # Maple Mono NF CN — the same face kitty uses fleet-wide; catppuccin-
+  # mocha to match the rest of the fleet's terminals. Termux (a separate
+  # sandbox) can't be fed from the nix store: its copy goes to
+  # ~/.termux/font.ttf by hand — see README.
+  terminal.font = "${pkgs.maple-mono.NF-CN-unhinted}/share/fonts/truetype/MapleMono-NF-CN-Regular.ttf";
   terminal.colors = {
     background = "#1e1e2e";
     foreground = "#cdd6f4";

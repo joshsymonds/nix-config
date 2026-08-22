@@ -606,6 +606,14 @@
         packages =
           (import ./pkgs {inherit pkgs inputs;})
           // {
+            # Regenerates the committed Shader Editor artifact:
+            #   nix build .#chrome-hexrain-shadereditor
+            #   cp -L result hosts/shrike/chrome-hexrain-shadereditor.glsl
+            # The committed copy exists so the phone can grab it via
+            # GitHub's copy-raw button; checks.chrome-hexrain-sync
+            # fails when it drifts from the generators.
+            chrome-hexrain-shadereditor =
+              (import ./modules/desktop/chrome-hexrain {inherit (pkgs) lib;}).androidSource pkgs;
             savecraft-egress = pkgs.callPackage ./pkgs/savecraft-egress {
               src = inputs.savecraft-egress;
             };
@@ -664,6 +672,19 @@
             flakeSource = self.outPath;
           };
           substituters = import ./tests/substituters.nix {inherit pkgs;};
+          # The committed Shader Editor artifact must match what the
+          # generators produce — see packages.chrome-hexrain-shadereditor.
+          chrome-hexrain-sync = let
+            generated = (import ./modules/desktop/chrome-hexrain {inherit (checkPkgs) lib;}).androidSource checkPkgs;
+          in
+            checkPkgs.runCommand "chrome-hexrain-sync" {} ''
+              if ! diff -u ${./hosts/shrike/chrome-hexrain-shadereditor.glsl} ${generated}; then
+                echo "hosts/shrike/chrome-hexrain-shadereditor.glsl is stale." >&2
+                echo "Regenerate: nix build .#chrome-hexrain-shadereditor && cp -L result hosts/shrike/chrome-hexrain-shadereditor.glsl" >&2
+                exit 1
+              fi
+              touch $out
+            '';
         });
 
         # mkShellNoCC + a tiny package set keeps the direnv shell closure

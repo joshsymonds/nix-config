@@ -23,8 +23,6 @@
   tmuxDevspaceHelper =
     pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ../tmux/scripts/tmux-devspace.sh);
 
-  chromeHexrain = import ../../modules/desktop/chrome-hexrain {inherit lib;};
-
   # stdin → Android clipboard via OSC 52, which the Termux-family
   # terminal implements (no Termux:API needed). Inside tmux the escape
   # rides a passthrough DCS. `cat file | clip`.
@@ -107,13 +105,11 @@ in {
   # new control master"); plain connections work.
   programs.ssh.settings."*".ControlMaster = lib.mkForce "no";
 
-  # chrome_hexrain (gnomon's shader wallpaper), assembled for the Shader
-  # Editor app from the same body + uniform values halmasuit renders —
-  # regenerates on every `update`. Getting it INTO Shader Editor is the
-  # one manual hop (its shader storage is app-internal): open this file,
-  # copy, paste into a new shader there. See hosts/shrike/README.md.
-  home.file."wallpaper/chrome-hexrain-shadereditor.glsl".source =
-    chromeHexrain.androidSource pkgs;
+  # chrome_hexrain for Shader Editor is a COMMITTED artifact
+  # (hosts/shrike/chrome-hexrain-shadereditor.glsl, drift-guarded by
+  # checks.chrome-hexrain-sync) so the phone grabs it with GitHub's
+  # copy-raw button — no clipboard gymnastics. It's also in the phone's
+  # ~/nix-config checkout after `update`.
 
   # Inbound ssh: same fleet keys as every NixOS host authorizes
   # (hosts/common.nix imports the same list). nix-on-droid has no NixOS

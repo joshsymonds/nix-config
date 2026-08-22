@@ -136,18 +136,16 @@ gnomon's halmasuit shader assembled for the Shader Editor app from the
 SAME shared body + uniform values (modules/desktop/chrome-hexrain/), so
 edits there flow to both machines on their next rebuilds.
 
-One-time setup: install **Shader Editor** from F-Droid, create a new
-shader, and paste the file in via Termux's clipboard API (the Nix app's
-terminal predates OSC 52 — `clip` prints mush locally, though it works
-over ssh into a capable terminal like kitty):
+The Shader Editor variant is a COMMITTED artifact —
+`hosts/shrike/chrome-hexrain-shadereditor.glsl` — kept in sync with the
+generators by `checks.chrome-hexrain-sync` (regenerate with
+`nix build .#chrome-hexrain-shadereditor && cp -L result
+hosts/shrike/chrome-hexrain-shadereditor.glsl`).
 
-```bash
-# Nix app:  cp ~/wallpaper/chrome-hexrain-shadereditor.glsl ~/storage/downloads/
-# Termux:   termux-clipboard-set < ~/storage/downloads/chrome-hexrain-shadereditor.glsl
-```
-
-(Termux needs the Termux:API app + `pkg install termux-api`; both apps
-are in apps.nix.) Then:
+One-time setup: install **Shader Editor** from F-Droid, then in the
+phone's browser open the file on GitHub and tap the **copy raw
+contents** button — the whole shader lands on the clipboard in one tap.
+Paste into a new shader in the app. Then:
 system wallpaper picker → Live wallpapers → Shader Editor → set for
 home + lock screen. Cap the frame rate in the app's settings (~30fps
 reads identically, halves the battery cost).

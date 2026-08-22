@@ -73,6 +73,16 @@ in {
 
   programs.helix.enable = true;
 
+  # The phone is credential-less by design (public repo, pull-only): the
+  # git module's global https→ssh insteadOf rewrite would force every
+  # GitHub pull through an ssh key that deliberately doesn't exist, and
+  # gpg signing has no key here either.
+  programs.git.settings = {
+    url = lib.mkForce {};
+    commit.gpgsign = lib.mkForce false;
+    tag.gpgsign = lib.mkForce false;
+  };
+
   # Inbound ssh: same fleet keys as every NixOS host authorizes
   # (hosts/common.nix imports the same list). nix-on-droid has no NixOS
   # user machinery, so the file is written directly.

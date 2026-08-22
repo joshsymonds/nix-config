@@ -18,9 +18,11 @@ Open the app, let it bootstrap, then:
 
 ```bash
 # nix-config is public — anonymous https clone, no credentials on the
-# phone (it only ever pulls):
-nix-shell -p git --run \
-  'git clone https://github.com/joshsymonds/nix-config.git ~/nix-config'
+# phone (it only ever pulls). Flakes syntax, NOT nix-shell -p: the fresh
+# install has no nixpkgs channel, so channel-era commands fail with
+# "file 'nixpkgs' was not found in the Nix search path".
+nix shell --extra-experimental-features 'nix-command flakes' nixpkgs#git \
+  --command git clone https://github.com/joshsymonds/nix-config.git ~/nix-config
 nix-on-droid switch --flake ~/nix-config#shrike
 ```
 

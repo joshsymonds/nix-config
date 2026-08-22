@@ -30,6 +30,42 @@ If the phone ever needs to *push*, that's the moment to mint a key — and
 by then `ssh shrike` works, so the pubkey travels over the tailnet
 (`ssh shrike cat .ssh/id_ed25519.pub`), never through copy-paste.
 
+### Optional: pull the first switch from the household attic
+
+The config declares ultraviolet's attic as a substituter, but that only
+takes effect *after* a switch — the first one doesn't know about it.
+vermissian prebuilds and pushes shrike's closure (see below), so if
+Tailscale is already up, seed the first switch by hand:
+
+```bash
+# proot's /etc/hosts doesn't know MagicDNS names pre-switch:
+echo '100.66.32.65 ultraviolet' >> /etc/hosts
+mkdir -p ~/.config/nix
+cat >> ~/.config/nix/nix.conf <<'EOF'
+extra-substituters = http://ultraviolet:8081/nix-config
+extra-trusted-public-keys = nix-config:ohee3Ue/5Mw2k1KHLUW26FpngXv/bg3YRtnFk0aMHZs=
+EOF
+```
+
+If /etc/hosts turns out to be read-only pre-switch, skip this — the
+first switch just pulls from cache.nixos.org and attic takes over from
+the second onward. This seeding only speeds downloads; evaluation still
+happens on-device and is slow under proot no matter what.
+
+### Re-warming the cache after config changes
+
+On vermissian (or gnomon — both have aarch64 binfmt):
+
+```bash
+nix build .#nixOnDroidConfigurations.shrike.activationPackage \
+  --impure --no-link --print-out-paths \
+  --extra-substituters https://nix-on-droid.cachix.org \
+  --extra-trusted-public-keys 'nix-on-droid.cachix.org-1:56snoMJTXmDRC1Ei24CmKoUqvHJ9XCp+nidK7qkMQrU='
+# then push that path's closure with attic push (post-build hooks only
+# cover locally-BUILT paths; substituted deps need an explicit push):
+attic push h:nix-config <generation-path>
+```
+
 First switch downloads the closure from cache.nixos.org — do it on wifi.
 When the terminal settings change (font/colors), run
 `termux-reload-settings` or restart the app.

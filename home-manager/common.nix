@@ -21,6 +21,7 @@ in {
     ./k9s
     ./lazygit
     ./ssh-agent
+    ./ssh-config
     ./zsh
     ./starship
     ./statusline-aliases

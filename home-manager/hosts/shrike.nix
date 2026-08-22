@@ -13,6 +13,7 @@
 # error.
 {
   config,
+  inputs,
   lib,
   pkgs,
   ...
@@ -52,11 +53,21 @@ in {
       tmuxDevspaceHelper
       vivid
       wget
+      # Starship's right-side chips (host alias, clouds block with the
+      # closing curve) shell out to cc-tools; without it the powerline
+      # renders unfinished. Public repo, aarch64-linux is built.
+      inputs.cc-tools.packages.${pkgs.stdenv.hostPlatform.system}.default
     ];
 
     sessionVariables = {
       EDITOR = "hx";
       COLORTERM = "truecolor";
+      # Android's kernel hostname is "localhost" and nix-on-droid can't
+      # set it. Everything that derives identity from the hostname —
+      # starship's host chip ($HOSTNAME) and the zsh module's DEV_CONTEXT
+      # fallback — gets told directly instead.
+      HOSTNAME = "shrike";
+      DEV_CONTEXT = "shrike";
     };
   };
 

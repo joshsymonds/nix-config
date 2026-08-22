@@ -61,9 +61,21 @@
     # Pixel 11). Not NixOS-on-a-phone: it owns the terminal environment
     # inside the com.termux.nix app sandbox; Android apps stay imperative,
     # reconciled against hosts/shrike/apps.nix by shrike's `update`.
+    #
+    # NB: deliberately NOT `inputs.nixpkgs.follows = "nixpkgs"`. Their
+    # pinned nixpkgs (2024-02) carries the nix 2.18 lineage, which is the
+    # only nix that builds derivations under proot on Android: 2.18 opens
+    # the pty slave in the forked child, while the modern refactor opens
+    # it in the parent and dies with "getting pseudoterminal attributes:
+    # Permission denied" during activation (user-environment build).
+    # shrike's nix.package points at their pin; the rest of shrike's
+    # closure still comes from our nixpkgs.
     nix-on-droid = {
       url = "github:nix-community/nix-on-droid";
-      inputs.nixpkgs.follows = "nixpkgs";
+      # Their own flake.lock's nixpkgs rev, pinned explicitly — a bare
+      # re-lock would resolve their `nixpkgs-unstable` ref to today's
+      # HEAD and hand us modern nix again.
+      inputs.nixpkgs.url = "github:nixos/nixpkgs/5d874ac46894c896119bce68e758e9e80bdb28f1";
       inputs.home-manager.follows = "home-manager";
     };
 

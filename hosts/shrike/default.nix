@@ -221,6 +221,11 @@ in {
   # Tailscale node IPs are stable.
   networking.hosts."100.66.32.65" = ["ultraviolet"];
   nix = {
+    # The 2.18-era nix from nix-on-droid's own pinned nixpkgs — the same
+    # lineage as the app's bootstrap, and the only one whose pty handling
+    # survives proot (see the nix-on-droid input comment in flake.nix).
+    # Do NOT bump to pkgs.nix without testing a build on-device.
+    package = inputs.nix-on-droid.inputs.nixpkgs.legacyPackages.aarch64-linux.nix;
     substituters = ["http://ultraviolet:8081/nix-config"];
     trustedPublicKeys = ["nix-config:ohee3Ue/5Mw2k1KHLUW26FpngXv/bg3YRtnFk0aMHZs="];
     # Same rationale as modules/nix/defaults.nix: an unreachable attic

@@ -212,6 +212,26 @@ in {
 
   user.shell = "${pkgs.zsh}/bin/zsh";
 
+  # Household attic on ultraviolet as first substituter: `update` pulls
+  # the closure over the tailnet instead of cache.nixos.org (vermissian
+  # builds shrike's closure under emulation and pushes it — see
+  # hosts/shrike/README.md). The static hosts entry matters twice over:
+  # proot's resolv.conf bypasses MagicDNS so the name wouldn't resolve,
+  # and atticd's Host-header allowlist only admits the hostname form.
+  # Tailscale node IPs are stable.
+  networking.hosts."100.66.32.65" = ["ultraviolet"];
+  nix = {
+    substituters = ["http://ultraviolet:8081/nix-config"];
+    trustedPublicKeys = ["nix-config:ohee3Ue/5Mw2k1KHLUW26FpngXv/bg3YRtnFk0aMHZs="];
+    # Same rationale as modules/nix/defaults.nix: an unreachable attic
+    # (phone off-tailnet, ultraviolet rebooting) must cost 5s per nix
+    # command, not the default hang-around — fall through to
+    # cache.nixos.org fast.
+    extraOptions = ''
+      connect-timeout = 5
+    '';
+  };
+
   home-manager = {
     useGlobalPkgs = true;
     backupFileExtension = "backup";

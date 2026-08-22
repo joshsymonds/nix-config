@@ -84,6 +84,10 @@ in {
     tag.gpgsign = lib.mkForce false;
   };
 
+  # ControlMaster multiplexing dies under proot ("Failed to connect to
+  # new control master"); plain connections work.
+  programs.ssh.settings."*".ControlMaster = lib.mkForce "no";
+
   # Inbound ssh: same fleet keys as every NixOS host authorizes
   # (hosts/common.nix imports the same list). nix-on-droid has no NixOS
   # user machinery, so the file is written directly.

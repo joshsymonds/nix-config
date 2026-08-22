@@ -82,6 +82,10 @@
   updateScript = pkgs.writeShellScriptBin "update" ''
     set -euo pipefail
 
+    # The app-sandbox PATH is sparse (no sed, sometimes no grep/find) —
+    # bring our own tools, learned the hard way on-device.
+    export PATH=${lib.makeBinPath [pkgs.coreutils pkgs.gnused pkgs.gnugrep pkgs.findutils]}:$PATH
+
     FLAKE_DIR="$HOME/nix-config"
     if [ ! -d "$FLAKE_DIR" ]; then
       echo "update: $FLAKE_DIR not found — see hosts/shrike/README.md for bootstrap" >&2

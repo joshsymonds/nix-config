@@ -676,6 +676,38 @@
 
         nixosConfigurations = lib.mapAttrs mkNixosHost nixosHostDefinitions;
 
+        # One-command bootstrap seeding for shrike, run BEFORE the first
+        # switch (phone-typeable, needs neither git nor a clone — github:
+        # refs use the tarball fetcher):
+        #   nix run --extra-experimental-features 'nix-command flakes' github:joshsymonds/nix-config#seed
+        # Writes the ultraviolet hosts entry, the attic substituter, and
+        # flakes-by-default into the pre-switch environment, so the first
+        # switch substitutes from the household cache instead of building
+        # on-device (proot's unpackPhase chokes on source-dir builds like
+        # termux-am). Idempotent.
+        apps.aarch64-linux.seed = let
+          pkgs = import nixpkgs {system = "aarch64-linux";};
+        in {
+          type = "app";
+          program = "${pkgs.writeShellScript "seed-shrike" ''
+            set -eu
+            if ! grep -qs ultraviolet /etc/hosts; then
+              echo '100.66.32.65 ultraviolet' >> /etc/hosts
+            fi
+            mkdir -p "$HOME/.config/nix"
+            conf="$HOME/.config/nix/nix.conf"
+            if ! grep -qs 'ultraviolet:8081' "$conf"; then
+              {
+                echo 'extra-substituters = http://ultraviolet:8081/nix-config'
+                echo 'extra-trusted-public-keys = nix-config:ohee3Ue/5Mw2k1KHLUW26FpngXv/bg3YRtnFk0aMHZs='
+                echo 'experimental-features = nix-command flakes'
+              } >> "$conf"
+            fi
+            echo 'seeded: attic substituter + flakes-by-default'
+            echo 'next: nix shell nixpkgs#git --command nix-on-droid switch --flake ~/nix-config'
+          ''}";
+        };
+
         # shrike — Pixel 11, Nix-on-Droid. Evaluated on demand by
         # `nix-on-droid switch --flake ~/nix-config#shrike` on the phone;
         # no host here builds aarch64-linux, so this config is eval-checked

@@ -36,27 +36,26 @@ If the phone ever needs to *push*, that's the moment to mint a key — and
 by then `ssh shrike` works, so the pubkey travels over the tailnet
 (`ssh shrike cat .ssh/id_ed25519.pub`), never through copy-paste.
 
-### Optional: pull the first switch from the household attic
+### Seed the attic before the first switch (one command)
 
 The config declares ultraviolet's attic as a substituter, but that only
-takes effect *after* a switch — the first one doesn't know about it.
-vermissian prebuilds and pushes shrike's closure (see below), so if
-Tailscale is already up, seed the first switch by hand:
+takes effect *after* a switch. Seeding it first is not optional in
+practice: without it the phone tries to *build* nix-on-droid's
+source-dir packages (termux-am) on-device, and proot's unpackPhase
+chokes on that. With Tailscale up, run the flake's seed app — github:
+refs use the tarball fetcher, so this needs neither git nor the clone:
 
 ```bash
-# proot's /etc/hosts doesn't know MagicDNS names pre-switch:
-echo '100.66.32.65 ultraviolet' >> /etc/hosts
-mkdir -p ~/.config/nix
-cat >> ~/.config/nix/nix.conf <<'EOF'
-extra-substituters = http://ultraviolet:8081/nix-config
-extra-trusted-public-keys = nix-config:ohee3Ue/5Mw2k1KHLUW26FpngXv/bg3YRtnFk0aMHZs=
-EOF
+nix run --extra-experimental-features 'nix-command flakes' \
+  github:joshsymonds/nix-config#seed
 ```
 
-If /etc/hosts turns out to be read-only pre-switch, skip this — the
-first switch just pulls from cache.nixos.org and attic takes over from
-the second onward. This seeding only speeds downloads; evaluation still
-happens on-device and is slow under proot no matter what.
+It writes the ultraviolet hosts entry (proot's resolv.conf can't see
+MagicDNS pre-switch), the attic substituter + key, and
+flakes-by-default into `~/.config/nix/nix.conf` — that command is the
+last time the experimental-features flag is ever typed. Idempotent.
+Seeding only speeds downloads; evaluation still happens on-device and
+is slow under proot no matter what.
 
 ### Re-warming the cache after config changes
 

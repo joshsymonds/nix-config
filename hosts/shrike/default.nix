@@ -223,7 +223,12 @@ in {
   # proot's resolv.conf bypasses MagicDNS so the name wouldn't resolve,
   # and atticd's Host-header allowlist only admits the hostname form.
   # Tailscale node IPs are stable.
-  networking.hosts."100.66.32.65" = ["ultraviolet"];
+  networking.hosts = {
+    "100.66.32.65" = ["ultraviolet"];
+    "100.94.194.116" = ["vermissian"];
+    "100.108.237.97" = ["gnomon"];
+    "100.120.163.8" = ["echelon"];
+  };
   nix = {
     # The 2.18-era nix from nix-on-droid's own pinned nixpkgs — the same
     # lineage as the app's bootstrap, and the only one whose pty handling

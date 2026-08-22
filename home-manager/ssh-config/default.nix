@@ -54,6 +54,19 @@ _: {
         ForwardX11Trusted = "yes";
       };
 
+      # vermissian and gnomon had no blocks at all — invisible from hosts
+      # where the local user happens to be joshsymonds, required from
+      # shrike (whose local user is nix-on-droid).
+      vermissian = {
+        HostName = "vermissian";
+        User = "joshsymonds";
+      };
+
+      gnomon = {
+        HostName = "gnomon";
+        User = "joshsymonds";
+      };
+
       # shrike (Pixel 11, nix-on-droid): tailnet-only, sshd on 8022 started
       # by opening the app (see hosts/shrike). `ssh shrike update` converges
       # the phone remotely.

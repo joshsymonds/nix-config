@@ -50,8 +50,11 @@ update
 - Tailscale: sign in, join the tailnet.
 - Termux (from F-Droid, never Play): SMS-bridge runtime — Termux:API
   addon must come from the same source as Termux itself.
-- Android Settings → Apps → Nix-on-Droid → Battery → **Unrestricted**,
-  or doze will freeze sshd despite the wake lock.
+- Android Settings → Apps → Nix-on-Droid → Battery: enable "Allow
+  background usage", then **tap the label text (not the switch)** and
+  pick **Unrestricted** — the toggle alone means Optimized, which still
+  dozes the app. Android sometimes reverts this to Optimized; if sshd
+  seems dead despite the open-the-app ritual, re-check here first.
 
 ## 5. Inbound SSH
 

@@ -689,16 +689,20 @@
           pkgs = import nixpkgs {system = "aarch64-linux";};
         in {
           type = "app";
+          # Self-contained: the pre-switch bootstrap PATH has almost
+          # nothing (not even grep), so every tool is a store path. And
+          # /etc/hosts is read-only pre-switch, so the substituter URL
+          # uses ultraviolet's tailscale IP — atticd's allowedHosts on
+          # ultraviolet admits the IP form for exactly this window.
           program = "${pkgs.writeShellScript "seed-shrike" ''
             set -eu
-            if ! grep -qs ultraviolet /etc/hosts; then
-              echo '100.66.32.65 ultraviolet' >> /etc/hosts
-            fi
-            mkdir -p "$HOME/.config/nix"
+            GREP=${pkgs.gnugrep}/bin/grep
+            MKDIR=${pkgs.coreutils}/bin/mkdir
+            "$MKDIR" -p "$HOME/.config/nix"
             conf="$HOME/.config/nix/nix.conf"
-            if ! grep -qs 'ultraviolet:8081' "$conf"; then
+            if ! "$GREP" -qs '8081/nix-config' "$conf"; then
               {
-                echo 'extra-substituters = http://ultraviolet:8081/nix-config'
+                echo 'extra-substituters = http://100.66.32.65:8081/nix-config'
                 echo 'extra-trusted-public-keys = nix-config:ohee3Ue/5Mw2k1KHLUW26FpngXv/bg3YRtnFk0aMHZs='
                 echo 'experimental-features = nix-command flakes'
               } >> "$conf"

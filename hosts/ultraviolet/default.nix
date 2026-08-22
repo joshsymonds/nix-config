@@ -284,6 +284,16 @@ in
       apiEndpoint = "http://ultraviolet:8081/";
       storagePath = "/mnt/atticd/storage";
       nfsStorage.enable = true;
+      # Default allowlist is the hostname forms only. shrike's pre-switch
+      # bootstrap can't resolve names (proot /etc/hosts is read-only until
+      # the first switch manages /etc), so its seed uses the tailscale IP
+      # form — admit it. Tailscale node IPs are stable.
+      allowedHosts = [
+        "ultraviolet"
+        "ultraviolet:8081"
+        "100.66.32.65"
+        "100.66.32.65:8081"
+      ];
       # Storage is now on the 13 TB NAS — be generous so cached builds aren't
       # rotated out before the next time we substitute against them.
       gcRetentionPeriod = "1 year";

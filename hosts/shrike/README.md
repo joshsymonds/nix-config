@@ -32,8 +32,16 @@ nix shell --extra-experimental-features 'nix-command flakes' nixpkgs#git \
   --command nix-on-droid switch --flake ~/nix-config#shrike
 ```
 
-If the phone ever needs to *push*, that's the moment to mint a key — and
-by then `ssh shrike` works, so the pubkey travels over the tailnet
+Post-switch, mint the phone's identity and register it (fleet +
+GitHub — the git module's https→ssh rewrite means pulls go over ssh
+once the closure is active):
+
+```bash
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519 -C josh+shrike@joshsymonds.com
+```
+
+Add the pubkey to lib/ssh-keys.nix (fleet authorized_keys) and to the
+GitHub account — read it over the tailnet
 (`ssh shrike cat .ssh/id_ed25519.pub`), never through copy-paste.
 
 ### Seed the attic before the first switch (one command)

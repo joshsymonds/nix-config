@@ -77,12 +77,9 @@ in {
 
   programs.helix.enable = true;
 
-  # The phone is credential-less by design (public repo, pull-only): the
-  # git module's global https→ssh insteadOf rewrite would force every
-  # GitHub pull through an ssh key that deliberately doesn't exist, and
-  # gpg signing has no key here either.
+  # No GPG key on the phone; the ssh identity (registered with GitHub)
+  # handles auth, but signing would fail.
   programs.git.settings = {
-    url = lib.mkForce {};
     commit.gpgsign = lib.mkForce false;
     tag.gpgsign = lib.mkForce false;
   };

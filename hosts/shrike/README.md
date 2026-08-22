@@ -137,8 +137,17 @@ SAME shared body + uniform values (modules/desktop/chrome-hexrain/), so
 edits there flow to both machines on their next rebuilds.
 
 One-time setup: install **Shader Editor** from F-Droid, create a new
-shader, paste the file's contents in (`cat` it in a terminal session, or
-open it via the Files app after copying to `~/storage/downloads`), then:
+shader, and paste the file in via Termux's clipboard API (the Nix app's
+terminal predates OSC 52 — `clip` prints mush locally, though it works
+over ssh into a capable terminal like kitty):
+
+```bash
+# Nix app:  cp ~/wallpaper/chrome-hexrain-shadereditor.glsl ~/storage/downloads/
+# Termux:   termux-clipboard-set < ~/storage/downloads/chrome-hexrain-shadereditor.glsl
+```
+
+(Termux needs the Termux:API app + `pkg install termux-api`; both apps
+are in apps.nix.) Then:
 system wallpaper picker → Live wallpapers → Shader Editor → set for
 home + lock screen. Cap the frame rate in the app's settings (~30fps
 reads identically, halves the battery cost).

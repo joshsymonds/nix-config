@@ -680,13 +680,21 @@
         # `nix-on-droid switch --flake ~/nix-config#shrike` on the phone;
         # no host here builds aarch64-linux, so this config is eval-checked
         # locally but built on-device (cache.nixos.org covers most of it).
-        nixOnDroidConfigurations.shrike = inputs.nix-on-droid.lib.nixOnDroidConfiguration {
-          pkgs = import nixpkgs {
-            system = "aarch64-linux";
-            config.allowUnfree = true;
+        nixOnDroidConfigurations = let
+          shrike = inputs.nix-on-droid.lib.nixOnDroidConfiguration {
+            pkgs = import nixpkgs {
+              system = "aarch64-linux";
+              config.allowUnfree = true;
+            };
+            extraSpecialArgs = mkSpecialArgs "aarch64-linux";
+            modules = [./hosts/shrike];
           };
-          extraSpecialArgs = mkSpecialArgs "aarch64-linux";
-          modules = [./hosts/shrike];
+        in {
+          inherit shrike;
+          # `nix-on-droid switch --flake ~/nix-config` (no fragment) uses
+          # `default`. Only one phone exists, so alias it — a dropped
+          # #shrike shouldn't be an error.
+          default = shrike;
         };
 
         darwinConfigurations.ninuan = darwin.lib.darwinSystem {

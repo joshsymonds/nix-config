@@ -334,17 +334,17 @@
     set -eu
     ${pkgs.util-linux}/bin/mountpoint -q /mnt/claude || exit 0
     ${pkgs.coreutils}/bin/mkdir -p /mnt/claude/${hostname}/patchbay
-    ${pkgs.rsync}/bin/rsync -a --no-owner --no-group ${ledgerDir}/ /mnt/claude/${hostname}/patchbay/
+    ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "${ledgerDir}/" /mnt/claude/${hostname}/patchbay/
   '';
 
   usageSnapshotSync = pkgs.writeShellScript "patchbay-usage-snapshot-sync" ''
-    set -eu
+    set -euo pipefail
     ${pkgs.util-linux}/bin/mountpoint -q /mnt/claude || exit 0
-    [ -e ${usageDb} ] || exit 0
+    [ -e "${usageDb}" ] || exit 0
     workdir=$(${pkgs.coreutils}/bin/mktemp -d)
     trap '${pkgs.coreutils}/bin/rm -rf "$workdir"' EXIT
     snapshot="$workdir/usage-$(${pkgs.coreutils}/bin/date -u +%Y%m%dT%H%M%SZ).sqlite"
-    export PATCHBAY_USAGE_DB=${usageDb}
+    export PATCHBAY_USAGE_DB="${usageDb}"
     ${lib.getExe patchbay} usage snapshot "$snapshot"
     snapshots=/mnt/claude/${hostname}/patchbay/snapshots
     ${pkgs.coreutils}/bin/mkdir -p "$snapshots"
@@ -431,11 +431,11 @@ in {
             # request — so on a host where it never appears, the cost is a 500
             # on that one route, not a unit that refuses to start.
             "PATCHBAY_RUNPOD_KEY_FILE=%h/.config/patchbay/runpod-qwen.key"
-            # Pin patchbay's ledger, usage DB, rate-card, and registry paths to
-            # the same locations they would otherwise fall back to. systemd
-            # expands %h to the user's home; the ledger and usage DB subpaths
-            # share strings with their shippers, and the registry matches the
-            # xdg.configFile."patchbay/routes.json" target below.
+            # Pin patchbay's ledger, usage DB, and registry paths to their
+            # fallback locations. PATCHBAY_RATE_CARDS explicitly enables rate-card
+            # loading. systemd expands %h to the user's home; the ledger and usage
+            # DB subpaths share strings with their shippers, and the registry
+            # matches the xdg.configFile."patchbay/routes.json" target below.
             "PATCHBAY_LEDGER_DIR=%h/${ledgerSubdir}"
             "PATCHBAY_USAGE_DB=%h/${usageDbSubpath}"
             "PATCHBAY_RATE_CARDS=${rateCardsFile}"

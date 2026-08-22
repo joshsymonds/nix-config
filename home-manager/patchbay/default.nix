@@ -270,35 +270,14 @@
 
   registryFile = (pkgs.formats.json {}).generate "patchbay-routes.json" registry;
 
-  # OpenRouter has one cache-write price. The 5m and 1h fields deliberately
-  # mirror it so TTL-bucketed writes price at the same rate if ever reported.
+  # Sol and Luna have a second OpenRouter price tier above 272k prompt tokens,
+  # but rate cards currently key only on model. Their Seats accept up to 1.05M
+  # tokens, so metered rows without provider-reported cost stay explicitly
+  # unknown rather than recording the known-wrong base-tier price until cards
+  # become tier-aware. DeepSeek V4 Flash has a single tier, so its card remains.
+  # OpenRouter has one cache-write price for it; the 5m and 1h fields mirror that
+  # price so TTL-bucketed writes price at the same rate if ever reported.
   rateCardsFile = (pkgs.formats.json {}).generate "patchbay-rate-cards.json" [
-    {
-      model = "openai/gpt-5.6-sol";
-      effective_from = "2026-08-21T00:00:00Z";
-      source = "openrouter.ai/api/v1/models 2026-08-21; base tier — the >272k-prompt override tier is not representable";
-      rates_usd_per_million = {
-        input = "2.00";
-        output = "10.00";
-        cache_read = "0.20";
-        cache_creation = "2.50";
-        cache_creation_5m = "2.50";
-        cache_creation_1h = "2.50";
-      };
-    }
-    {
-      model = "openai/gpt-5.6-luna";
-      effective_from = "2026-08-21T00:00:00Z";
-      source = "openrouter.ai/api/v1/models 2026-08-21; base tier — the >272k-prompt override tier is not representable";
-      rates_usd_per_million = {
-        input = "0.20";
-        output = "1.20";
-        cache_read = "0.02";
-        cache_creation = "0.25";
-        cache_creation_5m = "0.25";
-        cache_creation_1h = "0.25";
-      };
-    }
     {
       model = "deepseek/deepseek-v4-flash-0731";
       effective_from = "2026-08-21T00:00:00Z";

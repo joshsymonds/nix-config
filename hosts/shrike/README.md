@@ -23,7 +23,13 @@ Open the app, let it bootstrap, then:
 # "file 'nixpkgs' was not found in the Nix search path".
 nix shell --extra-experimental-features 'nix-command flakes' nixpkgs#git \
   --command git clone https://github.com/joshsymonds/nix-config.git ~/nix-config
-nix-on-droid switch --flake ~/nix-config#shrike
+
+# The first switch ALSO needs git on PATH (nix shells out to git to read
+# a git-repo flake, and pre-switch there is no git) — run it inside the
+# same ephemeral shell. After this switch, git is in the closure and
+# plain `update` works forever.
+nix shell --extra-experimental-features 'nix-command flakes' nixpkgs#git \
+  --command nix-on-droid switch --flake ~/nix-config#shrike
 ```
 
 If the phone ever needs to *push*, that's the moment to mint a key — and

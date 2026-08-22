@@ -129,6 +129,24 @@ atuin daemon is disabled here (classic sqlite mode instead). The
 session that runs `sshd-start` won't close until `sshd-stop`; that's
 inherent, and fine for a debug session.
 
+## Wallpaper: chrome_hexrain on the phone
+
+The closure ships `~/wallpaper/chrome-hexrain-shadereditor.glsl` —
+gnomon's halmasuit shader assembled for the Shader Editor app from the
+SAME shared body + uniform values (modules/desktop/chrome-hexrain/), so
+edits there flow to both machines on their next rebuilds.
+
+One-time setup: install **Shader Editor** from F-Droid, create a new
+shader, paste the file's contents in (`cat` it in a terminal session, or
+open it via the Files app after copying to `~/storage/downloads`), then:
+system wallpaper picker → Live wallpapers → Shader Editor → set for
+home + lock screen. Cap the frame rate in the app's settings (~30fps
+reads identically, halves the battery cost).
+
+After changing the shared shader/uniforms: `update` regenerates the
+file; re-paste into Shader Editor (its storage is app-internal — the
+last hop can't be declarative).
+
 ## Known unverified-on-device bits
 
 Written before the phone existed; check on first run:

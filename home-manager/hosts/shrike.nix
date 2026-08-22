@@ -22,6 +22,8 @@
   # common.nix provides it. Same definition here.
   tmuxDevspaceHelper =
     pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ../tmux/scripts/tmux-devspace.sh);
+
+  chromeHexrain = import ../../modules/desktop/chrome-hexrain {inherit lib;};
 in {
   imports = [
     ../atuin
@@ -88,6 +90,14 @@ in {
   # ControlMaster multiplexing dies under proot ("Failed to connect to
   # new control master"); plain connections work.
   programs.ssh.settings."*".ControlMaster = lib.mkForce "no";
+
+  # chrome_hexrain (gnomon's shader wallpaper), assembled for the Shader
+  # Editor app from the same body + uniform values halmasuit renders —
+  # regenerates on every `update`. Getting it INTO Shader Editor is the
+  # one manual hop (its shader storage is app-internal): open this file,
+  # copy, paste into a new shader there. See hosts/shrike/README.md.
+  home.file."wallpaper/chrome-hexrain-shadereditor.glsl".source =
+    chromeHexrain.androidSource pkgs;
 
   # Inbound ssh: same fleet keys as every NixOS host authorizes
   # (hosts/common.nix imports the same list). nix-on-droid has no NixOS

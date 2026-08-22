@@ -32,6 +32,12 @@
       id = "com.termux.api";
       label = "Termux:API";
     }
+    # Renders ~/wallpaper/chrome-hexrain-shadereditor.glsl as the live
+    # wallpaper (home + lock) — see hosts/shrike/README.md.
+    {
+      id = "de.markusfisch.android.shadereditor";
+      label = "Shader Editor";
+    }
   ];
 
   obtainium = [

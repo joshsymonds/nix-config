@@ -49,6 +49,10 @@ in {
       moor
       ncdu
       openssh
+      # gnugrep/gnused: the sandbox base PATH lacks even grep and sed
+      # (non-interactive ssh one-liners break without them).
+      gnugrep
+      gnused
       ripgrep
       tmuxDevspaceHelper
       vivid

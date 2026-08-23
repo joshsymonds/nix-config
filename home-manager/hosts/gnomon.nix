@@ -126,6 +126,11 @@
     # July 2025, still ships pre-stable alpha.6) so we don't use it.
     cosmic-files
 
+    # Dropbox desktop sync client. The open-source CLI/desktop helper pulls
+    # in the proprietary daemon wrapper, which installs and self-updates the
+    # actual client under ~/.dropbox-dist after the first authenticated run.
+    dropbox-cli
+
     (pkgs.catppuccin-papirus-folders.override {
       flavor = "mocha";
       accent = "mauve";

@@ -294,11 +294,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1787384891,
-        "narHash": "sha256-Mb4xNL8gGYUG7fkjbRLPFqsG/NkMBRY2XujbPkjMtHI=",
+        "lastModified": 1787594785,
+        "narHash": "sha256-9nxf5mSeHJLVEaF2J8K7iOne8rQrc42xlI82pbp63s4=",
         "owner": "joshsymonds",
         "repo": "cc-tools",
-        "rev": "0ac498a3c4dbe79dbed53677e7d5e6deed7e1cf6",
+        "rev": "b248afef1f09f973c747ffa02c073e6e2bcd78a5",
         "type": "github"
       },
       "original": {

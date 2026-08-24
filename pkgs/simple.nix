@@ -12,6 +12,7 @@
   mcp-atlassian = pkgs.callPackage ./mcp-atlassian {};
   claudeCodeCli = pkgs.callPackage ./claude-code-cli {};
   codex = pkgs.callPackage ./codex {};
+  pi-coding-agent = pkgs.callPackage ./pi-coding-agent {};
   claude-swap = pkgs.callPackage ./claude-swap {};
   cliproxyapi = pkgs.callPackage ./cliproxyapi {};
   deadcode = pkgs.callPackage ./deadcode {};

@@ -17,6 +17,9 @@ in {
   home.file = {
     ".pi/agent/extensions/cc-tools.ts".source = ./cc-tools.ts;
     ".pi/agent/extensions/compact-transcript.ts".source = "${compactTranscript}/extensions/compact-transcript.ts";
-    ".pi/agent/extensions/core-subagent.ts".source = "${coreSubagent}/src/index.ts";
+    ".pi/agent/extensions/core-subagent" = {
+      source = "${coreSubagent}/src";
+      recursive = true;
+    };
   };
 }

@@ -107,23 +107,52 @@ update
   dozes the app. Android sometimes reverts this to Optimized; if sshd
   seems dead despite the open-the-app ritual, re-check here first.
 
-## 5. Inbound SSH
+## 5. SSH: outbound is the product, inbound is a debug tool
 
-sshd config, host-key bootstrap, and the fleet's authorized_keys are all
-in the closure; `sshd-start` runs automatically from every new shell. The
-whole ritual is: **open the Nix-on-Droid app once after a reboot**. Then,
-from any fleet machine (matchBlock ships in ssh-config):
+The phone's daily job is outbound: `earth` / `mars` / etc. drop into
+tmux devspaces on vermissian (devspaces-client module), `ssh <host>`
+works fleet-wide with the phone's own key.
+
+Inbound sshd exists but is started BY HAND when wanted:
 
 ```bash
+sshd-start            # on the phone; then from a fleet machine:
 ssh shrike            # tailnet name, port 8022, user nix-on-droid
 ssh shrike update     # converge the phone remotely
+sshd-stop             # when done (releases the wake lock)
 ```
 
-`sshd-stop` kills it and releases the wake lock. Log: `~/.ssh/sshd.log`.
+It is deliberately NOT auto-armed: any daemon spawned from a session
+chains that session's proot supervisor open (ptrace), making the
+session unclosable — the "bricked on Ctrl-D" symptom. Same reason the
+atuin daemon is disabled here (classic sqlite mode instead). The
+session that runs `sshd-start` won't close until `sshd-stop`; that's
+inherent, and fine for a debug session.
 
-Verify on device: that non-interactive `ssh shrike update` finds `update`
-on PATH (zsh .zshenv should provide the profile PATH; if not, add a
-`SetEnv`/wrapper to the sshd config in hosts/shrike/default.nix).
+## Wallpaper: chrome_hexrain on the phone
+
+The closure ships `~/wallpaper/chrome-hexrain-shadereditor.glsl` —
+gnomon's halmasuit shader assembled for the Shader Editor app from the
+SAME shared body + uniform values (modules/desktop/chrome-hexrain/), so
+edits there flow to both machines on their next rebuilds.
+
+The Shader Editor variant is a COMMITTED artifact —
+`hosts/shrike/chrome-hexrain-shadereditor.glsl` — kept in sync with the
+generators by `checks.chrome-hexrain-sync` (regenerate with
+`nix build .#chrome-hexrain-shadereditor && cp -L result
+hosts/shrike/chrome-hexrain-shadereditor.glsl`).
+
+One-time setup: install **Shader Editor** from F-Droid, then in the
+phone's browser open the file on GitHub and tap the **copy raw
+contents** button — the whole shader lands on the clipboard in one tap.
+Paste into a new shader in the app. Then:
+system wallpaper picker → Live wallpapers → Shader Editor → set for
+home + lock screen. Cap the frame rate in the app's settings (~30fps
+reads identically, halves the battery cost).
+
+After changing the shared shader/uniforms: `update` regenerates the
+file; re-paste into Shader Editor (its storage is app-internal — the
+last hop can't be declarative).
 
 ## Known unverified-on-device bits
 

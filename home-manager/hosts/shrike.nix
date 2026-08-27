@@ -22,9 +22,22 @@
   # common.nix provides it. Same definition here.
   tmuxDevspaceHelper =
     pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ../tmux/scripts/tmux-devspace.sh);
+
+  # stdin → Android clipboard via OSC 52, which the Termux-family
+  # terminal implements (no Termux:API needed). Inside tmux the escape
+  # rides a passthrough DCS. `cat file | clip`.
+  clip = pkgs.writeShellScriptBin "clip" ''
+    data=$(${pkgs.coreutils}/bin/base64 -w0)
+    if [ -n "''${TMUX:-}" ]; then
+      printf '\033Ptmux;\033\033]52;c;%s\007\033\\' "$data"
+    else
+      printf '\033]52;c;%s\007' "$data"
+    fi
+  '';
 in {
   imports = [
     ../atuin
+    ../devspaces-client
     ../git
     ../lazygit
     ../ssh-config
@@ -57,6 +70,10 @@ in {
       tmuxDevspaceHelper
       vivid
       wget
+      # zsh's shared init sources `zoxide init` output, whose chpwd hook
+      # calls the bare binary — without it every cd errors.
+      zoxide
+      clip
       # Starship's right-side chips (host alias, clouds block with the
       # closing curve) shell out to cc-tools; without it the powerline
       # renders unfinished. Public repo, aarch64-linux is built.
@@ -84,18 +101,31 @@ in {
     tag.gpgsign = lib.mkForce false;
   };
 
+  # ControlMaster multiplexing dies under proot ("Failed to connect to
+  # new control master"); plain connections work.
+  programs.ssh.settings."*".ControlMaster = lib.mkForce "no";
+
+  # chrome_hexrain for Shader Editor is a COMMITTED artifact
+  # (hosts/shrike/chrome-hexrain-shadereditor.glsl, drift-guarded by
+  # checks.chrome-hexrain-sync) so the phone grabs it with GitHub's
+  # copy-raw button — no clipboard gymnastics. It's also in the phone's
+  # ~/nix-config checkout after `update`.
+
   # Inbound ssh: same fleet keys as every NixOS host authorizes
   # (hosts/common.nix imports the same list). nix-on-droid has no NixOS
   # user machinery, so the file is written directly.
   home.file.".ssh/authorized_keys".text =
     lib.concatMapStrings (key: key + "\n") (import ../../lib/ssh-keys.nix);
 
-  # Arm sshd on the first shell after the app starts — there's no systemd
-  # and no boot hook on Android, so "open the app once" is the ritual that
-  # brings shrike reachable after a reboot. Idempotent and quiet.
-  programs.zsh.initContent = lib.mkAfter ''
-    command -v sshd-start >/dev/null 2>&1 && sshd-start --quiet || true
-  '';
+  # Inbound ssh is DEBUG-ONLY, started by hand (`sshd-start`) when wanted.
+  # No auto-arm: a daemon spawned from a session chains that session's
+  # proot supervisor open forever (ptrace — see the pixel11 saga), which
+  # is what made Ctrl-D "brick" sessions. The phone's job is outbound:
+  # `earth` and friends into vermissian.
+  #
+  # Same reasoning for atuin: no resident daemon on the phone. Classic
+  # sqlite mode syncs per-command and leaves sessions free to die.
+  programs.atuin.daemon.enable = lib.mkForce false;
 
   # No systemd on Android. The tmux and atuin modules declare user units
   # that could never run here; the zsh module's no-systemd fallback starts

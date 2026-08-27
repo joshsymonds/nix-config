@@ -12,6 +12,7 @@ in {
     ./atuin
     ./claude-code
     ./codex
+    ./pi
     ./mcp
     ./helix
     ./kitty

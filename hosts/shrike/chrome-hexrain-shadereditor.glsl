@@ -1,99 +1,83 @@
-// modules/desktop/halmasuit-wallpaper.glsl —
-// Ported from DankMaterialShell's chrome_hexrain.frag (GLSL 450 +
-// std140 UBO) to halmasuit's Shadertoy-shape GLSL ES 100.
-//
-// Conversion rules applied:
-//   - #version directive stripped (halmasuit's shader compiler
-//     prepends its own GLSL ES 100 preamble declaring `iTime`,
-//     `iResolution`, `iTimeDelta`, `iFrame`, `iMouse`).
-//   - layout(location = 0) in/out declarations removed.
-//   - layout(std140, binding = 0) uniform buf { ... } ubuf;
-//     dissolved into individual `uniform` declarations.
-//   - Qt-specific uniforms removed: qt_Matrix (vertex matrix —
-//     irrelevant for a fragment shader), qt_Opacity (no Qt opacity
-//     surface in halmasuit; effectively 1.0).
-//   - iTime + iResolution are NOT redeclared (provided by preamble).
-//   - ubuf.X references → bare X.
-//   - qt_TexCoord0 → (gl_FragCoord.xy / iResolution.xy) via the
-//     mainImage wrapper.
-//   - void main() → void mainImage(out vec4 fragColor, in vec2 fragCoord).
-//   - precision highp float; explicitly set — iTime-dependent
-//     accumulators overflow mediump within seconds.
-//
-// Source: https://github.com/joshsymonds/DankMaterialShell
-//   quickshell/Shaders/frag/chrome_hexrain.frag
+#version 300 es
+// Assembled by modules/desktop/chrome-hexrain (Shader Editor
+// target). Paste the whole file into a new shader in the Shader
+// Editor app, then: system wallpaper picker -> Live wallpapers ->
+// Shader Editor -> apply to home + lock screen. Cap the frame
+// rate in the app's settings (~30fps reads identically, halves
+// the battery cost).
 
 precision highp float;
 precision highp int;
 
-// ── Uniforms (matching DMS chrome_hexrain UBO; declared individually
-// for GLSL ES 100). Drive values from
-// services.halmasuit.wallpaper.uniforms in nix-config. iTime and
-// iResolution come from halmasuit's injected preamble; do not redeclare.
+uniform float time;
+uniform vec2 resolution;
+out vec4 outColor;
 
-uniform float intensity;
-uniform float cellSize;
-uniform vec4 colorPrimary;
-uniform vec4 colorSecondary;
-uniform vec4 colorPrimaryContainer;
-uniform vec4 colorTertiary;
-uniform float modeAmount;
-uniform float domeStrength;
-uniform float seamGlow;
-uniform float sunDriftSpeed;
-uniform float heightAmount;
-uniform float matteness;
-uniform float bleedBack;
-uniform float hexBevel;
-uniform float heightDriftSpeed;
-uniform float frontSunStrength;
-uniform float frontSunSize;
-uniform float frontSunLifetime;
-uniform float frontSunGap;
-uniform float frontSunSpeed;
-uniform float frontSunShadowLength;
-uniform float frontSunShadowDarkness;
-uniform float backSunSize;
-uniform float backSunStrength;
-uniform float backSunLifetime;
-uniform float backSunGap;
-uniform float backSunSpeed;
-uniform float backNegSunSize;
-uniform float backNegSunStrength;
-uniform float backNegSunLifetime;
-uniform float backNegSunGap;
-uniform float backNegSunSpeed;
-uniform float backSunPaletteSpeed;
-uniform float frontSunPaletteSpeed;
-uniform float backSunCount;
-uniform float backNegSunCount;
-uniform float frontSunCount;
-uniform float frontNegSunCount;
-uniform float frontNegSunStrength;
-uniform float frontNegSunSize;
-uniform float frontNegSunLifetime;
-uniform float frontNegSunGap;
-uniform float frontNegSunSpeed;
-uniform float fastBackSunStrength;
-uniform float fastBackSunSize;
-uniform float fastBackSunLifetime;
-uniform float fastBackSunGap;
-uniform float fastBackSunSpeed;
-uniform vec4 colorPrimaryNext;
-uniform vec4 colorSecondaryNext;
-uniform vec4 colorPrimaryContainerNext;
-uniform vec4 colorTertiaryNext;
-uniform float flipOriginX;
-uniform float flipOriginY;
-uniform float flipStartTime;
-uniform float flipPropDelay;
-uniform float flipDuration;
-uniform vec4 windowGeom;
-uniform float barZoneEnabled;
-uniform float barZoneAnchor;
-uniform float barZoneThickness;
-uniform float barZoneElevation;
+#define iTime time
+#define iResolution vec3(resolution, 1.0)
+#define windowGeom vec4(0.0, 0.0, resolution)
 
+const float backNegSunCount = 4.000000;
+const float backNegSunGap = 18.000000;
+const float backNegSunLifetime = 35.000000;
+const float backNegSunSize = 0.330000;
+const float backNegSunSpeed = 0.020000;
+const float backNegSunStrength = 0.430000;
+const float backSunCount = 4.000000;
+const float backSunGap = 15.000000;
+const float backSunLifetime = 50.000000;
+const float backSunPaletteSpeed = 0.840000;
+const float backSunSize = 0.320000;
+const float backSunSpeed = 0.015000;
+const float backSunStrength = 1.000000;
+const float barZoneAnchor = 2.000000;
+const float barZoneElevation = 2.000000;
+const float barZoneEnabled = 0.000000;
+const float barZoneThickness = 80.000000;
+const float bleedBack = 0.180000;
+const float cellSize = 29.000000;
+const vec4 colorPrimary = vec4(0.345098, 0.592157, 0.886275, 1.000000);
+const vec4 colorPrimaryContainer = vec4(0.090196, 0.082353, 0.337255, 1.000000);
+const vec4 colorPrimaryContainerNext = vec4(0.337255, 0.082353, 0.082353, 1.000000);
+const vec4 colorPrimaryNext = vec4(0.223529, 1.000000, 0.600000, 1.000000);
+const vec4 colorSecondary = vec4(0.717647, 0.066667, 0.858824, 1.000000);
+const vec4 colorSecondaryNext = vec4(1.000000, 0.466667, 0.200000, 1.000000);
+const vec4 colorTertiary = vec4(0.223529, 1.000000, 0.600000, 1.000000);
+const vec4 colorTertiaryNext = vec4(1.000000, 0.847059, 0.290196, 1.000000);
+const float domeStrength = 0.780000;
+const float fastBackSunGap = 37.000000;
+const float fastBackSunLifetime = 26.000000;
+const float fastBackSunSize = 0.250000;
+const float fastBackSunSpeed = 0.145000;
+const float fastBackSunStrength = 1.120000;
+const float flipDuration = 1.600000;
+const float flipOriginX = 200.000000;
+const float flipOriginY = 700.000000;
+const float flipPropDelay = 0.120000;
+const float flipStartTime = 1000000000.000000;
+const float frontNegSunCount = 4.000000;
+const float frontNegSunGap = 15.000000;
+const float frontNegSunLifetime = 30.000000;
+const float frontNegSunSize = 0.430000;
+const float frontNegSunSpeed = 0.025000;
+const float frontNegSunStrength = 0.300000;
+const float frontSunCount = 4.000000;
+const float frontSunGap = 12.000000;
+const float frontSunLifetime = 45.000000;
+const float frontSunPaletteSpeed = 0.500000;
+const float frontSunShadowDarkness = 2.300000;
+const float frontSunShadowLength = 2.500000;
+const float frontSunSize = 0.570000;
+const float frontSunSpeed = 0.020000;
+const float frontSunStrength = 0.620000;
+const float heightAmount = 0.550000;
+const float heightDriftSpeed = 0.750000;
+const float hexBevel = 0.600000;
+const float intensity = 0.660000;
+const float matteness = 0.420000;
+const float modeAmount = 0.770000;
+const float seamGlow = 2.260000;
+const float sunDriftSpeed = 1.800000;
 
 const float PI3 = 1.04719755;        // π / 3
 const float TWO_PI = 6.28318531;
@@ -873,4 +857,11 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 
     fragColor = vec4(finalColor * intensity * 1.0,
                      a * intensity * 1.0);
+}
+
+
+void main() {
+    vec4 c;
+    mainImage(c, gl_FragCoord.xy);
+    outColor = vec4(c.rgb, 1.0);
 }

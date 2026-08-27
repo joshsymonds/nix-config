@@ -46,8 +46,23 @@
 
     pidfile="$HOME/.ssh/sshd.pid"
     if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
-      [ "$quiet" = 1 ] || echo "sshd already running (pid $(cat "$pidfile"))"
-      exit 0
+      # A live pid isn't a live sshd: an orphaned listener (e.g. its proot
+      # supervisor died) still accepts TCP but resets every handshake, and
+      # trusting the pidfile would keep the zombie enthroned forever.
+      # Healthy sshd greets with its banner immediately; probe it.
+      banner=""
+      read -r -t 3 banner < /dev/tcp/127.0.0.1/8022 2>/dev/null || true
+      case "$banner" in
+        SSH-*)
+          [ "$quiet" = 1 ] || echo "sshd already running (pid $(cat "$pidfile"))"
+          exit 0
+          ;;
+        *)
+          [ "$quiet" = 1 ] || echo "sshd pid alive but not answering — replacing zombie"
+          kill -9 "$(cat "$pidfile")" 2>/dev/null || true
+          rm -f "$pidfile"
+          ;;
+      esac
     fi
 
     mkdir -p "$HOME/.ssh"
@@ -189,9 +204,11 @@ in {
     termux-wake-unlock.enable = true;
   };
 
-  # Nerd font so the starship prompt renders; catppuccin-mocha to match
-  # the rest of the fleet's terminals.
-  terminal.font = "${pkgs.nerd-fonts.jetbrains-mono}/share/fonts/truetype/NerdFonts/JetBrainsMono/JetBrainsMonoNerdFontMono-Regular.ttf";
+  # Maple Mono NF CN — the same face kitty uses fleet-wide; catppuccin-
+  # mocha to match the rest of the fleet's terminals. Termux (a separate
+  # sandbox) can't be fed from the nix store: its copy goes to
+  # ~/.termux/font.ttf by hand — see README.
+  terminal.font = "${pkgs.maple-mono.NF-CN-unhinted}/share/fonts/truetype/MapleMono-NF-CN-Regular.ttf";
   terminal.colors = {
     background = "#1e1e2e";
     foreground = "#cdd6f4";

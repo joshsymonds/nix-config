@@ -272,7 +272,7 @@
 
     # Patchbay — per-host Anthropic Messages API gateway (Claude Code → per-project models)
     patchbay = {
-      url = "git+ssh://git@github.com/joshsymonds/patchbay.git?ref=main&rev=14ad04e94682a444b560f54a57604c71e8888d44";
+      url = "git+ssh://git@github.com/joshsymonds/patchbay.git?ref=main&rev=d82a65e450d760443e20681b432e71f9ebad7ede";
       flake = false;
     };
 
@@ -358,7 +358,6 @@
   # NB: nixConfig must be a literal attrset (no `let ... in`); Nix CLI parses it
   # before expression evaluation. Keep these strings in sync with lib/caches.nix.
   nixConfig = {
-    extra-experimental-features = ["pipe-operators"];
     extra-substituters = [
       "https://nix-community.cachix.org"
       "https://joshsymonds.cachix.org"
@@ -608,6 +607,14 @@
         packages =
           (import ./pkgs {inherit pkgs inputs;})
           // {
+            # Regenerates the committed Shader Editor artifact:
+            #   nix build .#chrome-hexrain-shadereditor
+            #   cp -L result hosts/shrike/chrome-hexrain-shadereditor.glsl
+            # The committed copy exists so the phone can grab it via
+            # GitHub's copy-raw button; checks.chrome-hexrain-sync
+            # fails when it drifts from the generators.
+            chrome-hexrain-shadereditor =
+              (import ./modules/desktop/chrome-hexrain {inherit (pkgs) lib;}).androidSource pkgs;
             savecraft-egress = pkgs.callPackage ./pkgs/savecraft-egress {
               src = inputs.savecraft-egress;
             };
@@ -666,6 +673,19 @@
             flakeSource = self.outPath;
           };
           substituters = import ./tests/substituters.nix {inherit pkgs;};
+          # The committed Shader Editor artifact must match what the
+          # generators produce — see packages.chrome-hexrain-shadereditor.
+          chrome-hexrain-sync = let
+            generated = (import ./modules/desktop/chrome-hexrain {inherit (checkPkgs) lib;}).androidSource checkPkgs;
+          in
+            checkPkgs.runCommand "chrome-hexrain-sync" {} ''
+              if ! diff -u ${./hosts/shrike/chrome-hexrain-shadereditor.glsl} ${generated}; then
+                echo "hosts/shrike/chrome-hexrain-shadereditor.glsl is stale." >&2
+                echo "Regenerate: nix build .#chrome-hexrain-shadereditor && cp -L result hosts/shrike/chrome-hexrain-shadereditor.glsl" >&2
+                exit 1
+              fi
+              touch $out
+            '';
         });
 
         # mkShellNoCC + a tiny package set keeps the direnv shell closure

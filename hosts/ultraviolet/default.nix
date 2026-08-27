@@ -309,6 +309,13 @@ in
       poe2Enable = true;
     };
 
+    # Daily knowledge-report drain (fact loop epic 2): leases production
+    # knowledge_reports, researches with CLI seats, gates, publishes.
+    services.savecraftKnowledgeDrain = {
+      enable = true;
+      repoPath = "/home/joshsymonds/Personal/savecraft";
+    };
+
     # Podman for media containers
     virtualisation.podman = {
       enable = true;

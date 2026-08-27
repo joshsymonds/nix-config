@@ -432,6 +432,7 @@
           ./hosts/common.nix
           inputs.agenix.nixosModules.default
           inputs.savecraft.nixosModules.pob-server
+          inputs.savecraft.nixosModules.knowledge-drain
           inputs.mentat.nixosModules.default
           ({outputs, ...}: {
             nixpkgs.overlays = [outputs.overlays.privatePackages];

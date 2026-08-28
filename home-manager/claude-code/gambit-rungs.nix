@@ -109,6 +109,51 @@
       }) [false true]
   ) (lib.attrNames gambitRungs);
 
+  # pi-subagents uses Pi model IDs and frontmatter rather than Claude Code's
+  # patchbay route, effort, and camel-case denylist fields. Keep extensions
+  # and skills out of rung children: Gambit passes the complete contract and
+  # brief, and only the root orchestrator may mutate task state or dispatch.
+  mkPiRungAgent = rung: readonly: let
+    inherit (gambitRungs.${rung}) route effort;
+    agentName = rungAgentName rung readonly;
+    model = "openai-codex/gpt-5.6-${lib.removePrefix "chatgpt/" route}";
+  in
+    pkgs.writeText "gambit-pi-rung-${agentName}.md" (lib.concatStringsSep "\n" (
+      [
+        "---"
+        "name: ${agentName}"
+        ''description: "Gambit rung: ${model} at ${effort} thinking${lib.optionalString readonly ", read-only advisory variant"}"''
+        "model: ${model}"
+        "thinking: ${effort}"
+        ''tools: "${
+            if readonly
+            then "read, bash, grep, find, ls"
+            else "*"
+          }"''
+        "extensions: false"
+        "skills: false"
+      ]
+      ++ lib.optional readonly "isolated: true"
+      ++ [
+        "---"
+        ""
+      ]
+      ++ (
+        if readonly
+        then readonlyDirective
+        else ["You are a gambit rung agent. Follow the contract and brief given in your prompt exactly."]
+      )
+      ++ [""]
+    ));
+
+  piRungAgentEntries = lib.concatMap (
+    rung:
+      map (readonly: {
+        name = "${rungAgentName rung readonly}.md";
+        path = mkPiRungAgent rung readonly;
+      }) [false true]
+  ) (lib.attrNames gambitRungs);
+
   # ── Gambit rung/role map ────────────────────────────────────────────────
   # <profile>/gambit/models.json: what gambit reads to turn a role into a
   # dispatch. Two kinds of rung entry:

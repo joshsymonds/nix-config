@@ -12,6 +12,7 @@
     (rungData)
     gambitRungs
     rungAgentEntries
+    piRungAgentEntries
     gambitModelsFull
     gambitModelsClaudeOnly
     ;
@@ -35,6 +36,7 @@
   # The same entries home-manager links into <profile>/agents, rendered here so
   # the frontmatter can be read back off disk.
   agentsDir = pkgs.linkFarm "gambit-rung-agents-check-dir" rungAgentEntries;
+  piAgentsDir = pkgs.linkFarm "gambit-pi-rung-agents-check-dir" piRungAgentEntries;
 in
   pkgs.runCommand "gambit-rung-agents-check" {
     nativeBuildInputs = [pkgs.jq];
@@ -110,6 +112,32 @@ in
       fi
       if grep -qF "READ-ONLY" "$plain"; then
         echo "writing variant $rung.md carries the read-only directive" >&2
+        exit 1
+      fi
+
+      # Pi gets the same named rungs rendered in pi-subagents frontmatter.
+      # Its direct Codex provider replaces Claude's patchbay route, `thinking`
+      # replaces `effort`, and read-only variants expose inspection tools only.
+      pi_model="openai-codex/gpt-5.6-''${route#chatgpt/}"
+      pi_plain="${piAgentsDir}/$rung.md"
+      pi_ro="${piAgentsDir}/$rung-ro.md"
+      for f in "$pi_plain" "$pi_ro"; do
+        test -f "$f"
+        grep -qxF "model: $pi_model" "$f"
+        grep -qxF "thinking: $effort" "$f"
+        grep -qxF "extensions: false" "$f"
+        grep -qxF "skills: false" "$f"
+        if grep -qF "disallowedTools:" "$f"; then
+          echo "Pi rung $f leaked Claude-only frontmatter" >&2
+          exit 1
+        fi
+      done
+      grep -qxF 'tools: "*"' "$pi_plain"
+      grep -qxF 'tools: "read, bash, grep, find, ls"' "$pi_ro"
+      grep -qxF 'isolated: true' "$pi_ro"
+      grep -qF "READ-ONLY advisory variant" "$pi_ro"
+      if grep -qF "isolated: true" "$pi_plain"; then
+        echo "writing Pi variant $rung.md is isolated read-only" >&2
         exit 1
       fi
     done

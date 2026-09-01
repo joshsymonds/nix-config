@@ -49,6 +49,14 @@ in {
       }
     ];
 
+    # networkd defaults to ManageForeignRoutingPolicyRules=yes: every restart
+    # (any rebuild whose networkd config changed) deletes routing policy rules
+    # it does not own, including warp-svc's `not fwmark 0x100cf lookup 65743`.
+    # warp-svc only reinstalls that rule on reconnect, and in full-tunnel mode
+    # its leak-protection nftables table keeps dropping all egress in the
+    # meantime — the host loses DNS and internet until WARP is bounced.
+    systemd.network.config.networkConfig.ManageForeignRoutingPolicyRules = false;
+
     # Bound to the interface's device unit rather than to cloudflare-warp.service:
     # the link appears on connect and disappears on disconnect, so this reapplies
     # on every reconnect and after a reboot without ordering against the daemon.

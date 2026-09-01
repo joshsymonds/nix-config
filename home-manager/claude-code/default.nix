@@ -128,20 +128,29 @@
   # only step needed for cmswitch to recognise it and — if unpinKey is
   # non-null — for activation to clear its launch-default effort pin.
   modelRegistry = {
+    "fable-5-1" = {
+      # No unpinKey: CC 2.1.257 pins launch effort only for opus-4-7/4-8 and
+      # fable-5 (see unpin<Model>LaunchEffort in the binary); fable-5-1 honors
+      # settings.json effortLevel directly.
+      model = "claude-fable-5-1";
+      defaultEffort = "high";
+      unpinKey = null;
+      aliases = ["fable"];
+    };
     "fable-5" = {
-      # The [1m] marker is client-side only (stripped before the wire): CC
-      # 2.1.234's static native-1M table predates fable-5, so the plain id
-      # resolves a 200k window and the context bar pegs 100% past 200k while
-      # the API happily serves the real 1M. The marker forces 1M resolution.
-      model = "claude-fable-5[1m]";
+      # Plain id since CC 2.1.257: its static model table has native_1m for
+      # fable-5, so the [1m] marker the 2.1.234-era entry needed is redundant.
+      model = "claude-fable-5";
       defaultEffort = "high";
       unpinKey = "unpinFable5LaunchEffort";
-      aliases = ["fable"];
+      aliases = [];
     };
     "opus-5" = {
       model = "claude-opus-5";
       defaultEffort = "xhigh";
-      unpinKey = "unpinOpus5LaunchEffort";
+      # CC 2.1.257 dropped unpinOpus5LaunchEffort (only opus-4-7/4-8 and
+      # fable-5 keys remain in the binary), so there is no pin to clear.
+      unpinKey = null;
       aliases = ["opus"];
     };
     "opus-4-8" = {

@@ -1,7 +1,7 @@
 {
   "companyAnnouncements": [],
   "viewMode": "default",
-  "model": "chatgpt/sol",
+  "model": "claude-fable-5-1",
   "effortLevel": "high",
   "preferredNotifChannel": "notifications_disabled",
   "permissions": {

@@ -625,6 +625,16 @@ in
         enable = true;
         trustedInterfaces = ["tailscale0"];
         allowedTCPPorts = [22];
+        # bathhouse embedding server (backlot embed-serve.sh, llama-server on
+        # 8091): reachable from the home LAN only, never the wider world. The
+        # NIC is matched by glob (see above), so restrict by source subnet
+        # instead of interface name.
+        extraCommands = ''
+          iptables -A nixos-fw -p tcp --dport 8091 -s 172.31.0.0/24 -j nixos-fw-accept
+        '';
+        extraStopCommands = ''
+          iptables -D nixos-fw -p tcp --dport 8091 -s 172.31.0.0/24 -j nixos-fw-accept 2>/dev/null || true
+        '';
       };
     };
 

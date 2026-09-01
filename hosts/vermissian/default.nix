@@ -17,6 +17,7 @@ in
       ../../modules/services/cloudflare-tunnel.nix
       ../../modules/services/cloudflare-warp-dns.nix
       ./hardware-configuration.nix
+      ./mullvad-proxy.nix
       ./services/marvin-blackbox-reap.nix
 
       # Headless-server hardening (BT module blacklist on top of fleet-wide)

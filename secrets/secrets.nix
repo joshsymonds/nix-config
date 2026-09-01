@@ -51,6 +51,8 @@ in {
   "secrets/hosts/ultraviolet/savecraft-canary-access-client-secret.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/gnomon/mullvad-privatekey.age".publicKeys = keys.gnomon;
   "secrets/hosts/gnomon/mullvad-addresses.age".publicKeys = keys.gnomon;
+  "secrets/hosts/vermissian/mullvad-privatekey.age".publicKeys = keys.vermissian;
+  "secrets/hosts/vermissian/mullvad-addresses.age".publicKeys = keys.vermissian;
   "secrets/hosts/vermissian/cloudflared-token.age".publicKeys = keys.vermissian;
   # Out-of-band Coder Docker stack (see the coder-db-password/coder-env
   # comment above) — no in-repo age.secrets declaration, not an orphan.

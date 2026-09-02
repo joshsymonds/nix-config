@@ -11,6 +11,7 @@ in {
   imports = [
     ./atuin
     ./claude-code
+    ./direnv-devenv
     ./codex
     ./pi
     ./mcp

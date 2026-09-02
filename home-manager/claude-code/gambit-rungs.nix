@@ -146,13 +146,70 @@
       ++ [""]
     ));
 
-  piRungAgentEntries = lib.concatMap (
-    rung:
-      map (readonly: {
-        name = "${rungAgentName rung readonly}.md";
-        path = mkPiRungAgent rung readonly;
-      }) [false true]
-  ) (lib.attrNames gambitRungs);
+  # Pi-only rungs on the omakase gateway (home-manager/pi declares the
+  # provider). No Claude Code twin: patchbay publishes no omakase route, and
+  # the gateway pins reasoning effort per alias, so `thinking` here records
+  # the alias's fixed effort rather than choosing one. These are for @deep /
+  # @everyday mentions and Agent dispatch while work migrates off Codex; the
+  # gambit role map below still resolves to the Codex rungs.
+  omakasePiRungs = {
+    everyday = {
+      model = "omakase/everyday";
+      thinking = "medium";
+    };
+    deep = {
+      model = "omakase/deep";
+      thinking = "xhigh";
+    };
+  };
+
+  mkOmakasePiRungAgent = rung: readonly: let
+    inherit (omakasePiRungs.${rung}) model thinking;
+    agentName = rungAgentName rung readonly;
+  in
+    pkgs.writeText "gambit-pi-rung-${agentName}.md" (lib.concatStringsSep "\n" (
+      [
+        "---"
+        "name: ${agentName}"
+        ''description: "Gambit rung: ${model} (omakase gateway, effort pinned ${thinking})${lib.optionalString readonly ", read-only advisory variant"}"''
+        "model: ${model}"
+        "thinking: ${thinking}"
+        ''tools: "${
+            if readonly
+            then "read, bash, grep, find, ls"
+            else "*"
+          }"''
+        "extensions: false"
+        "skills: false"
+      ]
+      ++ lib.optional readonly "isolated: true"
+      ++ [
+        "---"
+        ""
+      ]
+      ++ (
+        if readonly
+        then readonlyDirective
+        else ["You are a gambit rung agent. Follow the contract and brief given in your prompt exactly."]
+      )
+      ++ [""]
+    ));
+
+  piRungAgentEntries =
+    lib.concatMap (
+      rung:
+        map (readonly: {
+          name = "${rungAgentName rung readonly}.md";
+          path = mkPiRungAgent rung readonly;
+        }) [false true]
+    ) (lib.attrNames gambitRungs)
+    ++ lib.concatMap (
+      rung:
+        map (readonly: {
+          name = "${rungAgentName rung readonly}.md";
+          path = mkOmakasePiRungAgent rung readonly;
+        }) [false true]
+    ) (lib.attrNames omakasePiRungs);
 
   # ── Gambit rung/role map ────────────────────────────────────────────────
   # <profile>/gambit/models.json: what gambit reads to turn a role into a

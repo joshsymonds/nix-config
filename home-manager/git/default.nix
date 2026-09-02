@@ -15,6 +15,9 @@ _: {
   programs.git = {
     enable = true;
     lfs.enable = true;
+    # Per-tree Pi defaults read by the `pi` shell function (home-manager/zsh);
+    # local to a checkout, never something to commit.
+    ignores = [".pi-args"];
 
     settings = {
       user = {

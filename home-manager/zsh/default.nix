@@ -115,6 +115,36 @@ in {
         export PATCHBAY_CALLER_KEY_FILE=/run/agenix/patchbay-caller-key
       ''}
 
+      # Pi with per-tree defaults. The nearest .pi-args file at or above the
+      # working directory (searched up to /) supplies leading arguments, one
+      # per line, `#` comments allowed; explicit flags on the command line
+      # come after it and so win. ~/Work/attain/.pi-args points Pi at the
+      # omakase gateway; a tree with no file gets plain Pi.
+      pi() {
+        local dir="$PWD" file=""
+        while :; do
+          if [[ -f "$dir/.pi-args" ]]; then
+            file="$dir/.pi-args"
+            break
+          fi
+          [[ "$dir" == "/" ]] && break
+          dir="''${dir:h}"
+        done
+        if [[ -z "$file" ]]; then
+          command pi "$@"
+          return
+        fi
+        local -a extra
+        local line
+        while IFS= read -r line || [[ -n "$line" ]]; do
+          line="''${line%%#*}"
+          line="''${line## }"
+          [[ -z "''${line// }" ]] && continue
+          extra+=("''${(z)line}")
+        done < "$file"
+        command pi "''${extra[@]}" "$@"
+      }
+
       t() {
         if [[ $# -eq 0 ]]; then
           tmux-devspace new

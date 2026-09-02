@@ -87,6 +87,19 @@
 
   piRungAgents = pkgs.linkFarm "pi-gambit-rung-agents" piRungAgentEntries;
 in {
+  # The omakase gateway (Klover's LLM front door) as a first-class Pi
+  # provider. LiteLLM speaks Anthropic Messages, so no adapter is needed. The
+  # two aliases are the whole menu: `everyday` (GLM 5.3 Flash via Together,
+  # reasoning pinned to medium) and `deep` (GPT-5.6 Sol via Azure US, pinned
+  # to xhigh). The gateway ignores Pi's thinking parameter, so a thinking
+  # level here is documentation, not control. The key is a personal one from
+  # https://omakase.kloverinfrastructure.com, agenix-decrypted per login into
+  # $XDG_RUNTIME_DIR/agenix and read through Pi's "!command" resolver, which
+  # runs under a shell so the variable expands. Which projects default to
+  # this provider is decided by the `pi` shell function (home-manager/zsh)
+  # and a per-tree .pi-args file, not here.
+  age.secrets."omakase-key".file = ../../secrets/user/omakase-key.age;
+
   programs.pi-coding-agent = {
     enable = true;
     package = pkgs.pi-coding-agent;
@@ -115,6 +128,30 @@ in {
   };
 
   home.file = {
+    ".pi/agent/models.json".text = builtins.toJSON {
+      providers.omakase = {
+        name = "omakase";
+        baseUrl = "https://llm.kloverinfrastructure.com";
+        api = "anthropic-messages";
+        apiKey = "!cat \"$XDG_RUNTIME_DIR/agenix/omakase-key\"";
+        models = [
+          {
+            id = "everyday";
+            name = "everyday";
+            reasoning = true;
+            contextWindow = 1048575;
+            maxTokens = 131072;
+          }
+          {
+            id = "deep";
+            name = "deep";
+            reasoning = true;
+            contextWindow = 1050000;
+            maxTokens = 128000;
+          }
+        ];
+      };
+    };
     ".pi/agent/extensions/cc-tools.ts".source = ./cc-tools.ts;
     ".pi/agent/extensions/compact-transcript.ts".source = "${compactTranscript}/extensions/compact-transcript.ts";
     ".pi/agent/agents".source = piRungAgents;

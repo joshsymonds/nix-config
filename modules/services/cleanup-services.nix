@@ -33,16 +33,24 @@ in {
       description = "Run 'nix-collect-garbage --delete-older-than 3d' + 'nix-store --gc' in the cleanup pass.";
     };
 
-    tmpBuildCachePrune = lib.mkOption {
+    tmpPrune = lib.mkOption {
       type = lib.types.bool;
       default = true;
-      description = "Delete stale per-run build caches in /tmp (Go caches, arena-run dirs, scratch dirs) left behind by agent runs.";
+      description = ''
+        Delete every top-level /tmp entry whose mtime is older than
+        tmpPruneAgeDays, except entries some running process still has open
+        (an fd, cwd, or mount under it) and the fixed skip list in the
+        script. Age-based rather than name-based: the name allowlist this
+        replaced missed wrangler/miniflare/nix-shell/marvin-pi/contract-*
+        scratch dirs and let /tmp reach 53k entries and 29G on vermissian
+        (Sep 2026).
+      '';
     };
 
-    tmpBuildCacheAgeDays = lib.mkOption {
+    tmpPruneAgeDays = lib.mkOption {
       type = lib.types.ints.positive;
       default = 3;
-      description = "Minimum age in days before a /tmp build-cache dir is deleted.";
+      description = "Minimum age in days before a /tmp entry is deleted.";
     };
 
     homeBuildCachePrune = lib.mkOption {
@@ -112,15 +120,26 @@ in {
             fi
           ''}
 
-          ${lib.optionalString cfg.tmpBuildCachePrune ''
-            echo "Pruning stale build caches in /tmp..."
+          ${lib.optionalString cfg.tmpPrune ''
+            echo "Pruning /tmp entries idle >${toString cfg.tmpPruneAgeDays}d..."
+            # Top-level /tmp names some live process holds via an open fd,
+            # its cwd, or a mount (kind/docker bind-mounts, a test Postgres
+            # with PGDATA in /tmp, agent session dirs). Never touch those.
+            live=$( {
+              ${pkgs.findutils}/bin/find /proc/[0-9]*/fd /proc/[0-9]*/cwd -maxdepth 1 \
+                -lname '/tmp/*' -printf '%l\n' 2>/dev/null
+              ${pkgs.coreutils}/bin/cat /proc/[0-9]*/mountinfo 2>/dev/null \
+                | ${pkgs.gnugrep}/bin/grep -o ' /tmp/[^ ]*'
+            } | ${pkgs.gnused}/bin/sed -E 's#^ ?/tmp/##' \
+              | ${pkgs.coreutils}/bin/cut -d/ -f1 \
+              | ${pkgs.coreutils}/bin/sort -u)
             ${pkgs.findutils}/bin/find /tmp -mindepth 1 -maxdepth 1 \
-              \( -name '*cache*' -o -name '*go-build*' -o -name 'arena-run-*' \
-                 -o -name '*-authorrun-*' -o -name 'tmp.*' -o -name '*-scratch' \
-                 -o -name '*shared-target*' \) \
-              -mtime +${toString cfg.tmpBuildCacheAgeDays} \
-              -exec rm -rf {} + || true
-            echo "/tmp build-cache prune completed"
+              -mtime +${toString cfg.tmpPruneAgeDays} -printf '%f\n' \
+              | ${pkgs.gnugrep}/bin/grep -vE '^(claude-[0-9]+|cc-daemon-[0-9]+|systemd-private-.*|\..*-unix)$' \
+              | ${pkgs.gnugrep}/bin/grep -vxF -f <(printf '%s\n' "$live") \
+              | ${pkgs.gnused}/bin/sed 's#^#/tmp/#' \
+              | ${pkgs.findutils}/bin/xargs -r -d '\n' -n 200 rm -rf -- || true
+            echo "/tmp prune completed ($(${pkgs.coreutils}/bin/ls /tmp | ${pkgs.coreutils}/bin/wc -l) entries remain)"
           ''}
 
           ${lib.optionalString cfg.homeBuildCachePrune ''

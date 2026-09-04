@@ -125,18 +125,22 @@ in {
             # Top-level /tmp names some live process holds via an open fd,
             # its cwd, or a mount (kind/docker bind-mounts, a test Postgres
             # with PGDATA in /tmp, agent session dirs). Never touch those.
+            # Both /proc scans exit nonzero whenever a PID vanishes mid-walk
+            # (3/30 runs on vermissian under agent load, Sep 2026) and grep -o
+            # exits 1 on no match; under set -e + pipefail either one aborted
+            # the whole cleanup before it deleted anything. Tolerate them.
             live=$( {
               ${pkgs.findutils}/bin/find /proc/[0-9]*/fd /proc/[0-9]*/cwd -maxdepth 1 \
-                -lname '/tmp/*' -printf '%l\n' 2>/dev/null
+                -lname '/tmp/*' -printf '%l\n' 2>/dev/null || true
               ${pkgs.coreutils}/bin/cat /proc/[0-9]*/mountinfo 2>/dev/null \
-                | ${pkgs.gnugrep}/bin/grep -o ' /tmp/[^ ]*'
+                | ${pkgs.gnugrep}/bin/grep -o ' /tmp/[^ ]*' || true
             } | ${pkgs.gnused}/bin/sed -E 's#^ ?/tmp/##' \
               | ${pkgs.coreutils}/bin/cut -d/ -f1 \
               | ${pkgs.coreutils}/bin/sort -u)
             ${pkgs.findutils}/bin/find /tmp -mindepth 1 -maxdepth 1 \
               -mtime +${toString cfg.tmpPruneAgeDays} -printf '%f\n' \
               | ${pkgs.gnugrep}/bin/grep -vE '^(claude-[0-9]+|cc-daemon-[0-9]+|systemd-private-.*|\..*-unix)$' \
-              | ${pkgs.gnugrep}/bin/grep -vxF -f <(printf '%s\n' "$live") \
+              | ${pkgs.gnugrep}/bin/grep -vxF -f <(printf '%s\n' "$live" | ${pkgs.gnugrep}/bin/grep . || true) \
               | ${pkgs.gnused}/bin/sed 's#^#/tmp/#' \
               | ${pkgs.findutils}/bin/xargs -r -d '\n' -n 200 rm -rf -- || true
             echo "/tmp prune completed ($(${pkgs.coreutils}/bin/ls /tmp | ${pkgs.coreutils}/bin/wc -l) entries remain)"

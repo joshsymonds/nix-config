@@ -106,7 +106,7 @@ in {
 
     settings = {
       defaultProvider = "openai-codex";
-      defaultModel = "gpt-5.6-sol";
+      defaultModel = "gpt-6-astra";
       defaultThinkingLevel = "high";
       enableSkillCommands = true;
       skills = ["~/Personal/gambit/skills"];
@@ -129,7 +129,7 @@ in {
 
   home.file = {
     ".pi/agent/models.json".text = builtins.toJSON {
-      # Merge GPT-6 Astra into the built-in openai-codex provider (pi 0.84.3
+      # Merge GPT-6 Astra into the built-in openai-codex provider (pi 0.85.0
       # predates it). Cloned from pi's own gpt-5.6-sol entry; pricing from
       # developers.openai.com/api/docs/models/gpt-6-astra (2x input / 1.5x
       # output above 272K input).

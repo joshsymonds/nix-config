@@ -13,23 +13,23 @@
 }:
 buildNpmPackage (finalAttrs: {
   pname = "pi-coding-agent";
-  version = "0.84.3";
+  version = "0.85.0";
 
   src = fetchFromGitHub {
     owner = "earendil-works";
     repo = "pi";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-fC9pKgP2qD61ae5d7iOqP8anl88J1N1Bq8X8+aAjA2A=";
+    hash = "sha256-gznGlneVCx3htxRiJq0/futm4qLR9Bzfv3UwP3ES9v0=";
   };
 
-  npmDepsHash = "sha256-cDx28+c4bwtQpiy5+BCvZhZezoZb4WRqfZj2eoEeMbw=";
+  npmDepsHash = "sha256-K/KiukwTHwu4HE8hUu7ur3bxggwfO0WL+QDI0FtxP3I=";
 
   # Upstream generates the provider model catalog with network access and
   # leaves it out of the source tarball. The matching published pi-ai package
   # contains the hydrated catalog needed by the offline Nix build.
   modelData = fetchurl {
     url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
-    hash = "sha256-nECvL0OVD46U57vNDBs1SPAAly2gDE+5wNBSnU19VDE=";
+    hash = "sha256-RhiL2stVWgdGagER85Y/IJMqFhmeTWz7jUSn/l/G40I=";
   };
 
   preConfigure = ''
@@ -47,11 +47,13 @@ buildNpmPackage (finalAttrs: {
 
   buildPhase = ''
     runHook preBuild
+    npx tsgo -p packages/chord/tsconfig.build.json
     npx tsgo -p packages/tui/tsconfig.build.json
     npx tsgo -p packages/telemetry/tsconfig.build.json
     npx tsgo -p packages/ai/tsconfig.build.json
     npx tsgo -p packages/agent/tsconfig.build.json
     npx tsgo -p packages/protocol/tsconfig.build.json
+    npx tsgo -p packages/server/tsconfig.build.json
     npx tsgo -p packages/client/tsconfig.build.json
     npm run build --workspace=packages/coding-agent
     runHook postBuild
@@ -66,10 +68,12 @@ buildNpmPackage (finalAttrs: {
   postInstall =
     ''
       local nm="$out/lib/node_modules/pi-monorepo/node_modules"
-      for ws in @earendil-works/pi-ai:packages/ai \
+      for ws in @earendil-works/chord:packages/chord \
+                @earendil-works/pi-ai:packages/ai \
                 @earendil-works/pi-agent-core:packages/agent \
                 @earendil-works/pi-client:packages/client \
                 @earendil-works/pi-protocol:packages/protocol \
+                @earendil-works/pi-server:packages/server \
                 @earendil-works/pi-telemetry:packages/telemetry \
                 @earendil-works/pi-tui:packages/tui; do
         IFS=: read -r pkg src <<< "$ws"

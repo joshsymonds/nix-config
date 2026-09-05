@@ -129,6 +129,46 @@ in {
 
   home.file = {
     ".pi/agent/models.json".text = builtins.toJSON {
+      # Merge GPT-6 Astra into the built-in openai-codex provider (pi 0.84.3
+      # predates it). Cloned from pi's own gpt-5.6-sol entry; pricing from
+      # developers.openai.com/api/docs/models/gpt-6-astra (2x input / 1.5x
+      # output above 272K input).
+      providers.openai-codex.models = [
+        {
+          id = "gpt-6-astra";
+          name = "GPT-6 Astra";
+          api = "openai-codex-responses";
+          reasoning = true;
+          input = ["text" "image"];
+          cost = {
+            input = 10;
+            output = 50;
+            cacheRead = 1;
+            cacheWrite = 12.5;
+            tiers = [
+              {
+                inputTokensAbove = 272000;
+                input = 20;
+                output = 75;
+                cacheRead = 2;
+                cacheWrite = 25;
+              }
+            ];
+          };
+          contextWindow = 272000;
+          maxTokens = 128000;
+          thinkingLevelMap = {
+            xhigh = "xhigh";
+            max = "max";
+            minimal = "low";
+          };
+          compat = {
+            supportsOpenAIGrammarTools = true;
+            supportsAdditionalTools = true;
+            supportsToolSearch = true;
+          };
+        }
+      ];
       providers.omakase = {
         name = "omakase";
         baseUrl = "https://llm.kloverinfrastructure.com";

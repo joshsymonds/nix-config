@@ -23,6 +23,11 @@
     hash = "sha256-Zw+7QW0g4Xk5EXhCwkB+fBXxe5+3nsfNLAyVuzP6v78=";
   };
 
+  piLspSource = pkgs.fetchzip {
+    url = "https://registry.npmjs.org/@narumitw/pi-lsp/-/pi-lsp-0.49.7.tgz";
+    hash = "sha256-v6NQ311vtZl2x0PAEkGCIDzR3IixEd1t0Bg5h3jzM9E=";
+  };
+
   piTuiKit = pkgs.fetchzip {
     url = "https://registry.npmjs.org/@narumitw/pi-tui-kit/-/pi-tui-kit-0.59.0.tgz";
     hash = "sha256-dMzOHA7jxKShvU2okzNt7qRNm/5ONa+05ZkcfVTALbI=";
@@ -80,12 +85,21 @@
     ln -s ${pkgs.pi-coding-agent}/lib/node_modules/pi-monorepo/node_modules/typebox $out/node_modules/typebox
   '';
 
+  piLsp = pkgs.runCommand "pi-lsp-0.49.7" {} ''
+    cp -r ${piLspSource} $out
+    chmod -R u+w $out
+    mkdir -p $out/node_modules
+    ln -s ${pkgs.pi-coding-agent}/lib/node_modules/pi-monorepo/node_modules/typebox $out/node_modules/typebox
+  '';
+
   inherit
     (import ../claude-code/gambit-rungs.nix {inherit lib pkgs;})
     piRungAgentEntries
     ;
 
   piRungAgents = pkgs.linkFarm "pi-gambit-rung-agents" piRungAgentEntries;
+  workflowTools = import ./tool-packages {inherit lib pkgs;};
+  browser = import ./agent-browser.nix {inherit lib pkgs;};
 in {
   # The omakase gateway (Klover's LLM front door) as a first-class Pi
   # provider. LiteLLM speaks Anthropic Messages, so no adapter is needed. The
@@ -114,20 +128,53 @@ in {
         "${piTasks}"
         "${piSubagents}"
         "${piGoal}"
+        "${piLsp}"
+        {
+          source = "${workflowTools}/node_modules/@aliou/pi-processes";
+          prompts = [];
+          themes = [];
+        }
+        {
+          source = "${workflowTools}/node_modules/pi-web-access";
+          skills = [];
+          prompts = [];
+          themes = [];
+        }
+        {
+          source = "${browser.extension}";
+          skills = [];
+          prompts = [];
+          themes = [];
+        }
       ];
     };
 
-    context = ''
-      # Response style
-
-      - Be terse by default: keep final responses under 120 words or 8 lines.
-      - Lead with the result. Do not restate the request or narrate routine tool use.
-      - For code changes, report only the files changed and verification performed.
-      - Expand only when the user asks, critical context would otherwise be lost, or an active workflow requires a structured artifact.
-    '';
+    context = builtins.readFile ./AGENTS.md;
   };
 
   home.file = {
+    # ~/.local/bin is already on the login-shell PATH. Keep the native CLI
+    # declarative without modifying Pi itself or downloading browsers at runtime.
+    ".local/bin/agent-browser".source = "${browser.cli}/bin/agent-browser";
+    ".pi/config/pi-agent-browser-native/config.json".text = builtins.toJSON {
+      version = 1;
+      webSearch.enabled = false;
+      browser.executablePath = browser.chromiumExecutable;
+    };
+    # 0.28.0 uses the legacy ~/.pi path; XDG and explicit agent-dir launches
+    # select the other locations. All three contain the same non-secret defaults.
+    ".pi/web-search.json".source = ./web-search.json;
+    ".config/pi/web-search.json".source = ./web-search.json;
+    ".pi/agent/web-search.json".source = ./web-search.json;
+    ".pi/agent/extensions/processes.json".text = builtins.toJSON {
+      version = "0.10.6";
+      execution.shellPath = "${pkgs.bash}/bin/bash";
+      interception.blockBackgroundCommands = false;
+      widget = {
+        showStatusWidget = false;
+        dockDefaultState = "closed";
+      };
+    };
     ".pi/agent/models.json".text = builtins.toJSON {
       # Merge GPT-6 Astra into the built-in openai-codex provider (pi 0.85.0
       # predates it). Cloned from pi's own gpt-5.6-sol entry; pricing from
@@ -199,6 +246,41 @@ in {
       taskScope = "session-global";
       autoCascade = false;
       autoClearCompleted = "never";
+    };
+    # Reuse language servers already installed by home-manager/helix. This
+    # explicit map replaces upstream defaults (which use ty/biome instead).
+    # Gambit rung agents intentionally keep --no-extensions; LSP is available
+    # to the parent, not silently injected into read-only/isolated workers.
+    ".pi/agent/pi-lsp.json".text = builtins.toJSON {
+      timeout = 30000;
+      servers = {
+        nixd = {
+          command = ["nixd"];
+          extensions = [".nix"];
+          # Diagnostics only: do not import/evaluate any host closure or the
+          # editor's expensive NixOS/Home Manager option-completion expressions.
+          initialization.nixd = {
+            nixpkgs.expr = "{}";
+            options = {};
+          };
+        };
+        pyright = {
+          command = ["pyright-langserver" "--stdio"];
+          extensions = [".py" ".pyi"];
+        };
+        typescript = {
+          command = ["typescript-language-server" "--stdio"];
+          extensions = [".ts" ".tsx" ".mts" ".cts" ".js" ".jsx" ".mjs" ".cjs"];
+          initialization = {
+            disableAutomaticTypingAcquisition = true;
+            tsserver.path = "${pkgs.typescript}/lib/node_modules/typescript/lib/tsserver.js";
+          };
+        };
+        gopls = {
+          command = ["gopls"];
+          extensions = [".go"];
+        };
+      };
     };
     ".pi/agent/pi-goal.json".text = builtins.toJSON {
       rpc.enabled = false;

@@ -1,0 +1,9 @@
+{
+  "name": "pi-workflow-tools",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@aliou/pi-processes": "0.12.0",
+    "pi-web-access": "0.28.0"
+  }
+}

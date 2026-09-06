@@ -156,11 +156,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # CC-Tools - Claude Code smart hooks
-    cc-tools = {
-      url = "github:joshsymonds/cc-tools";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    # Steward - shared coding-agent runtime, statusline, and notifications
+    steward.url = "github:joshsymonds/steward/bb73759898e69e61d993790d4ac5721ef3c2dd15";
+    steward.inputs.nixpkgs.follows = "nixpkgs";
 
     # dms-claudecode — DMS plugin showing Claude Code subscription usage
     # (5h/7d rate windows, token burn, cost estimates) in the bar. Personal
@@ -657,6 +655,7 @@
               pkgs = checkPkgs;
               lib = checkPkgs.lib;
               gambitHasCodex = true;
+              stewardPackage = inputs.steward.packages.${system}.default;
             };
           };
           chatgpt-desktop = import ./tests/chatgpt-desktop.nix {

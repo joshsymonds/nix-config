@@ -14,7 +14,7 @@
       # Right side: devspace? | host | git | aws? | gcloud? | k8s? | curve.
       # Static-color chips (devspace, host, git) use built-in starship
       # styling. Dynamic-color chips (aws, gcloud, k8s) are rendered as a
-      # single block by `cc-tools render-clouds`, which emits raw ANSI
+      # single block by `steward render-clouds`, which emits raw ANSI
       # including its own internal powerline chevrons and the closing
       # right curve.
       right_format = "[](fg:mauve)\${custom.context}[](fg:rosewater bg:mauve)\${custom.host}[](fg:sky bg:rosewater)$git_branch$git_status\${custom.clouds}";
@@ -33,7 +33,7 @@
         style = "bg:lavender fg:base";
         format = "[ $path ]($style)";
 
-        # Match cc-tools formatPath: keep first segment (~ or /), last
+        # Match Steward's formatPath: keep first segment (~ or /), last
         # two full, middle replaced with …. Starship's truncation_length
         # is the count of TRAILING segments to keep (last N), and
         # truncation_symbol prepends when truncation occurred.
@@ -64,7 +64,7 @@
 
       # Built-in aws/kubernetes modules are intentionally NOT configured.
       # Their output is replaced by `custom.clouds` below, which calls
-      # `cc-tools render-clouds` for a single ANSI block that matches the
+      # `steward render-clouds` for a single ANSI block that matches the
       # Claude Code statusline byte-for-byte. (Disabling them explicitly
       # prevents accidental fallback rendering.)
       aws = {
@@ -77,7 +77,7 @@
       custom = {
         context = {
           when = ''test -n "$CODER_WORKSPACE_NAME" || test -n "$DEV_CONTEXT"'';
-          # Mirror cc-tools' devspace rule: known planet names truncate
+          # Mirror Steward's devspace rule: known planet names truncate
           # to 3 chars (the glyph carries identity); arbitrary names
           # (Coder workspaces, custom devspaces) keep their full text
           # since the name IS the identifier.
@@ -125,7 +125,7 @@
               host="$(hostname -s 2>/dev/null || cat /proc/sys/kernel/hostname 2>/dev/null || printf "")"
             fi
             if [ -n "$host" ]; then
-              label="$(cc-tools resolve --type=host --raw="$host" 2>/dev/null | awk -F '\t' '{print $1}')"
+              label="$(steward resolve --type=host --raw="$host" 2>/dev/null | awk -F '\t' '{print $1}')"
               [ -z "$label" ] && label="$host"
               printf " 󰒋 %s" "$label"
             fi
@@ -136,12 +136,12 @@
 
         # Cloud section: aws + gcloud + k8s chips, rendered as a single
         # raw-ANSI block. The leading chevron transitions from sky (git's
-        # color); the trailing right curve seals the prompt. cc-tools owns
+        # color); the trailing right curve seals the prompt. Steward owns
         # the resolution logic and chevron drawing, so this stays in lockstep
         # with the Claude Code statusline.
         clouds = {
           when = ''true'';
-          command = ''cc-tools render-clouds 2>/dev/null'';
+          command = ''steward render-clouds 2>/dev/null'';
           format = "$output";
           style = "";
         };

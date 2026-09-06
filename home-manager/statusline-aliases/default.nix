@@ -1,8 +1,8 @@
 {...}: {
   xdg.configFile."statusline-aliases/aliases.toml".text = ''
     # Shared alias + env-classification table for the statusline.
-    # Read by both `cc-tools resolve` (used by starship custom modules)
-    # and by the cc-tools statusline directly.
+    # Read by both `steward resolve` (used by starship custom modules)
+    # and by the Steward statusline directly.
 
     # --- Hosts ---------------------------------------------------------
     [hosts.ultraviolet]

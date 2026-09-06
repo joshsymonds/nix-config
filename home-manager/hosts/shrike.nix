@@ -75,9 +75,9 @@ in {
       zoxide
       clip
       # Starship's right-side chips (host alias, clouds block with the
-      # closing curve) shell out to cc-tools; without it the powerline
+      # closing curve) shell out to Steward; without it the powerline
       # renders unfinished. Public repo, aarch64-linux is built.
-      inputs.cc-tools.packages.${pkgs.stdenv.hostPlatform.system}.default
+      inputs.steward.packages.${pkgs.stdenv.hostPlatform.system}.default
     ];
 
     sessionVariables = {

@@ -286,27 +286,6 @@
         "type": "github"
       }
     },
-    "cc-tools": {
-      "inputs": {
-        "flake-utils": "flake-utils",
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
-      "locked": {
-        "lastModified": 1787594785,
-        "narHash": "sha256-9nxf5mSeHJLVEaF2J8K7iOne8rQrc42xlI82pbp63s4=",
-        "owner": "joshsymonds",
-        "repo": "cc-tools",
-        "rev": "b248afef1f09f973c747ffa02c073e6e2bcd78a5",
-        "type": "github"
-      },
-      "original": {
-        "owner": "joshsymonds",
-        "repo": "cc-tools",
-        "type": "github"
-      }
-    },
     "crane": {
       "locked": {
         "lastModified": 1783102699,
@@ -1366,7 +1345,7 @@
     },
     "flake-utils_4": {
       "inputs": {
-        "systems": "systems_5"
+        "systems": "systems_6"
       },
       "locked": {
         "lastModified": 1731533236,
@@ -2208,7 +2187,7 @@
     },
     "niri-float-sticky": {
       "inputs": {
-        "flake-utils": "flake-utils_2",
+        "flake-utils": "flake-utils",
         "nixpkgs": [
           "nixpkgs"
         ]
@@ -3517,7 +3496,7 @@
     "redlib-fork": {
       "inputs": {
         "crane": "crane_3",
-        "flake-utils": "flake-utils_3",
+        "flake-utils": "flake-utils_2",
         "nixpkgs": [
           "nixpkgs"
         ],
@@ -3540,7 +3519,6 @@
     "root": {
       "inputs": {
         "agenix": "agenix",
-        "cc-tools": "cc-tools",
         "crane": "crane",
         "darwin": "darwin_2",
         "determinate": "determinate",
@@ -3579,6 +3557,7 @@
         "shimmer": "shimmer",
         "sound-stage": "sound-stage",
         "spicetify-nix": "spicetify-nix",
+        "steward": "steward",
         "targetprocess-mcp": "targetprocess-mcp",
         "treefmt-nix": "treefmt-nix_4"
       }
@@ -3822,7 +3801,7 @@
     },
     "shimmer": {
       "inputs": {
-        "flake-utils": "flake-utils_4",
+        "flake-utils": "flake-utils_3",
         "nixpkgs": "nixpkgs_21"
       },
       "locked": {
@@ -3864,7 +3843,7 @@
         "nixpkgs": [
           "nixpkgs"
         ],
-        "systems": "systems_6"
+        "systems": "systems_5"
       },
       "locked": {
         "lastModified": 1782898510,
@@ -3877,6 +3856,28 @@
       "original": {
         "owner": "Gerg-L",
         "repo": "spicetify-nix",
+        "type": "github"
+      }
+    },
+    "steward": {
+      "inputs": {
+        "flake-utils": "flake-utils_4",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1788699019,
+        "narHash": "sha256-NjdBvVkUykEVl9/VRlwmh48O2MhfLpwn9xQzO65ZNNQ=",
+        "owner": "joshsymonds",
+        "repo": "steward",
+        "rev": "bb73759898e69e61d993790d4ac5721ef3c2dd15",
+        "type": "github"
+      },
+      "original": {
+        "owner": "joshsymonds",
+        "repo": "steward",
+        "rev": "bb73759898e69e61d993790d4ac5721ef3c2dd15",
         "type": "github"
       }
     },

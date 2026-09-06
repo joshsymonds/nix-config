@@ -27,6 +27,7 @@ in {
     ./zsh
     ./starship
     ./statusline-aliases
+    ./steward
   ];
 
   config = {
@@ -56,7 +57,6 @@ in {
           git
           gptfdisk
           inputs.agenix.packages.${pkgs.stdenv.hostPlatform.system}.agenix
-          inputs.cc-tools.packages.${pkgs.stdenv.hostPlatform.system}.default
           istioctl
           jq
           just

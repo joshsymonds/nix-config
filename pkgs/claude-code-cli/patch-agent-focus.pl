@@ -9,12 +9,12 @@
 # viewingAgentTaskId, set on transcript-view enter and cleared on exit.
 #
 # F1 swaps the builder's 4th argument from the token-samples Map (whose
-# payload field cc-tools ignores) to the app state; F2 spends the bytes of the
+# payload field Steward ignores) to the app state; F2 spends the bytes of the
 # two ignored per-task fields (startTime, tokenSamples) on a per-task
-# `focused` boolean. cc-tools' subagent hook relays it through the /dev/shm
+# `focused` boolean. Steward's subagent hook relays it through the /dev/shm
 # agents-state file, and the main statusline's model chip shows the focused
 # agent's model. A stock binary (this patch skipped on drift) simply never
-# sets `focused`, and cc-tools falls back to the aggregate running-agents
+# sets `focused`, and Steward falls back to the aggregate running-agents
 # view — nothing breaks.
 #
 # Safety model (identical to patch-context-window.pl): every anchor is
@@ -52,7 +52,7 @@ push @subs, {
     repl => 'int(Oe,Math.max(0,ue-jh()-TP),ct,Le        ).then',
 };
 
-# F2: in the builder's per-task map, drop the two fields cc-tools ignores
+# F2: in the builder's per-task map, drop the two fields Steward ignores
 # (startTime, tokenSamples — the latter being the only use of the old 4th
 # parameter) and spend their 53 bytes on `focused:tt.id===z.viewingAgentTaskId`
 # plus a pad comment. With F1 applied, `z` is the app state; on a task list

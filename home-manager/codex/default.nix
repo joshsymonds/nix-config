@@ -23,8 +23,9 @@
         cp -R ${gambitCodex}/. "$out/${gambitVersion}/"
       ''
     else null;
+  stewardPackage = inputs.steward.packages.${pkgs.stdenv.hostPlatform.system}.default;
   codexConfig = import ./managed-config.nix {
-    inherit gambitHasCodex lib pkgs;
+    inherit gambitHasCodex lib pkgs stewardPackage;
   };
   subagentIsolation = import ./subagent-isolation.nix;
   codexAgentRoles = import ./agent-roles.nix;
@@ -53,8 +54,8 @@ in {
   # reasserted, matching the mutable-state merge discipline used for Claude.
   #
   # yq-go provides a lossless-enough TOML <-> JSON bridge for Codex's config
-  # types; jq's recursive object merge lets the Nix baseline win without
-  # deleting hooks.state or additional projects written by Codex.
+  # types. The small merge helper keeps ordinary recursive baseline-wins
+  # behavior while managing only Steward's native Stop handler and trust key.
   home.activation.codexConfig = lib.hm.dag.entryAfter ["linkGeneration"] ''
     (
     set -euo pipefail
@@ -70,14 +71,16 @@ in {
     if [ -e "$TARGET" ] || [ -L "$TARGET" ]; then
       if ! ${pkgs.yq-go}/bin/yq -p=toml -o=json '.' "$TARGET" > "$WORK/current.json"; then
         echo "codexConfig: $TARGET is not valid TOML; preserving it unchanged." >&2
-        exit 0
+        exit 1
       fi
     else
       echo '{}' > "$WORK/current.json"
     fi
 
-    ${pkgs.jq}/bin/jq -s '.[0] * .[1]' \
-      "$WORK/current.json" "$WORK/base.json" > "$WORK/merged.json"
+    ${pkgs.python3}/bin/python3 ${./merge-config.py} \
+      --baseline "$WORK/base.json" \
+      --current "$WORK/current.json" \
+      --target "$TARGET" > "$WORK/merged.json"
 
     current="$(${pkgs.jq}/bin/jq -Sc . "$WORK/current.json")"
     merged="$(${pkgs.jq}/bin/jq -Sc . "$WORK/merged.json")"

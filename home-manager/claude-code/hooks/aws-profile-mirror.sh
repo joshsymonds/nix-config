@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# AWS_PROFILE mirror hook for cc-tools statusline.
+# AWS_PROFILE mirror hook for the Steward statusline.
 #
 # Wired as a PostToolUse hook on the Bash tool. After every Bash call,
 # scans the executed command text for `export AWS_PROFILE=...` or
 # `unset AWS_PROFILE` and mirrors the latest value (or empty string) to
-# ~/.cache/cc-tools/state.json. cc-tools' EnvReader reads this file
-# in preference to the process env so the chip reflects Claude's
+# ${STEWARD_STATE_FILE:-~/.cache/steward/state.json}. Steward's EnvReader reads
+# this file in preference to the process env so the chip reflects Claude's
 # declared profile even though the Bash subshell's env doesn't survive.
 #
 # DISPLAY-ONLY caveat: the statusline reflects Claude's *intent*. The
@@ -18,8 +18,8 @@
 
 set -u
 
-state_dir="$HOME/.cache/cc-tools"
-state_file="$state_dir/state.json"
+state_file="${STEWARD_STATE_FILE:-$HOME/.cache/steward/state.json}"
+state_dir="${state_file%/*}"
 
 # Read the full hook payload; bail quietly on read errors.
 payload="$(cat)" || exit 0
@@ -82,7 +82,7 @@ fi
 mkdir -p "$state_dir" 2>/dev/null || exit 0
 
 # Read existing state if any; merge the aws_profile field. Atomic
-# rename so cc-tools never sees a partial file. `jq -n --arg p` produces
+# rename so Steward never sees a partial file. `jq -n --arg p` produces
 # valid JSON for any value including empty strings — without this, the
 # unset-AWS_PROFILE case used to emit `{"aws_profile":}` (malformed).
 tmp="$state_file.tmp.$$"

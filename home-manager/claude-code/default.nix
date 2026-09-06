@@ -8,9 +8,6 @@
 }: let
   cfg = config.programs.claudeCode;
 
-  # Get cc-tools binaries from the flake
-  cc-tools = inputs.cc-tools.packages.${pkgs.stdenv.hostPlatform.system}.default;
-
   # Gambit skills marketplace as a directory-source. Pinned via flake.lock;
   # updates with `nix flake update gambit`.
   gambitSrc = inputs.gambit.packages.${pkgs.stdenv.hostPlatform.system}.default;
@@ -521,21 +518,6 @@ in {
     '';
   };
 
-  config.age.secrets."ntfy-url" = {
-    file = ../../secrets/user/ntfy-url.age;
-  };
-
-  # ntfy.sh API token for the paid account. Publishing with this as a
-  # Bearer token attributes messages to the account so the paid daily
-  # limits apply instead of the anonymous per-IP free quota (the whole
-  # fleet looping through one topic exhausts the free quota by mid-morning
-  # and every publish then 429s — silently, since the hook never checked
-  # HTTP status). The topic stays a public, unauthenticated-read topic so
-  # iOS Firebase push keeps full message content; only publish is authed.
-  config.age.secrets."ntfy-token" = {
-    file = ../../secrets/user/ntfy-token.age;
-  };
-
   config.home = {
     # Install Node.js to enable npm
     packages =
@@ -546,8 +528,6 @@ in {
         jq
         ripgrep
         python3
-        # Include cc-tools binaries
-        cc-tools
       ])
       ++ [pkgs.claudeCodeCli pkgs.claude-swap cmswitch ccrender];
 
@@ -556,27 +536,18 @@ in {
       "$HOME/.npm-global/bin"
     ];
 
-    # Set npm prefix to user directory and cc-tools socket path
-    sessionVariables =
-      {
-        NPM_CONFIG_PREFIX = "$HOME/.npm-global";
-        CC_TOOLS_SOCKET = "/run/user/\${UID}/cc-tools.sock";
-        CLAUDE_CODE_ENABLE_TASKS = "true";
-        CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
-        CLAUDE_CODE_NO_FLICKER = "1";
-        CLAUDE_CODE_TMUX_TRUECOLOR = "1";
-        # Shared by Claude's stdin hooks and Codex's argv notify command.
-        CC_TOOLS_NTFY_URL_FILE = config.age.secrets."ntfy-url".path;
-        CC_TOOLS_NTFY_TOKEN_FILE = config.age.secrets."ntfy-token".path;
-        # The only reliable way to disable auto-updates for native installs.
-        # settings.json autoUpdater.disabled is cosmetic; ~/.claude.json autoUpdates
-        # is bypassed by autoUpdatesProtectedForNative for native installMethod.
-        DISABLE_AUTOUPDATER = "1";
-      }
-      // lib.optionalAttrs (patchbayBaseUrl != null) {
-        CC_TOOLS_PATCHBAY_URL = patchbayBaseUrl;
-        PATCHBAY_CALLER_KEY_FILE = "/run/agenix/patchbay-caller-key";
-      };
+    # Set npm prefix to user directory.
+    sessionVariables = {
+      NPM_CONFIG_PREFIX = "$HOME/.npm-global";
+      CLAUDE_CODE_ENABLE_TASKS = "true";
+      CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
+      CLAUDE_CODE_NO_FLICKER = "1";
+      CLAUDE_CODE_TMUX_TRUECOLOR = "1";
+      # The only reliable way to disable auto-updates for native installs.
+      # settings.json autoUpdater.disabled is cosmetic; ~/.claude.json autoUpdates
+      # is bypassed by autoUpdatesProtectedForNative for native installMethod.
+      DISABLE_AUTOUPDATER = "1";
+    };
 
     # Create and manage the ~/.claude config directory. Runtime state
     # (.credentials.json, ~/.claude.json, projects/, todos/, history.jsonl,
@@ -620,8 +591,6 @@ in {
           ".claude/fleet.md".source = ./fleet.md;
           ".claude/agents".source = agentsDir;
           ".claude/skills".source = skillsDir;
-          ".claude/bin/cc-tools-statusline".source = "${cc-tools}/bin/cc-tools-statusline";
-          ".claude/bin/cc-tools".source = "${cc-tools}/bin/cc-tools";
           ".claude/hooks/aws-profile-mirror.sh" = {
             source = ./hooks/aws-profile-mirror.sh;
             executable = true;
@@ -1052,46 +1021,4 @@ in {
     '';
   };
 
-  # notifyd — the per-user notification daemon. The `cc-tools notify` hook
-  # (settings.json Notification/SessionEnd; the Stop turn-end hook was
-  # removed 2026-07) is a fire-and-forget client that hands each hook
-  # payload to this daemon over a unix socket at
-  # $XDG_RUNTIME_DIR/cc-tools/notifyd.sock and exits in milliseconds. The
-  # daemon owns decide/judge/dedupe/watchdog/delivery in one serialized
-  # process; if it is unreachable the client falls back inline (deterministic
-  # send, no judge) so a ping is never lost.
-  #
-  # PATH carries the two binaries the daemon shells out to: `claude` for the
-  # judge that composes turn-end summaries, and `tmux` for presence detection
-  # (is the user looking at the pane the frame came from). The ntfy URL/token
-  # ride the same agenix secret-file env the interactive hook uses — a
-  # systemd user service does NOT inherit home.sessionVariables, so they are
-  # set explicitly here; without a URL the daemon fail-fasts at startup.
-  config.systemd.user.services.cc-tools-notifyd = {
-    Unit = {
-      Description = "cc-tools notifyd — serialized turn-end notification daemon";
-      After = ["default.target"];
-    };
-    Service = {
-      # The ntfy secrets are read in a shell wrapper rather than passed as
-      # *_FILE env: home-manager agenix leaves the runtime dir unexpanded in
-      # the secret path (literal "''${XDG_RUNTIME_DIR}/agenix/..."), and
-      # systemd's Environment= does not expand it — only bash, at runtime,
-      # does. Same reason ntfy-notify reads its secret in-shell. The daemon
-      # fail-fasts if the URL is empty, so a missing secret surfaces loudly.
-      ExecStart = pkgs.writeShellScript "cc-tools-notifyd-start" ''
-        export CC_TOOLS_NTFY_URL
-        CC_TOOLS_NTFY_URL="$(cat "${config.age.secrets."ntfy-url".path}")"
-        export CC_TOOLS_NTFY_TOKEN
-        CC_TOOLS_NTFY_TOKEN="$(cat "${config.age.secrets."ntfy-token".path}")"
-        exec ${cc-tools}/bin/cc-tools notifyd
-      '';
-      Restart = "on-failure";
-      RestartSec = 5;
-      Environment = [
-        "PATH=${lib.makeBinPath [pkgs.claudeCodeCli pkgs.tmux pkgs.git pkgs.coreutils]}"
-      ];
-    };
-    Install.WantedBy = ["default.target"];
-  };
 }

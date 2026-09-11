@@ -45,6 +45,10 @@
 
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
 
+  # Codex usage allowance exhausted 2026-09-11; gambit runs on Claude rungs
+  # (Opus workers, Fable escalation and review, Sonnet scouts) until it refills.
+  programs.claudeCode.gambitClaudeOnly = true;
+
   programs.claudeCode.hostContext = ''
     # Host: vermissian (Linux NixOS, x86_64)
 

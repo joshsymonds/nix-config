@@ -165,6 +165,10 @@
   programs.claudeCode.extraSkills.debugging-linux-games =
     ../claude-code/host-skills/debugging-linux-games;
 
+  # Codex usage allowance exhausted 2026-09-11; gambit runs on Claude rungs
+  # (Opus workers, Fable escalation and review, Sonnet scouts) until it refills.
+  programs.claudeCode.gambitClaudeOnly = true;
+
   programs.claudeCode.hostContext = ''
     # Host: gnomon (Linux NixOS, x86_64)
 

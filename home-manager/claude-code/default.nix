@@ -511,7 +511,7 @@
     );
 
   gambitModelsJson = builtins.toJSON (
-    if codexUpstream
+    if codexUpstream && !cfg.gambitClaudeOnly
     then gambitModelsFull
     else gambitModelsClaudeOnly
   );
@@ -558,6 +558,18 @@ in {
       then imported from CLAUDE.md via @host.md. Used to ground agents about
       which physical machine they're running on (hardware, role, capabilities).
       Empty string produces an empty file; the @-import is harmless in that case.
+    '';
+  };
+
+  options.programs.claudeCode.gambitClaudeOnly = lib.mkOption {
+    type = lib.types.bool;
+    default = false;
+    description = ''
+      Dispatch gambit roles from the Claude-only rung map even on a host that
+      runs the Codex upstream. The chatgpt/* routes and rung agents stay
+      installed; only ~/.claude/gambit/models.json changes. Set this when the
+      Codex subscription's usage allowance is exhausted, and clear it when it
+      refills.
     '';
   };
 

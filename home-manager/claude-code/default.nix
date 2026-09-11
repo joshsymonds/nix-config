@@ -18,6 +18,7 @@
   # `or false` keeps hosts that never import home-manager/patchbay — darwin
   # (ninuan), echelon — evaluating.
   codexUpstream = config.services.patchbay.codexUpstream.enable or false;
+  codexExhausted = config.services.patchbay.codexUpstream.exhausted or false;
 
   # The chatgpt/* selectors patchbay publishes on those hosts. Same file the
   # gambit rungs and their check import, so a selector named here, in
@@ -511,7 +512,7 @@
     );
 
   gambitModelsJson = builtins.toJSON (
-    if codexUpstream && !cfg.gambitClaudeOnly
+    if codexUpstream && !codexExhausted
     then gambitModelsFull
     else gambitModelsClaudeOnly
   );
@@ -558,18 +559,6 @@ in {
       then imported from CLAUDE.md via @host.md. Used to ground agents about
       which physical machine they're running on (hardware, role, capabilities).
       Empty string produces an empty file; the @-import is harmless in that case.
-    '';
-  };
-
-  options.programs.claudeCode.gambitClaudeOnly = lib.mkOption {
-    type = lib.types.bool;
-    default = false;
-    description = ''
-      Dispatch gambit roles from the Claude-only rung map even on a host that
-      runs the Codex upstream. The chatgpt/* routes and rung agents stay
-      installed; only ~/.claude/gambit/models.json changes. Set this when the
-      Codex subscription's usage allowance is exhausted, and clear it when it
-      refills.
     '';
   };
 
@@ -674,8 +663,8 @@ in {
           ".claude/statsig/.keep".text = "";
           ".claude/commands/.keep".text = "";
           # The rung/role map gambit dispatches from: GPT rungs wherever the
-          # Codex upstream runs, Claude-only elsewhere. See gambitModelsFull
-          # above.
+          # Codex upstream runs with allowance left, Claude-only elsewhere.
+          # See gambitModelsFull above.
           ".claude/gambit/models.json".text = gambitModelsJson;
         }
       ];

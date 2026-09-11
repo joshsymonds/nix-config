@@ -215,13 +215,15 @@
   #
   # Only on codexUpstream hosts: the Luna Seats live on the loopback proxy,
   # and a subagents block naming an absent Seat invalidates the registry.
+  # Dropped while the allowance is exhausted, so every subagent rides the
+  # anthropic default Seat instead of a Luna Seat that can only refuse.
   bindings = lib.mapAttrs (selector: _: seatID selector) subscriptionSeats;
   context =
     {
       default_seat = "anthropic";
       models = bindings;
     }
-    // lib.optionalAttrs cfg.codexUpstream.enable {
+    // lib.optionalAttrs (cfg.codexUpstream.enable && !cfg.codexUpstream.exhausted) {
       subagents = {
         default_seat = "chatgpt-luna-medium";
         models = {
@@ -374,6 +376,15 @@ in {
       ChatGPT-subscription Codex OAuth backend, and publishes the chatgpt/*
       routes at it. Enable only on hosts holding Codex OAuth creds in
       ~/.cli-proxy-api
+    '';
+
+    codexUpstream.exhausted = lib.mkEnableOption ''
+      treating the Codex subscription's usage allowance as spent: the
+      chatgpt/* routes stay published for anyone who names one, but marked
+      subagent traffic stops defaulting to the Luna Seats and rides the
+      anthropic forward Seat like everything else, and gambit dispatches from
+      the Claude-only rung map. Set when the allowance runs out; clear when it
+      refills
     '';
   };
 

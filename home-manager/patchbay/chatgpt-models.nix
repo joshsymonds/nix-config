@@ -28,8 +28,9 @@
   # The capable GPT-5.6 tier at standard speed: the review finders and
   # verifier, and the brainstorming steelman's neighbour.
   "chatgpt/sol" = {model = "gpt-5.6-sol";};
-  # The same model on the fast tier: the worker ladder's second rung, where
-  # the two attempts are cheap enough that latency is what they cost.
+  # The same model on the fast tier. Published for direct use; no gambit rung
+  # points at it since the worker ladder's second rung returned to standard
+  # speed to spare Codex quota.
   "chatgpt/sol-fast" = {
     model = "gpt-5.6-sol";
     speed = "fast";

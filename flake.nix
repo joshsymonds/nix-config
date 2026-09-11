@@ -157,7 +157,7 @@
     };
 
     # Steward - shared coding-agent runtime, statusline, and notifications
-    steward.url = "github:joshsymonds/steward/3516f7989d768a9045b0fab9dee8ef08a798fcd0";
+    steward.url = "github:joshsymonds/steward/584ae32ce60c21f30827b1c3f3c6474586e3705d";
     steward.inputs.nixpkgs.follows = "nixpkgs";
 
     # dms-claudecode — DMS plugin showing Claude Code subscription usage
@@ -545,7 +545,6 @@
         system = "x86_64-linux";
         modules = [./hosts/ultraviolet/installer.nix];
       };
-
     };
 
     mkHome = {

@@ -1100,5 +1100,4 @@ in {
       chmod +x "$HOME/.local/bin/claude"
     '';
   };
-
 }

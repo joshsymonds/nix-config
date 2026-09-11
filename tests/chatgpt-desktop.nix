@@ -5,12 +5,12 @@
 }: let
   expectedSources = {
     "x86_64-linux" = {
-      url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/pool/main/c/chatgpt/chatgpt_26.810.41047_amd64.deb";
-      hash = "sha256-eHFfo80Tb/ZwcNqnaBmtrsxbQumYUVWWWWRdzh+/KvM=";
+      url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/pool/main/c/chatgpt/chatgpt_26.908.40834_amd64.deb";
+      hash = "sha256-2je457zvquoBnEeMrL5sc+4d3RXg4euzx+8KQt2BisI=";
     };
     "aarch64-linux" = {
-      url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/pool/main/c/chatgpt/chatgpt_26.810.41047_arm64.deb";
-      hash = "sha256-mW95PKA5dnb8uc0AIRTJd1XMN0GQfEAPf13c9scMCk4=";
+      url = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/pool/main/c/chatgpt/chatgpt_26.908.40834_arm64.deb";
+      hash = "sha256-uuXFylhWJaEWqId97cRV5MJ8oCBj6pPb1qBQbtahLTE=";
     };
   };
 

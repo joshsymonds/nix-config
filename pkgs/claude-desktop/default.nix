@@ -65,17 +65,17 @@
   pango,
   systemd,
 }: let
-  version = "1.17377.0";
+  version = "1.52386.0";
   debBase = "https://downloads.claude.ai/claude-desktop/apt/stable/pool/main/c/claude-desktop";
 
   srcs = {
     "x86_64-linux" = fetchurl {
       url = "${debBase}/claude-desktop_${version}_amd64.deb";
-      hash = "sha256-VjyN+O47lXyiNBFZgDhulgAH7Yz8jMBMd9WKjUP2wBg=";
+      hash = "sha256-nF0RPqLDHA1PYHXALmGAv0q1PTVza5pJfODoT2LpZUs=";
     };
     "aarch64-linux" = fetchurl {
       url = "${debBase}/claude-desktop_${version}_arm64.deb";
-      hash = "sha256-R1ms8ZtqyYH7rlzRwlqCjunG6Vz6nqTLjJzNfC/FOHE=";
+      hash = "sha256-ccfTKo7e5Xhw21T1mkVb0F+SsuGLRaFRC2ypCZ69d9c=";
     };
   };
 in

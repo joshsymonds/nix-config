@@ -1,13 +1,15 @@
 let
   nixpkgsLib = import <nixpkgs/lib>;
-  lib = nixpkgsLib // {
-    hm.dag = {
-      entryAfter = _: value: value;
-      entryBefore = _: value: value;
+  lib =
+    nixpkgsLib
+    // {
+      hm.dag = {
+        entryAfter = _: value: value;
+        entryBefore = _: value: value;
+      };
+      meta = nixpkgsLib.meta // {availableOn = _: _: true;};
+      getExe = package: "${package}/bin/chromium";
     };
-    meta = nixpkgsLib.meta // {availableOn = _: _: true;};
-    getExe = package: "${package}/bin/chromium";
-  };
   system = "x86_64-linux";
   fake = path: extra:
     {
@@ -22,7 +24,7 @@ let
   };
   checkedRunCommand = name: _: script:
     assert !(builtins.elem name ["pi-tasks-0.9.0" "pi-goal-0.54.3" "pi-lsp-0.49.7"])
-      || lib.hasInfix "@STEWARD_NODE_MODULES@/typebox" script;
+    || lib.hasInfix "@STEWARD_NODE_MODULES@/typebox" script;
       fake "/nix/store/fixture-${name}" {inherit script;};
   pkgs = rec {
     inherit lib;
@@ -45,7 +47,12 @@ let
     tmux = fake "@TMUX@" {};
     git = fake "@GIT@" {};
     bash = fake "/nix/store/fixture-bash" {};
-    chromium = fake "/nix/store/fixture-chromium" {meta = {mainProgram = "chromium"; platforms = [system];};};
+    chromium = fake "/nix/store/fixture-chromium" {
+      meta = {
+        mainProgram = "chromium";
+        platforms = [system];
+      };
+    };
     pi-coding-agent = fake "@STANDALONE_PI@" {};
     typescript = fake "/nix/store/fixture-typescript" {};
   };
@@ -122,7 +129,10 @@ let
     STEWARD_MODEL_ID = "model \"$HOME\"; false";
     STEWARD_MODEL_THINKING = "";
   };
-  piGoal = import ../pi/pi-goal.nix {inherit pkgs; nodeModules = stewardRuntime.nodeModules;};
+  piGoal = import ../pi/pi-goal.nix {
+    inherit pkgs;
+    nodeModules = stewardRuntime.nodeModules;
+  };
   pi = import ../pi/default.nix {inherit inputs lib pkgs;};
   codex = import ../codex/default.nix {
     hostname = "fixture";
@@ -144,9 +154,11 @@ let
     serviceScript = effective.systemd.user.services.steward-notifyd.Service.ExecStart.text;
   };
 in {
-  steward = exposeSteward steward // {
-    imports = map toString common.imports;
-  };
+  steward =
+    exposeSteward steward
+    // {
+      imports = map toString common.imports;
+    };
   stewardOverride = exposeSteward stewardOverride;
   pi = {
     package = toString pi.programs.pi-coding-agent.package;

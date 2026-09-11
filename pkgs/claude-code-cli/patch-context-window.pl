@@ -34,46 +34,49 @@ sub pad_comment {
 
 my @subs;
 
-# S1: enable the model-capabilities subsystem (K4t gates the startup models.list
-# fetch qm(), the disk-cache prime krr(), and the per-model lookup vL()). As of
-# 2.1.257 flipping it also lets G5() source max_output_tokens from the same
-# cache natively — a bonus over the 2.1.234 wBo gate this replaces.
+# S1: enable the model-capabilities subsystem. As of 2.1.269 Gtn gates the
+# startup models.list fetch vf(), the storage-backed prime read YSr(), and the
+# per-model lookup fz() (exact id match, then substring). Flipping it also lets
+# the max_output_tokens resolver source max_tokens from the same cache
+# natively (it already calls fz(e)?.max_tokens). (2.1.257's K4t.)
 push @subs, {
-    name => 'S1_K4t',
-    find => 'function K4t(){return!1}',
-    repl => 'function K4t(){return!0}',
+    name => 'S1_Gtn',
+    find => 'function Gtn(){return!1}',
+    repl => 'function Gtn(){return!0}',
 };
 
-# S2: in PL (window resolution), source the per-model input window from the
+# S2: in Sz (window resolution), source the per-model input window from the
 # capabilities cache for non-claude ids instead of the
 # CLAUDE_CODE_MAX_CONTEXT_TOKENS env var. Only the 32-byte env token becomes
-# the 23-byte cache lookup vL(e)?.max_input_tokens; the 9-byte difference is
-# absorbed by a /* */ comment. The existing non-claude gate kL(e) and the
-# `return Eme` (200k default) fallthrough are untouched, so claude ids and
-# cache misses (vL(e) -> undefined) still fall through unchanged. The full
+# the 23-byte cache lookup fz(e)?.max_input_tokens; the 9-byte difference is
+# absorbed by a /* */ comment. The existing non-claude gate hz(e) and the
+# `return Obe` (200k default) fallthrough are untouched, so claude ids and
+# cache misses (fz(e) -> undefined) still fall through unchanged. The full
 # clause is used as the anchor because the bare token is not unique (also in
-# wL and KS).
+# Ez, the DISABLE_COMPACT override, and the unknown-model notice gb).
+# (2.1.257's PL / vL / kL / Eme.)
 {
-    my $find      = 'let d=a.CLAUDE_CODE_MAX_CONTEXT_TOKENS;if(d!==void 0&&d>0&&kL(e))return d;return Eme}';
+    my $find      = 'let d=a.CLAUDE_CODE_MAX_CONTEXT_TOKENS;if(d!==void 0&&d>0&&hz(e))return d;return Obe}';
     my $token_old = 'a.CLAUDE_CODE_MAX_CONTEXT_TOKENS';
-    my $token_new = 'vL(e)?.max_input_tokens';
+    my $token_new = 'fz(e)?.max_input_tokens';
     my $pad       = pad_comment(length($token_old) - length($token_new));
     (my $repl = $find) =~ s/\Q$token_old\E/$token_new$pad/;
-    push @subs, { name => 'S2_PL', find => $find, repl => $repl };
+    push @subs, { name => 'S2_Sz', find => $find, repl => $repl };
 }
 
 # S3: neuter the 1M-credit clamp by forcing the latch accessor to false. Body
 # becomes `return!1` followed by a /* */ comment padding it to the original
 # length; the original latch call is dropped entirely (no dead RHS to evaluate).
-# (2.1.234's Iwr accessor is 2.1.257's eje; its only window-path caller is
-# FEn(e,n){return eje()&&wL()===void 0&&PL(e,n)>jO}.)
+# (2.1.257's eje accessor is 2.1.269's t4e; its only window-path caller is
+# qNn(e,n){return t4e()&&Ez()===void 0&&Sz(e,n)>I1}, which vp(e,n) uses to
+# clamp the resolved window to I1 = 200k.)
 {
-    my $find   = 'function eje(){return n().host.accountCreditLatches.longContext1mCreditsBlocked()}';
-    my $prefix = 'function eje(){return!1';
+    my $find   = 'function t4e(){return n().host.accountCreditLatches.longContext1mCreditsBlocked()}';
+    my $prefix = 'function t4e(){return!1';
     my $suffix = '}';
     my $padlen = length($find) - length($prefix) - length($suffix);
     my $repl   = $prefix . pad_comment($padlen) . $suffix;
-    push @subs, { name => 'S3_eje', find => $find, repl => $repl };
+    push @subs, { name => 'S3_t4e', find => $find, repl => $repl };
 }
 
 # Static invariant: every replacement is exactly as long as its find. A failure

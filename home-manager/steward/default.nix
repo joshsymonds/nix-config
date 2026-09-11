@@ -22,19 +22,20 @@ in {
     home = {
       packages = [steward];
 
-      sessionVariables = {
-        STEWARD_HELPER_BIN = lib.mkDefault "${stewardRuntime}/bin/steward-pi-helper";
-        STEWARD_MODEL_PROVIDER = lib.mkDefault "openai-codex";
-        STEWARD_MODEL_ID = lib.mkDefault "gpt-5.6-luna";
-        STEWARD_MODEL_THINKING = lib.mkDefault "low";
-        STEWARD_NTFY_URL_FILE = config.age.secrets."ntfy-url".path;
-        STEWARD_NTFY_TOKEN_FILE = config.age.secrets."ntfy-token".path;
-        STEWARD_STATE_FILE = lib.mkDefault "${config.xdg.cacheHome}/steward/state.json";
-      }
-      // lib.optionalAttrs (patchbayBaseUrl != null) {
-        STEWARD_PATCHBAY_URL = patchbayBaseUrl;
-        PATCHBAY_CALLER_KEY_FILE = "/run/agenix/patchbay-caller-key";
-      };
+      sessionVariables =
+        {
+          STEWARD_HELPER_BIN = lib.mkDefault "${stewardRuntime}/bin/steward-pi-helper";
+          STEWARD_MODEL_PROVIDER = lib.mkDefault "openai-codex";
+          STEWARD_MODEL_ID = lib.mkDefault "gpt-5.6-luna";
+          STEWARD_MODEL_THINKING = lib.mkDefault "low";
+          STEWARD_NTFY_URL_FILE = config.age.secrets."ntfy-url".path;
+          STEWARD_NTFY_TOKEN_FILE = config.age.secrets."ntfy-token".path;
+          STEWARD_STATE_FILE = lib.mkDefault "${config.xdg.cacheHome}/steward/state.json";
+        }
+        // lib.optionalAttrs (patchbayBaseUrl != null) {
+          STEWARD_PATCHBAY_URL = patchbayBaseUrl;
+          PATCHBAY_CALLER_KEY_FILE = "/run/agenix/patchbay-caller-key";
+        };
     };
 
     systemd.user.services.steward-notifyd = {

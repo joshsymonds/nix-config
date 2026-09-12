@@ -655,6 +655,10 @@ in {
             source = ./hooks/destructive-guard.py;
             executable = true;
           };
+          ".claude/hooks/gambit-record-context.sh" = {
+            source = ./hooks/gambit-record-context.sh;
+            executable = true;
+          };
           ".claude/hooks/usage-summary-refresh.sh" = {
             source = ./hooks/usage-summary-refresh.sh;
             executable = true;

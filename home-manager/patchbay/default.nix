@@ -338,6 +338,51 @@
         cache_creation_1h = "0.08";
       };
     }
+    # The judgment roster's three OpenRouter candidates (tiltyard-seats.nix),
+    # so a graded run's rows carry a cost basis instead of unknown. Same
+    # conventions as the card above: where the listing gives no separate
+    # cache-write price the three cache_creation fields mirror the input price,
+    # and where it gives no cache-read price that field takes the input price.
+    # The source records which of those a card leans on.
+    {
+      model = "z-ai/glm-5.3-flash";
+      effective_from = "2026-09-11T00:00:00Z";
+      source = "openrouter.ai model listing 2026-09-11; no separate cache-read or cache-write price — both billed as input";
+      rates_usd_per_million = {
+        input = "0.15";
+        output = "0.50";
+        cache_read = "0.15";
+        cache_creation = "0.15";
+        cache_creation_5m = "0.15";
+        cache_creation_1h = "0.15";
+      };
+    }
+    {
+      model = "moonshotai/kimi-k3";
+      effective_from = "2026-09-11T00:00:00Z";
+      source = "openrouter.ai model listing 2026-09-11; no separate cache-write price — writes billed as input";
+      rates_usd_per_million = {
+        input = "2.34";
+        output = "11.70";
+        cache_read = "0.24";
+        cache_creation = "2.34";
+        cache_creation_5m = "2.34";
+        cache_creation_1h = "2.34";
+      };
+    }
+    {
+      model = "deepseek/deepseek-v4.1-flash";
+      effective_from = "2026-09-11T00:00:00Z";
+      source = "openrouter.ai model listing 2026-09-11; no separate cache-write price — writes billed as input";
+      rates_usd_per_million = {
+        input = "0.20";
+        output = "0.60";
+        cache_read = "0.006";
+        cache_creation = "0.20";
+        cache_creation_5m = "0.20";
+        cache_creation_1h = "0.20";
+      };
+    }
   ];
 
   # Systemd user units do not inherit the session's XDG_STATE_HOME. Shared

@@ -65,4 +65,9 @@
   # as `runpod/qwen3.8`. A second Seat at the same address would be a second
   # ledger identity for one pod, so this binds the existing Seat by ID.
   qwen38 = {seat = "runpod-qwen3-8";};
+
+  # The Codex candidate and the campaign judge ride the ChatGPT subscription
+  # through the Seat patchbay already publishes as `chatgpt/sol`; binding it by
+  # ID keeps one ledger identity for that subscription.
+  sol = {seat = "chatgpt-sol";};
 }

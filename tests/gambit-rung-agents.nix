@@ -98,12 +98,12 @@ in
       and .["chatgpt/sol-fast"].model == .["chatgpt/sol"].model
     ' ${routeModelsJson} >/dev/null
 
-    # The tiltyard roster is exactly the seven judgment selectors. A missing
+    # The tiltyard roster is exactly the eight judgment selectors. A missing
     # one silently drops a candidate from a comparison; an extra one adds a
     # model nothing measured.
     jq -e '
       (keys | sort)
-      == ["dsv41flash", "fable51", "glm53", "kimik3", "opus5", "qwen38", "sonnet5"]
+      == ["dsv41flash", "fable51", "glm53", "kimik3", "opus5", "qwen38", "sol", "sonnet5"]
     ' ${tiltyardJson} >/dev/null
 
     # The three Claude candidates ride the caller's own credential on forward
@@ -137,6 +137,7 @@ in
       and .kimik3.model == "moonshotai/kimi-k3"
       and .dsv41flash.model == "deepseek/deepseek-v4.1-flash"
       and .qwen38.seat == "runpod-qwen3-8"
+      and .sol.seat == "chatgpt-sol"
     ' ${tiltyardJson} >/dev/null
 
     # The agent rungs of the full map are exactly the declared gambit rungs,

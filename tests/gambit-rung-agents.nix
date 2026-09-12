@@ -34,6 +34,13 @@
   chatgptRoutes = lib.attrNames chatgptModels;
   routeModelsJson = pkgs.writeText "patchbay-chatgpt-route-models.json" (builtins.toJSON chatgptModels);
 
+  # The tiltyard judgment roster: the plain-identifier selectors patchbay's
+  # `tiltyard` context publishes, and the Seat each one names. Imported for the
+  # same reason as chatgpt-models.nix above — it is config-free data, so this
+  # check can assert the roster without evaluating a host.
+  tiltyardSeats = import ../home-manager/patchbay/tiltyard-seats.nix;
+  tiltyardJson = pkgs.writeText "patchbay-tiltyard-seats.json" (builtins.toJSON tiltyardSeats);
+
   rungsJson = pkgs.writeText "gambit-rungs.json" (builtins.toJSON gambitRungs);
   fullJson = pkgs.writeText "gambit-models-full.json" (builtins.toJSON gambitModelsFull);
   claudeOnlyJson = pkgs.writeText "gambit-models-claude-only.json" (builtins.toJSON gambitModelsClaudeOnly);
@@ -90,6 +97,47 @@ in
       and (.["chatgpt/astra"] | has("speed") | not)
       and .["chatgpt/sol-fast"].model == .["chatgpt/sol"].model
     ' ${routeModelsJson} >/dev/null
+
+    # The tiltyard roster is exactly the seven judgment selectors. A missing
+    # one silently drops a candidate from a comparison; an extra one adds a
+    # model nothing measured.
+    jq -e '
+      (keys | sort)
+      == ["dsv41flash", "fable51", "glm53", "kimik3", "opus5", "qwen38", "sonnet5"]
+    ' ${tiltyardJson} >/dev/null
+
+    # The three Claude candidates ride the caller's own credential on forward
+    # Seats: no billing class to declare, and the model pin is the only thing
+    # that makes each one a distinct candidate, so it must be there. The counts
+    # keep these from passing vacuously on a roster that declares no such Seat.
+    jq -e '
+      [.[] | select(.auth_mode == "forward")] as $forward
+      | ($forward | length) == 3
+      and all($forward[];
+        (.model | type) == "string" and (.model | length) > 0
+        and (has("billing") | not))
+    ' ${tiltyardJson} >/dev/null
+
+    # The OpenRouter candidates spend the household key per token, which the
+    # ledger prices only when the Seat says so.
+    jq -e '
+      [.[] | select(.auth_mode == "inject")] as $inject
+      | ($inject | length) == 3
+      and all($inject[]; .billing == "metered")
+    ' ${tiltyardJson} >/dev/null
+
+    # The pinned ids themselves. A judgment run only compares what it claims to
+    # compare if each selector resolves to the model named here, and qwen3.8 is
+    # the RunPod pod patchbay already publishes rather than a second Seat.
+    jq -e '
+      .fable51.model == "claude-fable-5-1"
+      and .opus5.model == "claude-opus-5"
+      and .sonnet5.model == "claude-sonnet-5"
+      and .glm53.model == "z-ai/glm-5.3-flash"
+      and .kimik3.model == "moonshotai/kimi-k3"
+      and .dsv41flash.model == "deepseek/deepseek-v4.1-flash"
+      and .qwen38.seat == "runpod-qwen3-8"
+    ' ${tiltyardJson} >/dev/null
 
     # The agent rungs of the full map are exactly the declared gambit rungs,
     # and each one follows the <rung> / <rung>-ro naming models.json and the

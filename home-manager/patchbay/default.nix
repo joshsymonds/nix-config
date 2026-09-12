@@ -35,6 +35,10 @@
   # Its own file because the gambit rung agents name these selectors and a
   # check asserts they agree (home-manager/claude-code/gambit-rungs.nix).
   chatgptModels = import ./chatgpt-models.nix;
+  # The tiltyard judgment roster: selector -> the Seat that selector names in
+  # the `tiltyard` context below. Its own file for the same reason, and
+  # tests/gambit-rung-agents.nix asserts the roster there.
+  tiltyardSeats = import ./tiltyard-seats.nix;
 
   # A Seat ID from a public selector: same name, spelled in the ID grammar
   # (^[a-z0-9][a-z0-9-]*$), so "openrouter/sol" binds Seat "openrouter-sol".
@@ -234,6 +238,28 @@
       };
     };
 
+  # The tiltyard Seats get their own ID space rather than the selector-derived
+  # one: the roster selectors are bare identifiers chosen for a results table,
+  # and `tiltyard-` keeps them from ever colliding with a public selector's Seat.
+  # A roster entry naming a `seat` binds that existing Seat and publishes none.
+  tiltyardSeatID = selector: "tiltyard-${selector}";
+  tiltyardOwnSeats = lib.filterAttrs (_: entry: !(entry ? seat)) tiltyardSeats;
+
+  # The judgment context: every roster selector bound to its pinned Seat, and
+  # the anthropic forward Seat for everything else, so a judge or a harness
+  # driving this context reaches a candidate only by naming it. No subagents
+  # block — a judgment run's subagent traffic must ride the same Seat its
+  # selector asked for, not a policy default that would silently swap the model
+  # under measurement.
+  tiltyardContext = {
+    default_seat = "anthropic";
+    models =
+      lib.mapAttrs (
+        selector: entry: entry.seat or (tiltyardSeatID selector)
+      )
+      tiltyardSeats;
+  };
+
   # The seat-based registry: global Seats, context-local selector bindings,
   # selected per request by the /ctx/<name> URL prefix Claude Code's
   # ANTHROPIC_BASE_URL carries. Bare /v1 requests ride default_context.
@@ -250,7 +276,11 @@
       // lib.mapAttrs' (
         selector: seat: lib.nameValuePair (seatID selector) seat
       )
-      subscriptionSeats;
+      subscriptionSeats
+      // lib.mapAttrs' (
+        selector: seat: lib.nameValuePair (tiltyardSeatID selector) seat
+      )
+      tiltyardOwnSeats;
     contexts = {
       # ~/.claude, and everything outside a work checkout.
       personal = context;
@@ -258,6 +288,9 @@
       savecraft = context;
       # ~/Work/attain.
       attain = context;
+      # The judgment roster, for tiltyard runs and anything else comparing
+      # models by name.
+      tiltyard = tiltyardContext;
     };
   };
 

@@ -61,13 +61,20 @@ in
     jq -e 'length > 0' ${rungsJson} >/dev/null
 
     # Both maps expose exactly the roles gambit dispatches. A role gambit asks
-    # for that is missing here resolves to nothing at runtime.
+    # for that is missing here resolves to nothing at runtime. The orchestrator
+    # is seated only where a Codex route exists; without it, gambit's loading
+    # session performs the effort itself (contracts/models.md).
+    jq -e '
+      (.roles | keys | sort)
+      == ["escalation", "finder", "orchestrator", "scout", "steelman", "test-runner", "verifier", "worker"]
+      and .roles.orchestrator.entry == "sol-high"
+      and (.roles.orchestrator | has("readonly") | not)
+    ' ${fullJson} >/dev/null
+    jq -e '
+      (.roles | keys | sort)
+      == ["escalation", "finder", "scout", "steelman", "test-runner", "verifier", "worker"]
+    ' ${claudeOnlyJson} >/dev/null
     for map in ${fullJson} ${claudeOnlyJson}; do
-      jq -e '
-        (.roles | keys | sort)
-        == ["escalation", "finder", "scout", "steelman", "test-runner", "verifier", "worker"]
-      ' "$map" >/dev/null
-
       # Every entry rung and every ladder element names a rung the same map
       # declares — no dangling ladder step.
       jq -e '

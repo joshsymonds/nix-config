@@ -49,6 +49,14 @@
       route = "chatgpt/terra";
       effort = "medium";
     };
+    # Orchestrator rung: Sol at high effort runs one effort, review, or
+    # release from the durable record (gambit contracts/models.md). Chosen by
+    # Josh on 2026-09-12 when the judgment campaign was stopped short of its
+    # table to save quota.
+    "sol-high" = {
+      route = "chatgpt/sol";
+      effort = "high";
+    };
     # Review finders and verifier: Sol at standard speed.
     "sol-xhigh" = {
       route = "chatgpt/sol";
@@ -310,6 +318,7 @@
         readonly = true;
       };
       "test-runner".entry = "luna-low";
+      orchestrator.entry = "sol-high";
     };
   };
 

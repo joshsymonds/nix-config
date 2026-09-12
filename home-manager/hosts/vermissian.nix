@@ -48,7 +48,7 @@
   # Codex usage allowance exhausted 2026-09-11: subagents ride the anthropic
   # Seat and gambit runs on Claude rungs (Opus workers, Fable escalation and
   # review, Sonnet scouts) until it refills.
-  services.patchbay.codexUpstream.exhausted = true;
+  services.patchbay.codexUpstream.exhausted = false;
 
   programs.claudeCode.hostContext = ''
     # Host: vermissian (Linux NixOS, x86_64)

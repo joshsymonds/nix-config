@@ -216,16 +216,33 @@ in
           exit 1
         fi
       done
-      # A fast Seat's Pi twin loads exactly the codex-fast extension by store
-      # path; every other writing rung, and every read-only variant (isolated,
-      # so extensions are off regardless), loads none.
-      if [ "$speed" = fast ]; then
-        grep -qE '^extensions: \["/nix/store/[^"/]+-codex-fast\.ts"\]$' "$pi_plain"
+      # An Orchestrator is not a leaf worker: it needs scoped child dispatch
+      # and task-state tools. Keep the expected privileges independent of the
+      # renderer, including the absence of the task extension's RPC dispatch.
+      if [ "$rung" = sol-high ]; then
+        grep -qxF 'allowed_subagents: "astra-high, astra-xhigh-ro, luna-low, sol-low, sol-xhigh-ro, terra-medium-ro"' "$pi_plain"
+        grep -qxF 'extensions: ["pi-tasks", "pi-processes"]' "$pi_plain"
+        grep -qxF 'tools: "*, ext:pi-tasks/TaskCreate, ext:pi-tasks/TaskGet, ext:pi-tasks/TaskList, ext:pi-tasks/TaskUpdate, ext:pi-processes"' "$pi_plain"
+        grep -qF 'run_in_background: true' "$pi_plain"
+        grep -qF 'get_subagent_result(wait: true)' "$pi_plain"
+        grep -qF 'returning a final answer stops them' "$pi_plain"
       else
-        grep -qxF "extensions: false" "$pi_plain"
+        if grep -q '^allowed_subagents:' "$pi_plain"; then
+          echo "leaf worker $rung unexpectedly grants delegation" >&2
+          exit 1
+        fi
+        if [ "$speed" = fast ]; then
+          grep -qE '^extensions: \["/nix/store/[^"/]+-codex-fast\.ts"\]$' "$pi_plain"
+        else
+          grep -qxF "extensions: false" "$pi_plain"
+        fi
+        grep -qxF 'tools: "*"' "$pi_plain"
+      fi
+      if grep -q '^allowed_subagents:' "$pi_ro"; then
+        echo "read-only $rung unexpectedly grants delegation" >&2
+        exit 1
       fi
       grep -qxF "extensions: false" "$pi_ro"
-      grep -qxF 'tools: "*"' "$pi_plain"
       grep -qxF 'tools: "read, bash, grep, find, ls"' "$pi_ro"
       grep -qxF 'isolated: true' "$pi_ro"
       grep -qF "READ-ONLY advisory variant" "$pi_ro"
@@ -260,6 +277,10 @@ in
       grep -qF "READ-ONLY advisory variant" "$pi_ro"
       if grep -qF "isolated: true" "$pi_plain"; then
         echo "writing omakase Pi variant $rung.md is isolated read-only" >&2
+        exit 1
+      fi
+      if grep -q '^allowed_subagents:' "$pi_plain" "$pi_ro"; then
+        echo "omakase leaf rung $rung unexpectedly grants delegation" >&2
         exit 1
       fi
       # An omakase rung must not collide with a Codex rung name.

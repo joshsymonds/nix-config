@@ -161,18 +161,30 @@
       }) [false true]
   ) (lib.attrNames gambitRungs);
 
-  # pi-subagents uses Pi model IDs and frontmatter rather than Claude Code's
-  # patchbay route, effort, and camel-case denylist fields. Keep extensions
-  # and skills out of rung children: Gambit passes the complete contract and
-  # brief, and only the root orchestrator may mutate task state or dispatch.
-  # The one extension a writing fast rung loads is codex-fast, which adds
-  # nothing but the service tier; a read-only variant is `isolated`, which
-  # forces extensions off, so scouting stays at standard speed on Pi.
+  # Nested dispatch is opt-in independently of extension loading. Permit the
+  # Orchestrator to reach exactly the non-Orchestrator role targets, including
+  # escalation ladders and advisory variants, not arbitrary agents or itself.
+  piOrchestratorChildren = lib.sort builtins.lessThan (lib.unique (lib.concatMap (
+    role:
+      map (rung: let
+        target = gambitModelsFull.rungs.${rung};
+      in
+        if role.readonly or false
+        then target.readonly_agent
+        else target.agent) (role.ladder or [role.entry])
+  ) (lib.attrValues (lib.removeAttrs gambitModelsFull.roles ["orchestrator"]))));
+
+  # pi-subagents uses Pi frontmatter rather than Claude's patchbay fields.
+  # Leaf workers keep extensions off except the fast-tier hook. Orchestrators
+  # need task-state and process tools as well as ownership-scoped nested Agent;
+  # do not expose pi-tasks' separate RPC dispatch/control tools. Skills remain
+  # explicit contract-path loads. Read-only variants stay isolated leaves.
   mkPiRungAgent = rung: readonly: let
     inherit (gambitRungs.${rung}) route effort;
     agentName = rungAgentName rung readonly;
     model = "openai-codex/${routeModel route}";
     fast = routeFast route && !readonly;
+    orchestrator = !readonly && rung == gambitModelsFull.roles.orchestrator.entry;
   in
     pkgs.writeText "gambit-pi-rung-${agentName}.md" (lib.concatStringsSep "\n" (
       [
@@ -184,15 +196,20 @@
         ''tools: "${
             if readonly
             then "read, bash, grep, find, ls"
+            else if orchestrator
+            then "*, ext:pi-tasks/TaskCreate, ext:pi-tasks/TaskGet, ext:pi-tasks/TaskList, ext:pi-tasks/TaskUpdate, ext:pi-processes"
             else "*"
           }"''
         (
-          if fast
+          if orchestrator
+          then ''extensions: ["pi-tasks", "pi-processes"]''
+          else if fast
           then ''extensions: ["${codexFastExtension}"]''
           else "extensions: false"
         )
         "skills: false"
       ]
+      ++ lib.optional orchestrator ''allowed_subagents: "${lib.concatStringsSep ", " piOrchestratorChildren}"''
       ++ lib.optional readonly "isolated: true"
       ++ [
         "---"
@@ -201,6 +218,14 @@
       ++ (
         if readonly
         then readonlyDirective
+        else if orchestrator
+        then [
+          "You are a Gambit Orchestrator. Follow the contract and phase brief exactly."
+          "Dispatch children with run_in_background: true and record the returned IDs."
+          "Join them with get_subagent_result(wait: true) before returning your report."
+          "Nested children do not notify you; returning a final answer stops them."
+          "Use the scoped Agent tools, never shell-launched models or a parent proxy."
+        ]
         else ["You are a gambit rung agent. Follow the contract and brief given in your prompt exactly."]
       )
       ++ [""]

@@ -159,9 +159,9 @@ in {
     };
     # Reuse language servers already installed by home-manager/helix. This
     # explicit map replaces upstream defaults (which use ty/biome instead).
-    # Gambit rung agents intentionally keep extensions off, except the
-    # codex-fast tier hook a writing fast rung loads by store path; LSP is available
-    # to the parent, not silently injected into read-only/isolated workers.
+    # Gambit leaf agents keep extensions off except the writing fast-tier hook.
+    # Orchestrators explicitly load task/process tools; LSP stays available to
+    # the parent, not silently injected into read-only/isolated workers.
     ".pi/agent/pi-lsp.json".text = builtins.toJSON {
       timeout = 30000;
       servers = {

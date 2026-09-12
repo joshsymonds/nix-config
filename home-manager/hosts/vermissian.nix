@@ -4,6 +4,7 @@
     ../claude-code/transcripts.nix
     ../go
     ../patchbay
+    ../patchbay/singularity.nix
   ];
 
   # Per-host Anthropic API gateway. Mounts /mnt/claude, so it also ships its

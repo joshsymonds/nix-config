@@ -178,6 +178,7 @@
   subscriptionSeats =
     openrouterSeats
     // runpodSeats
+    // cfg.extraSeats
     // lib.optionalAttrs cfg.codexUpstream.enable (
       lib.mapAttrs (_: chatgptSeat) chatgptModels
     );
@@ -432,6 +433,12 @@
 in {
   options.services.patchbay = {
     enable = lib.mkEnableOption "the patchbay Anthropic Messages API gateway";
+
+    extraSeats = lib.mkOption {
+      type = lib.types.attrsOf (pkgs.formats.json {}).type;
+      default = {};
+      description = "Additional public selector-to-Seat definitions for this host.";
+    };
 
     port = lib.mkOption {
       type = lib.types.port;

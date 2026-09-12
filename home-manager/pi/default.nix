@@ -70,6 +70,29 @@ in {
     enable = true;
     package = stewardPackage;
 
+    models.providers.omakase = {
+      name = "omakase";
+      baseUrl = "https://llm.kloverinfrastructure.com";
+      api = "anthropic-messages";
+      apiKey = "!cat \"$XDG_RUNTIME_DIR/agenix/omakase-key\"";
+      models = [
+        {
+          id = "everyday";
+          name = "everyday";
+          reasoning = true;
+          contextWindow = 1048575;
+          maxTokens = 131072;
+        }
+        {
+          id = "deep";
+          name = "deep";
+          reasoning = true;
+          contextWindow = 1050000;
+          maxTokens = 128000;
+        }
+      ];
+    };
+
     settings = {
       defaultProvider = "openai-codex";
       defaultModel = "gpt-6-astra";
@@ -125,30 +148,6 @@ in {
       widget = {
         showStatusWidget = false;
         dockDefaultState = "closed";
-      };
-    };
-    ".pi/agent/models.json".text = builtins.toJSON {
-      providers.omakase = {
-        name = "omakase";
-        baseUrl = "https://llm.kloverinfrastructure.com";
-        api = "anthropic-messages";
-        apiKey = "!cat \"$XDG_RUNTIME_DIR/agenix/omakase-key\"";
-        models = [
-          {
-            id = "everyday";
-            name = "everyday";
-            reasoning = true;
-            contextWindow = 1048575;
-            maxTokens = 131072;
-          }
-          {
-            id = "deep";
-            name = "deep";
-            reasoning = true;
-            contextWindow = 1050000;
-            maxTokens = 128000;
-          }
-        ];
       };
     };
     ".pi/agent/extensions/compact-transcript.ts".source = "${compactTranscript}/extensions/compact-transcript.ts";

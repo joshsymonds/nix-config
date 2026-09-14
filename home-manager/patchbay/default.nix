@@ -111,6 +111,18 @@
       model = "deepseek/deepseek-v4-flash-0731";
       max_input_tokens = 1048576;
     };
+    # DeepSeek V4.1 Flash, the model the tiltyard roster pins as dsv41flash,
+    # published as a public selector so an evaluation run (the gambit trials)
+    # can name it as a subject outside the tiltyard context. Same window as
+    # the V4 Flash Seat above: 1048576 is what top_provider serves.
+    "openrouter/deepseek-v4.1-flash" = {
+      upstream = "https://openrouter.ai/api";
+      auth_mode = "inject";
+      billing = "metered";
+      api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
+      model = "deepseek/deepseek-v4.1-flash";
+      max_input_tokens = 1048576;
+    };
   };
 
   # The RunPod H100 pods, reachable only over the tailnet: two servings of the

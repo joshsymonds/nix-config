@@ -487,6 +487,7 @@
   inherit
     (import ./gambit-rungs.nix {inherit lib pkgs;})
     rungAgentEntries
+    optionalClaudeAgentEntries
     gambitModelsFull
     gambitModelsClaudeOnly
     ;
@@ -509,6 +510,8 @@
         })
         staticAgents)
       ++ lib.optionals codexUpstream rungAgentEntries
+      ++ lib.optionals (config.services.patchbay.enable or false)
+      (optionalClaudeAgentEntries (lib.attrNames (config.services.patchbay.extraSeats or {})))
     );
 
   gambitModelsJson = builtins.toJSON (

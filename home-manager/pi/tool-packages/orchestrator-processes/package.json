@@ -1,0 +1,5 @@
+{
+  "name": "pi-processes",
+  "private": true,
+  "pi": { "extensions": ["./index.ts"] }
+}

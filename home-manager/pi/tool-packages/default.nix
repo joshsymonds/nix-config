@@ -7,7 +7,13 @@ pkgs.buildNpmPackage {
   version = "1.0.0";
   src = lib.fileset.toSource {
     root = ./.;
-    fileset = lib.fileset.unions [./package.json ./package-lock.json];
+    fileset = lib.fileset.unions [
+      ./package.json
+      ./package-lock.json
+      ./process-keepalive.patch
+      ./process-keepalive.ts
+      ./orchestrator-processes
+    ];
   };
   npmDepsHash = "sha256-XyUA/DStMea0muvSswluhTmgmIn9F2fNfuN5ajaN/+8=";
   # Pi's loader supplies SDK peers. Never install another harness, run package
@@ -25,6 +31,10 @@ pkgs.buildNpmPackage {
     # not trusted that project. Keep process settings global/in-memory only.
     substituteInPlace $out/node_modules/@aliou/pi-processes/extensions/processes/config/loader.ts \
       --replace-fail 'scopes: ["global", "local", "memory"]' 'scopes: ["global", "memory"]'
+    # Opt-in child lifecycle only; the normal package manifest is unchanged.
+    patch -d $out/node_modules/@aliou/pi-processes -p1 < process-keepalive.patch
+    cp process-keepalive.ts $out/node_modules/@aliou/pi-processes/extensions/processes/hooks/keepalive.ts
+    cp -r orchestrator-processes $out/
     cp package.json package-lock.json $out/
     runHook postInstall
   '';

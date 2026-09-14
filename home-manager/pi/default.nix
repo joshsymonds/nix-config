@@ -43,7 +43,10 @@
   '';
 
   inherit
-    (import ../claude-code/gambit-rungs.nix {inherit lib pkgs;})
+    (import ../claude-code/gambit-rungs.nix {
+      inherit lib pkgs;
+      orchestratorProcessExtension = "${workflowTools}/orchestrator-processes/index.ts";
+    })
     piRungAgentEntries
     ;
 

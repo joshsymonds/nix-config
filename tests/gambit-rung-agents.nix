@@ -5,13 +5,16 @@
 {pkgs}: let
   inherit (pkgs) lib;
 
+  workflowTools = import ../home-manager/pi/tool-packages {inherit lib pkgs;};
+  orchestratorProcessExtension = "${workflowTools}/orchestrator-processes/index.ts";
   rungData = import ../home-manager/claude-code/gambit-rungs.nix {
-    inherit lib pkgs;
+    inherit lib pkgs orchestratorProcessExtension;
   };
   inherit
     (rungData)
     gambitRungs
     rungAgentEntries
+    optionalClaudeAgentEntries
     piRungAgentEntries
     omakasePiRungs
     gambitModelsFull
@@ -51,6 +54,13 @@
   # the frontmatter can be read back off disk.
   agentsDir = pkgs.linkFarm "gambit-rung-agents-check-dir" rungAgentEntries;
   piAgentsDir = pkgs.linkFarm "gambit-pi-rung-agents-check-dir" piRungAgentEntries;
+  optionalAgentsDir = assert optionalClaudeAgentEntries [] == [];
+  assert optionalClaudeAgentEntries ["chatgpt/sol"] == [];
+  assert map (entry: entry.name) (optionalClaudeAgentEntries ["singularity/deepseek-flash"])
+  == ["singularity-flash-high.md" "singularity-flash-high-ro.md"];
+  assert !(gambitModelsFull.rungs ? singularity-flash-high);
+  assert !(gambitModelsClaudeOnly.rungs ? singularity-flash-high);
+    pkgs.linkFarm "gambit-optional-claude-agents-check-dir" (optionalClaudeAgentEntries ["singularity/deepseek-flash"]);
 in
   pkgs.runCommand "gambit-rung-agents-check" {
     nativeBuildInputs = [pkgs.jq];
@@ -221,11 +231,19 @@ in
       # renderer, including the absence of the task extension's RPC dispatch.
       if [ "$rung" = sol-high ]; then
         grep -qxF 'allowed_subagents: "astra-high, astra-xhigh-ro, luna-low, sol-low, sol-xhigh-ro, terra-medium-ro"' "$pi_plain"
-        grep -qxF 'extensions: ["pi-tasks", "pi-processes"]' "$pi_plain"
+        grep -qxF 'extensions: ["pi-tasks", "${orchestratorProcessExtension}"]' "$pi_plain"
+        grep -qE '^extensions: \["pi-tasks", "/nix/store/[^"/]+/orchestrator-processes/index.ts"\]$' "$pi_plain"
+        test -f '${orchestratorProcessExtension}'
+        jq -e '.name == "pi-processes" and .pi.extensions == ["./index.ts"]' '${workflowTools}/orchestrator-processes/package.json' >/dev/null
+        # Root discovery must never opt in to the child lifecycle gate.
+        jq -e 'all(.pi.extensions[]; contains("orchestrator") | not)' '${workflowTools}/node_modules/@aliou/pi-processes/package.json' >/dev/null
         grep -qxF 'tools: "*, ext:pi-tasks/TaskCreate, ext:pi-tasks/TaskGet, ext:pi-tasks/TaskList, ext:pi-tasks/TaskUpdate, ext:pi-processes"' "$pi_plain"
         grep -qF 'run_in_background: true' "$pi_plain"
         grep -qF 'get_subagent_result(wait: true)' "$pi_plain"
-        grep -qF 'returning a final answer stops them' "$pi_plain"
+        grep -qF 'completing your run stops them' "$pi_plain"
+        grep -qF 'end your turn to yield' "$pi_plain"
+        grep -qF 'context/ignore do not request a turn' "$pi_plain"
+        grep -qF 'Never sleep, poll, or dispatch a model just to wait' "$pi_plain"
       else
         if grep -q '^allowed_subagents:' "$pi_plain"; then
           echo "leaf worker $rung unexpectedly grants delegation" >&2
@@ -288,6 +306,28 @@ in
         echo "omakase rung $rung shadows a Codex rung" >&2
         exit 1
       fi
+    done
+
+    # Optional beta agents share the Claude renderer, never Pi or role defaults.
+    plain="${optionalAgentsDir}/singularity-flash-high.md"
+    ro="${optionalAgentsDir}/singularity-flash-high-ro.md"
+    for f in "$plain" "$ro"; do
+      test -f "$f"
+      grep -qxF 'model: singularity/deepseek-flash' "$f"
+      grep -qxF 'effort: high' "$f"
+    done
+    grep -qxF 'name: singularity-flash-high' "$plain"
+    grep -qxF 'name: singularity-flash-high-ro' "$ro"
+    grep -qxF ${lib.escapeShellArg expectedDenylist} "$ro"
+    grep -qF 'READ-ONLY advisory variant' "$ro"
+    grep -qF 'Never run:' "$ro"
+    if grep -qE 'disallowedTools|READ-ONLY' "$plain"; then
+      echo 'writing Singularity agent carries read-only restrictions' >&2
+      exit 1
+    fi
+    for name in singularity-flash-high singularity-flash-high-ro; do
+      test ! -e "${piAgentsDir}/$name.md"
+      test ! -e "${agentsDir}/$name.md"
     done
 
     touch "$out"

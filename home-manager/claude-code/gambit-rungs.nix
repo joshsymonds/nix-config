@@ -9,6 +9,7 @@
 {
   lib,
   pkgs,
+  orchestratorProcessExtension ? "${import ../pi/tool-packages {inherit lib pkgs;}}/orchestrator-processes/index.ts",
 }: rec {
   # ── Gambit rung agents ──────────────────────────────────────────────────
   # Gambit's non-Claude ladder rungs ship as Claude Code SUBAGENT
@@ -79,6 +80,15 @@
     };
   };
 
+  # Explicit Claude Code dispatch only: these never enter Gambit's role map
+  # or Pi's agent directory. Install each pair only where its route is declared.
+  optionalClaudeRungs = {
+    "singularity-flash-high" = {
+      route = "singularity/deepseek-flash";
+      effort = "high";
+    };
+  };
+
   # Route key -> the Seat's upstream identity (model id, optional speed),
   # owned by the patchbay module. The model id labels the Claude Code agent
   # and names the Pi twin's provider model, so a rung never hardcodes a model
@@ -128,14 +138,18 @@
   # The description is quoted because it contains a colon; an unquoted YAML
   # plain scalar cannot carry ": ".
   mkRungAgent = rung: readonly: let
-    inherit (gambitRungs.${rung}) route effort;
+    inherit ((gambitRungs // optionalClaudeRungs).${rung}) route effort;
     agentName = rungAgentName rung readonly;
+    modelLabel =
+      if builtins.hasAttr route chatgptModels
+      then routeModel route
+      else route;
   in
     pkgs.writeText "gambit-rung-${agentName}.md" (lib.concatStringsSep "\n" (
       [
         "---"
         "name: ${agentName}"
-        ''description: "Gambit rung: ${routeModel route} (${route}) at ${effort} effort via patchbay${lib.optionalString readonly ", read-only advisory variant"}"''
+        ''description: "Gambit rung: ${modelLabel} (${route}) at ${effort} effort via patchbay${lib.optionalString readonly ", read-only advisory variant"}"''
         "model: ${route}"
         "effort: ${effort}"
       ]
@@ -160,6 +174,15 @@
         path = mkRungAgent rung readonly;
       }) [false true]
   ) (lib.attrNames gambitRungs);
+
+  optionalClaudeAgentEntries = routes:
+    lib.concatMap (
+      rung:
+        map (readonly: {
+          name = "${rungAgentName rung readonly}.md";
+          path = mkRungAgent rung readonly;
+        }) [false true]
+    ) (lib.attrNames (lib.filterAttrs (_: spec: builtins.elem spec.route routes) optionalClaudeRungs));
 
   # Nested dispatch is opt-in independently of extension loading. Permit the
   # Orchestrator to reach exactly the non-Orchestrator role targets, including
@@ -202,7 +225,7 @@
           }"''
         (
           if orchestrator
-          then ''extensions: ["pi-tasks", "pi-processes"]''
+          then ''extensions: ["pi-tasks", "${orchestratorProcessExtension}"]''
           else if fast
           then ''extensions: ["${codexFastExtension}"]''
           else "extensions: false"
@@ -223,7 +246,13 @@
           "You are a Gambit Orchestrator. Follow the contract and phase brief exactly."
           "Dispatch children with run_in_background: true and record the returned IDs."
           "Join them with get_subagent_result(wait: true) before returning your report."
-          "Nested children do not notify you; returning a final answer stops them."
+          "Nested children do not notify you; completing your run stops them."
+          "For commands, use process start with turn notifications for results you need."
+          "After starting a process, end your turn to yield; the harness keeps this run"
+          "open until a native turn notification resumes you or all owned work ends."
+          "Use notify.logMatches for readiness; context/ignore do not request a turn."
+          "Never sleep, poll, or dispatch a model just to wait. Stop owned servers"
+          "when finished, join nested children, then return your final report."
           "Use the scoped Agent tools, never shell-launched models or a parent proxy."
         ]
         else ["You are a gambit rung agent. Follow the contract and brief given in your prompt exactly."]

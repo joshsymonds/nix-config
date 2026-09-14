@@ -1,0 +1,50 @@
+diff --git a/extensions/processes/handlers/notifications.ts b/extensions/processes/handlers/notifications.ts
+--- a/extensions/processes/handlers/notifications.ts
++++ b/extensions/processes/handlers/notifications.ts
+@@ -29,0 +30 @@
++  deliveredTurn?: () => void,
+@@ -30,0 +32 @@
++  let disposed = false;
+@@ -52 +54 @@
+-    if (count === 0) return;
++    if (disposed || count === 0) return;
+@@ -85,0 +88 @@
++      if (disposed) return;
+@@ -106,0 +110 @@
++      if (options.triggerTurn && !disposed) deliveredTurn?.();
+@@ -110,0 +115 @@
++    disposed = true;
+diff --git a/extensions/processes/hooks/cleanup.ts b/extensions/processes/hooks/cleanup.ts
+--- a/extensions/processes/hooks/cleanup.ts
++++ b/extensions/processes/hooks/cleanup.ts
+@@ -23 +23 @@
+-): void {
++): () => void {
+@@ -26 +26 @@
+-  pi.on("session_shutdown", async () => {
++  const cleanup = () => {
+@@ -42 +42,3 @@
+-  });
++  };
++  pi.on("session_shutdown", cleanup);
++  return cleanup;
+diff --git a/extensions/processes/index.ts b/extensions/processes/index.ts
+--- a/extensions/processes/index.ts
++++ b/extensions/processes/index.ts
+@@ -12,0 +13 @@
++import { registerProcessKeepalive } from "./hooks/keepalive";
+@@ -24,0 +26 @@
++  keepalive = false,
+@@ -61,0 +64 @@
++  let gate: ReturnType<typeof registerProcessKeepalive> | undefined;
+@@ -67 +70 @@
+-    registerNotificationDelivery(pi.events, pi),
++    registerNotificationDelivery(pi.events, pi, () => gate?.deliveredTurn()),
+@@ -82 +85 @@
+-  registerCleanupHook(pi, {
++  const cleanup = registerCleanupHook(pi, {
+@@ -91,0 +95,4 @@
++  if (keepalive) {
++    gate = registerProcessKeepalive(pi, manager, cleanup);
++    disposers.push(() => gate?.dispose());
++  }

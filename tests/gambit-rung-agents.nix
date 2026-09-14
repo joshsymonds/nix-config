@@ -76,13 +76,13 @@ in
     # session performs the effort itself (contracts/models.md).
     jq -e '
       (.roles | keys | sort)
-      == ["escalation", "finder", "orchestrator", "scout", "steelman", "test-runner", "verifier", "worker"]
+      == ["finder", "orchestrator", "scout", "steelman", "test-runner", "verifier", "worker"]
       and .roles.orchestrator.entry == "sol-high"
       and (.roles.orchestrator | has("readonly") | not)
     ' ${fullJson} >/dev/null
     jq -e '
       (.roles | keys | sort)
-      == ["escalation", "finder", "scout", "steelman", "test-runner", "verifier", "worker"]
+      == ["finder", "scout", "steelman", "test-runner", "verifier", "worker"]
     ' ${claudeOnlyJson} >/dev/null
     for map in ${fullJson} ${claudeOnlyJson}; do
       # Every entry rung and every ladder element names a rung the same map
@@ -94,15 +94,16 @@ in
       ' "$map" >/dev/null
     done
 
-    # The full map is the measured ladder: two fast rungs, then the
-    # orchestrator's own model, never an Opus escalation. Keep these expected
-    # ladders independent of the source declarations.
+    # The worker ladder is exactly its entry rung on both maps. Keep this
+    # expected ladder independent of the source declarations.
     jq -e '
       .roles.worker.entry == "luna-low"
-      and .roles.worker.ladder == ["luna-low", "sol-low", "astra-high"]
-      and .roles.escalation.entry == "sol-low"
-      and .roles.escalation.ladder == ["sol-low", "astra-high"]
+      and .roles.worker.ladder == ["luna-low"]
     ' ${fullJson} >/dev/null
+    jq -e '
+      .roles.worker.entry == "opus"
+      and .roles.worker.ladder == ["opus"]
+    ' ${claudeOnlyJson} >/dev/null
 
     # The fast policy, pinned independently of the route file: Luna and Terra
     # are always fast, Sol is fast only on its own fast route, Astra never.
@@ -230,7 +231,7 @@ in
       # and task-state tools. Keep the expected privileges independent of the
       # renderer, including the absence of the task extension's RPC dispatch.
       if [ "$rung" = sol-high ]; then
-        grep -qxF 'allowed_subagents: "astra-high, astra-xhigh-ro, luna-low, sol-low, sol-xhigh-ro, terra-medium-ro"' "$pi_plain"
+        grep -qxF 'allowed_subagents: "astra-xhigh-ro, luna-low, sol-xhigh-ro, terra-medium-ro"' "$pi_plain"
         grep -qxF 'extensions: ["pi-tasks", "${orchestratorProcessExtension}"]' "$pi_plain"
         grep -qE '^extensions: \["pi-tasks", "/nix/store/[^"/]+/orchestrator-processes/index.ts"\]$' "$pi_plain"
         test -f '${orchestratorProcessExtension}'

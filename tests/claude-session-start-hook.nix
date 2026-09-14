@@ -46,9 +46,12 @@ in
 
     alpha="$GAMBIT_HOME/$id/alpha"
     beta="$GAMBIT_HOME/$id/beta"
-    mkdir -p "$alpha" "$beta"
+    mkdir -p "$alpha" "$beta/efforts/2"
     jq -n '{epic_branch: "main"}' > "$alpha/state.json"
-    jq -n '{epic_branch: "epic/two"}' > "$beta/state.json"
+    jq -n '{
+      epic_branch: "epic/two",
+      efforts: [{n: 2, branch: "effort/demo-2"}]
+    }' > "$beta/state.json"
 
     # A decoy under a different repository-id, on a branch name the fixture
     # repository really is on. Only the repository half of the lookup can
@@ -85,6 +88,15 @@ in
       ' >/dev/null || fail "context in $1 wrongly names $3: $out"
     }
 
+    assert_phrase() {
+      local out rc
+      out=$(run_hook "$1") && rc=0 || rc=$?
+      test "$rc" -eq 0 || fail "hook exited $rc in $1"
+      printf '%s' "$out" | jq -e --arg phrase "$2" \
+        '.hookSpecificOutput.additionalContext | contains($phrase)' >/dev/null \
+        || fail "context in $1 does not contain expected phrase: $2"
+    }
+
     assert_silent() {
       local out rc
       out=$(run_hook "$1") && rc=0 || rc=$?
@@ -96,9 +108,18 @@ in
     # other — including the decoy from the other repository.
     assert_names "$repo" "$alpha" "$beta"
     assert_names "$repo" "$alpha" "$decoy"
+    assert_phrase "$repo" \
+      "Gambit record for this epic: $alpha. Read state.json before continuing."
 
     git -C "$repo" switch -q -c epic/two
     assert_names "$repo" "$beta" "$alpha"
+    assert_phrase "$repo" \
+      "Gambit record for this epic: $beta. Read state.json before continuing."
+
+    git -C "$repo" switch -q -c effort/demo-2
+    assert_names "$repo" "$beta/efforts/2/" "$alpha"
+    assert_phrase "$repo" \
+      "Gambit effort 2 for this epic: $beta/efforts/2/. Read its state.json and brief.md before continuing."
 
     # A branch with no record, and a directory that is not a git repository at
     # all: both print nothing and exit 0, so a session there is unaffected.
@@ -119,6 +140,8 @@ in
       ] | length == 1
     ' ${settingsJson} >/dev/null \
       || fail "settings.json does not register the hook for compact|resume"
+    jq -e '.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW == "300000"' ${settingsJson} >/dev/null \
+      || fail "settings.json does not set CLAUDE_CODE_AUTO_COMPACT_WINDOW to 300000"
 
     touch "$out"
   ''

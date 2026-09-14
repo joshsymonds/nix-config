@@ -658,6 +658,9 @@
           claude-session-start-hook = import ./tests/claude-session-start-hook.nix {
             pkgs = checkPkgs;
           };
+          claude-dispatch-guard-hook = import ./tests/claude-dispatch-guard-hook.nix {
+            pkgs = checkPkgs;
+          };
           direnv-shell = import ./tests/direnv-shell.nix {inherit pkgs;};
           gambit-rung-agents = import ./tests/gambit-rung-agents.nix {
             pkgs = checkPkgs;

@@ -15,7 +15,9 @@
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "300000",
     "BASH_MAX_TIMEOUT_MS": "600000",
-    "DISABLE_AUTOUPDATER": "1"
+    "DISABLE_AUTOUPDATER": "1",
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "300000",
+    "GAMBIT_VALIDATE_DISPATCH": "__GAMBIT_VALIDATE_DISPATCH__"
   },
   "statusLine": {
     "type": "command",
@@ -35,6 +37,15 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/destructive-guard.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/gambit-dispatch-guard.py"
           }
         ]
       }

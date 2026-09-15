@@ -19,6 +19,7 @@ in {
     ./kitty
     ./tmux
     ./git
+    ./gws
     ./gpg
     ./k9s
     ./lazygit

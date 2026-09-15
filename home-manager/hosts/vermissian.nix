@@ -68,5 +68,15 @@
     work here, often via Claude Code. Highest core count + RAM in the fleet,
     so it's the default place for parallel compiles, large nix builds, and
     long-running tasks.
+
+    ## Google Workspace (Sheets, Drive, Docs)
+    `gws` is on PATH and is the way to read and write Josh's Google
+    documents; use it directly from the shell rather than looking for an
+    MCP. It defaults to the work account (jsymonds@joinklover.com); set
+    `GWS_ACCOUNT=personal` for josh@joshsymonds.com. Examples:
+    `gws sheets spreadsheets values get --params '{"spreadsheetId":"...","range":"Sheet1!A1:D50"}'`,
+    `gws drive files list --params '{"q":"name contains \"budget\""}'`,
+    `gws schema sheets.spreadsheets.values.update` for any method's shape.
+    Wrapper and per-account layout: home-manager/gws/default.nix.
   '';
 }

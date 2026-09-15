@@ -26,21 +26,17 @@
   # the rung a fast rung on both harnesses: the Claude Code agent gets it from
   # the Seat, the Pi twin from the codex-fast extension below.
   #
-  # The worker ladder is the one tiltyard's matrix data supports: two cheap
-  # low-effort rungs (Luna fast, Sol standard), then the orchestrator's own
-  # model. Same-seat retries convert
-  # ~2 points, terra between sol-low and sol converts 0/32 failures, and the
-  # rungs above sol-low convert ~12% of what sol-low fails — so sol-xhigh and
-  # astra-xhigh stay for review and steelman only.
+  # The worker role uses an entry-only ladder: Luna is cheap and fast, while
+  # higher-effort review rungs remain reserved for their advisory roles.
   gambitRungs = {
     # Worker entry rung: Luna, always on the fast tier.
     "luna-low" = {
       route = "chatgpt/luna";
       effort = "low";
     };
-    # Worker second rung and escalation entry: Sol at standard speed. It ran
-    # on the fast tier from 2026-09-09 to 2026-09-11 and was the largest
-    # Codex-quota draw on the ladder, so it went back to standard.
+    # Retained standard-speed rung: Sol. It ran on the fast tier from
+    # 2026-09-09 to 2026-09-11 and was the largest Codex-quota draw on the
+    # ladder, so it went back to standard.
     "sol-low" = {
       route = "chatgpt/sol";
       effort = "low";
@@ -185,8 +181,8 @@
     ) (lib.attrNames (lib.filterAttrs (_: spec: builtins.elem spec.route routes) optionalClaudeRungs));
 
   # Nested dispatch is opt-in independently of extension loading. Permit the
-  # Orchestrator to reach exactly the non-Orchestrator role targets, including
-  # escalation ladders and advisory variants, not arbitrary agents or itself.
+  # Orchestrator to reach exactly the non-Orchestrator role targets and advisory
+  # variants, not arbitrary agents or itself.
   piOrchestratorChildren = lib.sort builtins.lessThan (lib.unique (lib.concatMap (
     role:
       map (rung: let
@@ -332,7 +328,7 @@
   #     parameter; a readonly role takes readonly_agent instead. This is the
   #     only way a foreign model id reaches the wire (see mkRungAgent above).
   #   - {model} — dispatch general-purpose/Explore with that enum model.
-  # A role names its entry rung, plus the escalation ladder where it has one;
+  # A role names its entry rung. The worker's ladder repeats only that entry;
   # `readonly = true` marks an advisory role that must not write.
   gambitModelsFull = {
     rungs =
@@ -349,11 +345,7 @@
     roles = {
       worker = {
         entry = "luna-low";
-        ladder = ["luna-low" "sol-low" "astra-high"];
-      };
-      escalation = {
-        entry = "sol-low";
-        ladder = ["sol-low" "astra-high"];
+        ladder = ["luna-low"];
       };
       scout = {
         entry = "terra-medium";
@@ -387,11 +379,7 @@
     roles = {
       worker = {
         entry = "opus";
-        ladder = ["opus" "fable"];
-      };
-      escalation = {
-        entry = "fable";
-        ladder = ["fable"];
+        ladder = ["opus"];
       };
       scout = {
         entry = "sonnet";

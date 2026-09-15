@@ -80,7 +80,10 @@
 
   settingsJson = assert chatgptDefaultKnown;
     mkSettingsJson "base" (
-      lib.optionalAttrs (patchbayBaseUrl != null) {
+      {
+        env.GAMBIT_VALIDATE_DISPATCH = "${gambitSrc}/skills/executing-plans/scripts/validate_dispatch.py";
+      }
+      // lib.optionalAttrs (patchbayBaseUrl != null) {
         env.ANTHROPIC_BASE_URL = patchbayBaseUrl;
       }
       // lib.optionalAttrs (defaultModelIsChatgpt && !codexUpstream) {
@@ -656,6 +659,10 @@ in {
           };
           ".claude/hooks/destructive-guard.py" = {
             source = ./hooks/destructive-guard.py;
+            executable = true;
+          };
+          ".claude/hooks/gambit-dispatch-guard.py" = {
+            source = ./hooks/gambit-dispatch-guard.py;
             executable = true;
           };
           ".claude/hooks/gambit-record-context.sh" = {

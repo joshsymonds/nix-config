@@ -15,8 +15,8 @@
 #   first seven characters of the root commit.  Using the common dir rather
 #   than the per-worktree git dir is what makes every linked worktree of a
 #   repository — the epic workspace and each worker's — resolve to the same
-#   record.  The branch is then matched against the `epic_branch` field of each
-#   candidate record's state.json, so only the epic being worked on is named.
+#   record.  An epic branch is matched against `epic_branch`; an effort branch
+#   is matched against its branch entry in `efforts`, so the active work is named.
 #
 # STDOUT DISCIPLINE
 #   Claude Code injects SessionStart stdout into the session as context, so
@@ -49,12 +49,31 @@ for state in "$record_home/$repository_id"/*/state.json; do
   # An unmatched glob stays literal, so this also covers "no records at all".
   [ -f "$state" ] || continue
   epic_branch=$(jq -r '.epic_branch // empty' "$state" 2>/dev/null) || continue
-  [ "$epic_branch" = "$branch" ] || continue
-  jq -nc --arg dir "$(dirname "$state")" '{
+  if [ "$epic_branch" = "$branch" ]; then
+    jq -nc --arg dir "$(dirname "$state")" '{
+      hookSpecificOutput: {
+        hookEventName: "SessionStart",
+        additionalContext: ("Gambit record for this epic: " + $dir
+          + ". Read state.json before continuing.")
+      }
+    }'
+    continue
+  fi
+
+  case "$branch" in
+    effort/*-*) ;;
+    *) continue ;;
+  esac
+  effort_n=$(jq -r --arg branch "$branch" '
+    .efforts[]? | select(.branch == $branch) | .n // empty
+  ' "$state" 2>/dev/null) || continue
+  [ -n "$effort_n" ] || continue
+  jq -nc --arg dir "$(dirname "$state")" --arg n "$effort_n" '{
     hookSpecificOutput: {
       hookEventName: "SessionStart",
-      additionalContext: ("Gambit record for this epic: " + $dir
-        + ". Read state.json before continuing.")
+      additionalContext: ("Gambit effort " + $n + " for this epic: "
+        + $dir + "/efforts/" + $n
+        + "/. Read its state.json and brief.md before continuing.")
     }
   }'
 done

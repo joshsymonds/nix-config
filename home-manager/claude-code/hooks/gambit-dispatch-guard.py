@@ -44,7 +44,7 @@ def load_json_stdin() -> dict[str, Any]:
     return value
 
 
-def worker_agents(registry_path: str) -> set[str]:
+def worker_agents(registry_path: str) -> tuple[set[str], str]:
     with open(registry_path, encoding="utf-8") as registry_file:
         registry = json.load(registry_file)
 
@@ -71,7 +71,7 @@ def worker_agents(registry_path: str) -> set[str]:
         if not isinstance(rung, dict) or not isinstance(rung.get("agent"), str):
             raise ValueError("registry worker rung is invalid")
         agents.add(rung["agent"])
-    return agents
+    return agents, entry
 
 
 def prompt_path(prompt: Any, label: str) -> str | None:
@@ -84,6 +84,17 @@ def prompt_path(prompt: Any, label: str) -> str | None:
             if value and os.path.isabs(value):
                 return value
             return None
+    return None
+
+
+def prompt_value(prompt: Any, label: str) -> str | None:
+    if not isinstance(prompt, str):
+        return None
+    prefix = f"{label}: "
+    for line in prompt.splitlines():
+        if line.startswith(prefix):
+            value = line[len(prefix) :].strip()
+            return value or None
     return None
 
 
@@ -101,7 +112,7 @@ def main() -> None:
 
     try:
         registry_path = os.path.expanduser(os.environ.get(MODELS_ENV, DEFAULT_MODELS))
-        agents = worker_agents(registry_path)
+        agents, entry_rung = worker_agents(registry_path)
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
         allow()
 
@@ -110,16 +121,22 @@ def main() -> None:
 
     brief = prompt_path(tool_input.get("prompt"), "Brief")
     workspace = prompt_path(tool_input.get("prompt"), "Workspace")
-    if brief is None or workspace is None:
+    record = prompt_path(tool_input.get("prompt"), "Record")
+    task = prompt_value(tool_input.get("prompt"), "Task")
+    if brief is None or workspace is None or record is None or task is None:
         missing = []
         if brief is None:
             missing.append("Brief")
         if workspace is None:
             missing.append("Workspace")
+        if record is None:
+            missing.append("Record")
+        if task is None:
+            missing.append("Task")
         deny(
             "Gambit worker dispatch is blocked because the prompt is missing "
             + " and ".join(missing)
-            + " line(s) with absolute paths."
+            + " line(s)."
         )
 
     validator = os.environ.get(VALIDATOR_ENV, "")
@@ -132,7 +149,20 @@ def main() -> None:
 
     try:
         result = subprocess.run(
-            ["python3", validator_path, "--brief", brief, "--workspace", workspace],
+            [
+                "python3",
+                validator_path,
+                "--brief",
+                brief,
+                "--workspace",
+                workspace,
+                "--record",
+                record,
+                "--task",
+                task,
+                "--entry-rung",
+                entry_rung,
+            ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,

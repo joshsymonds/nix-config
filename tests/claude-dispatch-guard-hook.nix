@@ -22,6 +22,7 @@ in
     export MARKER="$PWD/validator-args"
     mkdir -p "$HOME" "$PWD/workspace"
     : > "$PWD/brief.md"
+    : > "$PWD/state.json"
 
     # Keep this registry independent of the installed roster. The worker entry
     # and ladder deliberately name the same writing agent, while another rung
@@ -60,7 +61,9 @@ PY
     }
 
     prompt="Brief: $PWD/brief.md
-Workspace: $PWD/workspace"
+Workspace: $PWD/workspace
+Record: $PWD/state.json
+Task: task-123"
 
     # Other tools never reach the dispatch guard, even with a worker agent.
     out=$(run_hook Bash worker-agent "no marker")
@@ -79,6 +82,29 @@ Workspace: $PWD/workspace"
       and (.hookSpecificOutput.permissionDecisionReason | contains("Brief"))
     ' >/dev/null || fail "missing Brief line was not denied: $out"
 
+    # Record and Task are required, and neither missing line may reach the validator.
+    missing_record_prompt="Brief: $PWD/brief.md
+Workspace: $PWD/workspace
+Task: task-123"
+    rm -f "$MARKER"
+    out=$(run_hook Agent worker-agent "$missing_record_prompt")
+    printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
+      .hookSpecificOutput.permissionDecision == "deny"
+      and (.hookSpecificOutput.permissionDecisionReason | contains("Record"))
+    ' >/dev/null || fail "missing Record line was not denied: $out"
+    test ! -e "$MARKER" || fail "validator ran without Record: $(cat "$MARKER")"
+
+    missing_task_prompt="Brief: $PWD/brief.md
+Workspace: $PWD/workspace
+Record: $PWD/state.json"
+    rm -f "$MARKER"
+    out=$(run_hook Agent worker-agent "$missing_task_prompt")
+    printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
+      .hookSpecificOutput.permissionDecision == "deny"
+      and (.hookSpecificOutput.permissionDecisionReason | contains("Task"))
+    ' >/dev/null || fail "missing Task line was not denied: $out"
+    test ! -e "$MARKER" || fail "validator ran without Task: $(cat "$MARKER")"
+
     # A valid worker dispatch invokes the configured validator and remains
     # silent when that validator succeeds.
     unset FAIL
@@ -86,10 +112,14 @@ Workspace: $PWD/workspace"
     out=$(run_hook Agent worker-agent "$prompt")
     test -z "$out" || fail "passing validation was denied: $out"
     test -f "$MARKER" || fail "validator was not invoked"
-    grep -Fqx -- "--brief" "$MARKER" || fail "validator missing --brief: $(cat "$MARKER")"
-    grep -Fqx "$PWD/brief.md" "$MARKER" || fail "validator missing brief path: $(cat "$MARKER")"
-    grep -Fqx -- "--workspace" "$MARKER" || fail "validator missing --workspace: $(cat "$MARKER")"
-    grep -Fqx "$PWD/workspace" "$MARKER" || fail "validator missing workspace path: $(cat "$MARKER")"
+    expected_args="$(printf '%s\n' \
+      --brief "$PWD/brief.md" \
+      --workspace "$PWD/workspace" \
+      --record "$PWD/state.json" \
+      --task task-123 \
+      --entry-rung worker-rung)"
+    test "$(cat "$MARKER")" = "$expected_args" \
+      || fail "validator argv mismatch: $(cat "$MARKER")"
 
     # A validator failure denies and exposes its diagnostic in the reason.
     export FAIL=1

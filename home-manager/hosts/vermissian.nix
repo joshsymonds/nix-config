@@ -77,6 +77,8 @@
     `gws sheets spreadsheets values get --params '{"spreadsheetId":"...","range":"Sheet1!A1:D50"}'`,
     `gws drive files list --params '{"q":"name contains \"budget\""}'`,
     `gws schema sheets.spreadsheets.values.update` for any method's shape.
-    Wrapper and per-account layout: home-manager/gws/default.nix.
+    Auth is borrowed from gcloud (Drive scope), so a failure naming
+    `--enable-gdrive-access` means that account needs a gcloud re-login.
+    Wrapper and account mapping: home-manager/gws/default.nix.
   '';
 }

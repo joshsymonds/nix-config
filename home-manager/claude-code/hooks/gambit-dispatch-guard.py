@@ -3,8 +3,8 @@
 
 The worker's brief is the source of truth for each dispatch. This hook only
 runs the validator for the writing agents named by the worker role's entry and
-ladder in the local Gambit registry. Malformed input and an unreadable registry
-fail open, matching destructive-guard.py's documented policy.
+ladder in the local Gambit registry. Malformed input fails open, while registry
+failures deny rung-shaped agents and leave unrelated agents untouched.
 """
 import json
 import os
@@ -74,6 +74,14 @@ def worker_agents(registry_path: str) -> tuple[set[str], str]:
     return agents, entry
 
 
+def is_rung_agent(agent: Any) -> bool:
+    if not isinstance(agent, str):
+        return False
+    if agent.endswith("-ro"):
+        agent = agent[:-3]
+    return agent.endswith(("-low", "-medium", "-high", "-xhigh"))
+
+
 def prompt_path(prompt: Any, label: str) -> str | None:
     if not isinstance(prompt, str):
         return None
@@ -110,13 +118,20 @@ def main() -> None:
     if not isinstance(tool_input, dict):
         allow()
 
+    agent = tool_input.get("subagent_type")
+    registry_path = os.path.expanduser(os.environ.get(MODELS_ENV, DEFAULT_MODELS))
     try:
-        registry_path = os.path.expanduser(os.environ.get(MODELS_ENV, DEFAULT_MODELS))
         agents, entry_rung = worker_agents(registry_path)
-    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+        if is_rung_agent(agent):
+            deny(
+                "Gambit worker dispatch is blocked because the "
+                f"{MODELS_ENV} registry could not be loaded at "
+                f"{registry_path}: {error}."
+            )
         allow()
 
-    if tool_input.get("subagent_type") not in agents:
+    if agent not in agents:
         allow()
 
     brief = prompt_path(tool_input.get("prompt"), "Brief")

@@ -130,12 +130,32 @@ Record: $PWD/state.json"
     ' >/dev/null || fail "validator failure was not denied with its message: $out"
     unset FAIL
 
-    # Malformed hook input and an unreadable registry fail open.
+    # Malformed hook input still fails open because it is not a dispatch the
+    # hook can read.
     out=$(printf '{not-json' | ${pkgs.python3}/bin/python3 ${hook})
     test -z "$out" || fail "malformed input was denied: $out"
+
+    # A malformed registry denies rung-shaped agents and names the registry
+    # problem, while unrelated agents remain untouched.
+    malformed_models="$PWD/malformed-models.json"
+    printf '{not-json' > "$malformed_models"
+    export GAMBIT_MODELS="$malformed_models"
+    out=$(run_hook Agent some-rung-high "$prompt")
+    printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
+      .hookSpecificOutput.permissionDecision == "deny"
+      and (.hookSpecificOutput.permissionDecisionReason | contains("GAMBIT_MODELS"))
+    ' >/dev/null || fail "malformed registry allowed rung dispatch: $out"
+    out=$(run_hook Agent general-purpose "$prompt")
+    test -z "$out" || fail "malformed registry denied unrelated agent: $out"
+
+    # A missing registry denies a read-only rung-shaped agent as well.
     export GAMBIT_MODELS="$PWD/missing-models.json"
-    out=$(run_hook Agent worker-agent "$prompt")
-    test -z "$out" || fail "unreadable registry was denied: $out"
+    out=$(run_hook Agent some-rung-low-ro "$prompt")
+    printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
+      .hookSpecificOutput.permissionDecision == "deny"
+      and (.hookSpecificOutput.permissionDecisionReason | contains("GAMBIT_MODELS"))
+    ' >/dev/null || fail "missing registry allowed rung dispatch: $out"
+    export GAMBIT_MODELS="$PWD/models.json"
 
     # An unset or missing validator is a deny, rather than an accidental pass.
     export GAMBIT_MODELS="$PWD/models.json"

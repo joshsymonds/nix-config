@@ -106,6 +106,11 @@
     lanzaboote = {
       url = "github:nix-community/lanzaboote/v1.1.0";
       inputs.nixpkgs.follows = "nixpkgs";
+      # v1.1.0 carries a June 2026 rust-overlay whose toolchain wrapper still
+      # reads stdenv.isLinux/isDarwin (deprecation warning on every lanzaboote
+      # host eval). lanzaboote pins its rustc via a rustup toolchain file, so
+      # following our newer rust-overlay changes only the wrapper recipe.
+      inputs.rust-overlay.follows = "rust-overlay";
     };
 
     # DankMaterialShell — Quickshell-based desktop shell for niri (and others).
@@ -270,7 +275,7 @@
 
     # Patchbay — per-host Anthropic Messages API gateway (Claude Code → per-project models)
     patchbay = {
-      url = "git+ssh://git@github.com/joshsymonds/patchbay.git?ref=main&rev=d1e0128915edf5c711edbd46dd8b9525da275d19";
+      url = "git+ssh://git@github.com/joshsymonds/patchbay.git?ref=main&rev=7b6e46c73fce367a51d2784d62839f0883c77b24";
       flake = false;
     };
 
@@ -660,6 +665,7 @@
           };
           claude-dispatch-guard-hook = import ./tests/claude-dispatch-guard-hook.nix {
             pkgs = checkPkgs;
+            renderedSettings = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home.file.".claude/settings.base.json".source;
           };
           direnv-shell = import ./tests/direnv-shell.nix {inherit pkgs;};
           gambit-rung-agents = import ./tests/gambit-rung-agents.nix {

@@ -431,7 +431,7 @@ in {
     hardware.enableAllFirmware = true;
 
     nix.settings = {
-      experimental-features = "nix-command flakes";
+      experimental-features = ["nix-command" "flakes"];
       extra-substituters = [
         caches.nixCommunity.url
         caches.joshsymonds.url

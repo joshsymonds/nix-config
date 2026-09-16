@@ -216,7 +216,7 @@ in {
                 home-manager.expr = ''(${flakeRef}).homeConfigurations."joshsymonds@${hostname}".options'';
               }
               // (
-                if pkgs.stdenv.isDarwin
+                if pkgs.stdenv.hostPlatform.isDarwin
                 then {nix-darwin.expr = "(${flakeRef}).darwinConfigurations.${hostname}.options";}
                 else {nixos.expr = "(${flakeRef}).nixosConfigurations.${hostname}.options";}
               );

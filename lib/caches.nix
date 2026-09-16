@@ -24,7 +24,8 @@
     publicKey = "niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964=";
   };
 
-  # ─── GPU / ML caches (gated on hardware.gpu-nvidia.enable) ─────────
+  # ─── GPU / ML caches (gated on nix.cudaCache.enable, which ─────────
+  # ─── defaults to hardware.gpu-nvidia.enable) ───────────────────────
   #
   # SomeoneSerge/nixpkgs-cuda-ci builds nixpkgs packages with
   # cudaSupport=true and pushes them here. Without this, every CUDA-

@@ -79,7 +79,7 @@ in {
           nvd
           parallel
         ]
-        ++ lib.optionals (!stdenv.isDarwin) [parted visidata]
+        ++ lib.optionals (!stdenv.hostPlatform.isDarwin) [parted visidata]
         ++ [
           yazi
           ripgrep

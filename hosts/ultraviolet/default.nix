@@ -67,9 +67,7 @@ in
     performance.cpuVendor = "intel";
 
     # Cap journald on the root SSD (had grown past 4G unbounded)
-    services.journald.extraConfig = ''
-      SystemMaxUse=1G
-    '';
+    services.journald.settings.Journal.SystemMaxUse = "1G";
 
     # Additional NFS mount for Home Assistant backups
     fileSystems."/mnt/backups" = {

@@ -23,7 +23,15 @@
   ...
 }: let
   caches = import ../../lib/caches.nix;
-  diskoPkg = inputs.disko.packages.${pkgs.stdenv.hostPlatform.system}.disko;
+  # Same disko source the nixosModules come from, built with nixpkgs'
+  # recipe: the flake's own package.nix still reads stdenv.isDarwin and
+  # warns on every installer eval, while the nixpkgs recipe copies the
+  # identical file set without it. Keeping src = inputs.disko keeps the
+  # CLI's bundled lib in lock-step with the module the hosts evaluate.
+  diskoPkg = pkgs.disko.overrideAttrs (_: {
+    version = "1.13.0-unstable-${inputs.disko.lastModifiedDate}";
+    src = inputs.disko;
+  });
 
   # The install logic itself — a real .sh file with shellcheck and bats
   # coverage. Inline shell in the systemd-service wrapper below is just
@@ -62,7 +70,7 @@ in {
   # may need it. trusted-users restricted to root — the installer is
   # not a development environment.
   nix.settings = {
-    experimental-features = "nix-command flakes";
+    experimental-features = ["nix-command" "flakes"];
     extra-substituters = [
       caches.nixCommunity.url
       caches.joshsymonds.url

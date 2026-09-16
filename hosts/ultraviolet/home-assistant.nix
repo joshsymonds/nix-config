@@ -991,9 +991,6 @@ in {
 
     # Configure directory for additional YAML files
     configDir = "/var/lib/hass";
-
-    # Open firewall port (only localhost, Caddy handles external)
-    openFirewall = false;
   };
 
   # Add Home Assistant to Caddy reverse proxy

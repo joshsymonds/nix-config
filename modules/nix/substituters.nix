@@ -34,8 +34,23 @@
   # host, without remembering to also touch this file.
   hasGpuNvidia = config.hardware.gpu-nvidia.enable or false;
   hasSteam = config.programs.steam.enable or false;
+  wantsCuda = config.nix.cudaCache.enable;
 in {
-  nix.settings = {
+  options.nix.cudaCache.enable = lib.mkOption {
+    type = lib.types.bool;
+    default = hasGpuNvidia;
+    defaultText = lib.literalExpression "config.hardware.gpu-nvidia.enable";
+    description = ''
+      Trust and pull from cache.nixos-cuda.org. On by default wherever
+      hardware.gpu-nvidia is enabled. Set it explicitly on a GPU-less
+      host that still *evaluates or builds* cudaSupport closures — a
+      dev server entering a CUDA devenv, or verifying a GPU host's
+      system closure — so those paths download instead of compiling
+      locally (torch + onnxruntime + opencv is ~12 h on 32 cores).
+    '';
+  };
+
+  config.nix.settings = {
     extra-substituters =
       # ─── Universal (every NixOS host) ──────────────────────
       [
@@ -44,11 +59,11 @@ in {
         caches.devenv.url
         caches.niri.url
       ]
-      # ─── GPU / ML (gated on hardware.gpu-nvidia.enable) ────
+      # ─── GPU / ML (nix.cudaCache.enable; defaults to gpu-nvidia) ─
       # SomeoneSerge/nixpkgs-cuda-ci's cudaSupport=true builds.
       # Without this, onnxruntime/ollama-cuda/pytorch rebuild
       # from source — ~45 min for onnxruntime alone.
-      ++ lib.optionals hasGpuNvidia [
+      ++ lib.optionals wantsCuda [
         caches.cuda.url
       ]
       # ─── Gaming (gated on programs.steam.enable) ───────────
@@ -67,7 +82,7 @@ in {
         caches.devenv.publicKey
         caches.niri.publicKey
       ]
-      ++ lib.optionals hasGpuNvidia [
+      ++ lib.optionals wantsCuda [
         caches.cuda.publicKey
       ]
       ++ lib.optionals hasSteam [

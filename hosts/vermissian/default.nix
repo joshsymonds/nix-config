@@ -93,6 +93,14 @@ in
     };
 
     # Host-specific nix settings (common.nix provides defaults)
+    #
+    # No GPU here, but this host consumes cudaSupport closures anyway:
+    # ~/Personal/backlot's devenv builds torch/onnxruntime/opencv with
+    # cudaSupport=true, and gnomon's system closure gets verified here
+    # after flake bumps. Without the CUDA cache the first backlot entry
+    # compiled that stack for 12 hours (Sep 15 2026) even though every
+    # path was already in cache.nixos-cuda.org.
+    nix.cudaCache.enable = true;
 
     networking = {
       useDHCP = false;

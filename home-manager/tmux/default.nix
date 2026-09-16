@@ -115,7 +115,7 @@ in {
         # styled pill string for cpu/ram/net/disk + failed-units alert.
         # Linux-only: script reads /proc + calls systemctl, and pkgs.systemd
         # (in runtimeInputs) has no aarch64-darwin support.
-        ${optionalString pkgs.stdenv.isLinux ''set -g status-right "#(${tmuxStatus}/bin/tmux-status)"''}
+        ${optionalString pkgs.stdenv.hostPlatform.isLinux ''set -g status-right "#(${tmuxStatus}/bin/tmux-status)"''}
 
         # Pane borders — Catppuccin Mocha colors
         set -g pane-border-style "fg=#313244"
@@ -160,7 +160,7 @@ in {
     # value via hm-session-vars.sh). Without this, the systemd server lands in
     # /tmp/tmux-UID/ and the shell server lands in /run/user/UID/tmux-UID/,
     # producing two parallel servers and an asymmetric view for the reaper.
-    systemd.user.services.tmux = mkIf pkgs.stdenv.isLinux {
+    systemd.user.services.tmux = mkIf pkgs.stdenv.hostPlatform.isLinux {
       Unit = {
         Description = "tmux server";
         # Never tear down a running tmux server during home-manager activation.
@@ -195,7 +195,7 @@ in {
 
     # Orphan reaper: kills stale sessions (>48h idle) and orphans inside live
     # scopes. Two-pass design — see scripts/tmux-orphan-reaper.sh. Linux only.
-    systemd.user.services.tmux-orphan-reaper = mkIf pkgs.stdenv.isLinux {
+    systemd.user.services.tmux-orphan-reaper = mkIf pkgs.stdenv.hostPlatform.isLinux {
       Unit = {
         Description = "Reap orphans in tmux pane scopes; kill stale sessions";
       };
@@ -205,7 +205,7 @@ in {
       };
     };
 
-    systemd.user.timers.tmux-orphan-reaper = mkIf pkgs.stdenv.isLinux {
+    systemd.user.timers.tmux-orphan-reaper = mkIf pkgs.stdenv.hostPlatform.isLinux {
       Unit = {
         Description = "Run tmux orphan reaper every 10 minutes";
       };

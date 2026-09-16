@@ -34,7 +34,7 @@ in
     pname = "golangci-lint-bin";
     inherit version src;
 
-    nativeBuildInputs = lib.optionals stdenv.isLinux [autoPatchelfHook];
+    nativeBuildInputs = lib.optionals stdenv.hostPlatform.isLinux [autoPatchelfHook];
 
     dontUnpack = true;
 

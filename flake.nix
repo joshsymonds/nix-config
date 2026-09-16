@@ -106,6 +106,11 @@
     lanzaboote = {
       url = "github:nix-community/lanzaboote/v1.1.0";
       inputs.nixpkgs.follows = "nixpkgs";
+      # v1.1.0 carries a June 2026 rust-overlay whose toolchain wrapper still
+      # reads stdenv.isLinux/isDarwin (deprecation warning on every lanzaboote
+      # host eval). lanzaboote pins its rustc via a rustup toolchain file, so
+      # following our newer rust-overlay changes only the wrapper recipe.
+      inputs.rust-overlay.follows = "rust-overlay";
     };
 
     # DankMaterialShell — Quickshell-based desktop shell for niri (and others).

@@ -96,7 +96,7 @@ in {
       # grim/slurp/wl-clipboard are installed system-side in modules/desktop/niri.nix.
       satty
 
-      libreoffice-fresh
+      libreoffice
     ];
   };
 

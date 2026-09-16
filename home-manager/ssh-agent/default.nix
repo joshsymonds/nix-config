@@ -60,12 +60,12 @@ in {
       enableDefaultConfig = false;
       extraConfig = ''
         # Use the systemd/launchd managed SSH agent socket
-        ${lib.optionalString pkgs.stdenv.isLinux ''
+        ${lib.optionalString pkgs.stdenv.hostPlatform.isLinux ''
           IdentityAgent /run/user/1000/ssh-agent.socket
         ''}
 
         # macOS specific: use system keychain for passphrase caching
-        ${lib.optionalString pkgs.stdenv.isDarwin ''
+        ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
           UseKeychain yes
           IdentityFile ~/.ssh/github
         ''}
@@ -84,7 +84,7 @@ in {
   };
 
   # Linux: systemd user service for SSH agent
-  systemd.user.services.ssh-agent = lib.mkIf pkgs.stdenv.isLinux {
+  systemd.user.services.ssh-agent = lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
     Unit = {
       Description = "SSH Agent";
       Documentation = "man:ssh-agent(1)";
@@ -105,7 +105,7 @@ in {
   };
 
   # Linux: Set SSH_AUTH_SOCK environment variable
-  home.sessionVariables = lib.mkIf pkgs.stdenv.isLinux {
+  home.sessionVariables = lib.mkIf pkgs.stdenv.hostPlatform.isLinux {
     SSH_AUTH_SOCK = sshAgentSocket;
   };
 

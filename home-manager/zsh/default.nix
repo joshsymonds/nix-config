@@ -5,7 +5,7 @@
   hostname ? null,
   ...
 }: let
-  isDarwin = pkgs.stdenv.isDarwin;
+  isDarwin = pkgs.stdenv.hostPlatform.isDarwin;
   autoAttachRemoteTmux = hostname != null && !isDarwin;
 
   # Pre-render shell-init scripts at Nix build time so each new zsh sources
@@ -42,7 +42,7 @@ in {
       FZF_DEFAULT_COMMAND = "fd --type f --strip-cwd-prefix --hidden --exclude .git";
       FZF_CTRL_T_COMMAND = "fd --type f --strip-cwd-prefix --hidden --exclude .git";
     }
-    // lib.optionalAttrs pkgs.stdenv.isLinux {
+    // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
       PRISMA_SCHEMA_ENGINE_BINARY = "${pkgs.prisma-engines}/bin/schema-engine";
       PRISMA_QUERY_ENGINE_LIBRARY = "${pkgs.prisma-engines}/lib/libquery_engine.node";
       PRISMA_QUERY_ENGINE_BINARY = "${pkgs.prisma-engines}/bin/query-engine";

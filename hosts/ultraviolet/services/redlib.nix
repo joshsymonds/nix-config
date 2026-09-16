@@ -25,6 +25,14 @@ in {
   systemd.services.redlib = {
     serviceConfig.EnvironmentFile = config.age.secrets."redlib-collections".path;
     restartTriggers = [config.age.secrets."redlib-collections".file];
+
+    # Reddit 403-blocked this host's home IP on 2026-09-16 after redlib's
+    # OAuth token rollover looked like abuse (the morning-room audit pushed
+    # ~1200 requests through it in minutes). Send Reddit traffic out through
+    # gluetun's HTTP proxy (sabnzbd-vpn.nix, Mullvad exit) instead. redlib's
+    # wreq client honours HTTPS_PROXY; only reddit.com is ever contacted.
+    environment.HTTPS_PROXY = "http://127.0.0.1:8888";
+    after = ["podman-gluetun.service"];
   };
 
   # Cloudflare Tunnel handles public exposure (redlib.husbuddies.gay) directly,

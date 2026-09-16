@@ -1,6 +1,9 @@
 # Behavioural check for the PreToolUse hook that validates gambit worker
 # dispatches before Claude Code launches them.
-{pkgs}: let
+{
+  pkgs,
+  renderedSettings,
+}: let
   hook = ../home-manager/claude-code/hooks/gambit-dispatch-guard.py;
   settingsJson = ../home-manager/claude-code/settings.json;
   defaultNix = ../home-manager/claude-code/default.nix;
@@ -176,8 +179,14 @@ Record: $PWD/state.json"
     ' ${settingsJson} >/dev/null || fail "settings do not register dispatch guard"
     ${pkgs.jq}/bin/jq -e '.env.GAMBIT_VALIDATE_DISPATCH == "__GAMBIT_VALIDATE_DISPATCH__"' ${settingsJson} >/dev/null \
       || fail "settings do not reserve validator environment"
-    grep -Fq 'env.GAMBIT_VALIDATE_DISPATCH = "''${gambitSrc}/skills/executing-plans/scripts/validate_dispatch.py"' ${defaultNix} \
+    grep -Fq 'GAMBIT_VALIDATE_DISPATCH = "''${gambitSrc}/skills/executing-plans/scripts/validate_dispatch.py"' ${defaultNix} \
       || fail "default.nix does not inject Gambit validator path"
+    # The rendered settings must carry the substituted path alongside the
+    # patchbay base URL: a shallow `//` merge of two env overlays drops one.
+    ${pkgs.jq}/bin/jq -e '.env.GAMBIT_VALIDATE_DISPATCH | test("/skills/executing-plans/scripts/validate_dispatch\\.py$")' ${renderedSettings} >/dev/null \
+      || fail "rendered settings do not substitute the Gambit validator path"
+    ${pkgs.jq}/bin/jq -e '.env.ANTHROPIC_BASE_URL | startswith("http://127.0.0.1:")' ${renderedSettings} >/dev/null \
+      || fail "rendered settings lost the patchbay base URL"
 
     touch "$result_path"
   ''

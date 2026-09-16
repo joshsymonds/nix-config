@@ -660,6 +660,7 @@
           };
           claude-dispatch-guard-hook = import ./tests/claude-dispatch-guard-hook.nix {
             pkgs = checkPkgs;
+            renderedSettings = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home.file.".claude/settings.base.json".source;
           };
           direnv-shell = import ./tests/direnv-shell.nix {inherit pkgs;};
           gambit-rung-agents = import ./tests/gambit-rung-agents.nix {

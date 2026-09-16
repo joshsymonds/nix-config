@@ -80,11 +80,19 @@
 
   settingsJson = assert chatgptDefaultKnown;
     mkSettingsJson "base" (
+      # One env attrset: the overlays below are joined with `//`, which is a
+      # shallow merge, so two overlays each carrying an `env` key would keep
+      # only the last one and leave the __GAMBIT_VALIDATE_DISPATCH__
+      # placeholder unsubstituted (observed 2026-09-15 on vermissian: the
+      # dispatch guard denied every worker launch).
       {
-        env.GAMBIT_VALIDATE_DISPATCH = "${gambitSrc}/skills/executing-plans/scripts/validate_dispatch.py";
-      }
-      // lib.optionalAttrs (patchbayBaseUrl != null) {
-        env.ANTHROPIC_BASE_URL = patchbayBaseUrl;
+        env =
+          {
+            GAMBIT_VALIDATE_DISPATCH = "${gambitSrc}/skills/executing-plans/scripts/validate_dispatch.py";
+          }
+          // lib.optionalAttrs (patchbayBaseUrl != null) {
+            ANTHROPIC_BASE_URL = patchbayBaseUrl;
+          };
       }
       // lib.optionalAttrs (defaultModelIsChatgpt && !codexUpstream) {
         model = claudeFallback.model;

@@ -227,6 +227,10 @@
   #     exactly that the terminal rung is native Claude. No gambit ladder ends
   #     at fable, so fable needs no pin — fable-inheriting subagents (default
   #     Explores, background forks) take the Luna default.
+  #   * claude-sonnet-5 -> anthropic. The `sonnet` rung is gambit's cheap
+  #     Claude fallback for workers when the Luna pool is cooling down; left
+  #     unpinned it fell through to the Luna default and failed with the same
+  #     usage_limit_reached the fallback was meant to escape (2026-09-15).
   #   * Both haiku spellings appear on the wire and bindings are exact, so
   #     the fast tier is pinned twice.
   #
@@ -245,6 +249,7 @@
         default_seat = "chatgpt-luna-medium";
         models = {
           "claude-opus-5" = "anthropic";
+          "claude-sonnet-5" = "anthropic";
           "claude-haiku-4-5" = "chatgpt-luna-low";
           "claude-haiku-4-5-20251001" = "chatgpt-luna-low";
         };

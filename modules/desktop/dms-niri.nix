@@ -48,12 +48,12 @@ in {
     desktop.niri.enable = true;
 
     # niri itself — niri-flake provides programs.niri.{enable, package}.
-    # Pin to niri-unstable for parity with DMS's edge tracking; switch to
-    # niri-flake.packages.${pkgs.stdenv.hostPlatform.system}.niri-stable if
-    # you want a slower-moving target. niri-flake doesn't add niri-unstable
-    # to the top-level pkgs by default — reference it through the flake input.
+    # pkgs.niri-unstable is our fork built via niri-flake's make-niri
+    # (see overlays/default.nix for why it isn't taken straight from
+    # inputs.niri-flake.packages). Switch to niri-flake's niri-stable if
+    # you want a slower-moving target.
     programs.niri.enable = true;
-    programs.niri.package = inputs.niri-flake.packages.${pkgs.stdenv.hostPlatform.system}.niri-unstable;
+    programs.niri.package = pkgs.niri-unstable;
 
     # DMS shell layer. The DMS edge release made several feature toggles
     # built-in (no longer effective; produces hard assertion failures if

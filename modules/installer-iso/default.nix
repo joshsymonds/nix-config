@@ -62,7 +62,7 @@ in {
   # may need it. trusted-users restricted to root — the installer is
   # not a development environment.
   nix.settings = {
-    experimental-features = "nix-command flakes";
+    experimental-features = ["nix-command" "flakes"];
     extra-substituters = [
       caches.nixCommunity.url
       caches.joshsymonds.url

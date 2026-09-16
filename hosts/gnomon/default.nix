@@ -77,20 +77,26 @@ in
     hardware.gpu-nvidia = {
       enable = true;
       enable32Bit = true; # Steam/Proton, 32-bit Wine
-      # 595.71.05 (this nixpkgs pin's production) faults under D3D12
-      # PSO-compile load: Xid 109 "CTX SWITCH TIMEOUT" on GameThread
-      # killed Satisfactory's device twice in a row (2026-06-12),
-      # matching ValveSoftware/Proton#7580 reports blaming the 595
-      # branch. Pin the 610.43.02 new-feature branch (hashes from
-      # nixpkgs master) — where active Blackwell work lands. Fallbacks
-      # if unstable: 595.80 production, 580.159.04 previous-stable.
+      # 595.71.05 (the June 2026 nixpkgs pin's production) faults under
+      # D3D12 PSO-compile load: Xid 109 "CTX SWITCH TIMEOUT" on
+      # GameThread killed Satisfactory's device twice in a row
+      # (2026-06-12), matching ValveSoftware/Proton#7580 reports blaming
+      # the 595 branch. Pin the 610 new-feature branch — where active
+      # Blackwell work lands. Fallbacks if unstable: 595.99 production,
+      # 580.178.04 previous-stable.
+      #
+      # 610.43.02 → 610.57.04 (2026-09-16): 610.43.02's open module
+      # calls strncpy, which the 7.2 kernel no longer exports, so it
+      # fails to compile against linux-cachyos 7.2.4. 610.57.04 is
+      # nixpkgs' current new_feature (hashes copied from there) and is
+      # Hydra-built against linux 7.2.6.
       # Delete once the flake's nixpkgs ships a fixed production branch.
       package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
-        version = "610.43.02";
-        sha256_64bit = "sha256-MDSgVLtM33dS/43CclZMsQVROAS/9TU4lFkBsWyndGM=";
-        openSha256 = "sha256-hP5NVZZ4vGsACHLmUDKq4uckpd/kn1GxCSYnnJfAuBs=";
-        settingsSha256 = "sha256-0YAhufRgjDW+uR+kjaTb154fibpcDw8QowfrucoZsKE=";
-        persistencedSha256 = "sha256-Whgv9X+v2fRhzliOl2LzltY9v1SxDafFfv3IUPqj/hk=";
+        version = "610.57.04";
+        sha256_64bit = "sha256-suk1xmuDuwDAyFe8jg7g/VLekoa0DJzB7sKafOfrEW0=";
+        openSha256 = "sha256-rQHOOOY4KL92Ww3KDwh+j4eGU7oNAH8LutZC5wmFnPo=";
+        settingsSha256 = "sha256-ZEMo8I8Zc2Tq6RVDNYpAH+f094dUaZiBqO+5f6lIjRI=";
+        persistencedSha256 = "sha256-aXmD2VY1RLlgAnlHhOUMWzvMyhI6JTClcFLm4imF/mA=";
       };
       # cudaArches deliberately left at module default (empty list).
       # Pinning to ["12.0"] (Blackwell-only) was technically tighter

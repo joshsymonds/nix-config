@@ -44,6 +44,36 @@ in {
     // {
       devenv = devenvPkg;
 
+      # niri from our fork (niri-flake's niri-unstable input override,
+      # branch josh/integration), built through niri-flake's make-niri so
+      # its config validator / niri-session unit / xwayland-satellite
+      # wiring all come from one source. Consumed by
+      # modules/desktop/dms-niri.nix and home-manager/desktop-x86_64-linux.nix.
+      #
+      # Why not `inputs.niri-flake.packages.<system>.niri-unstable`:
+      # niri-flake's make-niri still asks callPackage for
+      # `libdisplay-info_0_2` and asserts its version is 0.2.0. nixpkgs
+      # turned that alias into a `throw` on 2026-08-04 and upstream
+      # niri-flake has been frozen at that same date. `.override` can't
+      # rescue it (callPackage forces the assert before the overridable
+      # result exists), so substitute inside the callPackage scope
+      # instead: nixpkgs' own niri 26.04 builds against
+      # libdisplay-info_0_3, which is also what the fork's Cargo.lock
+      # (libdisplay-info-sys 0.3.0) wants. The `version` override only
+      # satisfies the assert; the store path is libdisplay-info_0_3's.
+      # Drop this once niri-flake moves to libdisplay-info_0_3.
+      niri-unstable = let
+        niriPkgs =
+          final
+          // {
+            callPackage = final.lib.callPackageWith (final
+              // {
+                libdisplay-info_0_2 = final.libdisplay-info_0_3 // {version = "0.2.0";};
+              });
+          };
+      in
+        (inputs.niri-flake.lib.internal.make-package-set niriPkgs).niri-unstable;
+
       # redlib-veraticus needs flake inputs (crane, redlib-fork, rust-overlay)
       # so it isn't in pkgs/simple.nix's plain-callPackage set; pkgs/default.nix
       # (the `nix build .#redlib-veraticus` path) wires the same inputs
@@ -178,7 +208,7 @@ in {
           [
             ''
               substituteInPlace $TMP/work/dist/main.js \
-                --replace-fail "zj&&ee.app.disableHardwareAcceleration()" "void 0"
+                --replace-fail "hy&&ed.app.disableHardwareAcceleration()" "void 0"
               substituteInPlace $TMP/work/dist/app.js \
                 --replace-fail "N.map(e=>A.calendarById\$[e]?.mtColor)" "[A.calendarById\$[D?.mtCalendarId]?.mtColor]"
               asar pack --unpack='{*.node,*.ftz,rect-overlay}' "$TMP/work" $out/opt/Morgen/resources/app.asar

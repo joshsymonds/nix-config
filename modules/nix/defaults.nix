@@ -18,7 +18,7 @@
   nix = {
     optimise.automatic = lib.mkDefault true;
     settings = {
-      experimental-features = lib.mkDefault "nix-command flakes pipe-operators";
+      experimental-features = lib.mkDefault ["nix-command" "flakes" "pipe-operators"];
       # Substituters + trusted-public-keys live in
       # modules/nix/substituters.nix (single source of truth, with
       # per-feature gating so the right hosts pull from the right

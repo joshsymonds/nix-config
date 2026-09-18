@@ -51,6 +51,11 @@
   # review, Sonnet scouts) until it refills.
   services.patchbay.codexUpstream.exhausted = true;
 
+  # ~/Work/attain sessions bill the employer's Bedrock account through the
+  # attain-bedrock Seat (signed from the `attain` AWS profile). Flip to
+  # false to put attain back on the personal Anthropic subscription.
+  services.patchbay.attainBedrock.enable = true;
+
   programs.claudeCode.hostContext = ''
     # Host: vermissian (Linux NixOS, x86_64)
 

@@ -25,6 +25,10 @@ in {
   # through the models.json shell-command resolver (home-manager/pi).
   "secrets/user/omakase-key.age".publicKeys = keys.joshsymonds;
   "secrets/user/tavily-key.age".publicKeys = keys.joshsymonds;
+  # Caller model id -> Attain application-inference-profile ARN, for
+  # patchbay's attain-bedrock Seat (home-manager/patchbay). The ARNs embed
+  # the Attain AWS account id, which is why the map is not in the clear.
+  "secrets/user/patchbay-bedrock-model-map.age".publicKeys = keys.joshsymonds;
 
   # Host-specific secrets
   "secrets/hosts/ultraviolet/cloudflare-api-token.age".publicKeys = keys.ultraviolet;

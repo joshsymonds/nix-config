@@ -78,6 +78,22 @@
     || throw "claude-code: settings.json model '${settingsJsonBase.model}' is not a route home-manager/patchbay/chatgpt-models.nix publishes";
   claudeFallback = modelRegistry."fable-5-1";
 
+  # What a ~/Work/attain session runs: the registry's Fable 5.1 at its
+  # default effort, stamped into each Attain repo's project settings by
+  # activation.claudeAttainContext (below), where it beats the user-level
+  # default in settings.json. Works on either side of patchbay's
+  # attainBedrock toggle — the model id is Anthropic-side both ways.
+  #
+  # [1m]: behind any base URL that is not api.anthropic.com Claude Code
+  # believes the Claude 5 models are 200k whatever the catalog says (verified
+  # 2026-09-17, CC 2.1.269); the suffix is stripped client-side and adds the
+  # context-1m beta, which is what keeps /context at 1000k there.
+  attainModel = modelRegistry."fable-5-1";
+  attainSettings = {
+    model = "${attainModel.model}[1m]";
+    effortLevel = attainModel.defaultEffort;
+  };
+
   settingsJson = assert chatgptDefaultKnown;
     mkSettingsJson "base" (
       # One env attrset: the overlays below are joined with `//`, which is a
@@ -889,16 +905,17 @@ in {
     '';
 
     # Stamp each Attain repo's project settings with the /ctx/attain
-    # patchbay context. Which account answers a request is registry policy,
-    # but WHICH context a session speaks to is the one fact patchbay cannot
-    # know — the base URL carries it, and a project's own
-    # .claude/settings.json is where Claude Code reads a per-project base
-    # URL from. Merges the env key into any existing file, preserving
-    # everything else; the file stays untracked in the employer repos.
+    # patchbay context and the attain model/effort (attainSettings above).
+    # Which account answers a request is registry policy, but WHICH context
+    # a session speaks to is the one fact patchbay cannot know — the base
+    # URL carries it, and a project's own .claude/settings.json is where
+    # Claude Code reads a per-project base URL from. Deep-merges the stamp
+    # into any existing file, preserving everything else; the file stays
+    # untracked in the employer repos.
     activation.claudeAttainContext = lib.hm.dag.entryAfter ["writeBoundary"] (
       lib.optionalString (patchbayBaseUrl != null) ''
         attain_root="$HOME/Work/attain"
-        attain_url="${patchbayBaseUrl}/ctx/attain"
+        attain_stamp=${lib.escapeShellArg (builtins.toJSON (attainSettings // {env.ANTHROPIC_BASE_URL = "${patchbayBaseUrl}/ctx/attain";}))}
         if [ -d "$attain_root" ]; then
           for project in "$attain_root" "$attain_root"/*/; do
             project="''${project%/}"
@@ -913,8 +930,10 @@ in {
             sfile="$project/.claude/settings.json"
             run mkdir -p "$project/.claude"
             [ -f "$sfile" ] || echo '{}' > "$sfile"
-            if ! ${pkgs.jq}/bin/jq -e --arg u "$attain_url" '.env.ANTHROPIC_BASE_URL == $u' "$sfile" >/dev/null 2>&1; then
-              ${pkgs.jq}/bin/jq --arg u "$attain_url" '.env = ((.env // {}) + {ANTHROPIC_BASE_URL: $u})' "$sfile" > "$sfile.tmp" && mv "$sfile.tmp" "$sfile"
+            # jq's `*` is a recursive merge, so the stamp's keys win and every
+            # other key (permissions, worktree, ...) survives.
+            if ! ${pkgs.jq}/bin/jq -e --argjson s "$attain_stamp" '(. * $s) == .' "$sfile" >/dev/null 2>&1; then
+              ${pkgs.jq}/bin/jq --argjson s "$attain_stamp" '. * $s' "$sfile" > "$sfile.tmp" && mv "$sfile.tmp" "$sfile"
             fi
           done
         fi

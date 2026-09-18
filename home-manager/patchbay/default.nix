@@ -212,25 +212,53 @@
     };
   };
 
-  # Every context binds the same selectors and defaults to the anthropic
-  # forward Seat, so a Claude model rides the caller's own OAuth credentials
-  # untouched. What a context buys is the name the ledger records against
-  # each request, which is what keeps spend attributable per project.
+  # The Attain Bedrock Seat: Claude models signed with SigV4 from the `attain`
+  # AWS profile instead of forwarded to Anthropic. No upstream (the endpoint
+  # derives from the region) and no model rewrite — the caller's Claude id is
+  # the key into the model map, which holds the per-user
+  # application-inference-profile ARNs. Those ARNs embed the Attain AWS
+  # account id and this repo is public, so they live in an agenix secret and
+  # only the env var naming that file appears here.
+  #
+  # Always declared: services.patchbay.attainBedrock.enable is then a one-line
+  # flip between billing the employer's Bedrock account and the personal
+  # Anthropic subscription, and the registry hot-reloads on rebuild. On a host
+  # with no `attain` AWS profile a request that reaches this Seat fails at
+  # credential export with a clear 502 rather than routing somewhere wrong.
+  #
+  # max_input_tokens is published metadata, not enforced. Claude Code sends
+  # the context-1m beta as a header and the Bedrock path copies inbound
+  # headers through, so the Claude 5 models keep their 1M window here.
+  attainBedrockSeat = {
+    auth_mode = "sigv4";
+    aws_profile = "attain";
+    aws_region = "us-east-2";
+    model_map_env_file = "PATCHBAY_BEDROCK_MODEL_MAP_FILE";
+    max_input_tokens = 1000000;
+  };
+
+  # Every context binds the same selectors; what differs is the default Seat
+  # a Claude model rides — the anthropic forward on the caller's own OAuth
+  # credentials everywhere but attain, which the attainBedrock option can
+  # point at the employer's account — and the name the ledger records
+  # against each request, which is what keeps spend attributable per project.
   #
   # Marked subagent traffic (x-claude-code-agent-id) that no public selector
   # already claims rides Luna instead of the subscription: default Explores
   # and other unlisted subagents at medium effort, haiku-slot dispatches at
   # low. Two exact pins carve out what must stay native:
   #
-  #   * claude-opus-5 -> anthropic. Gambit's worker and escalation ladders
-  #     TERMINATE at the opus rung, and the ladder's 100%-solve invariant is
-  #     exactly that the terminal rung is native Claude. No gambit ladder ends
-  #     at fable, so fable needs no pin — fable-inheriting subagents (default
-  #     Explores, background forks) take the Luna default.
-  #   * claude-sonnet-5 -> anthropic. The `sonnet` rung is gambit's cheap
-  #     Claude fallback for workers when the Luna pool is cooling down; left
-  #     unpinned it fell through to the Luna default and failed with the same
-  #     usage_limit_reached the fallback was meant to escape (2026-09-15).
+  #   * claude-opus-5 -> the context's Claude Seat. Gambit's worker and
+  #     escalation ladders TERMINATE at the opus rung, and the ladder's
+  #     100%-solve invariant is exactly that the terminal rung is native
+  #     Claude. No gambit ladder ends at fable, so fable needs no pin —
+  #     fable-inheriting subagents (default Explores, background forks) take
+  #     the Luna default.
+  #   * claude-sonnet-5 -> the context's Claude Seat. The `sonnet` rung is
+  #     gambit's cheap Claude fallback for workers when the Luna pool is
+  #     cooling down; left unpinned it fell through to the Luna default and
+  #     failed with the same usage_limit_reached the fallback was meant to
+  #     escape (2026-09-15).
   #   * Both haiku spellings appear on the wire and bindings are exact, so
   #     the fast tier is pinned twice.
   #
@@ -239,22 +267,28 @@
   # Dropped while the allowance is exhausted, so every subagent rides the
   # anthropic default Seat instead of a Luna Seat that can only refuse.
   bindings = lib.mapAttrs (selector: _: seatID selector) subscriptionSeats;
-  context =
+  mkContext = claudeSeat:
     {
-      default_seat = "anthropic";
+      default_seat = claudeSeat;
       models = bindings;
     }
     // lib.optionalAttrs (cfg.codexUpstream.enable && !cfg.codexUpstream.exhausted) {
       subagents = {
         default_seat = "chatgpt-luna-medium";
         models = {
-          "claude-opus-5" = "anthropic";
-          "claude-sonnet-5" = "anthropic";
+          "claude-opus-5" = claudeSeat;
+          "claude-sonnet-5" = claudeSeat;
           "claude-haiku-4-5" = "chatgpt-luna-low";
           "claude-haiku-4-5-20251001" = "chatgpt-luna-low";
         };
       };
     };
+  context = mkContext "anthropic";
+  attainContext = mkContext (
+    if cfg.attainBedrock.enable
+    then "attain-bedrock"
+    else "anthropic"
+  );
 
   # The tiltyard Seats get their own ID space rather than the selector-derived
   # one: the roster selectors are bare identifiers chosen for a results table,
@@ -289,6 +323,7 @@
           upstream = "https://api.anthropic.com";
           auth_mode = "forward";
         };
+        attain-bedrock = attainBedrockSeat;
       }
       // subagentSeats
       // lib.mapAttrs' (
@@ -304,13 +339,23 @@
       personal = context;
       # ~/Work/savecraft.
       savecraft = context;
-      # ~/Work/attain.
-      attain = context;
+      # ~/Work/attain: the employer's Bedrock account when attainBedrock is
+      # on, the personal subscription otherwise.
+      attain = attainContext;
       # The judgment roster, for tiltyard runs and anything else comparing
       # models by name.
       tiltyard = tiltyardContext;
     };
   };
+
+  # Bedrock model map: caller model id -> application-inference-profile ARN.
+  # Home-manager agenix, so its path is a literal "''${XDG_RUNTIME_DIR}/..."
+  # placeholder; systemd does NOT expand that in Environment=, but a user
+  # unit's %t specifier IS the runtime dir, so swap one for the other and the
+  # unit still derives its path from the secret declaration.
+  bedrockModelMapPath =
+    lib.replaceStrings ["\${XDG_RUNTIME_DIR}"] ["%t"]
+    config.age.secrets."patchbay-bedrock-model-map".path;
 
   # CLIProxyAPI: an Anthropic-compatible endpoint over the ChatGPT Codex
   # subscription. It runs as a user service bound to loopback. OAuth state
@@ -480,6 +525,15 @@ in {
       ~/.cli-proxy-api
     '';
 
+    attainBedrock.enable = lib.mkEnableOption ''
+      routing the attain context's Claude models to the employer's Bedrock
+      account: the attain-bedrock sigv4 Seat becomes that context's default
+      Seat (and its opus/sonnet subagent pins), signed from the `attain` AWS
+      profile and metered there. Off, attain rides the anthropic forward Seat
+      like every other context. The Seat and its model-map secret ship
+      either way, so flipping this is the whole switch
+    '';
+
     codexUpstream.exhausted = lib.mkEnableOption ''
       treating the Codex subscription's usage allowance as spent: the
       chatgpt/* routes stay published for anyone who names one, but marked
@@ -491,6 +545,13 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    # Caller model id -> Attain application-inference-profile ARN, for the
+    # attain-bedrock Seat. Encrypted because the ARNs embed the Attain AWS
+    # account id and this repo is public.
+    age.secrets."patchbay-bedrock-model-map" = {
+      file = ../../secrets/user/patchbay-bedrock-model-map.age;
+    };
+
     # cliproxyapi is also the one-time login CLI:
     #   cli-proxy-api --config ~/.config/cliproxyapi/config.yaml --codex-login
     # (--codex-device-login on headless hosts), so it belongs on PATH wherever
@@ -529,11 +590,15 @@ in {
         RestartSec = 5;
         Environment =
           [
-            # No PATH: patchbay is started by absolute store path and shells
-            # out to nothing.
+            # The sigv4 Seat exports AWS credentials by running
+            # `aws configure export-credentials`, so the aws CLI must be on
+            # the unit's PATH. Nothing else here needs a PATH: patchbay
+            # itself is started by absolute store path.
+            "PATH=${lib.makeBinPath [pkgs.awscli2]}"
             "PATCHBAY_LISTEN=127.0.0.1:${toString cfg.port}"
             "PATCHBAY_OPENROUTER_KEY_FILE=/run/agenix/patchbay-openrouter-key"
             "PATCHBAY_CALLER_KEY_FILE=/run/agenix/patchbay-caller-key"
+            "PATCHBAY_BEDROCK_MODEL_MAP_FILE=${bedrockModelMapPath}"
             # Unconditional: tiltyard's scripts/runpod-qwen.sh writes this key
             # when it launches the pod, and patchbay reads key files per
             # request — so on a host where it never appears, the cost is a 500

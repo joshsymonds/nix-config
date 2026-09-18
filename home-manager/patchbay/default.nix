@@ -232,12 +232,14 @@
   # from the Anthropic-Beta header Claude Code sends, and patchbay's Bedrock
   # translation moves them across. Bedrock then refuses the whole request over
   # any flag it does not know — "Unexpected value(s) ... for the
-  # anthropic-beta header" — so strip_betas names the ones Claude Code sends
-  # that Bedrock rejects (verified 2026-09-17, CC 2.1.269, us-east-2; the last
-  # two ride only an OAuth-authenticated session, so an API-key capture will
-  # not show them). When a CC upgrade adds a flag Bedrock lacks, the 400 names
-  # it and this list is the fix. context-1m-2025-08-07 rides through, which is
-  # what keeps the Claude 5 models' 1M window here.
+  # anthropic-beta header" — so strip_betas names every flag Claude Code can
+  # send that Bedrock rejects. The list is every dated beta string in the CC
+  # 2.1.269 binary probed one at a time against us-east-2 (2026-09-17), not
+  # the flags one session happened to send: print mode, OAuth login and
+  # interactive mode each add flags the others do not. When a CC upgrade adds
+  # a flag Bedrock lacks, the 400 names it and this list is the fix.
+  # context-1m-2025-08-07 rides through, which is what keeps the Claude 5
+  # models' 1M window here.
   attainBedrockSeat = {
     auth_mode = "sigv4";
     aws_profile = "attain";
@@ -245,10 +247,32 @@
     model_map_env_file = "PATCHBAY_BEDROCK_MODEL_MAP_FILE";
     max_input_tokens = 1000000;
     strip_betas = [
+      "advanced-tool-use-2025-11-20"
       "advisor-tool-2026-03-01"
-      "prompt-caching-scope-2026-01-05"
+      "agent-memory-2026-07-22"
+      "cache-diagnosis-2026-04-07"
+      "ccr-byoc-2025-07-29"
+      "ccr-triggers-2026-01-30"
+      "context-hint-2026-04-09"
+      "dangerous-tool-use-2026-09-03"
+      "dreaming-2026-04-21"
+      "environments-2025-11-01"
       "extended-cache-ttl-2025-04-11"
+      "fast-mode-2026-02-01"
+      "files-api-2025-04-14"
+      "managed-agents-2026-04-01"
+      "mcp-servers-2025-12-04"
+      "mcp-tunnels-2026-06-22"
+      "message-batches-2024-09-24"
+      "message-threads-2026-08-12"
       "oauth-2025-04-20"
+      "oidc-federation-2026-04-01"
+      "prompt-caching-evict-2026-05-12"
+      "prompt-caching-scope-2026-01-05"
+      "redact-thinking-2026-02-12"
+      "server-side-fallback-2026-07-01"
+      "skills-2025-10-02"
+      "user-profiles-2026-03-24"
     ];
   };
 

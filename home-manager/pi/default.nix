@@ -154,6 +154,7 @@ in {
       };
     };
     ".pi/agent/extensions/compact-transcript.ts".source = "${compactTranscript}/extensions/compact-transcript.ts";
+    ".pi/agent/extensions/tool-retry-guard.ts".source = ./tool-retry-guard.ts;
     ".pi/agent/agents".source = piRungAgents;
     ".pi/agent/tasks-config.json".text = builtins.toJSON {
       taskScope = "session-global";

@@ -226,15 +226,30 @@
   # with no `attain` AWS profile a request that reaches this Seat fails at
   # credential export with a clear 502 rather than routing somewhere wrong.
   #
-  # max_input_tokens is published metadata, not enforced. Claude Code sends
-  # the context-1m beta as a header and the Bedrock path copies inbound
-  # headers through, so the Claude 5 models keep their 1M window here.
+  # max_input_tokens is published metadata, not enforced.
+  #
+  # Beta flags: Bedrock reads them from the body's anthropic_beta list, never
+  # from the Anthropic-Beta header Claude Code sends, and patchbay's Bedrock
+  # translation moves them across. Bedrock then refuses the whole request over
+  # any flag it does not know — "Unexpected value(s) ... for the
+  # anthropic-beta header" — so strip_betas names the ones Claude Code sends
+  # that Bedrock rejects (verified 2026-09-17, CC 2.1.269, us-east-2; the last
+  # two ride only an OAuth-authenticated session, so an API-key capture will
+  # not show them). When a CC upgrade adds a flag Bedrock lacks, the 400 names
+  # it and this list is the fix. context-1m-2025-08-07 rides through, which is
+  # what keeps the Claude 5 models' 1M window here.
   attainBedrockSeat = {
     auth_mode = "sigv4";
     aws_profile = "attain";
     aws_region = "us-east-2";
     model_map_env_file = "PATCHBAY_BEDROCK_MODEL_MAP_FILE";
     max_input_tokens = 1000000;
+    strip_betas = [
+      "advisor-tool-2026-03-01"
+      "prompt-caching-scope-2026-01-05"
+      "extended-cache-ttl-2025-04-11"
+      "oauth-2025-04-20"
+    ];
   };
 
   # Every context binds the same selectors; what differs is the default Seat

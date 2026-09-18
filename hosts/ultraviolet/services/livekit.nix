@@ -128,7 +128,18 @@ in {
         fi
         sleep 1
       done
-      exec ${pkgs.tailscale}/bin/tailscale serve --bg --https=${toString servePort} ${toString signalPort}
+      # mentat-tailnet-serve starts in parallel (both order after shimmer's
+      # reset, not after each other) and `tailscale serve` rejects a config
+      # write whose etag another writer just invalidated. Retry instead of
+      # leaving the ${toString servePort} mapping missing until the next restart.
+      for i in $(seq 1 10); do
+        if ${pkgs.tailscale}/bin/tailscale serve --bg --https=${toString servePort} ${toString signalPort}; then
+          exit 0
+        fi
+        sleep 2
+      done
+      echo "livekit-tailnet-serve: tailscale serve kept failing" >&2
+      exit 1
     '';
   };
 

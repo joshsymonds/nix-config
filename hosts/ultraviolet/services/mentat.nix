@@ -180,7 +180,18 @@
         fi
         sleep 1
       done
-      exec ${pkgs.tailscale}/bin/tailscale serve --bg --https=8485 8484
+      # livekit-tailnet-serve starts in parallel (both order after shimmer's
+      # reset, not after each other) and `tailscale serve` rejects a config
+      # write whose etag another writer just invalidated. Retry instead of
+      # leaving the 8485 mapping missing until the next restart.
+      for i in $(seq 1 10); do
+        if ${pkgs.tailscale}/bin/tailscale serve --bg --https=8485 8484; then
+          exit 0
+        fi
+        sleep 2
+      done
+      echo "mentat-tailnet-serve: tailscale serve kept failing" >&2
+      exit 1
     '';
   };
 }

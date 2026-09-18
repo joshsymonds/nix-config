@@ -52,6 +52,13 @@
       MCP_SERVER_URL = "https://shimmer.husbuddies.gay";
       MCP_SERVER_HOST = "127.0.0.1";
       MCP_SERVER_PORT = "8000";
+      # aiofile (FastMCP's OAuth token store reads) defaults to caio's io_uring
+      # backend, which registers its eventfd async-only: a buffered read that
+      # the kernel completes via task work never wakes the event loop, so the
+      # request parks until some later request submits I/O. Seen as 22-minute
+      # request pile-ups from ChatGPT on Sep 18 2026. The thread backend has
+      # no such wakeup gap.
+      CAIO_IMPL = "thread";
     };
 
     restartTriggers = [
@@ -114,6 +121,8 @@
       MCP_SERVER_HOST = "127.0.0.1";
       MCP_TAILNET_PORT = "8001";
       SHIMMER_TAILNET_ALLOWLIST = "josh@joshsymonds.com";
+      # Same io_uring wakeup gap as the OIDC service above; see that comment.
+      CAIO_IMPL = "thread";
     };
 
     restartTriggers = [

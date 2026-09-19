@@ -46,10 +46,8 @@
 
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
 
-  # Codex usage allowance exhausted 2026-09-11: subagents ride the anthropic
-  # Seat and gambit runs on Claude rungs (Opus workers, Fable escalation and
-  # review, Sonnet scouts) until it refills.
-  services.patchbay.codexUpstream.exhausted = true;
+  # Codex quota is available; use the full Gambit role registry.
+  services.patchbay.codexUpstream.exhausted = false;
 
   # ~/Work/attain sessions bill the employer's Bedrock account through the
   # attain-bedrock Seat (signed from the `attain` AWS profile). Flip to

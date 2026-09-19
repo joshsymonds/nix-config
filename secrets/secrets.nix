@@ -61,6 +61,7 @@ in {
   "secrets/hosts/ultraviolet/savecraft-canary-fixture.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/savecraft-canary-access-client-id.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/savecraft-canary-access-client-secret.age".publicKeys = keys.ultraviolet;
+  "secrets/hosts/ultraviolet/valheim-password.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/gnomon/mullvad-privatekey.age".publicKeys = keys.gnomon;
   "secrets/hosts/gnomon/mullvad-addresses.age".publicKeys = keys.gnomon;
   "secrets/hosts/vermissian/mullvad-privatekey.age".publicKeys = keys.vermissian;

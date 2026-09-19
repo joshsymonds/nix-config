@@ -1,0 +1,4 @@
+{
+  "server": {"app": 896660, "depot": 896661, "manifest": "6686760496212527200", "build": 25390671, "narHash": "sha256-Vya2pbJxJs2HcrWfah7FhTPVgH2OEMI7MUo3rVdha1M="},
+  "runtime": {"app": 1007, "depot": 1006, "manifest": "4559160656493359681", "narHash": "sha256-VzL5osfQt43j0iRyd7xmxbhYJ+39+BzmZ+1UihzgFzU="}
+}

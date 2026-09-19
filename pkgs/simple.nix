@@ -5,23 +5,30 @@
 # source of truth so the two don't drift out of sync (they had: this file
 # exists because wyoming-onnx-asr and redlib-veraticus were overlay-only and
 # `nix build .#wyoming-onnx-asr` didn't work).
-{pkgs}: {
-  myCaddy = pkgs.callPackage ./caddy {};
-  starlark-lsp = pkgs.callPackage ./starlark-lsp {};
-  nuclei = pkgs.callPackage ./nuclei {};
-  mcp-atlassian = pkgs.callPackage ./mcp-atlassian {};
-  claudeCodeCli = pkgs.callPackage ./claude-code-cli {};
-  codex = pkgs.callPackage ./codex {};
-  pi-coding-agent = pkgs.callPackage ./pi-coding-agent {};
-  claude-swap = pkgs.callPackage ./claude-swap {};
-  cliproxyapi = pkgs.callPackage ./cliproxyapi {};
-  deadcode = pkgs.callPackage ./deadcode {};
-  golangciLintBin = pkgs.callPackage ./golangci-lint-bin {};
-  coder = pkgs.callPackage ./coder-cli {inherit (pkgs) unzip;};
-  invidious-companion = pkgs.callPackage ./invidious-companion {};
-  newrelic-cli = pkgs.callPackage ./newrelic-cli {};
-  morgen-fetch = pkgs.callPackage ./morgen-fetch {};
-  morgen-notifier = pkgs.callPackage ./morgen-notifier {};
-  claude-notify-sounds = pkgs.callPackage ./claude-notify-sounds {};
-  wyoming-onnx-asr = pkgs.callPackage ./wyoming-onnx-asr {};
-}
+{pkgs}: let
+  valheim = pkgs.callPackage ./valheim-server {};
+in
+  {
+    myCaddy = pkgs.callPackage ./caddy {};
+    starlark-lsp = pkgs.callPackage ./starlark-lsp {};
+    nuclei = pkgs.callPackage ./nuclei {};
+    mcp-atlassian = pkgs.callPackage ./mcp-atlassian {};
+    claudeCodeCli = pkgs.callPackage ./claude-code-cli {};
+    codex = pkgs.callPackage ./codex {};
+    pi-coding-agent = pkgs.callPackage ./pi-coding-agent {};
+    claude-swap = pkgs.callPackage ./claude-swap {};
+    cliproxyapi = pkgs.callPackage ./cliproxyapi {};
+    deadcode = pkgs.callPackage ./deadcode {};
+    golangciLintBin = pkgs.callPackage ./golangci-lint-bin {};
+    coder = pkgs.callPackage ./coder-cli {inherit (pkgs) unzip;};
+    invidious-companion = pkgs.callPackage ./invidious-companion {};
+    newrelic-cli = pkgs.callPackage ./newrelic-cli {};
+    morgen-fetch = pkgs.callPackage ./morgen-fetch {};
+    morgen-notifier = pkgs.callPackage ./morgen-notifier {};
+    claude-notify-sounds = pkgs.callPackage ./claude-notify-sounds {};
+    wyoming-onnx-asr = pkgs.callPackage ./wyoming-onnx-asr {};
+  }
+  // pkgs.lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "x86_64-linux") {
+    valheim-server = valheim;
+    valheim-source-check = valheim.sourceCheck;
+  }

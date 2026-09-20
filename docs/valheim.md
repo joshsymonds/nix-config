@@ -32,8 +32,30 @@ log is `/var/lib/valheim/logs/valheim-current.log`.
 sudo systemctl start valheim.service
 sudo systemctl stop valheim.service
 sudo systemctl restart valheim.service
-systemctl is-active valheim.service
+systemctl is-enabled --quiet valheim.service
+systemctl is-active --quiet valheim.service
 sudo -u valheim tail -n 100 /var/lib/valheim/logs/valheim-current.log
+sudo grep -Fq 'Game server connected' /var/lib/valheim/logs/valheim-current.log
+sudo ss -lunp | grep -Eq ':2456\b'
+sudo ss -lunp | grep -Eq ':2457\b'
+world_dir=/var/lib/valheim/worlds_local/Midgard
+world_id=$(sudo find "$world_dir" -maxdepth 1 -type f -name '_main.*.fwl2' -size +0c -printf '%f\n')
+test -n "$world_id"
+for suffix in fwl2 db2 chunks; do
+  sudo find "$world_dir" -maxdepth 1 -type f -name "_main.*.$suffix" -size +0c -print -quit | grep -q .
+done
+sudo systemctl restart valheim.service
+test "$world_id" = "$(sudo find "$world_dir" -maxdepth 1 -type f -name '_main.*.fwl2' -size +0c -printf '%f\n')"
+for suffix in fwl2 db2 chunks; do
+  sudo find "$world_dir" -maxdepth 1 -type f -name "_main.*.$suffix" -size +0c -print -quit | grep -q .
+done
+sudo grep -Fq 'Game server connected' /var/lib/valheim/logs/valheim-current.log
+invocation=$(systemctl show --value -p InvocationID valheim.service)
+restarts=$(systemctl show --value -p NRestarts valheim.service)
+sleep 300
+systemctl is-active --quiet valheim.service
+test "$invocation" = "$(systemctl show --value -p InvocationID valheim.service)"
+test "$restarts" = "$(systemctl show --value -p NRestarts valheim.service)"
 ```
 
 The encrypted password is
@@ -83,6 +105,10 @@ contents. Do not run this during normal operation or as part of deployment.
 ```sh
 archive=/mnt/backups/valheim/valheim-YYYYMMDDTHHMMSS-XXXXXX.tar
 saved=/var/lib/valheim.before-restore.$(date -u +%Y%m%dT%H%M%SZ)
+timer_was_active=0
+if systemctl is-active --quiet valheim-backup.timer; then timer_was_active=1; fi
+sudo systemctl stop valheim-backup.timer
+sudo systemctl stop valheim-backup.service
 sudo systemctl stop valheim.service
 sudo mv /var/lib/valheim "$saved"
 sudo install -d -m 0700 -o valheim -g valheim /var/lib/valheim
@@ -90,10 +116,12 @@ sudo tar -xf "$archive" -C /var/lib/valheim --strip-components=1 state
 sudo chown -R valheim:valheim /var/lib/valheim
 sudo systemctl start valheim.service
 systemctl is-active valheim.service
+if [ "$timer_was_active" -eq 1 ]; then sudo systemctl start valheim-backup.timer; fi
 ```
 
 If validation fails, stop the service, remove the restored directory, move
-`$saved` back, and start it again.
+`$saved` back, and start it again. Restart `valheim-backup.timer` as well when
+`$timer_was_active` is 1.
 
 ## Deploy and rollback
 
@@ -113,7 +141,11 @@ Rollback without changing world data using the captured generation:
 sudo "$prior_system/bin/switch-to-configuration" switch
 ```
 
-Recovery roots are the pinned package/configuration in this repository and the
-Nix store, ciphertext in `secrets/hosts/ultraviolet/`, live state in
-`/var/lib/valheim`, transient protected spool in `/var/lib/valheim-backup`, and
-seven-day NAS archives in `/mnt/backups/valheim`.
+Recovery roots are linked explicitly by record: source is
+`~/.gambit/nix-config-2c8df73/valheim-server/artifacts/source`, package is
+`~/.gambit/nix-config-2c8df73/valheim-server/artifacts/server`, and system is
+`~/.gambit/nix-config-2c8df73/valheim-server/artifacts/ultraviolet-system`;
+ciphertext is `secrets/hosts/ultraviolet/valheim-password.age`,
+live state is `/var/lib/valheim`, transient protected spool is
+`/var/lib/valheim-backup`, and seven-day NAS archives are
+`/mnt/backups/valheim`.

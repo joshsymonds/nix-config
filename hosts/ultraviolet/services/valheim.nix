@@ -37,16 +37,20 @@
         staging="$spool/.current.$$"
         remote_tmp=
         restart_needed=0
+        lock_held=0
+        lock=/run/valheim-backup.lock
+
+        release_lock() {
+          if [ "$lock_held" -eq 1 ]; then
+            ${pkgs.util-linux}/bin/flock -u 9
+            exec 9>&-
+            lock_held=0
+          fi
+        }
 
         finish() {
           status=$?
           trap - EXIT HUP INT TERM
-          if [ "$restart_needed" -eq 1 ]; then
-            if ! ${pkgs.systemd}/bin/systemctl start valheim.service; then
-              echo "failed to restore initially running Valheim service" >&2
-              status=1
-            fi
-          fi
           if ! ${pkgs.coreutils}/bin/rm -rf -- "$staging"; then
             echo "failed to clean local backup staging" >&2
             status=1
@@ -55,25 +59,44 @@
             echo "failed to clean remote backup temporary file" >&2
             status=1
           fi
+          if ! release_lock; then
+            echo "failed to release Valheim backup lock" >&2
+            status=1
+          fi
+          if [ "$restart_needed" -eq 1 ]; then
+            if ! ${pkgs.systemd}/bin/systemctl start valheim.service; then
+              echo "failed to restore initially running Valheim service" >&2
+              status=1
+            fi
+          fi
           exit "$status"
         }
         trap finish EXIT
         trap 'exit 1' HUP INT TERM
 
+        exec 9>"$lock"
+        if ! ${pkgs.util-linux}/bin/flock -n 9; then
+          echo "another backup is already capturing Valheim state" >&2
+          exit 1
+        fi
+        lock_held=1
         ${pkgs.coreutils}/bin/mkdir -p "$spool"
         ${pkgs.coreutils}/bin/chmod 0700 "$spool"
 
+        before_save_markers=0
         if ${pkgs.systemd}/bin/systemctl is-active --quiet valheim.service; then
           restart_needed=1
-          ${pkgs.systemd}/bin/systemctl stop valheim.service
-          if ${pkgs.systemd}/bin/systemctl is-active --quiet valheim.service; then
-            echo "Valheim remained active after its graceful stop" >&2
-            exit 1
-          fi
-          if ! ${pkgs.gnugrep}/bin/grep -Fq \
-            'World save (5/5) done.' \
-            "$state/logs/valheim-current.log"; then
-            echo "graceful stop did not record a completed world save" >&2
+          before_save_markers=$(${pkgs.gnugrep}/bin/grep -Fc 'World save (5/5) done.' "$state/logs/valheim-current.log" || true)
+        fi
+        ${pkgs.systemd}/bin/systemctl stop valheim.service
+        if ${pkgs.systemd}/bin/systemctl is-active --quiet valheim.service; then
+          echo "Valheim remained active after its graceful stop" >&2
+          exit 1
+        fi
+        if [ "$restart_needed" -eq 1 ]; then
+          after_save_markers=$(${pkgs.gnugrep}/bin/grep -Fc 'World save (5/5) done.' "$state/logs/valheim-current.log" || true)
+          if [ "$after_save_markers" -le "$before_save_markers" ]; then
+            echo "graceful stop did not record a newly completed world save" >&2
             exit 1
           fi
         fi
@@ -91,6 +114,7 @@
         ${pkgs.coreutils}/bin/mkdir -p "$staging/state"
         ${pkgs.coreutils}/bin/cp -a "$state/." "$staging/state/"
 
+        release_lock
         if [ "$restart_needed" -eq 1 ]; then
           ${pkgs.systemd}/bin/systemctl start valheim.service
           if ! ${pkgs.systemd}/bin/systemctl is-active --quiet valheim.service; then

@@ -39,6 +39,7 @@ in
   assert unit.StateDirectoryMode == "0700";
   assert unit.WorkingDirectory == "/var/lib/valheim";
   assert unit.Restart == "on-failure";
+  assert lib.hasInfix "flock -n /run/valheim-backup.lock" unit.ExecStartPre;
   assert unit.KillSignal == "SIGINT";
   assert unit.LimitCORE == 0;
   assert unit.StandardOutput == "null";
@@ -68,5 +69,6 @@ in
       grep -F -- 'kill -INT' ${stopper}
       grep -F -- 'valheim password file is missing or unreadable' ${launcher}
       grep -F -- 'valheim password is invalid' ${launcher}
+      grep -F -- '-password "$password"' ${launcher}
       touch "$out"
     ''

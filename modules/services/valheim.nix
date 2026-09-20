@@ -156,6 +156,7 @@ in {
         ExecStop = stopper;
         Restart = "on-failure";
         RestartSec = "5s";
+        ExecStartPre = "+${pkgs.util-linux}/bin/flock -n /run/valheim-backup.lock ${pkgs.coreutils}/bin/true";
 
         StateDirectory = "valheim";
         StateDirectoryMode = "0700";

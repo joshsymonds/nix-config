@@ -1,22 +1,22 @@
-# Consistency check over the gambit rung data: the rung definitions, the two
-# rung/role maps written to <profile>/gambit/models.json, the rendered subagent
-# files, and the patchbay routes they point at. Replaces the coverage the
-# deleted claude-codex-executors.nix gave the Codex executor registry.
+# Consistency check over Gambit model profiles: the profile definitions, the
+# two profile/role maps written to <profile>/gambit/models.json, the rendered
+# subagent files, and the patchbay routes they point at. The compatibility
+# filename and check attribute remain stable for callers.
 {pkgs}: let
   inherit (pkgs) lib;
 
   workflowTools = import ../home-manager/pi/tool-packages {inherit lib pkgs;};
   orchestratorProcessExtension = "${workflowTools}/orchestrator-processes/index.ts";
-  rungData = import ../home-manager/claude-code/gambit-rungs.nix {
+  modelProfileData = import ../home-manager/claude-code/gambit-rungs.nix {
     inherit lib pkgs orchestratorProcessExtension;
   };
   inherit
-    (rungData)
-    gambitRungs
-    rungAgentEntries
-    optionalClaudeAgentEntries
-    piRungAgentEntries
-    omakasePiRungs
+    (modelProfileData)
+    gambitProfiles
+    profileAgentEntries
+    optionalClaudeProfileAgentEntries
+    piProfileAgentEntries
+    omakasePiProfiles
     gambitModelsFull
     gambitModelsClaudeOnly
     ;
@@ -44,66 +44,66 @@
   tiltyardSeats = import ../home-manager/patchbay/tiltyard-seats.nix;
   tiltyardJson = pkgs.writeText "patchbay-tiltyard-seats.json" (builtins.toJSON tiltyardSeats);
 
-  rungsJson = pkgs.writeText "gambit-rungs.json" (builtins.toJSON gambitRungs);
+  profilesJson = pkgs.writeText "gambit-model-profiles.json" (builtins.toJSON gambitProfiles);
   fullJson = pkgs.writeText "gambit-models-full.json" (builtins.toJSON gambitModelsFull);
   claudeOnlyJson = pkgs.writeText "gambit-models-claude-only.json" (builtins.toJSON gambitModelsClaudeOnly);
   routesJson = pkgs.writeText "patchbay-chatgpt-routes.json" (builtins.toJSON chatgptRoutes);
-  omakaseJson = pkgs.writeText "gambit-omakase-pi-rungs.json" (builtins.toJSON omakasePiRungs);
+  omakaseJson = pkgs.writeText "gambit-omakase-pi-profiles.json" (builtins.toJSON omakasePiProfiles);
 
   # The same entries home-manager links into <profile>/agents, rendered here so
   # the frontmatter can be read back off disk.
-  agentsDir = pkgs.linkFarm "gambit-rung-agents-check-dir" rungAgentEntries;
-  piAgentsDir = pkgs.linkFarm "gambit-pi-rung-agents-check-dir" piRungAgentEntries;
-  optionalAgentsDir = assert optionalClaudeAgentEntries [] == [];
-  assert optionalClaudeAgentEntries ["chatgpt/sol"] == [];
-  assert map (entry: entry.name) (optionalClaudeAgentEntries ["singularity/deepseek-flash"])
+  agentsDir = pkgs.linkFarm "gambit-profile-agents-check-dir" profileAgentEntries;
+  piAgentsDir = pkgs.linkFarm "gambit-pi-profile-agents-check-dir" piProfileAgentEntries;
+  optionalAgentsDir = assert optionalClaudeProfileAgentEntries [] == [];
+  assert optionalClaudeProfileAgentEntries ["chatgpt/sol"] == [];
+  assert map (entry: entry.name) (optionalClaudeProfileAgentEntries ["singularity/deepseek-flash"])
   == ["singularity-flash-high.md" "singularity-flash-high-ro.md"];
-  assert !(gambitModelsFull.rungs ? singularity-flash-high);
-  assert !(gambitModelsClaudeOnly.rungs ? singularity-flash-high);
-    pkgs.linkFarm "gambit-optional-claude-agents-check-dir" (optionalClaudeAgentEntries ["singularity/deepseek-flash"]);
+  assert !(gambitModelsFull.profiles ? singularity-flash-high);
+  assert !(gambitModelsClaudeOnly.profiles ? singularity-flash-high);
+    pkgs.linkFarm "gambit-optional-claude-agents-check-dir" (optionalClaudeProfileAgentEntries ["singularity/deepseek-flash"]);
 in
   pkgs.runCommand "gambit-rung-agents-check" {
     nativeBuildInputs = [pkgs.jq];
   } ''
     set -euo pipefail
 
-    # Guard against the whole file passing vacuously on an empty rung set.
-    jq -e 'length > 0' ${rungsJson} >/dev/null
+    # Guard against the whole file passing vacuously on an empty profile set.
+    jq -e 'length > 0' ${profilesJson} >/dev/null
 
-    # Both maps expose exactly the roles gambit dispatches. A role gambit asks
-    # for that is missing here resolves to nothing at runtime. The orchestrator
-    # is seated only where a Codex route exists; without it, gambit's loading
-    # session performs the effort itself (contracts/models.md).
+    # Both maps expose exactly the explicit roles Gambit dispatches. The
+    # orchestrator is seated only where a Codex route exists; without it,
+    # Gambit's loading session performs the effort itself.
     jq -e '
       (.roles | keys | sort)
-      == ["finder", "orchestrator", "scout", "steelman", "test-runner", "verifier", "worker"]
+      == ["conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "orchestrator", "scout", "steelman", "task-reviewer", "test-runner"]
+      and .roles.implementer == {"entry":"luna-low"}
+      and .roles."task-reviewer" == {"entry":"terra-medium","readonly":true}
+      and .roles."finding-verifier" == {"entry":"terra-medium","readonly":true}
+      and .roles."conformance-reviewer" == {"entry":"sol-high","readonly":true}
+      and .roles."integration-reviewer" == {"entry":"sol-high","readonly":true}
       and .roles.orchestrator.entry == "sol-high"
       and (.roles.orchestrator | has("readonly") | not)
+      and (.roles as $roles | ["worker", "finder", "verifier", "reviewer"] | all(. as $old | ($roles | has($old) | not)))
     ' ${fullJson} >/dev/null
     jq -e '
       (.roles | keys | sort)
-      == ["finder", "scout", "steelman", "test-runner", "verifier", "worker"]
+      == ["conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "scout", "steelman", "task-reviewer", "test-runner"]
+      and .roles.implementer == {"entry":"opus"}
+      and .roles."task-reviewer" == {"entry":"fable","readonly":true}
+      and .roles."finding-verifier" == {"entry":"fable","readonly":true}
+      and .roles."conformance-reviewer" == {"entry":"fable","readonly":true}
+      and .roles."integration-reviewer" == {"entry":"fable","readonly":true}
+      and (.roles as $roles | ["worker", "finder", "verifier", "reviewer"] | all(. as $old | ($roles | has($old) | not)))
     ' ${claudeOnlyJson} >/dev/null
     for map in ${fullJson} ${claudeOnlyJson}; do
-      # Every entry rung and every ladder element names a rung the same map
-      # declares — no dangling ladder step.
+      # Every role entry names a model profile the same map declares.
       jq -e '
-        (.rungs | keys) as $declared
-        | [.roles[] | .entry, ((.ladder // [])[])] as $used
-        | all($used[]; . as $rung | ($declared | index($rung)) != null)
+        (.profiles | keys) as $declared
+        | [.roles[].entry] as $used
+        | all($used[]; . as $profile | ($declared | index($profile)) != null)
+        and (. | has("rungs") | not)
       ' "$map" >/dev/null
     done
-
-    # The worker ladder is exactly its entry rung on both maps. Keep this
-    # expected ladder independent of the source declarations.
-    jq -e '
-      .roles.worker.entry == "luna-low"
-      and .roles.worker.ladder == ["luna-low"]
-    ' ${fullJson} >/dev/null
-    jq -e '
-      .roles.worker.entry == "opus"
-      and .roles.worker.ladder == ["opus"]
-    ' ${claudeOnlyJson} >/dev/null
 
     # The fast policy, pinned independently of the route file: Luna and Terra
     # are always fast, Sol is fast only on its own fast route, Astra never.
@@ -158,43 +158,46 @@ in
       and .sol.seat == "chatgpt-sol"
     ' ${tiltyardJson} >/dev/null
 
-    # The agent rungs of the full map are exactly the declared gambit rungs,
-    # and each one follows the <rung> / <rung>-ro naming models.json and the
-    # generated subagent files both depend on.
-    jq -e --argjson declared "$(cat ${rungsJson})" '
-      ([.rungs | to_entries[] | select(.value | has("agent")) | .key] | sort)
+    # The agent profiles of the full map are exactly the declared Gambit model
+    # profiles, and each follows the <profile> / <profile>-ro naming contract.
+    jq -e --argjson declared "$(cat ${profilesJson})" '
+      ([.profiles | to_entries[] | select(.value | has("agent")) | .key] | sort)
         == ($declared | keys | sort)
       and all(
-        .rungs | to_entries[] | select(.value | has("agent"));
+        .profiles | to_entries[] | select(.value | has("agent"));
         .value.agent == .key and .value.readonly_agent == (.key + "-ro")
       )
     ' ${fullJson} >/dev/null
 
-    # The Claude-only map (work profile everywhere, plus every non-Codex host)
-    # carries no GPT rung at all — only enum-model rungs.
-    jq -e 'all(.rungs[]; (has("agent") | not) and has("model"))' ${claudeOnlyJson} >/dev/null
+    # The Claude-only map carries no GPT profile — only enum-model profiles.
+    jq -e 'all(.profiles[]; (has("agent") | not) and has("model"))' ${claudeOnlyJson} >/dev/null
 
-    # No rung may name a route patchbay does not publish under codexUpstream;
-    # such a rung would dispatch at a port nothing listens on.
+    # No profile may name a route patchbay does not publish under
+    # codexUpstream; such a profile would dispatch at a port nothing listens on.
     jq -e --argjson routes "$(cat ${routesJson})" '
       all(.[]; .route as $route | ($routes | index($route)) != null)
-    ' ${rungsJson} >/dev/null
+    ' ${profilesJson} >/dev/null
 
     # The rendered subagents: model/effort match the declaration, the
     # read-only variant carries the full denylist and its bounded-Bash
     # directive, and the writing variant carries neither.
-    for rung in $(jq -r 'keys[]' ${rungsJson}); do
-      route=$(jq -r --arg r "$rung" '.[$r].route' ${rungsJson})
-      effort=$(jq -r --arg r "$rung" '.[$r].effort' ${rungsJson})
+    for profile in $(jq -r 'keys[]' ${profilesJson}); do
+      route=$(jq -r --arg r "$profile" '.[$r].route' ${profilesJson})
+      effort=$(jq -r --arg r "$profile" '.[$r].effort' ${profilesJson})
 
-      plain="${agentsDir}/$rung.md"
-      ro="${agentsDir}/$rung-ro.md"
+      plain="${agentsDir}/$profile.md"
+      ro="${agentsDir}/$profile-ro.md"
       test -f "$plain"
       test -f "$ro"
 
       for f in "$plain" "$ro"; do
         grep -qxF "model: $route" "$f"
         grep -qxF "effort: $effort" "$f"
+        grep -qF "Gambit model profile:" "$f"
+        if grep -qF "Gambit rung" "$f"; then
+          echo "generated profile $f retains rung wording" >&2
+          exit 1
+        fi
       done
 
       grep -qxF ${lib.escapeShellArg expectedDenylist} "$ro"
@@ -202,36 +205,37 @@ in
       grep -qF "Never run:" "$ro"
 
       if grep -qF "disallowedTools" "$plain"; then
-        echo "writing variant $rung.md carries a denylist" >&2
+        echo "writing variant $profile.md carries a denylist" >&2
         exit 1
       fi
       if grep -qF "READ-ONLY" "$plain"; then
-        echo "writing variant $rung.md carries the read-only directive" >&2
+        echo "writing variant $profile.md carries the read-only directive" >&2
         exit 1
       fi
 
-      # Pi gets the same named rungs rendered in pi-subagents frontmatter.
+      # Pi gets the same named profiles rendered in pi-subagents frontmatter.
       # Its direct Codex provider replaces Claude's patchbay route, `thinking`
       # replaces `effort`, and read-only variants expose inspection tools only.
       pi_model="openai-codex/$(jq -r --arg r "$route" '.[$r].model' ${routeModelsJson})"
       speed=$(jq -r --arg r "$route" '.[$r].speed // ""' ${routeModelsJson})
-      pi_plain="${piAgentsDir}/$rung.md"
-      pi_ro="${piAgentsDir}/$rung-ro.md"
+      pi_plain="${piAgentsDir}/$profile.md"
+      pi_ro="${piAgentsDir}/$profile-ro.md"
       for f in "$pi_plain" "$pi_ro"; do
         test -f "$f"
         grep -qxF "model: $pi_model" "$f"
         grep -qxF "thinking: $effort" "$f"
         grep -qxF "skills: false" "$f"
+        grep -qF "Gambit model profile:" "$f"
         if grep -qF "disallowedTools:" "$f"; then
-          echo "Pi rung $f leaked Claude-only frontmatter" >&2
+          echo "Pi profile $f leaked Claude-only frontmatter" >&2
           exit 1
         fi
       done
-      # An Orchestrator is not a leaf worker: it needs scoped child dispatch
-      # and task-state tools. Keep the expected privileges independent of the
-      # renderer, including the absence of the task extension's RPC dispatch.
-      if [ "$rung" = sol-high ]; then
-        grep -qxF 'allowed_subagents: "astra-xhigh-ro, luna-low, sol-xhigh-ro, terra-medium-ro"' "$pi_plain"
+      # An Orchestrator is not a leaf Implementer: it needs scoped child
+      # dispatch and task-state tools. Keep the expected privileges independent
+      # of the renderer, including the absence of task RPC dispatch.
+      if [ "$profile" = sol-high ]; then
+        grep -qxF 'allowed_subagents: "astra-xhigh-ro, luna-low, sol-high-ro, terra-medium-ro"' "$pi_plain"
         grep -qxF 'extensions: ["pi-tasks", "${orchestratorProcessExtension}"]' "$pi_plain"
         grep -qE '^extensions: \["pi-tasks", "/nix/store/[^"/]+/orchestrator-processes/index.ts"\]$' "$pi_plain"
         test -f '${orchestratorProcessExtension}'
@@ -247,7 +251,7 @@ in
         grep -qF 'Never sleep, poll, or dispatch a model just to wait' "$pi_plain"
       else
         if grep -q '^allowed_subagents:' "$pi_plain"; then
-          echo "leaf worker $rung unexpectedly grants delegation" >&2
+          echo "leaf profile $profile unexpectedly grants delegation" >&2
           exit 1
         fi
         if [ "$speed" = fast ]; then
@@ -258,7 +262,7 @@ in
         grep -qxF 'tools: "*"' "$pi_plain"
       fi
       if grep -q '^allowed_subagents:' "$pi_ro"; then
-        echo "read-only $rung unexpectedly grants delegation" >&2
+        echo "read-only $profile unexpectedly grants delegation" >&2
         exit 1
       fi
       grep -qxF "extensions: false" "$pi_ro"
@@ -266,19 +270,19 @@ in
       grep -qxF 'isolated: true' "$pi_ro"
       grep -qF "READ-ONLY advisory variant" "$pi_ro"
       if grep -qF "isolated: true" "$pi_plain"; then
-        echo "writing Pi variant $rung.md is isolated read-only" >&2
+        echo "writing Pi variant $profile.md is isolated read-only" >&2
         exit 1
       fi
     done
 
-    # Pi-only omakase rungs: rendered into the same agents dir, with the
-    # gateway model id and the alias's pinned effort, and the same tool
-    # discipline as the Codex rungs. They have no Claude Code twin.
-    for rung in $(jq -r 'keys[]' ${omakaseJson}); do
-      model=$(jq -r --arg r "$rung" '.[$r].model' ${omakaseJson})
-      thinking=$(jq -r --arg r "$rung" '.[$r].thinking' ${omakaseJson})
-      pi_plain="${piAgentsDir}/$rung.md"
-      pi_ro="${piAgentsDir}/$rung-ro.md"
+    # Pi-only omakase profiles: rendered into the same agents dir, with the
+    # gateway model id and alias's pinned effort, and the same tool discipline
+    # as the Codex profiles. They have no Claude Code twin.
+    for profile in $(jq -r 'keys[]' ${omakaseJson}); do
+      model=$(jq -r --arg r "$profile" '.[$r].model' ${omakaseJson})
+      thinking=$(jq -r --arg r "$profile" '.[$r].thinking' ${omakaseJson})
+      pi_plain="${piAgentsDir}/$profile.md"
+      pi_ro="${piAgentsDir}/$profile-ro.md"
       for f in "$pi_plain" "$pi_ro"; do
         test -f "$f"
         grep -qxF "model: $model" "$f"
@@ -286,7 +290,7 @@ in
         grep -qxF "extensions: false" "$f"
         grep -qxF "skills: false" "$f"
         if grep -qF "disallowedTools:" "$f"; then
-          echo "omakase Pi rung $f leaked Claude-only frontmatter" >&2
+          echo "omakase Pi profile $f leaked Claude-only frontmatter" >&2
           exit 1
         fi
       done
@@ -295,16 +299,16 @@ in
       grep -qxF 'isolated: true' "$pi_ro"
       grep -qF "READ-ONLY advisory variant" "$pi_ro"
       if grep -qF "isolated: true" "$pi_plain"; then
-        echo "writing omakase Pi variant $rung.md is isolated read-only" >&2
+        echo "writing omakase Pi variant $profile.md is isolated read-only" >&2
         exit 1
       fi
       if grep -q '^allowed_subagents:' "$pi_plain" "$pi_ro"; then
-        echo "omakase leaf rung $rung unexpectedly grants delegation" >&2
+        echo "omakase leaf profile $profile unexpectedly grants delegation" >&2
         exit 1
       fi
-      # An omakase rung must not collide with a Codex rung name.
-      if jq -e --arg r "$rung" 'has($r)' ${rungsJson} >/dev/null; then
-        echo "omakase rung $rung shadows a Codex rung" >&2
+      # An omakase profile must not collide with a Codex profile name.
+      if jq -e --arg r "$profile" 'has($r)' ${profilesJson} >/dev/null; then
+        echo "omakase profile $profile shadows a Codex profile" >&2
         exit 1
       fi
     done

@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""PreToolUse:Agent|Task guard for gambit worker dispatches.
+"""PreToolUse:Agent|Task guard for Gambit Implementer dispatches.
 
-The worker's brief is the source of truth for each dispatch. This hook only
-runs the validator for the writing agents named by the worker role's entry and
-ladder in the local Gambit registry. Malformed input fails open, while registry
-failures deny rung-shaped agents and leave unrelated agents untouched.
+The Implementer's brief is the source of truth for each dispatch. This hook
+runs the validator for the writing agent named by the Implementer role's entry
+model profile. Installed and historical registries using the old rungs/worker
+schema remain supported. Malformed hook input fails open, while registry
+failures deny model-profile-shaped agents and leave unrelated agents untouched.
 """
 import json
 import os
@@ -44,37 +45,65 @@ def load_json_stdin() -> dict[str, Any]:
     return value
 
 
-def worker_agents(registry_path: str) -> tuple[set[str], str]:
+def implementer_dispatch(registry_path: str) -> tuple[set[str], str, str]:
+    """Return guarded agents, entry id, and the validator's entry flag.
+
+    New registries use profiles/implementer and are entry-only. Old
+    rungs/worker registries may include a ladder. Any mixture of the two schema
+    generations is ambiguous and rejected rather than guessed at.
+    """
     with open(registry_path, encoding="utf-8") as registry_file:
         registry = json.load(registry_file)
 
     if not isinstance(registry, dict):
         raise ValueError("registry is not an object")
-    rungs = registry["rungs"]
-    roles = registry["roles"]
-    if not isinstance(rungs, dict) or not isinstance(roles, dict):
-        raise ValueError("registry has invalid rungs or roles")
-    worker = roles["worker"]
-    if not isinstance(worker, dict):
-        raise ValueError("registry worker role is invalid")
+    roles = registry.get("roles")
+    if not isinstance(roles, dict):
+        raise ValueError("registry roles are invalid")
 
-    entry = worker["entry"]
+    has_new = "profiles" in registry or "implementer" in roles
+    has_old = "rungs" in registry or "worker" in roles
+    if has_new and has_old:
+        raise ValueError("registry has ambiguous mixed profiles/implementer and rungs/worker schemas")
+    if not has_new and not has_old:
+        raise ValueError("registry has neither profiles/implementer nor rungs/worker schema")
+
+    if has_new:
+        profiles = registry.get("profiles")
+        implementer = roles.get("implementer")
+        if not isinstance(profiles, dict) or not isinstance(implementer, dict):
+            raise ValueError("registry has invalid profiles or Implementer role")
+        if "ladder" in implementer:
+            raise ValueError("registry Implementer role must be entry-only")
+        entry = implementer.get("entry")
+        if not isinstance(entry, str):
+            raise ValueError("registry Implementer entry is invalid")
+        profile = profiles.get(entry)
+        if not isinstance(profile, dict) or not isinstance(profile.get("agent"), str):
+            raise ValueError("registry Implementer profile is invalid")
+        return {profile["agent"]}, entry, "--entry-profile"
+
+    rungs = registry.get("rungs")
+    worker = roles.get("worker")
+    if not isinstance(rungs, dict) or not isinstance(worker, dict):
+        raise ValueError("legacy registry has invalid rungs or worker role")
+    entry = worker.get("entry")
     ladder = worker.get("ladder", [])
     if not isinstance(entry, str) or not isinstance(ladder, list) or not all(
         isinstance(rung, str) for rung in ladder
     ):
-        raise ValueError("registry worker entry or ladder is invalid")
+        raise ValueError("legacy registry worker entry or ladder is invalid")
 
     agents: set[str] = set()
     for rung_name in [entry, *ladder]:
-        rung = rungs[rung_name]
+        rung = rungs.get(rung_name)
         if not isinstance(rung, dict) or not isinstance(rung.get("agent"), str):
-            raise ValueError("registry worker rung is invalid")
+            raise ValueError("legacy registry worker rung is invalid")
         agents.add(rung["agent"])
-    return agents, entry
+    return agents, entry, "--entry-rung"
 
 
-def is_rung_agent(agent: Any) -> bool:
+def is_profile_agent(agent: Any) -> bool:
     if not isinstance(agent, str):
         return False
     if agent.endswith("-ro"):
@@ -121,11 +150,11 @@ def main() -> None:
     agent = tool_input.get("subagent_type")
     registry_path = os.path.expanduser(os.environ.get(MODELS_ENV, DEFAULT_MODELS))
     try:
-        agents, entry_rung = worker_agents(registry_path)
-    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
-        if is_rung_agent(agent):
+        agents, entry, entry_flag = implementer_dispatch(registry_path)
+    except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
+        if is_profile_agent(agent):
             deny(
-                "Gambit worker dispatch is blocked because the "
+                "Gambit Implementer dispatch is blocked because the "
                 f"{MODELS_ENV} registry could not be loaded at "
                 f"{registry_path}: {error}."
             )
@@ -149,7 +178,7 @@ def main() -> None:
         if task is None:
             missing.append("Task")
         deny(
-            "Gambit worker dispatch is blocked because the prompt is missing "
+            "Gambit Implementer dispatch is blocked because the prompt is missing "
             + " and ".join(missing)
             + " line(s)."
         )
@@ -158,7 +187,7 @@ def main() -> None:
     validator_path = os.path.expanduser(validator)
     if not validator_path or not os.path.isfile(validator_path):
         deny(
-            "Gambit worker dispatch is blocked because "
+            "Gambit Implementer dispatch is blocked because "
             f"{VALIDATOR_ENV} is unset or missing: {validator or '<unset>'}."
         )
 
@@ -175,8 +204,8 @@ def main() -> None:
                 record,
                 "--task",
                 task,
-                "--entry-rung",
-                entry_rung,
+                entry_flag,
+                entry,
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -185,14 +214,14 @@ def main() -> None:
         )
     except OSError as error:
         deny(
-            "Gambit worker dispatch is blocked because the validator could not "
+            "Gambit Implementer dispatch is blocked because the validator could not "
             f"run: {error}."
         )
 
     if result.returncode != 0:
         output = result.stdout.strip() or "<validator produced no output>"
         deny(
-            "Gambit worker dispatch is blocked because brief validation failed "
+            "Gambit Implementer dispatch is blocked because brief validation failed "
             f"(exit {result.returncode}): {output}"
         )
 

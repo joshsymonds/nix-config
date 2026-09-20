@@ -1,6 +1,6 @@
-# Gambit's rung/role data — the single source of truth for which non-Claude
-# ladder rungs exist, what each one is named, how it is rendered as a Claude
-# Code subagent, and how roles map onto rungs.
+# Gambit's profile/role data — the single source of truth for which non-Claude
+# model profiles exist, what each one is named, how it is rendered as a Claude
+# Code subagent, and how roles map onto profiles.
 #
 # Imported by home-manager/claude-code/default.nix (which installs the agents
 # and writes <profile>/gambit/models.json) and by tests/gambit-rung-agents.nix
@@ -11,42 +11,42 @@
   pkgs,
   orchestratorProcessExtension ? "${import ../pi/tool-packages {inherit lib pkgs;}}/orchestrator-processes/index.ts",
 }: rec {
-  # ── Gambit rung agents ──────────────────────────────────────────────────
-  # Gambit's non-Claude ladder rungs ship as Claude Code SUBAGENT
+  # ── Gambit profile agents ──────────────────────────────────────────────────
+  # Gambit's non-Claude model profiles ship as Claude Code SUBAGENT
   # DEFINITIONS, not as model parameters. The Agent tool's `model:` argument
   # is enum-locked (sonnet/opus/haiku/fable/inherit), so a patchbay route id
   # like chatgpt/sol can only reach the wire through a subagent's
   # frontmatter, whose `model` field accepts a full model id. Gambit
-  # dispatches a rung by subagent_type and passes the real contract by path
+  # dispatches a profile by subagent_type and passes the real contract by path
   # in the prompt, so these bodies stay deliberately generic and minimal.
   #
   # Each `route` must be a route key patchbay publishes under codexUpstream;
   # home-manager/patchbay/chatgpt-models.nix owns that list and the check
   # asserts the two agree. A route whose Seat carries speed = "fast" makes
-  # the rung a fast rung on both harnesses: the Claude Code agent gets it from
+  # the profile a fast profile on both harnesses: the Claude Code agent gets it from
   # the Seat, the Pi twin from the codex-fast extension below.
   #
-  # The worker role uses an entry-only ladder: Luna is cheap and fast, while
-  # higher-effort review rungs remain reserved for their advisory roles.
-  gambitRungs = {
-    # Worker entry rung: Luna, always on the fast tier.
+  # The Implementer role is entry-only: Luna is cheap and fast, while
+  # higher-effort model profiles remain reserved for advisory roles.
+  gambitProfiles = {
+    # Implementer entry profile: Luna, always on the fast tier.
     "luna-low" = {
       route = "chatgpt/luna";
       effort = "low";
     };
-    # Retained standard-speed rung: Sol. It ran on the fast tier from
+    # Retained standard-speed profile: Sol. It ran on the fast tier from
     # 2026-09-09 to 2026-09-11 and was the largest Codex-quota draw on the
-    # ladder, so it went back to standard.
+    # profile catalog, so it went back to standard.
     "sol-low" = {
       route = "chatgpt/sol";
       effort = "low";
     };
-    # Scout rung: Terra, always on the fast tier.
+    # Scout profile: Terra, always on the fast tier.
     "terra-medium" = {
       route = "chatgpt/terra";
       effort = "medium";
     };
-    # Orchestrator rung: Sol at high effort runs one effort, review, or
+    # Orchestrator profile: Sol at high effort runs one effort, review, or
     # release from the durable record (gambit contracts/models.md). Chosen by
     # Josh on 2026-09-12 when the judgment campaign was stopped short of its
     # table to save quota.
@@ -54,16 +54,14 @@
       route = "chatgpt/sol";
       effort = "high";
     };
-    # Review finders and verifier: Sol at standard speed.
+    # Retained Sol xhigh profile for explicit/manual dispatch.
     "sol-xhigh" = {
       route = "chatgpt/sol";
       effort = "xhigh";
     };
-    # GPT-6 Astra at the effort the Pi orchestrator runs it: the terminal
-    # worker rung — the orchestrator's own model in an isolated context, after
-    # both fast rungs have failed — and a second transport for the production
-    # orchestrator model from Claude Code over patchbay's HTTPS path
-    # (cli-proxy-api) rather than Pi's Codex WebSocket, when one stalls.
+    # Retained Astra high profile for explicit/manual dispatch. Claude Code
+    # reaches it through patchbay's HTTPS path (cli-proxy-api), while Pi uses
+    # Codex WebSocket. It is not an implementation escalation target.
     "astra-high" = {
       route = "chatgpt/astra";
       effort = "high";
@@ -78,7 +76,7 @@
 
   # Explicit Claude Code dispatch only: these never enter Gambit's role map
   # or Pi's agent directory. Install each pair only where its route is declared.
-  optionalClaudeRungs = {
+  optionalClaudeProfiles = {
     "singularity-flash-high" = {
       route = "singularity/deepseek-flash";
       effort = "high";
@@ -87,7 +85,7 @@
 
   # Route key -> the Seat's upstream identity (model id, optional speed),
   # owned by the patchbay module. The model id labels the Claude Code agent
-  # and names the Pi twin's provider model, so a rung never hardcodes a model
+  # and names the Pi twin's provider model, so a profile never hardcodes a model
   # generation; the speed decides whether the Pi twin loads the fast
   # extension.
   chatgptModels = import ../patchbay/chatgpt-models.nix;
@@ -96,26 +94,26 @@
 
   # The Pi-side counterpart of a fast Seat: a before_provider_request hook
   # that asks the openai-codex provider for the priority tier. Referenced by
-  # store path from the rung frontmatter, so only fast rungs ever load it.
+  # store path from the profile frontmatter, so only fast profiles ever load it.
   codexFastExtension = ../pi/codex-fast.ts;
 
-  # The naming contract models.json depends on: a rung's writing agent is the
-  # rung name, its advisory agent is the rung name plus "-ro".
-  rungAgentName = rung: readonly: rung + lib.optionalString readonly "-ro";
+  # The naming contract models.json depends on: a profile's writing agent is the
+  # profile name, its advisory agent is the profile name plus "-ro".
+  profileAgentName = profile: readonly: profile + lib.optionalString readonly "-ro";
 
   # The read-only denylist. `disallowedTools` is resolved before any `tools`
   # allowlist (Claude Code sub-agents reference), so this removes the
   # mutating tools outright: file edits, sub-dispatch (which could launch a
   # writing agent), and every MCP server (shimmer reaches Jira, GitLab,
   # Todoist, Monarch — all write-capable).
-  rungAgentDenylist = "disallowedTools: Edit, Write, NotebookEdit, Agent, mcp__*";
+  profileAgentDenylist = "disallowedTools: Edit, Write, NotebookEdit, Agent, mcp__*";
 
   # What the -ro variants are told, over and above the denylist. Bash
   # survives the denylist because the read-only contracts (scout, steelman,
-  # finder, verifier) are useless without git and search, so the bound on it
-  # has to be stated in the body — a prompt-level rule, not a sandbox.
+  # and reviewers) are useless without git and search, so the bound on it has
+  # to be stated in the body — a prompt-level rule, not a sandbox.
   readonlyDirective = [
-    "You are a gambit rung agent in its READ-ONLY advisory variant. Follow the"
+    "You are a Gambit model-profile agent in its READ-ONLY advisory variant. Follow the"
     "contract and brief given in your prompt exactly."
     ""
     "You inspect and report; you never change the workspace. The editing tools"
@@ -133,23 +131,23 @@
 
   # The description is quoted because it contains a colon; an unquoted YAML
   # plain scalar cannot carry ": ".
-  mkRungAgent = rung: readonly: let
-    inherit ((gambitRungs // optionalClaudeRungs).${rung}) route effort;
-    agentName = rungAgentName rung readonly;
+  mkProfileAgent = profile: readonly: let
+    inherit ((gambitProfiles // optionalClaudeProfiles).${profile}) route effort;
+    agentName = profileAgentName profile readonly;
     modelLabel =
       if builtins.hasAttr route chatgptModels
       then routeModel route
       else route;
   in
-    pkgs.writeText "gambit-rung-${agentName}.md" (lib.concatStringsSep "\n" (
+    pkgs.writeText "gambit-profile-${agentName}.md" (lib.concatStringsSep "\n" (
       [
         "---"
         "name: ${agentName}"
-        ''description: "Gambit rung: ${modelLabel} (${route}) at ${effort} effort via patchbay${lib.optionalString readonly ", read-only advisory variant"}"''
+        ''description: "Gambit model profile: ${modelLabel} (${route}) at ${effort} effort via patchbay${lib.optionalString readonly ", read-only advisory variant"}"''
         "model: ${route}"
         "effort: ${effort}"
       ]
-      ++ lib.optional readonly rungAgentDenylist
+      ++ lib.optional readonly profileAgentDenylist
       ++ [
         "---"
         ""
@@ -157,36 +155,36 @@
       ++ (
         if readonly
         then readonlyDirective
-        else ["You are a gambit rung agent. Follow the contract and brief given in your prompt exactly."]
+        else ["You are a Gambit model-profile agent. Follow the contract and brief given in your prompt exactly."]
       )
       ++ [""]
     ));
 
-  # Both variants of every rung, as linkFarm entries.
-  rungAgentEntries = lib.concatMap (
-    rung:
+  # Both variants of every profile, as linkFarm entries.
+  profileAgentEntries = lib.concatMap (
+    profile:
       map (readonly: {
-        name = "${rungAgentName rung readonly}.md";
-        path = mkRungAgent rung readonly;
+        name = "${profileAgentName profile readonly}.md";
+        path = mkProfileAgent profile readonly;
       }) [false true]
-  ) (lib.attrNames gambitRungs);
+  ) (lib.attrNames gambitProfiles);
 
-  optionalClaudeAgentEntries = routes:
+  optionalClaudeProfileAgentEntries = routes:
     lib.concatMap (
-      rung:
+      profile:
         map (readonly: {
-          name = "${rungAgentName rung readonly}.md";
-          path = mkRungAgent rung readonly;
+          name = "${profileAgentName profile readonly}.md";
+          path = mkProfileAgent profile readonly;
         }) [false true]
-    ) (lib.attrNames (lib.filterAttrs (_: spec: builtins.elem spec.route routes) optionalClaudeRungs));
+    ) (lib.attrNames (lib.filterAttrs (_: spec: builtins.elem spec.route routes) optionalClaudeProfiles));
 
   # Nested dispatch is opt-in independently of extension loading. Permit the
   # Orchestrator to reach exactly the non-Orchestrator role targets and advisory
   # variants, not arbitrary agents or itself.
   piOrchestratorChildren = lib.sort builtins.lessThan (lib.unique (lib.concatMap (
     role:
-      map (rung: let
-        target = gambitModelsFull.rungs.${rung};
+      map (profile: let
+        target = gambitModelsFull.profiles.${profile};
       in
         if role.readonly or false
         then target.readonly_agent
@@ -194,22 +192,22 @@
   ) (lib.attrValues (lib.removeAttrs gambitModelsFull.roles ["orchestrator"]))));
 
   # pi-subagents uses Pi frontmatter rather than Claude's patchbay fields.
-  # Leaf workers keep extensions off except the fast-tier hook. Orchestrators
+  # Leaf agents keep extensions off except the fast-tier hook. Orchestrators
   # need task-state and process tools as well as ownership-scoped nested Agent;
   # do not expose pi-tasks' separate RPC dispatch/control tools. Skills remain
   # explicit contract-path loads. Read-only variants stay isolated leaves.
-  mkPiRungAgent = rung: readonly: let
-    inherit (gambitRungs.${rung}) route effort;
-    agentName = rungAgentName rung readonly;
+  mkPiProfileAgent = profile: readonly: let
+    inherit (gambitProfiles.${profile}) route effort;
+    agentName = profileAgentName profile readonly;
     model = "openai-codex/${routeModel route}";
     fast = routeFast route && !readonly;
-    orchestrator = !readonly && rung == gambitModelsFull.roles.orchestrator.entry;
+    orchestrator = !readonly && profile == gambitModelsFull.roles.orchestrator.entry;
   in
-    pkgs.writeText "gambit-pi-rung-${agentName}.md" (lib.concatStringsSep "\n" (
+    pkgs.writeText "gambit-pi-profile-${agentName}.md" (lib.concatStringsSep "\n" (
       [
         "---"
         "name: ${agentName}"
-        ''description: "Gambit rung: ${model} at ${effort} thinking${lib.optionalString fast ", fast tier"}${lib.optionalString readonly ", read-only advisory variant"}"''
+        ''description: "Gambit model profile: ${model} at ${effort} thinking${lib.optionalString fast ", fast tier"}${lib.optionalString readonly ", read-only advisory variant"}"''
         "model: ${model}"
         "thinking: ${effort}"
         ''tools: "${
@@ -251,18 +249,18 @@
           "when finished, join nested children, then return your final report."
           "Use the scoped Agent tools, never shell-launched models or a parent proxy."
         ]
-        else ["You are a gambit rung agent. Follow the contract and brief given in your prompt exactly."]
+        else ["You are a Gambit model-profile agent. Follow the contract and brief given in your prompt exactly."]
       )
       ++ [""]
     ));
 
-  # Pi-only rungs on the omakase gateway (home-manager/pi declares the
+  # Pi-only profiles on the omakase gateway (home-manager/pi declares the
   # provider). No Claude Code twin: patchbay publishes no omakase route, and
   # the gateway pins reasoning effort per alias, so `thinking` here records
   # the alias's fixed effort rather than choosing one. These are for @deep /
   # @everyday mentions and Agent dispatch while work migrates off Codex; the
-  # gambit role map below still resolves to the Codex rungs.
-  omakasePiRungs = {
+  # gambit role map below still resolves to the Codex profiles.
+  omakasePiProfiles = {
     everyday = {
       model = "omakase/everyday";
       thinking = "medium";
@@ -273,15 +271,15 @@
     };
   };
 
-  mkOmakasePiRungAgent = rung: readonly: let
-    inherit (omakasePiRungs.${rung}) model thinking;
-    agentName = rungAgentName rung readonly;
+  mkOmakasePiProfileAgent = profile: readonly: let
+    inherit (omakasePiProfiles.${profile}) model thinking;
+    agentName = profileAgentName profile readonly;
   in
-    pkgs.writeText "gambit-pi-rung-${agentName}.md" (lib.concatStringsSep "\n" (
+    pkgs.writeText "gambit-pi-profile-${agentName}.md" (lib.concatStringsSep "\n" (
       [
         "---"
         "name: ${agentName}"
-        ''description: "Gambit rung: ${model} (omakase gateway, effort pinned ${thinking})${lib.optionalString readonly ", read-only advisory variant"}"''
+        ''description: "Gambit model profile: ${model} (omakase gateway, effort pinned ${thinking})${lib.optionalString readonly ", read-only advisory variant"}"''
         "model: ${model}"
         "thinking: ${thinking}"
         ''tools: "${
@@ -300,53 +298,58 @@
       ++ (
         if readonly
         then readonlyDirective
-        else ["You are a gambit rung agent. Follow the contract and brief given in your prompt exactly."]
+        else ["You are a Gambit model-profile agent. Follow the contract and brief given in your prompt exactly."]
       )
       ++ [""]
     ));
 
-  piRungAgentEntries =
+  piProfileAgentEntries =
     lib.concatMap (
-      rung:
+      profile:
         map (readonly: {
-          name = "${rungAgentName rung readonly}.md";
-          path = mkPiRungAgent rung readonly;
+          name = "${profileAgentName profile readonly}.md";
+          path = mkPiProfileAgent profile readonly;
         }) [false true]
-    ) (lib.attrNames gambitRungs)
+    ) (lib.attrNames gambitProfiles)
     ++ lib.concatMap (
-      rung:
+      profile:
         map (readonly: {
-          name = "${rungAgentName rung readonly}.md";
-          path = mkOmakasePiRungAgent rung readonly;
+          name = "${profileAgentName profile readonly}.md";
+          path = mkOmakasePiProfileAgent profile readonly;
         }) [false true]
-    ) (lib.attrNames omakasePiRungs);
+    ) (lib.attrNames omakasePiProfiles);
 
-  # ── Gambit rung/role map ────────────────────────────────────────────────
+  # ── Gambit profile/role map ────────────────────────────────────────────────
   # <profile>/gambit/models.json: what gambit reads to turn a role into a
-  # dispatch. Two kinds of rung entry:
+  # dispatch. Two kinds of profile entry:
   #   - {agent, readonly_agent} — dispatch subagent_type=<agent> and NO model
   #     parameter; a readonly role takes readonly_agent instead. This is the
-  #     only way a foreign model id reaches the wire (see mkRungAgent above).
+  #     only way a foreign model id reaches the wire (see mkProfileAgent above).
   #   - {model} — dispatch general-purpose/Explore with that enum model.
-  # A role names its entry rung. The worker's ladder repeats only that entry;
-  # `readonly = true` marks an advisory role that must not write.
+  # A role names its entry model profile; `readonly = true` marks an advisory
+  # role that must not write.
+  #
+  # These role defaults are provisional policy selected by the user, not the
+  # measured lowest-passing profiles from a completed evaluation campaign.
+  # Keep deployment deferred until Gambit's consumers and this registry can
+  # switch together. The intended flow places task-reviewer and
+  # finding-verifier at task gates, runs conformance-reviewer and
+  # integration-reviewer as the final passes, and sends every final finding to
+  # finding-verifier.
   gambitModelsFull = {
-    rungs =
-      lib.mapAttrs (rung: _: {
-        agent = rungAgentName rung false;
-        readonly_agent = rungAgentName rung true;
+    profiles =
+      lib.mapAttrs (profile: _: {
+        agent = profileAgentName profile false;
+        readonly_agent = profileAgentName profile true;
       })
-      gambitRungs
+      gambitProfiles
       // {
         sonnet.model = "sonnet";
         opus.model = "opus";
         fable.model = "fable";
       };
     roles = {
-      worker = {
-        entry = "luna-low";
-        ladder = ["luna-low"];
-      };
+      implementer.entry = "luna-low";
       scout = {
         entry = "terra-medium";
         readonly = true;
@@ -355,12 +358,20 @@
         entry = "astra-xhigh";
         readonly = true;
       };
-      finder = {
-        entry = "sol-xhigh";
+      "task-reviewer" = {
+        entry = "terra-medium";
         readonly = true;
       };
-      verifier = {
-        entry = "sol-xhigh";
+      "finding-verifier" = {
+        entry = "terra-medium";
+        readonly = true;
+      };
+      "conformance-reviewer" = {
+        entry = "sol-high";
+        readonly = true;
+      };
+      "integration-reviewer" = {
+        entry = "sol-high";
         readonly = true;
       };
       "test-runner".entry = "luna-low";
@@ -368,19 +379,17 @@
     };
   };
 
-  # Claude-only map: no GPT rungs at all. Used on hosts without the Codex
-  # upstream, where patchbay publishes no chatgpt/* route for a rung to reach.
+  # Claude-only map: the same provisional role policy with the current Claude
+  # model choices and no GPT fallback. Used on hosts without the Codex upstream,
+  # where patchbay publishes no chatgpt/* route for a profile to reach.
   gambitModelsClaudeOnly = {
-    rungs = {
+    profiles = {
       sonnet.model = "sonnet";
       opus.model = "opus";
       fable.model = "fable";
     };
     roles = {
-      worker = {
-        entry = "opus";
-        ladder = ["opus"];
-      };
+      implementer.entry = "opus";
       scout = {
         entry = "sonnet";
         readonly = true;
@@ -389,11 +398,19 @@
         entry = "fable";
         readonly = true;
       };
-      finder = {
+      "task-reviewer" = {
         entry = "fable";
         readonly = true;
       };
-      verifier = {
+      "finding-verifier" = {
+        entry = "fable";
+        readonly = true;
+      };
+      "conformance-reviewer" = {
+        entry = "fable";
+        readonly = true;
+      };
+      "integration-reviewer" = {
         entry = "fable";
         readonly = true;
       };

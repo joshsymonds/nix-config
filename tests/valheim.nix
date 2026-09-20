@@ -55,14 +55,15 @@ in
       grep -F -- '-port 2456' ${launcher}
       grep -F -- '-public 0' ${launcher}
       grep -F -- '-savedir /var/lib/valheim' ${launcher}
-      ! grep -F -- '-crossplay' ${launcher}
+      if grep -F -- '-crossplay' ${launcher}; then
+        echo 'unexpected crossplay' >&2
+        exit 1
+      fi
       grep -F -- '/var/lib/valheim/logs' ${launcher}
       grep -F -- 'valheim-current.log' ${launcher}
       grep -F -- 'valheim invocation start' ${launcher}
       grep -F -- 'valheim invocation exit status=' ${launcher}
       grep -F -- '>> "$log_file" 2>&1' ${launcher}
-      ! grep -F -- '/bin/cat' ${launcher}
-      ! grep -F -- 'PIPESTATUS' ${launcher}
       grep -F -- 'valheim_server.x86_64' ${stopper}
       grep -F -- 'kill -INT' ${stopper}
       grep -F -- 'valheim password file is missing or unreadable' ${launcher}

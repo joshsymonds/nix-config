@@ -48,7 +48,6 @@
   '';
   launcher = pkgs.writeShellScript "valheim-launch" ''
     set -eu
-    password_file=${lib.escapeShellArg (toString cfg.passwordFile)}
     log_directory=${stateDirectory}/logs
     log_file="$log_directory/valheim-current.log"
 
@@ -58,37 +57,41 @@
     ${pkgs.coreutils}/bin/chmod 0600 "$log_file"
     printf '%s\n' "valheim invocation start" >> "$log_file"
 
-    if [ ! -r "$password_file" ]; then
-      printf '%s\n' "valheim password file is missing or unreadable" >> "$log_file"
-      exit 78
-    fi
+    password=""
+    ${lib.optionalString (cfg.passwordFile != null) ''
+      password_file=${lib.escapeShellArg (toString cfg.passwordFile)}
+      if [ ! -r "$password_file" ]; then
+        printf '%s\n' "valheim password file is missing or unreadable" >> "$log_file"
+        exit 78
+      fi
 
-    if ! password=$(${pkgs.coreutils}/bin/cat -- "$password_file"); then
-      printf '%s\n' "valheim password file is missing or unreadable" >> "$log_file"
-      exit 78
-    fi
-    byte_count=$(${pkgs.coreutils}/bin/wc -c < "$password_file")
-    line_count=$(${pkgs.coreutils}/bin/wc -l < "$password_file")
+      if ! password=$(${pkgs.coreutils}/bin/cat -- "$password_file"); then
+        printf '%s\n' "valheim password file is missing or unreadable" >> "$log_file"
+        exit 78
+      fi
+      byte_count=$(${pkgs.coreutils}/bin/wc -c < "$password_file")
+      line_count=$(${pkgs.coreutils}/bin/wc -l < "$password_file")
 
-    case "$password" in
-      ""|*[!A-Za-z0-9]*)
+      case "$password" in
+        ""|*[!A-Za-z0-9]*)
+          ${invalidPassword}
+          ;;
+      esac
+      if [ ''${#password} -lt 5 ]; then
         ${invalidPassword}
-        ;;
-    esac
-    if [ ''${#password} -lt 5 ]; then
-      ${invalidPassword}
-    fi
+      fi
 
-    # Accept one alphanumeric line with or without its final newline. Reject
-    # extra/truncated lines even though command substitution strips newlines.
-    case "$line_count" in
-      0) expected_bytes=''${#password} ;;
-      1) expected_bytes=$(( ''${#password} + 1 )) ;;
-      *) ${invalidPassword} ;;
-    esac
-    if [ "$byte_count" -ne "$expected_bytes" ]; then
-      ${invalidPassword}
-    fi
+      # Accept one alphanumeric line with or without its final newline. Reject
+      # extra/truncated lines even though command substitution strips newlines.
+      case "$line_count" in
+        0) expected_bytes=''${#password} ;;
+        1) expected_bytes=$(( ''${#password} + 1 )) ;;
+        *) ${invalidPassword} ;;
+      esac
+      if [ "$byte_count" -ne "$expected_bytes" ]; then
+        ${invalidPassword}
+      fi
+    ''}
 
     set +e
     ${lib.getExe' cfg.package "valheim-server"} \
@@ -110,8 +113,8 @@ in {
     };
 
     passwordFile = lib.mkOption {
-      type = lib.types.path;
-      description = "Restricted runtime file containing the server password.";
+      type = lib.types.nullOr lib.types.path;
+      description = "Restricted runtime password file, or null to explicitly allow passwordless joins.";
     };
 
     serverName = lib.mkOption {

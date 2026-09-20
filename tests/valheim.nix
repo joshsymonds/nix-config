@@ -19,6 +19,16 @@
         };
       }
     ]).config;
+  passwordless =
+    (evaluate [
+      {
+        services.valheim = {
+          enable = true;
+          package = fakePackage;
+          passwordFile = null;
+        };
+      }
+    ]).config.systemd.services.valheim.serviceConfig.ExecStart;
   service = enabled.systemd.services.valheim;
   unit = service.serviceConfig;
   launcher = unit.ExecStart;
@@ -70,5 +80,12 @@ in
       grep -F -- 'valheim password file is missing or unreadable' ${launcher}
       grep -F -- 'valheim password is invalid' ${launcher}
       grep -F -- '-password "$password"' ${launcher}
+      grep -F -- 'password=""' ${passwordless}
+      grep -F -- '-password "$password"' ${passwordless}
+      grep -F -- '-public 0' ${passwordless}
+      if grep -Eq 'password_file=|valheim password is' ${passwordless}; then
+        echo 'passwordless launcher unexpectedly requires a credential' >&2
+        exit 1
+      fi
       touch "$out"
     ''

@@ -58,13 +58,18 @@ test "$invocation" = "$(systemctl show --value -p InvocationID valheim.service)"
 test "$restarts" = "$(systemctl show --value -p NRestarts valheim.service)"
 ```
 
-The encrypted password is
-`secrets/hosts/ultraviolet/valheim-password.age`; agenix exposes it at runtime
-outside the state directory. An authorized operator can deliberately retrieve
-it with `sudo -u valheim cat /run/agenix/valheim-password`; this prints the
-secret, so never run it into logs, paste it, or use it for routine checks. The
-launcher passes the password in argv: persisted logs are protected, but an
-authorized local process inspector can see the live argv.
+Midgard is **passwordless** (`services.valheim.passwordFile = null`) and remains
+unlisted. Anyone who can reach its game ports can join, subject to Valheim's
+normal version/account checks and any ban/permit lists. Network access, not a
+shared password, is the access boundary; do not forward ports publicly unless
+that is intended. LAN players connect to `172.31.0.200:2456`; authorized Tailscale
+peers can use ultraviolet's Tailscale address without a game password.
+
+The module still supports a restricted runtime `passwordFile` for servers that
+need a password. In that mode, upstream Valheim exposes it in process arguments.
+The old encrypted credential remains in
+`secrets/hosts/ultraviolet/valheim-password.age` for rollback, but Midgard no longer
+provisions or reads it.
 
 The LAN endpoint is `172.31.0.200:2456`; the host firewall opens UDP
 2456–2457. No router, Tailscale, Cloudflare, or other public ingress is part of

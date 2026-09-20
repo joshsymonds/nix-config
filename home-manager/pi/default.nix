@@ -199,9 +199,11 @@ in {
     };
     ".pi/agent/pi-goal.json".text = builtins.toJSON {
       rpc.enabled = false;
+      # Finite limits are gambit's documented Pi safety exception: the pause
+      # asks only for /goal continuation of the same run and is not a terminal.
       continuationLimits = {
-        automaticTurns = null;
-        noProgressTurns = null;
+        automaticTurns = 25;
+        noProgressTurns = 3;
       };
     };
     ".pi/agent/subagents.json".text = builtins.toJSON {

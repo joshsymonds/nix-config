@@ -27,12 +27,12 @@ in
       exit 1
     }
 
-    grep -qF '"automaticTurns":null' ${settings} || {
-      echo "pi-goal automaticTurns pause is not disabled" >&2
+    grep -qF '"automaticTurns":25' ${settings} || {
+      echo "pi-goal automaticTurns limit is not 25" >&2
       exit 1
     }
-    grep -qF '"noProgressTurns":null' ${settings} || {
-      echo "pi-goal noProgressTurns pause is not disabled" >&2
+    grep -qF '"noProgressTurns":3' ${settings} || {
+      echo "pi-goal noProgressTurns limit is not 3" >&2
       exit 1
     }
 

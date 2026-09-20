@@ -590,6 +590,7 @@
       perSystem = {
         pkgs,
         system,
+        config,
         ...
       }: {
         # Override flake-parts' default `pkgs` with an allowUnfree-enabled
@@ -645,6 +646,10 @@
             overlays = [self.outputs.overlays.default];
           };
         in {
+          valheim = import ./tests/valheim.nix {
+            pkgs = checkPkgs;
+          };
+          formatting = config.checks.treefmt;
           codex-agent-roster = import ./tests/codex-agent-roster.nix {
             pkgs = checkPkgs;
           };

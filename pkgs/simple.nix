@@ -5,7 +5,9 @@
 # source of truth so the two don't drift out of sync (they had: this file
 # exists because wyoming-onnx-asr and redlib-veraticus were overlay-only and
 # `nix build .#wyoming-onnx-asr` didn't work).
-{pkgs}: {
+{pkgs}: let
+  valheim = pkgs.callPackage ./valheim-server {};
+in {
   myCaddy = pkgs.callPackage ./caddy {};
   starlark-lsp = pkgs.callPackage ./starlark-lsp {};
   nuclei = pkgs.callPackage ./nuclei {};
@@ -24,4 +26,6 @@
   morgen-notifier = pkgs.callPackage ./morgen-notifier {};
   claude-notify-sounds = pkgs.callPackage ./claude-notify-sounds {};
   wyoming-onnx-asr = pkgs.callPackage ./wyoming-onnx-asr {};
+  valheim-server = valheim;
+  valheim-source-check = valheim.sourceCheck;
 }

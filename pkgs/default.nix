@@ -9,6 +9,12 @@
   inputs ? {},
   ...
 }: let
+  simplePackages = import ./simple.nix {inherit pkgs;};
+  supportedSimplePackages =
+    if pkgs.stdenv.hostPlatform.system == "x86_64-linux"
+    then simplePackages
+    else pkgs.lib.removeAttrs simplePackages ["valheim-server" "valheim-source-check"];
+
   # redlib-veraticus needs flake inputs that aren't there when this file is
   # evaluated without `inputs` (see above) — gate on their presence instead
   # of requiring them.
@@ -44,7 +50,7 @@
     }
     else {};
 in
-  import ./simple.nix {inherit pkgs;}
+  supportedSimplePackages
   // darwinOnly
   // linuxOnly
   // redlibPackages

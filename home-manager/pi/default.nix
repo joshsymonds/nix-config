@@ -47,10 +47,10 @@
       inherit lib pkgs;
       orchestratorProcessExtension = "${workflowTools}/orchestrator-processes/index.ts";
     })
-    piRungAgentEntries
+    piProfileAgentEntries
     ;
 
-  piRungAgents = pkgs.linkFarm "pi-gambit-rung-agents" piRungAgentEntries;
+  piProfileAgents = pkgs.linkFarm "pi-gambit-profile-agents" piProfileAgentEntries;
   workflowTools = import ./tool-packages {inherit lib pkgs;};
   browser = import ./agent-browser.nix {inherit lib pkgs;};
 in {
@@ -155,7 +155,7 @@ in {
     };
     ".pi/agent/extensions/compact-transcript.ts".source = "${compactTranscript}/extensions/compact-transcript.ts";
     ".pi/agent/extensions/tool-retry-guard.ts".source = ./tool-retry-guard.ts;
-    ".pi/agent/agents".source = piRungAgents;
+    ".pi/agent/agents".source = piProfileAgents;
     ".pi/agent/tasks-config.json".text = builtins.toJSON {
       taskScope = "session-global";
       autoCascade = false;

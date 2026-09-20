@@ -1,4 +1,4 @@
-# Behavioural check for the PreToolUse hook that validates gambit worker
+# Behavioural check for the PreToolUse hook that validates Gambit Implementer
 # dispatches before Claude Code launches them.
 {
   pkgs,
@@ -27,17 +27,19 @@ in
         : > "$PWD/brief.md"
         : > "$PWD/state.json"
 
-        # Keep this registry independent of the installed roster. The worker entry
-        # and ladder deliberately name the same writing agent, while another rung
-        # exercises the non-worker path.
+        # Keep this registry independent of the installed roster. The
+        # Implementer is entry-only, while test-runner and another profile
+        # exercise dispatches that the Implementer guard must exempt.
         cat > "$GAMBIT_MODELS" <<'JSON'
         {
-          "rungs": {
-            "worker-rung": {"agent": "worker-agent"},
-            "other-rung": {"agent": "other-agent"}
+          "profiles": {
+            "implementer-profile": {"agent": "implementer-agent"},
+            "test-profile": {"agent": "test-runner-agent"},
+            "other-profile": {"agent": "other-agent"}
           },
           "roles": {
-            "worker": {"entry": "worker-rung", "ladder": ["worker-rung"]}
+            "implementer": {"entry": "implementer-profile"},
+            "test-runner": {"entry": "test-profile"}
           }
         }
     JSON
@@ -68,17 +70,19 @@ in
     Record: $PWD/state.json
     Task: task-123"
 
-        # Other tools never reach the dispatch guard, even with a worker agent.
-        out=$(run_hook Bash worker-agent "no marker")
+        # Other tools never reach the dispatch guard, even with an Implementer.
+        out=$(run_hook Bash implementer-agent "no marker")
         test -z "$out" || fail "non-Agent/Task tool was denied: $out"
 
-        # An Agent/Task dispatch to an agent outside the worker entry and ladder
-        # remains untouched.
+        # Agents outside the Implementer entry remain untouched, including the
+        # explicit test-runner role.
         out=$(run_hook Agent other-agent "no marker")
-        test -z "$out" || fail "non-worker rung was denied: $out"
+        test -z "$out" || fail "non-Implementer profile was denied: $out"
+        out=$(run_hook Agent test-runner-agent "no marker")
+        test -z "$out" || fail "test-runner profile was denied: $out"
 
-        # Worker dispatches must carry both absolute paths in their prompt.
-        out=$(run_hook Agent worker-agent "Workspace: $PWD/workspace")
+        # Implementer dispatches must carry the full dispatch context.
+        out=$(run_hook Agent implementer-agent "Workspace: $PWD/workspace")
         printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
           .hookSpecificOutput.hookEventName == "PreToolUse"
           and .hookSpecificOutput.permissionDecision == "deny"
@@ -90,7 +94,7 @@ in
     Workspace: $PWD/workspace
     Task: task-123"
         rm -f "$MARKER"
-        out=$(run_hook Agent worker-agent "$missing_record_prompt")
+        out=$(run_hook Agent implementer-agent "$missing_record_prompt")
         printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
           .hookSpecificOutput.permissionDecision == "deny"
           and (.hookSpecificOutput.permissionDecisionReason | contains("Record"))
@@ -101,18 +105,18 @@ in
     Workspace: $PWD/workspace
     Record: $PWD/state.json"
         rm -f "$MARKER"
-        out=$(run_hook Agent worker-agent "$missing_task_prompt")
+        out=$(run_hook Agent implementer-agent "$missing_task_prompt")
         printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
           .hookSpecificOutput.permissionDecision == "deny"
           and (.hookSpecificOutput.permissionDecisionReason | contains("Task"))
         ' >/dev/null || fail "missing Task line was not denied: $out"
         test ! -e "$MARKER" || fail "validator ran without Task: $(cat "$MARKER")"
 
-        # A valid worker dispatch invokes the configured validator and remains
-        # silent when that validator succeeds.
+        # A valid Implementer dispatch invokes the configured validator and
+        # identifies its entry as a model profile.
         unset FAIL
         rm -f "$MARKER"
-        out=$(run_hook Agent worker-agent "$prompt")
+        out=$(run_hook Agent implementer-agent "$prompt")
         test -z "$out" || fail "passing validation was denied: $out"
         test -f "$MARKER" || fail "validator was not invoked"
         expected_args="$(printf '%s\n' \
@@ -120,50 +124,118 @@ in
           --workspace "$PWD/workspace" \
           --record "$PWD/state.json" \
           --task task-123 \
-          --entry-rung worker-rung)"
+          --entry-profile implementer-profile)"
         test "$(cat "$MARKER")" = "$expected_args" \
           || fail "validator argv mismatch: $(cat "$MARKER")"
 
         # A validator failure denies and exposes its diagnostic in the reason.
         export FAIL=1
-        out=$(run_hook Task worker-agent "$prompt")
+        out=$(run_hook Task implementer-agent "$prompt")
         printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
           .hookSpecificOutput.permissionDecision == "deny"
           and (.hookSpecificOutput.permissionDecisionReason | contains("stub validator rejected dispatch"))
         ' >/dev/null || fail "validator failure was not denied with its message: $out"
         unset FAIL
 
+        # Installed or historical registries retain the old rungs/worker schema
+        # and validator flag until they are regenerated.
+        legacy_models="$PWD/legacy-models.json"
+        cat > "$legacy_models" <<'JSON'
+        {
+          "rungs": {
+            "legacy-entry": {"agent": "legacy-low"},
+            "legacy-escalation": {"agent": "legacy-high"}
+          },
+          "roles": {
+            "worker": {
+              "entry": "legacy-entry",
+              "ladder": ["legacy-escalation"]
+            }
+          }
+        }
+    JSON
+        export GAMBIT_MODELS="$legacy_models"
+        rm -f "$MARKER"
+        out=$(run_hook Agent legacy-high "$prompt")
+        test -z "$out" || fail "legacy worker dispatch was denied: $out"
+        expected_args="$(printf '%s\n' \
+          --brief "$PWD/brief.md" \
+          --workspace "$PWD/workspace" \
+          --record "$PWD/state.json" \
+          --task task-123 \
+          --entry-rung legacy-entry)"
+        test "$(cat "$MARKER")" = "$expected_args" \
+          || fail "legacy validator argv mismatch: $(cat "$MARKER")"
+
+        # A registry containing both generations is ambiguous even if their
+        # apparent targets agree, so profile-shaped dispatches fail closed.
+        mixed_models="$PWD/mixed-models.json"
+        cat > "$mixed_models" <<'JSON'
+        {
+          "profiles": {"mixed-low": {"agent": "mixed-low"}},
+          "rungs": {"mixed-low": {"agent": "mixed-low"}},
+          "roles": {
+            "implementer": {"entry": "mixed-low"},
+            "worker": {"entry": "mixed-low", "ladder": ["mixed-low"]}
+          }
+        }
+    JSON
+        export GAMBIT_MODELS="$mixed_models"
+        rm -f "$MARKER"
+        out=$(run_hook Agent mixed-low "$prompt")
+        printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
+          .hookSpecificOutput.permissionDecision == "deny"
+          and (.hookSpecificOutput.permissionDecisionReason | contains("ambiguous"))
+        ' >/dev/null || fail "mixed registry allowed profile dispatch: $out"
+        test ! -e "$MARKER" || fail "validator ran for mixed registry"
+
+        # A syntactically valid new registry is still malformed when its
+        # Implementer entry is not an agent-backed model profile.
+        malformed_schema="$PWD/malformed-schema.json"
+        cat > "$malformed_schema" <<'JSON'
+        {
+          "profiles": {"bad-high": {"model": "opus"}},
+          "roles": {"implementer": {"entry": "bad-high"}}
+        }
+    JSON
+        export GAMBIT_MODELS="$malformed_schema"
+        out=$(run_hook Agent bad-high "$prompt")
+        printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
+          .hookSpecificOutput.permissionDecision == "deny"
+          and (.hookSpecificOutput.permissionDecisionReason | contains("Implementer profile is invalid"))
+        ' >/dev/null || fail "malformed profile registry allowed dispatch: $out"
+
         # Malformed hook input still fails open because it is not a dispatch the
         # hook can read.
         out=$(printf '{not-json' | ${pkgs.python3}/bin/python3 ${hook})
         test -z "$out" || fail "malformed input was denied: $out"
 
-        # A malformed registry denies rung-shaped agents and names the registry
-        # problem, while unrelated agents remain untouched.
+        # A malformed registry denies model-profile-shaped agents and names the
+        # registry problem, while unrelated agents remain untouched.
         malformed_models="$PWD/malformed-models.json"
         printf '{not-json' > "$malformed_models"
         export GAMBIT_MODELS="$malformed_models"
-        out=$(run_hook Agent some-rung-high "$prompt")
+        out=$(run_hook Agent some-profile-high "$prompt")
         printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
           .hookSpecificOutput.permissionDecision == "deny"
           and (.hookSpecificOutput.permissionDecisionReason | contains("GAMBIT_MODELS"))
-        ' >/dev/null || fail "malformed registry allowed rung dispatch: $out"
+        ' >/dev/null || fail "malformed registry allowed profile dispatch: $out"
         out=$(run_hook Agent general-purpose "$prompt")
         test -z "$out" || fail "malformed registry denied unrelated agent: $out"
 
-        # A missing registry denies a read-only rung-shaped agent as well.
+        # A missing registry denies a read-only profile-shaped agent as well.
         export GAMBIT_MODELS="$PWD/missing-models.json"
-        out=$(run_hook Agent some-rung-low-ro "$prompt")
+        out=$(run_hook Agent some-profile-low-ro "$prompt")
         printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
           .hookSpecificOutput.permissionDecision == "deny"
           and (.hookSpecificOutput.permissionDecisionReason | contains("GAMBIT_MODELS"))
-        ' >/dev/null || fail "missing registry allowed rung dispatch: $out"
+        ' >/dev/null || fail "missing registry allowed profile dispatch: $out"
         export GAMBIT_MODELS="$PWD/models.json"
 
         # An unset or missing validator is a deny, rather than an accidental pass.
         export GAMBIT_MODELS="$PWD/models.json"
         export GAMBIT_VALIDATE_DISPATCH="$PWD/missing-validator.py"
-        out=$(run_hook Agent worker-agent "$prompt")
+        out=$(run_hook Agent implementer-agent "$prompt")
         printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
           .hookSpecificOutput.permissionDecision == "deny"
           and (.hookSpecificOutput.permissionDecisionReason | contains("GAMBIT_VALIDATE_DISPATCH"))

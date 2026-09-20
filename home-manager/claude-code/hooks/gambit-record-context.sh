@@ -14,8 +14,8 @@
 #   repository-id is the basename of the parent of the COMMON git dir plus the
 #   first seven characters of the root commit.  Using the common dir rather
 #   than the per-worktree git dir is what makes every linked worktree of a
-#   repository — the epic workspace and each worker's — resolve to the same
-#   record.  An epic branch is matched against `epic_branch`; an effort branch
+#   repository — the epic workspace and each Implementer's — resolve to the
+#   same record. An epic branch is matched against `epic_branch`; an effort branch
 #   is matched against its branch entry in `efforts`, so the active work is named.
 #
 # STDOUT DISCIPLINE

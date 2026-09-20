@@ -14,14 +14,14 @@
   gambitRev = inputs.gambit.rev or "unknown";
 
   # Whether this host runs the ChatGPT/Codex upstream, and therefore whether
-  # patchbay publishes the chatgpt/* routes the gambit rung agents point at.
+  # patchbay publishes the chatgpt/* routes Gambit model-profile agents use.
   # `or false` keeps hosts that never import home-manager/patchbay — darwin
   # (ninuan), echelon — evaluating.
   codexUpstream = config.services.patchbay.codexUpstream.enable or false;
   codexExhausted = config.services.patchbay.codexUpstream.exhausted or false;
 
   # The chatgpt/* selectors patchbay publishes on those hosts. Same file the
-  # gambit rungs and their check import, so a selector named here, in
+  # Gambit model profiles and their compatibility-named check import, so a selector named here, in
   # modelRegistry, or in settings.json has exactly one place it can be spelled.
   chatgptModels = import ../patchbay/chatgpt-models.nix;
 
@@ -100,7 +100,7 @@
       # shallow merge, so two overlays each carrying an `env` key would keep
       # only the last one and leave the __GAMBIT_VALIDATE_DISPATCH__
       # placeholder unsubstituted (observed 2026-09-15 on vermissian: the
-      # dispatch guard denied every worker launch).
+      # dispatch guard denied every Implementer launch).
       {
         env =
           {
@@ -496,33 +496,32 @@
     '';
   };
 
-  # ── Gambit rungs ────────────────────────────────────────────────────────
-  # The rung definitions, the subagent renderer, and both rung/role maps live
-  # in ./gambit-rungs.nix so tests/gambit-rung-agents.nix can import the same
-  # data this module installs. See that file for what a rung is and why it
-  # has to be a subagent definition.
+  # ── Gambit model profiles ───────────────────────────────────────────────
+  # The model-profile definitions, subagent renderer, and both profile/role
+  # maps live in the compatibility-named ./gambit-rungs.nix so the stable
+  # gambit-rung-agents check can import the same data this module installs.
   #
   # On the -ro variants: "read-only" here is a denylist plus a prompt-level
   # directive, and that is strictly weaker than the OS-level
   # `sandbox = "read-only"` the deleted Codex executor path used to get.
   # `disallowedTools` removes the editing tools, sub-dispatch, and every MCP
   # server, but Bash survives — the read-only contracts (scout, steelman,
-  # finder, verifier) need git and search inspection, so the variant's body
+  # and reviewers) need git and search inspection, so the variant's body
   # spells out the bounded command set instead. A determined prompt could
   # still talk Bash into writing; the destructive-guard hook is what backstops
   # the worst of that.
   inherit
     (import ./gambit-rungs.nix {inherit lib pkgs;})
-    rungAgentEntries
-    optionalClaudeAgentEntries
+    profileAgentEntries
+    optionalClaudeProfileAgentEntries
     gambitModelsFull
     gambitModelsClaudeOnly
     ;
 
   # Agents dir as a linkFarm, mirroring skillsDir: the checked-in ./agents
-  # definitions plus, on Codex-upstream hosts, the generated rung agents.
+  # definitions plus, on Codex-upstream hosts, generated model-profile agents.
   # Off a Codex-upstream host the chatgpt/* routes are not published, so a
-  # rung agent would point at a port nothing listens on.
+  # profile agent would point at a port nothing listens on.
   agentsDir = let
     staticAgents = lib.attrNames (
       lib.filterAttrs (
@@ -536,9 +535,9 @@
           path = ./agents + "/${n}";
         })
         staticAgents)
-      ++ lib.optionals codexUpstream rungAgentEntries
+      ++ lib.optionals codexUpstream profileAgentEntries
       ++ lib.optionals (config.services.patchbay.enable or false)
-      (optionalClaudeAgentEntries (lib.attrNames (config.services.patchbay.extraSeats or {})))
+      (optionalClaudeProfileAgentEntries (lib.attrNames (config.services.patchbay.extraSeats or {})))
     );
 
   gambitModelsJson = builtins.toJSON (
@@ -700,8 +699,8 @@ in {
           ".claude/.keep".text = "";
           ".claude/statsig/.keep".text = "";
           ".claude/commands/.keep".text = "";
-          # The rung/role map gambit dispatches from: GPT rungs wherever the
-          # Codex upstream runs with allowance left, Claude-only elsewhere.
+          # The profile/role map Gambit dispatches from: GPT profiles wherever
+          # the Codex upstream runs with allowance left, Claude-only elsewhere.
           # See gambitModelsFull above.
           ".claude/gambit/models.json".text = gambitModelsJson;
         }
@@ -1003,8 +1002,8 @@ in {
     '';
 
     # Retire the Codex MCP server from the runtime prefs. Gambit's
-    # non-Claude rungs are subagent definitions now (see the rung agent
-    # block above), so nothing dispatches through mcp__codex__* any more.
+    # non-Claude model profiles are subagent definitions now (see the profile
+    # agent block above), so nothing dispatches through mcp__codex__* any more.
     # But the activation that used to live here MERGED the server into
     # ~/.claude.json — runtime-mutable user prefs Nix never regenerates.
     # Dropping the generator alone would orphan the entry, and every session

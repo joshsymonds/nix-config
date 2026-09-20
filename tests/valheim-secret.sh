@@ -21,8 +21,14 @@ for bad in missing corrupt wrong content; do
     content) short="$tmp/short"; printf 'bad!\n' >"$short"; age -r "$recipient" -o "$tmp/content.age" "$short"; f="$tmp/content.age" ;;
   esac
   if run "$f" >"$tmp/out" 2>&1; then echo "$bad unexpectedly passed" >&2; exit 1; fi
-  ! grep -Fq 'SyntheticValheimPassword' "$tmp/out"
-  ! grep -Fq "$identity" "$tmp/out"
+  if grep -Fq 'SyntheticValheimPassword' "$tmp/out"; then
+    echo "$bad exposed synthetic password" >&2
+    exit 1
+  fi
+  if grep -Fq "$identity" "$tmp/out"; then
+    echo "$bad exposed private identity path" >&2
+    exit 1
+  fi
 done
 if VALHEIM_SSH_IDENTITY= bash "$root/scripts/check-valheim-secret.sh" "$cipher" >/dev/null 2>&1; then exit 1; fi
 if run "$cipher" extra >/dev/null 2>&1; then exit 1; fi

@@ -16,8 +16,14 @@ runCommand "valheim-server-package-test" {
     test -f ${package}/libexec/valheim/valheim_server_Data/boot.config
     test -f ${source}/runtime/linux64/steamclient.so
     test '${package.src}' = '${source}'
-    ! grep -Eiq 'steamcmd|depotdownloader|download|update' ${package}/bin/valheim-server
-    ! grep -q -- '-crossplay' ${package}/bin/valheim-server
+    if grep -Eiq 'steamcmd|depotdownloader|download|update' ${package}/bin/valheim-server; then
+      echo 'forbidden runtime updater content found' >&2
+      exit 1
+    fi
+    if grep -q -- '-crossplay' ${package}/bin/valheim-server; then
+      echo 'forbidden crossplay content found' >&2
+      exit 1
+    fi
     grep -Fq 'valheim_server.x86_64' ${package}/bin/valheim-server
     grep -Fq '"$@"' ${package}/bin/valheim-server
 

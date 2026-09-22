@@ -225,13 +225,22 @@
       unpinKey = "unpinFable5LaunchEffort";
       aliases = [];
     };
+    "opus-5-5" = {
+      # `opus` follows Claude Code's own alias: CC 2.1.280 resolves the bare
+      # name to claude-opus-5-5 (native 1M window, 128k output), so cmswitch
+      # opus and a `--model opus` session name the same model.
+      model = "claude-opus-5-5";
+      defaultEffort = "xhigh";
+      unpinKey = null;
+      aliases = ["opus"];
+    };
     "opus-5" = {
       model = "claude-opus-5";
       defaultEffort = "xhigh";
       # CC 2.1.257 dropped unpinOpus5LaunchEffort (only opus-4-7/4-8 and
       # fable-5 keys remain in the binary), so there is no pin to clear.
       unpinKey = null;
-      aliases = ["opus"];
+      aliases = [];
     };
     "opus-4-8" = {
       model = "claude-opus-4-8";

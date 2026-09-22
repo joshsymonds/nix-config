@@ -234,10 +234,11 @@
   # any flag it does not know — "Unexpected value(s) ... for the
   # anthropic-beta header" — so strip_betas names every flag Claude Code can
   # send that Bedrock rejects. The list is every dated beta string in the CC
-  # 2.1.269 binary probed one at a time against us-east-2 (2026-09-17), not
-  # the flags one session happened to send: print mode, OAuth login and
-  # interactive mode each add flags the others do not. When a CC upgrade adds
-  # a flag Bedrock lacks, the 400 names it and this list is the fix.
+  # 2.1.269 binary probed one at a time against us-east-2 (2026-09-17) plus
+  # the four 2.1.280 added, probed the same way (2026-09-22) — not the flags
+  # one session happened to send: print mode, OAuth login and interactive
+  # mode each add flags the others do not. When a CC upgrade adds a flag
+  # Bedrock lacks, the 400 names it and this list is the fix.
   # context-1m-2025-08-07 rides through, which is what keeps the Claude 5
   # models' 1M window here.
   attainBedrockSeat = {
@@ -250,6 +251,7 @@
       "advanced-tool-use-2025-11-20"
       "advisor-tool-2026-03-01"
       "agent-memory-2026-07-22"
+      "alpha-2026-08-05"
       "cache-diagnosis-2026-04-07"
       "ccr-byoc-2025-07-29"
       "ccr-triggers-2026-01-30"
@@ -260,6 +262,7 @@
       "extended-cache-ttl-2025-04-11"
       "fast-mode-2026-02-01"
       "files-api-2025-04-14"
+      "inline-tools-2026-09-15"
       "managed-agents-2026-04-01"
       "mcp-servers-2025-12-04"
       "mcp-tunnels-2026-06-22"
@@ -272,6 +275,8 @@
       "redact-thinking-2026-02-12"
       "server-side-fallback-2026-07-01"
       "skills-2025-10-02"
+      "thinking-resumption-2026-07-17"
+      "timing-2026-09-09"
       "user-profiles-2026-03-24"
     ];
   };
@@ -287,12 +292,15 @@
   # and other unlisted subagents at medium effort, haiku-slot dispatches at
   # low. Two exact pins carve out what must stay native:
   #
-  #   * claude-opus-5 -> the context's Claude Seat. Gambit's worker and
-  #     escalation ladders TERMINATE at the opus rung, and the ladder's
-  #     100%-solve invariant is exactly that the terminal rung is native
-  #     Claude. No gambit ladder ends at fable, so fable needs no pin —
-  #     fable-inheriting subagents (default Explores, background forks) take
-  #     the Luna default.
+  #   * claude-opus-5 and claude-opus-5-5 -> the context's Claude Seat.
+  #     Gambit's worker and escalation ladders TERMINATE at the opus rung,
+  #     and the ladder's 100%-solve invariant is exactly that the terminal
+  #     rung is native Claude. The rung names the bare `opus` alias, which CC
+  #     2.1.280 resolves to claude-opus-5-5 (earlier releases: claude-opus-5),
+  #     so both ids are pinned; without the second, every opus-rung dispatch
+  #     on 2.1.280 fell through to the Luna default. No gambit ladder ends at
+  #     fable, so fable needs no pin — fable-inheriting subagents (default
+  #     Explores, background forks) take the Luna default.
   #   * claude-sonnet-5 -> the context's Claude Seat. The `sonnet` rung is
   #     gambit's cheap Claude fallback for workers when the Luna pool is
   #     cooling down; left unpinned it fell through to the Luna default and
@@ -316,6 +324,7 @@
         default_seat = "chatgpt-luna-medium";
         models = {
           "claude-opus-5" = claudeSeat;
+          "claude-opus-5-5" = claudeSeat;
           "claude-sonnet-5" = claudeSeat;
           "claude-haiku-4-5" = "chatgpt-luna-low";
           "claude-haiku-4-5-20251001" = "chatgpt-luna-low";

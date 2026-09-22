@@ -140,8 +140,11 @@ in
       ] | length == 1
     ' ${settingsJson} >/dev/null \
       || fail "settings.json does not register the hook for compact|resume"
-    jq -e '.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW == "300000"' ${settingsJson} >/dev/null \
-      || fail "settings.json does not set CLAUDE_CODE_AUTO_COMPACT_WINDOW to 300000"
+    # Auto-compaction runs at the window Claude Code tunes for the model: a
+    # CLAUDE_CODE_AUTO_COMPACT_WINDOW override would compact every 1M-window
+    # session at its fixed count instead (dropped 2026-09-22).
+    jq -e '.env | has("CLAUDE_CODE_AUTO_COMPACT_WINDOW") | not' ${settingsJson} >/dev/null \
+      || fail "settings.json sets CLAUDE_CODE_AUTO_COMPACT_WINDOW; the model-tuned window is the decision"
 
     touch "$out"
   ''

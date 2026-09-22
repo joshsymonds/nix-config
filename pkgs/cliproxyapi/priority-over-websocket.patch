@@ -72,11 +72,11 @@ index 84c4069..6c2aaaf 100644
  	if auth == nil {
  		return false
 diff --git a/internal/runtime/executor/codex_websockets_executor_test.go b/internal/runtime/executor/codex_websockets_executor_test.go
-index 3961723..c0c76ae 100644
+index 8a363e2..b59b9fa 100644
 --- a/internal/runtime/executor/codex_websockets_executor_test.go
 +++ b/internal/runtime/executor/codex_websockets_executor_test.go
-@@ -2576,3 +2576,96 @@ func TestCodexWebsocketZeroTokenIncompleteReleasesSessionRequestLock(t *testing.
- 		t.Fatal("failed to acquire session request lock after zero-token incomplete failure")
+@@ -3404,3 +3404,96 @@ func TestCodexWebsockets_SendErrorLogsSessionObject(t *testing.T) {
+ 		t.Fatalf("expected reason=send_error in log output, got: %s", logOutput)
  	}
  }
 +

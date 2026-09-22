@@ -123,9 +123,9 @@
       # without the routes never offer them.
       // lib.optionalAttrs codexUpstream {
         modelPicker.options =
-          lib.mapAttrsToList (selector: upstreamModel: {
+          lib.mapAttrsToList (selector: route: {
             model = selector;
-            label = upstreamModel;
+            label = route.model;
             description = "ChatGPT subscription via patchbay";
             behavesAs = "claude-opus-5";
           })

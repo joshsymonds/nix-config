@@ -5,13 +5,13 @@
 }:
 buildGoModule (finalAttrs: {
   pname = "cliproxyapi";
-  version = "7.2.154";
+  version = "7.3.13";
 
   src = fetchFromGitHub {
     owner = "router-for-me";
     repo = "CLIProxyAPI";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-/jD2oDlVQTc6pZ2GJess3uLhmr+/A/1yDxf0b2Zvh9Q=";
+    hash = "sha256-9ZiYPBEoxTcZaomY0Be4Q5hwQf5FCfdbvcJzYEGI+So=";
   };
 
   # Built from source rather than the upstream release binary so this patch
@@ -25,7 +25,7 @@ buildGoModule (finalAttrs: {
   # downstream, when the auth enables websockets. Carries its own tests.
   patches = [./priority-over-websocket.patch];
 
-  vendorHash = "sha256-CrDp7MOr+AwJUhTovklXx3F1yaktQlvD7VYhYSY6VvY=";
+  vendorHash = "sha256-r3yWkdMcM40G9jV7MxW/qNv3E9WrHavFilW24quEf+8=";
 
   subPackages = ["cmd/server"];
 

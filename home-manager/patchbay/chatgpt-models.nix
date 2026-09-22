@@ -41,6 +41,15 @@
     model = "gpt-5.6-luna";
     speed = "fast";
   };
+  # The GPT-6 generation of Sol and Luna, published for direct use; no gambit
+  # rung points at them yet. The Codex backend lists them only to clients at
+  # 0.155.0 or newer, and CLIProxyAPI's registry knows them from 7.3.x.
+  # Same tier policy as their 5.6 namesakes: Sol standard, Luna always fast.
+  "chatgpt/sol-6" = {model = "gpt-6-sol";};
+  "chatgpt/luna-6" = {
+    model = "gpt-6-luna";
+    speed = "fast";
+  };
   # The scout rung. Always fast, for the same reason.
   "chatgpt/terra" = {
     model = "gpt-5.6-terra";

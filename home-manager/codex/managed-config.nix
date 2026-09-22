@@ -62,7 +62,7 @@
   '';
 in
   pkgs.writeText "codex-managed-config.toml" ''
-    model = "gpt-5.6-sol"
+    model = "gpt-6-sol"
     model_reasoning_effort = "xhigh"
 
     # Equivalent to --dangerously-bypass-approvals-and-sandbox. This machine

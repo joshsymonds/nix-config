@@ -127,9 +127,9 @@ test("evaluated shared module is the one package, secret-file environment, and n
   assert.deepEqual(shared.sessionVariables, {
     PATCHBAY_CALLER_KEY_FILE: "/run/agenix/patchbay-caller-key",
     STEWARD_HELPER_BIN: "@STEWARD_RUNTIME@/bin/steward-pi-helper",
-    STEWARD_MODEL_ID: "gpt-5.6-luna",
+    STEWARD_MODEL_ID: "gpt-6-luna",
     STEWARD_MODEL_PROVIDER: "openai-codex",
-    STEWARD_MODEL_THINKING: "low",
+    STEWARD_MODEL_THINKING: "medium",
     STEWARD_NTFY_TOKEN_FILE: "${XDG_RUNTIME_DIR}/agenix/ntfy-token",
     STEWARD_NTFY_URL_FILE: "${XDG_RUNTIME_DIR}/agenix/ntfy-url",
     STEWARD_PATCHBAY_URL: "http://127.0.0.1:4242",
@@ -404,7 +404,7 @@ test("generated Codex activation preserves unrelated mutable configuration atomi
       "/home/joshsymonds/nix-config": { trust_level: "trusted" },
     });
     assert.deepEqual(actual.custom, current.custom);
-    assert.equal(actual.model, "gpt-5.6-sol");
+    assert.equal(actual.model, "gpt-6-sol");
     assert.equal(actual.approval_policy, "never");
     assert.equal(actual.tui.notifications[0], "approval-requested");
     assert.equal(statSync(target).mode & 0o777, 0o600);

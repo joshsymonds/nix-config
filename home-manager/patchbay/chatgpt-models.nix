@@ -25,28 +25,21 @@
   # 2026-09-05 by comparing reasoning tokens at low vs xhigh, same step as the
   # "(xhigh)" model-id suffix.
   "chatgpt/astra" = {model = "gpt-6-astra";};
-  # The capable GPT-5.6 tier at standard speed: the review finders and
-  # verifier, and the brainstorming steelman's neighbour.
-  "chatgpt/sol" = {model = "gpt-5.6-sol";};
+  # The capable tier at standard speed: the review finders and verifier, and
+  # the brainstorming steelman's neighbour. GPT-6 Sol and Luna are listed by
+  # the Codex backend only to clients at 0.155.0 or newer, and CLIProxyAPI's
+  # registry knows them from 7.3.x. Terra has no GPT-6 generation yet.
+  "chatgpt/sol" = {model = "gpt-6-sol";};
   # The same model on the fast tier. Published for direct use; no gambit rung
   # points at it since the worker ladder's second rung returned to standard
   # speed to spare Codex quota.
   "chatgpt/sol-fast" = {
-    model = "gpt-5.6-sol";
+    model = "gpt-6-sol";
     speed = "fast";
   };
   # The fast tier for haiku-slot work and the worker entry rung. Always fast:
   # Luna's whole point is turnaround.
   "chatgpt/luna" = {
-    model = "gpt-5.6-luna";
-    speed = "fast";
-  };
-  # The GPT-6 generation of Sol and Luna, published for direct use; no gambit
-  # rung points at them yet. The Codex backend lists them only to clients at
-  # 0.155.0 or newer, and CLIProxyAPI's registry knows them from 7.3.x.
-  # Same tier policy as their 5.6 namesakes: Sol standard, Luna always fast.
-  "chatgpt/sol-6" = {model = "gpt-6-sol";};
-  "chatgpt/luna-6" = {
     model = "gpt-6-luna";
     speed = "fast";
   };

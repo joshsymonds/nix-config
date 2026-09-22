@@ -73,6 +73,64 @@ in {
     enable = true;
     package = stewardPackage;
 
+    # Merge GPT-6 Sol and Luna into the built-in openai-codex provider: the
+    # pinned pi predates them, and the gambit rungs' Pi twins name the model
+    # id their patchbay route carries (chatgpt-models.nix). Cloned from pi's
+    # own gpt-5.6-sol/luna entries; pricing from openrouter.ai/api/v1/models
+    # 2026-09-22 (2x input / 1.5x output above 272K input). Drop these once
+    # pi's catalogue ships them.
+    models.providers.openai-codex.models = let
+      codexModel = id: name: cost: {
+        inherit id name cost;
+        api = "openai-codex-responses";
+        reasoning = true;
+        input = ["text" "image"];
+        contextWindow = 272000;
+        maxTokens = 128000;
+        thinkingLevelMap = {
+          xhigh = "xhigh";
+          max = "max";
+          minimal = "low";
+        };
+        compat = {
+          supportsOpenAIGrammarTools = true;
+          supportsAdditionalTools = true;
+          supportsToolSearch = true;
+        };
+      };
+    in [
+      (codexModel "gpt-6-sol" "GPT-6 Sol" {
+        input = 2;
+        output = 10;
+        cacheRead = 0.2;
+        cacheWrite = 2.5;
+        tiers = [
+          {
+            inputTokensAbove = 272000;
+            input = 4;
+            output = 15;
+            cacheRead = 0.4;
+            cacheWrite = 5;
+          }
+        ];
+      })
+      (codexModel "gpt-6-luna" "GPT-6 Luna" {
+        input = 0.1;
+        output = 0.5;
+        cacheRead = 0.01;
+        cacheWrite = 0.125;
+        tiers = [
+          {
+            inputTokensAbove = 272000;
+            input = 0.2;
+            output = 0.75;
+            cacheRead = 0.02;
+            cacheWrite = 0.25;
+          }
+        ];
+      })
+    ];
+
     models.providers.omakase = {
       name = "omakase";
       baseUrl = "https://llm.kloverinfrastructure.com";

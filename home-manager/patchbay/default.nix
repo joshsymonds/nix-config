@@ -82,7 +82,7 @@
       auth_mode = "inject";
       billing = "metered";
       api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
-      model = "openai/gpt-5.6-sol";
+      model = "openai/gpt-6-sol";
       max_input_tokens = 1050000;
     };
     "openrouter/luna" = {
@@ -90,7 +90,7 @@
       auth_mode = "inject";
       billing = "metered";
       api_key_env_file = "PATCHBAY_OPENROUTER_KEY_FILE";
-      model = "openai/gpt-5.6-luna";
+      model = "openai/gpt-6-luna";
       max_input_tokens = 1050000;
     };
     # DeepSeek V4 Flash, pinned to the 0731 snapshot: the tiltyard study's
@@ -203,11 +203,11 @@
   # lists them.
   subagentSeats = lib.optionalAttrs cfg.codexUpstream.enable {
     chatgpt-luna-medium = chatgptSeat {
-      model = "gpt-5.6-luna(medium)";
+      model = "gpt-6-luna(medium)";
       speed = "fast";
     };
     chatgpt-luna-low = chatgptSeat {
-      model = "gpt-5.6-luna(low)";
+      model = "gpt-6-luna(low)";
       speed = "fast";
     };
   };

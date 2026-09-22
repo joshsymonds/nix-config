@@ -3,10 +3,10 @@
   codexModule = ../home-manager/codex/default.nix;
 in
   pkgs.runCommand "codex-agent-roster-check" {} ''
-    test ${pkgs.lib.escapeShellArg roles.worker.model} = gpt-5.6-luna
+    test ${pkgs.lib.escapeShellArg roles.worker.model} = gpt-6-luna
     test ${pkgs.lib.escapeShellArg roles.worker.reasoningEffort} = high
     test ${pkgs.lib.escapeShellArg roles.worker.serviceTier} = fast
-    test ${pkgs.lib.escapeShellArg roles.escalation.model} = gpt-5.6-sol
+    test ${pkgs.lib.escapeShellArg roles.escalation.model} = gpt-6-sol
     test ${pkgs.lib.escapeShellArg roles.escalation.reasoningEffort} = high
     for forbidden in \
       '"plugins/gambit"' \

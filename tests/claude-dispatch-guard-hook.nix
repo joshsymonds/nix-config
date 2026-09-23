@@ -137,57 +137,23 @@ in
         ' >/dev/null || fail "validator failure was not denied with its message: $out"
         unset FAIL
 
-        # Installed or historical registries retain the old rungs/worker schema
-        # and validator flag until they are regenerated.
-        legacy_models="$PWD/legacy-models.json"
-        cat > "$legacy_models" <<'JSON'
+        # The retired rungs/worker schema is no longer read; a registry in that
+        # shape denies model-profile-shaped dispatches instead of guessing.
+        old_models="$PWD/old-models.json"
+        cat > "$old_models" <<'JSON'
         {
-          "rungs": {
-            "legacy-entry": {"agent": "legacy-low"},
-            "legacy-escalation": {"agent": "legacy-high"}
-          },
-          "roles": {
-            "worker": {
-              "entry": "legacy-entry",
-              "ladder": ["legacy-escalation"]
-            }
-          }
+          "rungs": {"old-entry": {"agent": "old-low"}},
+          "roles": {"worker": {"entry": "old-entry"}}
         }
     JSON
-        export GAMBIT_MODELS="$legacy_models"
+        export GAMBIT_MODELS="$old_models"
         rm -f "$MARKER"
-        out=$(run_hook Agent legacy-high "$prompt")
-        test -z "$out" || fail "legacy worker dispatch was denied: $out"
-        expected_args="$(printf '%s\n' \
-          --brief "$PWD/brief.md" \
-          --workspace "$PWD/workspace" \
-          --record "$PWD/state.json" \
-          --task task-123 \
-          --entry-rung legacy-entry)"
-        test "$(cat "$MARKER")" = "$expected_args" \
-          || fail "legacy validator argv mismatch: $(cat "$MARKER")"
-
-        # A registry containing both generations is ambiguous even if their
-        # apparent targets agree, so profile-shaped dispatches fail closed.
-        mixed_models="$PWD/mixed-models.json"
-        cat > "$mixed_models" <<'JSON'
-        {
-          "profiles": {"mixed-low": {"agent": "mixed-low"}},
-          "rungs": {"mixed-low": {"agent": "mixed-low"}},
-          "roles": {
-            "implementer": {"entry": "mixed-low"},
-            "worker": {"entry": "mixed-low", "ladder": ["mixed-low"]}
-          }
-        }
-    JSON
-        export GAMBIT_MODELS="$mixed_models"
-        rm -f "$MARKER"
-        out=$(run_hook Agent mixed-low "$prompt")
+        out=$(run_hook Agent old-low "$prompt")
         printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
           .hookSpecificOutput.permissionDecision == "deny"
-          and (.hookSpecificOutput.permissionDecisionReason | contains("ambiguous"))
-        ' >/dev/null || fail "mixed registry allowed profile dispatch: $out"
-        test ! -e "$MARKER" || fail "validator ran for mixed registry"
+          and (.hookSpecificOutput.permissionDecisionReason | contains("invalid profiles or Implementer role"))
+        ' >/dev/null || fail "old rungs registry allowed profile dispatch: $out"
+        test ! -e "$MARKER" || fail "validator ran for old rungs registry"
 
         # A syntactically valid new registry is still malformed when its
         # Implementer entry is not an agent-backed model profile.

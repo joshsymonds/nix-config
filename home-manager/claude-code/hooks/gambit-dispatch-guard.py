@@ -3,9 +3,8 @@
 
 The Implementer's brief is the source of truth for each dispatch. This hook
 runs the validator for the writing agent named by the Implementer role's entry
-model profile. Installed and historical registries using the old rungs/worker
-schema remain supported. Malformed hook input fails open, while registry
-failures deny model-profile-shaped agents and leave unrelated agents untouched.
+model profile. Malformed hook input fails open, while registry failures deny
+model-profile-shaped agents and leave unrelated agents untouched.
 """
 import json
 import os
@@ -45,13 +44,8 @@ def load_json_stdin() -> dict[str, Any]:
     return value
 
 
-def implementer_dispatch(registry_path: str) -> tuple[set[str], str, str]:
-    """Return guarded agents, entry id, and the validator's entry flag.
-
-    New registries use profiles/implementer and are entry-only. Old
-    rungs/worker registries may include a ladder. Any mixture of the two schema
-    generations is ambiguous and rejected rather than guessed at.
-    """
+def implementer_dispatch(registry_path: str) -> tuple[set[str], str]:
+    """Return the guarded agents and the Implementer's entry profile."""
     with open(registry_path, encoding="utf-8") as registry_file:
         registry = json.load(registry_file)
 
@@ -61,46 +55,19 @@ def implementer_dispatch(registry_path: str) -> tuple[set[str], str, str]:
     if not isinstance(roles, dict):
         raise ValueError("registry roles are invalid")
 
-    has_new = "profiles" in registry or "implementer" in roles
-    has_old = "rungs" in registry or "worker" in roles
-    if has_new and has_old:
-        raise ValueError("registry has ambiguous mixed profiles/implementer and rungs/worker schemas")
-    if not has_new and not has_old:
-        raise ValueError("registry has neither profiles/implementer nor rungs/worker schema")
-
-    if has_new:
-        profiles = registry.get("profiles")
-        implementer = roles.get("implementer")
-        if not isinstance(profiles, dict) or not isinstance(implementer, dict):
-            raise ValueError("registry has invalid profiles or Implementer role")
-        if "ladder" in implementer:
-            raise ValueError("registry Implementer role must be entry-only")
-        entry = implementer.get("entry")
-        if not isinstance(entry, str):
-            raise ValueError("registry Implementer entry is invalid")
-        profile = profiles.get(entry)
-        if not isinstance(profile, dict) or not isinstance(profile.get("agent"), str):
-            raise ValueError("registry Implementer profile is invalid")
-        return {profile["agent"]}, entry, "--entry-profile"
-
-    rungs = registry.get("rungs")
-    worker = roles.get("worker")
-    if not isinstance(rungs, dict) or not isinstance(worker, dict):
-        raise ValueError("legacy registry has invalid rungs or worker role")
-    entry = worker.get("entry")
-    ladder = worker.get("ladder", [])
-    if not isinstance(entry, str) or not isinstance(ladder, list) or not all(
-        isinstance(rung, str) for rung in ladder
-    ):
-        raise ValueError("legacy registry worker entry or ladder is invalid")
-
-    agents: set[str] = set()
-    for rung_name in [entry, *ladder]:
-        rung = rungs.get(rung_name)
-        if not isinstance(rung, dict) or not isinstance(rung.get("agent"), str):
-            raise ValueError("legacy registry worker rung is invalid")
-        agents.add(rung["agent"])
-    return agents, entry, "--entry-rung"
+    profiles = registry.get("profiles")
+    implementer = roles.get("implementer")
+    if not isinstance(profiles, dict) or not isinstance(implementer, dict):
+        raise ValueError("registry has invalid profiles or Implementer role")
+    if "ladder" in implementer:
+        raise ValueError("registry Implementer role must be entry-only")
+    entry = implementer.get("entry")
+    if not isinstance(entry, str):
+        raise ValueError("registry Implementer entry is invalid")
+    profile = profiles.get(entry)
+    if not isinstance(profile, dict) or not isinstance(profile.get("agent"), str):
+        raise ValueError("registry Implementer profile is invalid")
+    return {profile["agent"]}, entry
 
 
 def is_profile_agent(agent: Any) -> bool:
@@ -150,7 +117,7 @@ def main() -> None:
     agent = tool_input.get("subagent_type")
     registry_path = os.path.expanduser(os.environ.get(MODELS_ENV, DEFAULT_MODELS))
     try:
-        agents, entry, entry_flag = implementer_dispatch(registry_path)
+        agents, entry = implementer_dispatch(registry_path)
     except (OSError, TypeError, ValueError, json.JSONDecodeError) as error:
         if is_profile_agent(agent):
             deny(
@@ -204,7 +171,7 @@ def main() -> None:
                 record,
                 "--task",
                 task,
-                entry_flag,
+                "--entry-profile",
                 entry,
             ],
             stdout=subprocess.PIPE,

@@ -26,10 +26,19 @@
   # the profile a fast profile on both harnesses: the Claude Code agent gets it from
   # the Seat, the Pi twin from the codex-fast extension below.
   #
-  # The Implementer role is entry-only: Luna is cheap and fast, while
-  # higher-effort model profiles remain reserved for advisory roles.
+  # The Implementer role is entry-only: Luna is cheap and fast, and its
+  # entry effort is the one the tiltyard screen measured to close the corpus.
   gambitProfiles = {
-    # Implementer entry profile: Luna, always on the fast tier.
+    # Implementer entry profile: Luna at high effort, always on the fast tier.
+    # Tiltyard's GPT-6 screen (2026-09-22, 56 audited scenarios x 2, two
+    # attempts per cell like the Implementer's) measured gpt-6-luna at 77%
+    # green at low effort and 95% at high, level with gpt-6-sol and at about
+    # an eighth of Sol's cost per green.
+    "luna-high" = {
+      route = "chatgpt/luna";
+      effort = "high";
+    };
+    # Test-runner profile: Luna at low effort, always on the fast tier.
     "luna-low" = {
       route = "chatgpt/luna";
       effort = "low";
@@ -349,7 +358,7 @@
         fable.model = "fable";
       };
     roles = {
-      implementer.entry = "luna-low";
+      implementer.entry = "luna-high";
       scout = {
         entry = "terra-medium";
         readonly = true;

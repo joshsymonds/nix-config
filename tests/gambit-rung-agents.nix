@@ -76,7 +76,7 @@ in
     jq -e '
       (.roles | keys | sort)
       == ["conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "orchestrator", "scout", "steelman", "task-reviewer", "test-runner"]
-      and .roles.implementer == {"entry":"luna-low"}
+      and .roles.implementer == {"entry":"luna-high"}
       and .roles."task-reviewer" == {"entry":"terra-medium","readonly":true}
       and .roles."finding-verifier" == {"entry":"terra-medium","readonly":true}
       and .roles."conformance-reviewer" == {"entry":"sol-high","readonly":true}
@@ -235,7 +235,7 @@ in
       # dispatch and task-state tools. Keep the expected privileges independent
       # of the renderer, including the absence of task RPC dispatch.
       if [ "$profile" = sol-high ]; then
-        grep -qxF 'allowed_subagents: "astra-xhigh-ro, luna-low, sol-high-ro, terra-medium-ro"' "$pi_plain"
+        grep -qxF 'allowed_subagents: "astra-xhigh-ro, luna-high, luna-low, sol-high-ro, terra-medium-ro"' "$pi_plain"
         grep -qxF 'extensions: ["pi-tasks", "${orchestratorProcessExtension}"]' "$pi_plain"
         grep -qE '^extensions: \["pi-tasks", "/nix/store/[^"/]+/orchestrator-processes/index.ts"\]$' "$pi_plain"
         test -f '${orchestratorProcessExtension}'

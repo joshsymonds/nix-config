@@ -86,7 +86,15 @@ in {
       # public repo — e.g. REDLIB_HOME_EXCLUDED_COLLECTIONS. agenix decrypts it
       # to a root-owned 0400 path; systemd reads it before dropping to DynamicUser.
       redlib = {
-        serviceConfig.EnvironmentFile = config.age.secrets."redlib-collections".path;
+        serviceConfig = {
+          EnvironmentFile = config.age.secrets."redlib-collections".path;
+          # redlib exits after ~90s if it can't mint an OAuth token. After a
+          # power loss gluetun's tunnel can take minutes to come up (the
+          # container is "active" long before the proxy can reach Reddit), so
+          # keep retrying like the audit instances do.
+          Restart = "on-failure";
+          RestartSec = "10s";
+        };
         restartTriggers = [config.age.secrets."redlib-collections".file];
 
         # Reddit 403-blocked this host's home IP on 2026-09-16 after redlib's

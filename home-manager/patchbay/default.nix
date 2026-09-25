@@ -290,7 +290,7 @@
   # Marked subagent traffic (x-claude-code-agent-id) that no public selector
   # already claims rides Luna instead of the subscription: default Explores
   # and other unlisted subagents at medium effort, haiku-slot dispatches at
-  # low. Two exact pins carve out what must stay native:
+  # low. Exact pins carve out what must stay native:
   #
   #   * claude-opus-5 and claude-opus-5-5 -> the context's Claude Seat.
   #     Gambit's worker and escalation ladders TERMINATE at the opus rung,
@@ -298,9 +298,13 @@
   #     rung is native Claude. The rung names the bare `opus` alias, which CC
   #     2.1.280 resolves to claude-opus-5-5 (earlier releases: claude-opus-5),
   #     so both ids are pinned; without the second, every opus-rung dispatch
-  #     on 2.1.280 fell through to the Luna default. No gambit ladder ends at
-  #     fable, so fable needs no pin — fable-inheriting subagents (default
-  #     Explores, background forks) take the Luna default.
+  #     on 2.1.280 fell through to the Luna default.
+  #   * claude-fable-5-1 -> the context's Claude Seat. An explicit
+  #     `model: fable` dispatch otherwise fell through to the Luna default
+  #     and failed with Luna whenever the Codex upstream was down
+  #     (2026-09-25). The wire can't tell an explicit fable dispatch from a
+  #     fable-inheriting one, so default Explores and background forks under
+  #     a fable session ride the Claude Seat too.
   #   * claude-sonnet-5 -> the context's Claude Seat. The `sonnet` rung is
   #     gambit's cheap Claude fallback for workers when the Luna pool is
   #     cooling down; left unpinned it fell through to the Luna default and
@@ -325,6 +329,7 @@
         models = {
           "claude-opus-5" = claudeSeat;
           "claude-opus-5-5" = claudeSeat;
+          "claude-fable-5-1" = claudeSeat;
           "claude-sonnet-5" = claudeSeat;
           "claude-haiku-4-5" = "chatgpt-luna-low";
           "claude-haiku-4-5-20251001" = "chatgpt-luna-low";

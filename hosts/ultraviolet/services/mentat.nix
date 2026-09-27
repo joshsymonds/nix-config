@@ -108,6 +108,14 @@
     };
     reminder.enable = true; # 09:00 daily
 
+    # Voice turns ride chatgpt/sol-fast through this host's patchbay (the
+    # Codex upstream in home-manager/hosts/ultraviolet.nix). The caller key
+    # arrives as a systemd credential below; %d is the unit's credentials dir.
+    extraEnv = {
+      MENTAT_VOICE_GATEWAY_URL = "http://127.0.0.1:4100";
+      MENTAT_VOICE_GATEWAY_KEY_FILE = "%d/patchbay-caller-key";
+    };
+
     # The public OAuth front: a FastMCP proxy over the daemon's loopback /mcp
     # behind the Cloudflare Access OIDC app, reached through the cloudflared
     # tunnel (dashboard route mentat.husbuddies.gay → http://localhost:8486).
@@ -140,6 +148,9 @@
   # re-encryption (the module can't do this itself — it only sees the
   # constant /run/agenix runtime path).
   systemd.services.mentatd.restartTriggers = [config.age.secrets."mentat-env".file];
+  # patchbay accepts one shared caller key, owned by joshsymonds (0400);
+  # LoadCredential reads it as PID 1 and hands mentatd a private copy.
+  systemd.services.mentatd.serviceConfig.LoadCredential = ["patchbay-caller-key:/run/agenix/patchbay-caller-key"];
   systemd.services.mentat-voice.restartTriggers = [config.age.secrets."mentat-voice-env".file];
   systemd.services.mentat-public.restartTriggers = [
     config.age.secrets."mentat-access-client-id".file

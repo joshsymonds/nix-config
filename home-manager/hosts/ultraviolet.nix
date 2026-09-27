@@ -10,6 +10,10 @@
   services.patchbay = {
     enable = true;
     ledgerShipper.enable = true;
+    # Holds Codex OAuth creds in ~/.cli-proxy-api, so it runs the CLIProxyAPI
+    # upstream and publishes the chatgpt/* routes (mentat's voice turns ride
+    # chatgpt/sol-fast).
+    codexUpstream.enable = true;
   };
 
   home.packages = with pkgs; [

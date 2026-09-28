@@ -11,6 +11,7 @@
       "1password"
       "1password-cli"
       "claude"
+      "dbeaver-community"
       "discord"
       "docker"
       "firefox"

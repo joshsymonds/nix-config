@@ -305,11 +305,13 @@
   #     (2026-09-25). The wire can't tell an explicit fable dispatch from a
   #     fable-inheriting one, so default Explores and background forks under
   #     a fable session ride the Claude Seat too.
-  #   * claude-sonnet-5 -> the context's Claude Seat. The `sonnet` rung is
-  #     gambit's cheap Claude fallback for workers when the Luna pool is
-  #     cooling down; left unpinned it fell through to the Luna default and
-  #     failed with the same usage_limit_reached the fallback was meant to
-  #     escape (2026-09-15).
+  #   * claude-sonnet-5 and claude-sonnet-5-5 -> the context's Claude Seat.
+  #     The `sonnet` rung is gambit's cheap Claude fallback for workers when
+  #     the Luna pool is cooling down; left unpinned it fell through to the
+  #     Luna default and failed with the same usage_limit_reached the fallback
+  #     was meant to escape (2026-09-15). CC 2.1.284 resolves the bare
+  #     `sonnet` alias to claude-sonnet-5-5 (earlier releases:
+  #     claude-sonnet-5), so both ids are pinned.
   #   * Both haiku spellings appear on the wire and bindings are exact, so
   #     the fast tier is pinned twice.
   #
@@ -331,6 +333,7 @@
           "claude-opus-5-5" = claudeSeat;
           "claude-fable-5-1" = claudeSeat;
           "claude-sonnet-5" = claudeSeat;
+          "claude-sonnet-5-5" = claudeSeat;
           "claude-haiku-4-5" = "chatgpt-luna-low";
           "claude-haiku-4-5-20251001" = "chatgpt-luna-low";
         };
@@ -440,6 +443,12 @@
   # become tier-aware. DeepSeek V4 Flash has a single tier, so its card remains.
   # OpenRouter has one cache-write price for it; the 5m and 1h fields mirror that
   # price so TTL-bucketed writes price at the same rate if ever reported.
+  #
+  # Claude cards price the only metered Claude route: the attain-bedrock Seat,
+  # whose rows resolve to the caller's Anthropic id. Forward Seats on OAuth are
+  # subscription rows and never reach a card. Bedrock's us. cross-region
+  # profiles bill 1.1x the Anthropic list price, so the card is the Bedrock
+  # rate; the unbucketed cache_creation field takes the 5m write price.
   rateCardsFile = (pkgs.formats.json {}).generate "patchbay-rate-cards.json" [
     {
       model = "deepseek/deepseek-v4-flash-0731";
@@ -497,6 +506,19 @@
         cache_creation = "0.20";
         cache_creation_5m = "0.20";
         cache_creation_1h = "0.20";
+      };
+    }
+    {
+      model = "claude-sonnet-5-5";
+      effective_from = "2026-09-28T00:00:00Z";
+      source = "Claude Code 2.1.284 model catalog pricing tier_2_10 (list 2/10, cache read 0.20, 5m write 2.50, 1h write 4) x1.1 for Bedrock us. cross-region";
+      rates_usd_per_million = {
+        input = "2.20";
+        output = "11.00";
+        cache_read = "0.22";
+        cache_creation = "2.75";
+        cache_creation_5m = "2.75";
+        cache_creation_1h = "4.40";
       };
     }
   ];

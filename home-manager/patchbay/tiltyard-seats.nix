@@ -16,7 +16,7 @@
 # An entry with `seat` names a Seat the registry already publishes and adds none;
 # the rest become Seats of their own under `tiltyard-<selector>`.
 {
-  # The four Claude candidates ride the caller's own OAuth credential on
+  # The five Claude candidates ride the caller's own OAuth credential on
   # forward Seats — the subscription already pays for them, so a judgment run
   # spends nothing extra. `model` is the whole point of the Seat: a forward Seat
   # without it would serve whatever model the request already named.
@@ -39,6 +39,11 @@
     upstream = "https://api.anthropic.com";
     auth_mode = "forward";
     model = "claude-sonnet-5";
+  };
+  sonnet55 = {
+    upstream = "https://api.anthropic.com";
+    auth_mode = "forward";
+    model = "claude-sonnet-5-5";
   };
 
   # The open-weight candidates, billed per token to the household OpenRouter key

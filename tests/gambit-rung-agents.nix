@@ -121,16 +121,16 @@ in
     # model nothing measured.
     jq -e '
       (keys | sort)
-      == ["dsv41flash", "fable51", "glm53", "kimik3", "opus5", "opus55", "qwen38", "sol", "sonnet5"]
+      == ["dsv41flash", "fable51", "glm53", "kimik3", "opus5", "opus55", "qwen38", "sol", "sonnet5", "sonnet55"]
     ' ${tiltyardJson} >/dev/null
 
-    # The four Claude candidates ride the caller's own credential on forward
+    # The five Claude candidates ride the caller's own credential on forward
     # Seats: no billing class to declare, and the model pin is the only thing
     # that makes each one a distinct candidate, so it must be there. The counts
     # keep these from passing vacuously on a roster that declares no such Seat.
     jq -e '
       [.[] | select(.auth_mode == "forward")] as $forward
-      | ($forward | length) == 4
+      | ($forward | length) == 5
       and all($forward[];
         (.model | type) == "string" and (.model | length) > 0
         and (has("billing") | not))
@@ -152,6 +152,7 @@ in
       and .opus5.model == "claude-opus-5"
       and .opus55.model == "claude-opus-5-5"
       and .sonnet5.model == "claude-sonnet-5"
+      and .sonnet55.model == "claude-sonnet-5-5"
       and .glm53.model == "z-ai/glm-5.3-flash"
       and .kimik3.model == "moonshotai/kimi-k3"
       and .dsv41flash.model == "deepseek/deepseek-v4.1-flash"

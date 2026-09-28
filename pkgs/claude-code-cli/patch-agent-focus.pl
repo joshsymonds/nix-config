@@ -41,37 +41,37 @@ sub pad_comment {
 
 my @subs;
 
-# F1: at the tick's call site, pass the app-state snapshot `Je` (already bound
-# at the top of the tick as `let Je=h.getState()`) instead of the token-samples
+# F1: at the tick's call site, pass the app-state snapshot `Ze` (already bound
+# at the top of the tick as `let Ze=h.getState()`) instead of the token-samples
 # Map. Argument-position whitespace pads the call to identical length. The
-# samples Map keeps being maintained by the tick (`jDe(Pe.current, ...)`) —
-# only the builder stops receiving it. (2.1.269's lSt(...,Pe.current) / it;
-# 2.1.257's int(...,Te.current) / Le.)
+# samples Map keeps being maintained by the tick (`zLe(De.current, ...)`) —
+# only the builder stops receiving it. (2.1.280's WDe(...,Pe.current) / Je;
+# 2.1.269's lSt(...,Pe.current) / it; 2.1.257's int(...,Te.current) / Le.)
 push @subs, {
-    name => 'F1_WDe_callsite',
-    find => 'WDe(ct,Math.max(0,Se-Bu()-Ty),mt,Pe.current).then',
-    repl => 'WDe(ct,Math.max(0,Se-Bu()-Ty),mt,Je        ).then',
+    name => 'F1_YLe_callsite',
+    find => 'YLe(mt,Math.max(0,Se-Df()-Yv),gt,De.current).then',
+    repl => 'YLe(mt,Math.max(0,Se-Df()-Yv),gt,Ze        ).then',
 };
 
 # F2: in the builder's per-task map, drop the two fields Steward ignores
 # (startTime, tokenSamples — the latter being the only use of the old 4th
-# parameter) and spend their 54 bytes on `focused:ut.id===Q.viewingAgentTaskId`
-# plus a pad comment. With F1 applied, `Q` is the app state; on a task list
+# parameter) and spend their bytes on `focused:pt.id===G.viewingAgentTaskId`
+# plus a pad comment. With F1 applied, `G` is the app state; on a task list
 # where no agent view is open, viewingAgentTaskId is undefined and every
-# task's focused is false. (2.1.269's dt / se / vp / Pp; 2.1.257's tt / z /
-# Nf / Jf / ue.)
+# task's focused is false. (2.1.280's ut / Q / Af / mf; 2.1.269's dt / se /
+# vp / Pp; 2.1.257's tt / z / Nf / Jf / ue.)
 {
-    my $find = 'startTime:ut.startTime,model:ut.model,effort:ut.effort,'
-        . 'contextWindowSize:ut.model?Af(ut.model,mf()):void 0,'
-        . 'tokenCount:ut.progress?.tokenCount??0,tokenSamples:Q.get(ut.id)??[],'
-        . 'cwd:ut.cwd??Se}';
-    my $core = 'model:ut.model,effort:ut.effort,'
-        . 'contextWindowSize:ut.model?Af(ut.model,mf()):void 0,'
-        . 'tokenCount:ut.progress?.tokenCount??0,focused:ut.id===Q.viewingAgentTaskId,';
-    my $tail   = 'cwd:ut.cwd??Se}';
+    my $find = 'startTime:pt.startTime,model:pt.model,effort:pt.effort,'
+        . 'contextWindowSize:pt.model?qg(pt.model,km()):void 0,'
+        . 'tokenCount:pt.progress?.tokenCount??0,tokenSamples:G.get(pt.id)??[],'
+        . 'cwd:pt.cwd??Se}';
+    my $core = 'model:pt.model,effort:pt.effort,'
+        . 'contextWindowSize:pt.model?qg(pt.model,km()):void 0,'
+        . 'tokenCount:pt.progress?.tokenCount??0,focused:pt.id===G.viewingAgentTaskId,';
+    my $tail   = 'cwd:pt.cwd??Se}';
     my $padlen = length($find) - length($core) - length($tail);
     push @subs, {
-        name => 'F2_WDe_tasks',
+        name => 'F2_YLe_tasks',
         find => $find,
         repl => $core . pad_comment($padlen) . $tail,
     };

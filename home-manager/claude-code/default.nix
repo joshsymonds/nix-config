@@ -254,11 +254,19 @@
       unpinKey = "unpinOpus47LaunchEffort";
       aliases = [];
     };
+    "sonnet-5-5" = {
+      # `sonnet` follows Claude Code's own alias: CC 2.1.284 resolves the bare
+      # name to claude-sonnet-5-5 (native 1M window, 128k output).
+      model = "claude-sonnet-5-5";
+      defaultEffort = "high";
+      unpinKey = null;
+      aliases = ["sonnet"];
+    };
     "sonnet-5" = {
       model = "claude-sonnet-5";
       defaultEffort = "high";
       unpinKey = null;
-      aliases = ["sonnet"];
+      aliases = [];
     };
     "haiku-4-5" = {
       model = "claude-haiku-4-5-20251001";

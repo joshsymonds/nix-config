@@ -3811,17 +3811,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1789163297,
-        "narHash": "sha256-7PTSI10g9EYWAUO8RWGpYvlaRHIhgKjXXEpfd8bXffU=",
+        "lastModified": 1790610850,
+        "narHash": "sha256-qdxID1Aj/GbIQSj+b+jfXv9FTnrxoSWSupre0z9t+zo=",
         "owner": "joshsymonds",
         "repo": "steward",
-        "rev": "584ae32ce60c21f30827b1c3f3c6474586e3705d",
+        "rev": "608d87d799867a0932921f61b2b45441084d7612",
         "type": "github"
       },
       "original": {
         "owner": "joshsymonds",
         "repo": "steward",
-        "rev": "584ae32ce60c21f30827b1c3f3c6474586e3705d",
+        "rev": "608d87d799867a0932921f61b2b45441084d7612",
         "type": "github"
       }
     },

@@ -623,7 +623,10 @@ in {
         ripgrep
         python3
       ])
-      ++ [pkgs.claudeCodeCli pkgs.claude-swap cmswitch ccrender];
+      ++ [pkgs.claudeCodeCli cmswitch ccrender]
+      # cswap is only used on the Linux hosts, and three of its upstream tests
+      # fail under the Darwin builder.
+      ++ lib.optionals pkgs.stdenv.isLinux [pkgs.claude-swap];
 
     # Add npm global bin to PATH for user-installed packages
     sessionPath = lib.mkAfter [

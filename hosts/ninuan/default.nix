@@ -74,6 +74,18 @@ in
 
     networking.hostName = "ninuan";
 
+    # Apple's sshd (Remote Login), key-only like the NixOS hosts in
+    # hosts/common.nix. macOS offers passwords via keyboard-interactive PAM,
+    # so that has to be closed too, not just PasswordAuthentication.
+    services.openssh = {
+      enable = true;
+      extraConfig = ''
+        PermitRootLogin no
+        PasswordAuthentication no
+        KbdInteractiveAuthentication no
+      '';
+    };
+
     # Time and internationalization
     time.timeZone = "America/Los_Angeles";
 
@@ -81,6 +93,7 @@ in
     users.users.${user} = {
       shell = pkgs.zsh;
       home = "/Users/${user}";
+      openssh.authorizedKeys.keys = import ../../lib/ssh-keys.nix;
     };
 
     # Security
@@ -91,6 +104,11 @@ in
         auth       sufficient     pam_tid.so
       '';
     };
+    # Same grant as the NixOS hosts (hosts/common.nix); `update` pre-flights
+    # `sudo -n true`, and agents over ssh can't answer a prompt.
+    security.sudo.extraConfig = ''
+      ${user} ALL=(ALL:ALL) NOPASSWD:SETENV: ALL
+    '';
 
     # Services
     programs.zsh.enable = true; # This is necessary to set zsh paths properly

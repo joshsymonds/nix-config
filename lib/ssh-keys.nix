@@ -1,5 +1,5 @@
 # The fleet's user SSH public keys — one list, consumed by
-# hosts/common.nix (users.users.joshsymonds.openssh.authorizedKeys) and
+# hosts/common.nix and hosts/ninuan (users.users.joshsymonds.openssh.authorizedKeys) and
 # by shrike's home layer (nix-on-droid has no NixOS user machinery, so it
 # writes ~/.ssh/authorized_keys directly).
 [

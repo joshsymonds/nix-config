@@ -74,7 +74,7 @@ in {
       pushScript = pkgs.writeShellScript "atticd-push-detached" ''
         set -eu
         export PATH=${pkgs.coreutils}/bin
-        CFG=$(mktemp -d -t atticd-push)
+        CFG=$(mktemp -d -t atticd-push.XXXXXX)
         trap "rm -rf $CFG" EXIT
         mkdir -p "$CFG/attic"
         {

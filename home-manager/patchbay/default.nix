@@ -528,9 +528,12 @@
     inherit (litellmPrices) sha256;
   });
 
-  # Caller id -> catalog key. The Seat's model map is an encrypted secret, so
-  # this list mirrors its keys by hand; claude-sonnet-5-5 is here ahead of its
-  # map entry.
+  # Caller id -> catalog entry. The Seat's model map is an encrypted secret, so
+  # this mirrors its keys by hand. Its profiles are us. cross-region (three US
+  # regions) except jsymonds-sonnet55, which is global and bills at list
+  # price. That card carries a later effectiveFrom floor because a us. card
+  # for claude-sonnet-5-5 was already recorded at 2026-09-11 and 2026-09-28;
+  # the model was unmapped then, so no row was ever priced by those.
   attainBedrockCatalogKeys =
     lib.genAttrs [
       "claude-fable-5"
@@ -541,18 +544,31 @@
       "claude-opus-5-5"
       "claude-sonnet-4-6"
       "claude-sonnet-5"
-      "claude-sonnet-5-5"
-    ] (model: "us.anthropic.${model}")
+    ] (model: {catalogKey = "us.anthropic.${model}";})
     // lib.genAttrs ["claude-haiku-4-5" "claude-haiku-4-5-20251001"]
-    (_: "us.anthropic.claude-haiku-4-5-20251001-v1:0");
+    (_: {catalogKey = "us.anthropic.claude-haiku-4-5-20251001-v1:0";})
+    // {
+      claude-sonnet-5-5 = {
+        catalogKey = "global.anthropic.claude-sonnet-5-5";
+        effectiveFloor = "2026-09-29T00:00:00Z";
+      };
+    };
 
   # toString renders six decimals, exact for any per-million price here.
   perMillion = perToken: toString (perToken * 1000000);
-  bedrockClaudeCard = model: catalogKey: let
+  # ISO-8601 UTC strings of one shape order lexically, so a floor is a max.
+  laterOf = a: b:
+    if a < b
+    then b
+    else a;
+  bedrockClaudeCard = model: {
+    catalogKey,
+    effectiveFloor ? litellmPrices.effectiveFrom,
+  }: let
     entry = litellmCatalog.${catalogKey};
   in {
     inherit model;
-    effective_from = litellmPrices.effectiveFrom;
+    effective_from = laterOf litellmPrices.effectiveFrom effectiveFloor;
     source = "LiteLLM model_prices_and_context_window.json @ ${litellmPrices.rev}: ${catalogKey}";
     rates_usd_per_million = {
       input = perMillion entry.input_cost_per_token;

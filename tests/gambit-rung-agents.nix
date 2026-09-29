@@ -27,11 +27,13 @@
   # Edit/Write/NotebookEdit are the file mutators, mcp__* removes every MCP
   # server (shimmer alone reaches Jira, GitLab, Todoist and Monarch write
   # APIs), and the leaf tools follow.
-  expectedDenylist = "disallowedTools: Edit, Write, NotebookEdit, mcp__*, Agent, SendMessage, ListAgents, TaskStop, Skill, EnterWorktree, ExitWorktree";
+  expectedDenylist = "disallowedTools: Edit, Write, NotebookEdit, mcp__*, Agent, SendMessage, ListAgents, TaskStop, Skill, EnterWorktree, ExitWorktree, PushNotification, RemoteTrigger, CronCreate, CronDelete, CronList, DesignSync, ReportFindings";
   # Every writing variant except the Orchestrator's is a leaf: it returns to
   # its dispatcher, so it cannot dispatch, message or stop other agents, load
-  # skills, or switch the session's worktree.
-  expectedLeafDenylist = "disallowedTools: Agent, SendMessage, ListAgents, TaskStop, Skill, EnterWorktree, ExitWorktree";
+  # skills, switch the session's worktree, notify the phone, touch cloud
+  # routines or scheduled prompts, write design projects, or render findings
+  # to the host instead of returning them.
+  expectedLeafDenylist = "disallowedTools: Agent, SendMessage, ListAgents, TaskStop, Skill, EnterWorktree, ExitWorktree, PushNotification, RemoteTrigger, CronCreate, CronDelete, CronList, DesignSync, ReportFindings";
 
   # The route keys patchbay actually publishes under codexUpstream, and the
   # Seat identity each one maps to: the upstream model id (the Pi twin

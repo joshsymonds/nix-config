@@ -115,9 +115,11 @@
   # Director (`main`/`team-lead`) instead of returning, stopped other tasks,
   # and loaded skills — including gambit's own orchestration stages — on
   # every dispatch (mentat session b9a95fb7, 2026-09-25..29: ~520 worker
-  # SendMessages to the Director, 258 Skill loads). Every profile except the
-  # Orchestrator's writing variant is a leaf.
-  leafDenylistTools = "Agent, SendMessage, ListAgents, TaskStop, Skill, EnterWorktree, ExitWorktree";
+  # SendMessages to the Director, 258 Skill loads). The rest reach outside the
+  # dispatch: phone notifications, cloud routines, scheduled prompts, design
+  # projects, and host-rendered findings that would bypass the dispatcher.
+  # Every profile except the Orchestrator's writing variant is a leaf.
+  leafDenylistTools = "Agent, SendMessage, ListAgents, TaskStop, Skill, EnterWorktree, ExitWorktree, PushNotification, RemoteTrigger, CronCreate, CronDelete, CronList, DesignSync, ReportFindings";
 
   # The read-only denylist. `disallowedTools` is resolved before any `tools`
   # allowlist (Claude Code sub-agents reference), so this removes the

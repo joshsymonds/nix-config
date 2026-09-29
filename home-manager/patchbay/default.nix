@@ -443,13 +443,7 @@
   # become tier-aware. DeepSeek V4 Flash has a single tier, so its card remains.
   # OpenRouter has one cache-write price for it; the 5m and 1h fields mirror that
   # price so TTL-bucketed writes price at the same rate if ever reported.
-  #
-  # Claude cards price the only metered Claude route: the attain-bedrock Seat,
-  # whose rows resolve to the caller's Anthropic id. Forward Seats on OAuth are
-  # subscription rows and never reach a card. Bedrock's us. cross-region
-  # profiles bill 1.1x the Anthropic list price, so the card is the Bedrock
-  # rate; the unbucketed cache_creation field takes the 5m write price.
-  rateCardsFile = (pkgs.formats.json {}).generate "patchbay-rate-cards.json" [
+  rateCardsFile = (pkgs.formats.json {}).generate "patchbay-rate-cards.json" ([
     {
       model = "deepseek/deepseek-v4-flash-0731";
       effective_from = "2026-08-21T00:00:00Z";
@@ -508,20 +502,67 @@
         cache_creation_1h = "0.20";
       };
     }
-    {
-      model = "claude-sonnet-5-5";
-      effective_from = "2026-09-28T00:00:00Z";
-      source = "Claude Code 2.1.284 model catalog pricing tier_2_10 (list 2/10, cache read 0.20, 5m write 2.50, 1h write 4) x1.1 for Bedrock us. cross-region";
-      rates_usd_per_million = {
-        input = "2.20";
-        output = "11.00";
-        cache_read = "0.22";
-        cache_creation = "2.75";
-        cache_creation_5m = "2.75";
-        cache_creation_1h = "4.40";
-      };
-    }
-  ];
+  ]
+  ++ lib.mapAttrsToList bedrockClaudeCard attainBedrockCatalogKeys);
+
+  # Claude cards price the only metered Claude route: the attain-bedrock Seat,
+  # whose rows resolve to the caller's Anthropic id. Forward Seats on OAuth are
+  # subscription rows and never reach a card. The rates come from LiteLLM's
+  # price catalog, pinned by rev: each card is the us. cross-region Bedrock
+  # entry (1.1x the Anthropic list price), and the unbucketed cache_creation
+  # field takes the 5m write price. A caller id missing from the catalog fails
+  # evaluation rather than leaving its rows unpriced.
+  #
+  # Cards are immutable per (model, effective_from), and patchbay refuses to
+  # start on a conflicting one. The source names the rev, so a rev bump must
+  # also move effectiveFrom (to the bump date); reusing it is a conflict on
+  # every host. The first snapshot is backdated to 2026-09-11, the ledger's
+  # first metered Claude row, so repricing can reach the whole history.
+  litellmPrices = {
+    rev = "56a63b4b296015511a2fdfeb576337548378892b";
+    sha256 = "098vcy63gidm4g24acp2zv8lvn1a4rsmxd3jccdlrl2rm1cbm9dh";
+    effectiveFrom = "2026-09-11T00:00:00Z";
+  };
+  litellmCatalog = lib.importJSON (builtins.fetchurl {
+    url = "https://raw.githubusercontent.com/BerriAI/litellm/${litellmPrices.rev}/model_prices_and_context_window.json";
+    inherit (litellmPrices) sha256;
+  });
+
+  # Caller id -> catalog key. The Seat's model map is an encrypted secret, so
+  # this list mirrors its keys by hand; claude-sonnet-5-5 is here ahead of its
+  # map entry.
+  attainBedrockCatalogKeys =
+    lib.genAttrs [
+      "claude-fable-5"
+      "claude-fable-5-1"
+      "claude-opus-4-7"
+      "claude-opus-4-8"
+      "claude-opus-5"
+      "claude-opus-5-5"
+      "claude-sonnet-4-6"
+      "claude-sonnet-5"
+      "claude-sonnet-5-5"
+    ] (model: "us.anthropic.${model}")
+    // lib.genAttrs ["claude-haiku-4-5" "claude-haiku-4-5-20251001"]
+    (_: "us.anthropic.claude-haiku-4-5-20251001-v1:0");
+
+  # toString renders six decimals, exact for any per-million price here.
+  perMillion = perToken: toString (perToken * 1000000);
+  bedrockClaudeCard = model: catalogKey: let
+    entry = litellmCatalog.${catalogKey};
+  in {
+    inherit model;
+    effective_from = litellmPrices.effectiveFrom;
+    source = "LiteLLM model_prices_and_context_window.json @ ${litellmPrices.rev}: ${catalogKey}";
+    rates_usd_per_million = {
+      input = perMillion entry.input_cost_per_token;
+      output = perMillion entry.output_cost_per_token;
+      cache_read = perMillion entry.cache_read_input_token_cost;
+      cache_creation = perMillion entry.cache_creation_input_token_cost;
+      cache_creation_5m = perMillion entry.cache_creation_input_token_cost;
+      cache_creation_1h = perMillion entry.cache_creation_input_token_cost_above_1hr;
+    };
+  };
 
   # Systemd user units do not inherit the session's XDG_STATE_HOME. Shared
   # strings keep the unit's paths and the NFS shippers in agreement.

@@ -4,7 +4,7 @@ _: {
   ];
 
   virtualisation.oci-containers.containers.jellyseerr = {
-    image = "fallenbagel/jellyseerr:2.7.3";
+    image = "docker.io/fallenbagel/jellyseerr:2.7.3";
     ports = [
       "5055:5055"
     ];

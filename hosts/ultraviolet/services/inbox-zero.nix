@@ -275,7 +275,7 @@ in {
   };
 
   virtualisation.oci-containers.containers."inbox-zero-postgres" = {
-    image = "postgres:16-alpine";
+    image = "docker.io/library/postgres:16-alpine";
     autoStart = true;
     environmentFiles = ["/run/inbox-zero/postgres.env"];
     volumes = [
@@ -289,7 +289,7 @@ in {
   };
 
   virtualisation.oci-containers.containers."inbox-zero-redis" = {
-    image = "redis:7-alpine";
+    image = "docker.io/library/redis:7-alpine";
     autoStart = true;
     cmd = ["redis-server" "--appendonly" "yes" "--save" "60" "1000"];
     volumes = [

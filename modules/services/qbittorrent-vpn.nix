@@ -37,7 +37,7 @@ in {
 
     gluetunImage = lib.mkOption {
       type = lib.types.str;
-      default = "qmcgaw/gluetun:v3.40.0";
+      default = "docker.io/qmcgaw/gluetun:v3.40.0";
       description = "gluetun OCI image. Pinned to a known-good tag; bump deliberately.";
     };
 
@@ -125,7 +125,9 @@ in {
         example = "/run/agenix/mullvad-addresses";
         description = ''
           Path to a file containing the WireGuard interface addresses
-          (comma-separated CIDR list, e.g. "10.x.y.z/32,fc00:.../128").
+          (comma-separated IPv4 CIDR list, e.g. "10.x.y.z/32"). IPv4
+          only: the gluetun netns has IPv6 disabled, and gluetun
+          refuses to start with an IPv6 interface address there.
           Mounted read-only into gluetun and read via
           WIREGUARD_ADDRESSES_SECRETFILE.
         '';
@@ -202,6 +204,14 @@ in {
                 else "off";
               HEALTH_VPN_DURATION_INITIAL = "30s";
               HEALTH_VPN_DURATION_ADDITION = "10s";
+              # The server list baked into a pinned gluetun image goes
+              # stale as the provider retires and re-keys relays; a dead
+              # peer handshakes silently into nothing. Refresh the list
+              # daily into the persisted /gluetun/servers.json (gluetun
+              # prefers whichever copy is newer). The first refresh
+              # fires one period after start, not at start.
+              UPDATER_PERIOD = "24h";
+              UPDATER_VPN_SERVICE_PROVIDERS = cfg.vpn.serviceProvider;
             }
             // lib.optionalAttrs (cfg.vpn.serverCities != null) {
               SERVER_CITIES = cfg.vpn.serverCities;
@@ -221,6 +231,16 @@ in {
             "--cap-add=NET_ADMIN"
             "--device=/dev/net/tun"
             "--sysctl=net.ipv4.conf.all.src_valid_mark=1"
+            # IPv4-only netns. gluetun (through v3.41.3) counts the eth0
+            # fe80::/64 link-local route as IPv6 support and then dials
+            # random IPv6 endpoints the podman bridge can't route
+            # (sendmmsg: network is unreachable), leaving the tunnel down
+            # until a healthcheck restart happens to pick IPv4. With IPv6
+            # off, detection is truthful and every endpoint is IPv4. The
+            # addressesFile must then hold only IPv4 CIDRs: gluetun
+            # refuses an IPv6 interface address when IPv6 is unsupported.
+            "--sysctl=net.ipv6.conf.all.disable_ipv6=1"
+            "--sysctl=net.ipv6.conf.default.disable_ipv6=1"
             # gluetun is stateless (its only volume is a server-list
             # cache); nothing it holds is worth a graceful drain. It also
             # owns the netns + /dev/net/tun + the podman0 bridge — exactly

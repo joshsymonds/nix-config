@@ -10,8 +10,10 @@
 # Provisioning (do once, locally):
 #
 #   1. Mullvad account → "WireGuard configuration" → Add new device for
-#      gnomon. Save the generated private key and the assigned
-#      addresses (e.g., "10.x.y.z/32,fc00:bbbb:...:1/128").
+#      gnomon. Save the generated private key and the assigned IPv4
+#      address (e.g., "10.x.y.z/32"). Drop the fc00:... IPv6 address
+#      Mullvad also assigns: the gluetun netns is IPv4-only and gluetun
+#      refuses an IPv6 interface address there.
 #
 #   2. Add recipient entries to secrets/secrets.nix:
 #        "secrets/hosts/gnomon/mullvad-privatekey.age".publicKeys = keys.gnomon;

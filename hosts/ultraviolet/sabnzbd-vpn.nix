@@ -22,7 +22,7 @@
     containers = {
       # Gluetun VPN container - handles all VPN connectivity
       gluetun = {
-        image = "qmcgaw/gluetun:v3.40.0"; # Pin to stable version
+        image = "docker.io/qmcgaw/gluetun:v3.40.0"; # Pin to stable version
 
         environment = {
           VPN_SERVICE_PROVIDER = "mullvad";
@@ -49,6 +49,12 @@
           # Health check
           HEALTH_VPN_DURATION_INITIAL = "30s";
           HEALTH_VPN_DURATION_ADDITION = "10s";
+
+          # Refresh Mullvad's relay list daily into the persisted
+          # /gluetun/servers.json; the list baked into the pinned image
+          # goes stale as relays are retired and re-keyed.
+          UPDATER_PERIOD = "24h";
+          UPDATER_VPN_SERVICE_PROVIDERS = "mullvad";
         };
 
         volumes = [
@@ -61,7 +67,13 @@
           "--cap-add=NET_ADMIN"
           "--device=/dev/net/tun"
           "--sysctl=net.ipv4.conf.all.src_valid_mark=1"
-          "--sysctl=net.ipv6.conf.all.disable_ipv6=0" # Enable IPv6 if Mullvad supports it
+          # IPv4-only netns: ultraviolet has no IPv6 upstream, and with IPv6
+          # enabled gluetun reads the eth0 link-local route as IPv6 support
+          # and keeps dialing unroutable IPv6 Mullvad endpoints. Same fix as
+          # modules/services/qbittorrent-vpn.nix; the addresses secret is
+          # IPv4-only to match.
+          "--sysctl=net.ipv6.conf.all.disable_ipv6=1"
+          "--sysctl=net.ipv6.conf.default.disable_ipv6=1"
         ];
 
         ports = [
@@ -75,7 +87,7 @@
 
       # SABnzbd container - routes through Gluetun
       sabnzbd = {
-        image = "linuxserver/sabnzbd:4.5.2";
+        image = "docker.io/linuxserver/sabnzbd:4.5.2";
 
         environment = {
           PUID = "1000";

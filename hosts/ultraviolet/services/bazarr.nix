@@ -4,7 +4,7 @@ _: {
   ];
 
   virtualisation.oci-containers.containers.bazarr = {
-    image = "linuxserver/bazarr:1.5.1";
+    image = "docker.io/linuxserver/bazarr:1.5.1";
     ports = [
       "6767:6767"
     ];

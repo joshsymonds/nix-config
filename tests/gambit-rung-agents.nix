@@ -24,10 +24,14 @@
   # Spelled out here rather than imported from gambit-rungs.nix: importing the
   # constant would make the assertion tautological — it would prove the file
   # says whatever the module says, not that the module denies the right tools.
-  # Edit/Write/NotebookEdit are the file mutators, Agent stops an -ro variant
-  # sub-dispatching a writing agent, and mcp__* removes every MCP server
-  # (shimmer alone reaches Jira, GitLab, Todoist and Monarch write APIs).
-  expectedDenylist = "disallowedTools: Edit, Write, NotebookEdit, Agent, mcp__*";
+  # Edit/Write/NotebookEdit are the file mutators, mcp__* removes every MCP
+  # server (shimmer alone reaches Jira, GitLab, Todoist and Monarch write
+  # APIs), and the leaf tools follow.
+  expectedDenylist = "disallowedTools: Edit, Write, NotebookEdit, mcp__*, Agent, SendMessage, ListAgents, TaskStop, Skill, EnterWorktree, ExitWorktree";
+  # Every writing variant except the Orchestrator's is a leaf: it returns to
+  # its dispatcher, so it cannot dispatch, message or stop other agents, load
+  # skills, or switch the session's worktree.
+  expectedLeafDenylist = "disallowedTools: Agent, SendMessage, ListAgents, TaskStop, Skill, EnterWorktree, ExitWorktree";
 
   # The route keys patchbay actually publishes under codexUpstream, and the
   # Seat identity each one maps to: the upstream model id (the Pi twin
@@ -182,7 +186,9 @@ in
 
     # The rendered subagents: model/effort match the declaration, the
     # read-only variant carries the full denylist and its bounded-Bash
-    # directive, and the writing variant carries neither.
+    # directive, a writing leaf carries the leaf denylist, and the
+    # Orchestrator's writing variant keeps dispatch but cannot send messages,
+    # since a resumed child's reply goes to the Director, not to it.
     for profile in $(jq -r 'keys[]' ${profilesJson}); do
       route=$(jq -r --arg r "$profile" '.[$r].route' ${profilesJson})
       effort=$(jq -r --arg r "$profile" '.[$r].effort' ${profilesJson})
@@ -206,9 +212,21 @@ in
       grep -qF "READ-ONLY advisory variant" "$ro"
       grep -qF "Never run:" "$ro"
 
-      if grep -qF "disallowedTools" "$plain"; then
-        echo "writing variant $profile.md carries a denylist" >&2
-        exit 1
+      if [ "$profile" = sol-high ]; then
+        grep -qxF 'disallowedTools: SendMessage, ListAgents' "$plain"
+        grep -qF "You are a Gambit Orchestrator." "$plain"
+        grep -qF "reaches the Director when you finish" "$plain"
+        grep -qF 'same-thread continuation as a fresh dispatch' "$plain"
+        if grep -qF 'Continue a child by sending' "$plain"; then
+          echo "Orchestrator variant $profile.md continues children by message" >&2
+          exit 1
+        fi
+      else
+        grep -qxF ${lib.escapeShellArg expectedLeafDenylist} "$plain"
+        if grep -qF "Gambit Orchestrator" "$plain"; then
+          echo "leaf variant $profile.md carries the Orchestrator directive" >&2
+          exit 1
+        fi
       fi
       if grep -qF "READ-ONLY" "$plain"; then
         echo "writing variant $profile.md carries the read-only directive" >&2
@@ -328,7 +346,8 @@ in
     grep -qxF ${lib.escapeShellArg expectedDenylist} "$ro"
     grep -qF 'READ-ONLY advisory variant' "$ro"
     grep -qF 'Never run:' "$ro"
-    if grep -qE 'disallowedTools|READ-ONLY' "$plain"; then
+    grep -qxF ${lib.escapeShellArg expectedLeafDenylist} "$plain"
+    if grep -qF 'READ-ONLY' "$plain"; then
       echo 'writing Singularity agent carries read-only restrictions' >&2
       exit 1
     fi

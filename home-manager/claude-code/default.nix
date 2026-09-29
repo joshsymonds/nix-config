@@ -521,8 +521,8 @@
   # On the -ro variants: "read-only" here is a denylist plus a prompt-level
   # directive, and that is strictly weaker than the OS-level
   # `sandbox = "read-only"` the deleted Codex executor path used to get.
-  # `disallowedTools` removes the editing tools, sub-dispatch, and every MCP
-  # server, but Bash survives — the read-only contracts (scout, steelman,
+  # `disallowedTools` removes the editing tools, every MCP server, and the
+  # leaf tools (sub-dispatch, messaging, skills), but Bash survives — the read-only contracts (scout, steelman,
   # and reviewers) need git and search inspection, so the variant's body
   # spells out the bounded command set instead. A determined prompt could
   # still talk Bash into writing; the destructive-guard hook is what backstops

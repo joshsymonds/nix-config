@@ -110,12 +110,50 @@
   # profile name, its advisory agent is the profile name plus "-ro".
   profileAgentName = profile: readonly: profile + lib.optionalString readonly "-ro";
 
+  # The tools a leaf never needs: a leaf returns its result to the agent that
+  # dispatched it and nothing else. With these present, workers messaged the
+  # Director (`main`/`team-lead`) instead of returning, stopped other tasks,
+  # and loaded skills — including gambit's own orchestration stages — on
+  # every dispatch (mentat session b9a95fb7, 2026-09-25..29: ~520 worker
+  # SendMessages to the Director, 258 Skill loads). Every profile except the
+  # Orchestrator's writing variant is a leaf.
+  leafDenylistTools = "Agent, SendMessage, ListAgents, TaskStop, Skill, EnterWorktree, ExitWorktree";
+
   # The read-only denylist. `disallowedTools` is resolved before any `tools`
   # allowlist (Claude Code sub-agents reference), so this removes the
-  # mutating tools outright: file edits, sub-dispatch (which could launch a
-  # writing agent), and every MCP server (shimmer reaches Jira, GitLab,
-  # Todoist, Monarch — all write-capable).
-  profileAgentDenylist = "disallowedTools: Edit, Write, NotebookEdit, Agent, mcp__*";
+  # mutating tools outright: file edits, every MCP server (shimmer reaches
+  # Jira, GitLab, Todoist, Monarch — all write-capable), and the leaf tools
+  # above, whose Agent entry stops sub-dispatch of a writing agent.
+  profileAgentDenylist = "disallowedTools: Edit, Write, NotebookEdit, mcp__*, ${leafDenylistTools}";
+
+  # A writing leaf keeps its editing tools and loses only the leaf tools.
+  leafAgentDenylist = "disallowedTools: ${leafDenylistTools}";
+
+  # The Orchestrator's writing variant is the one Claude Code profile that
+  # dispatches and stops children. It sends no messages (see its directive).
+  orchestratorProfile = gambitModelsFull.roles.orchestrator.entry;
+  orchestratorAgentDenylist = "disallowedTools: SendMessage, ListAgents";
+
+  # The Director spawns the Orchestrator as a named teammate, so its final
+  # message is already delivered to the Director when it finishes. Mid-effort
+  # messages each wake the Director on its full context (379 of them in the
+  # session cited above).
+  #
+  # Claude Code routes a resumed child's reply to the session lead, not to the
+  # teammate that resumed it: a probe on 2026-09-29 sent a finished luna-low
+  # child a continuation from a sol-high teammate, and the reply arrived only
+  # at the Director. So Gambit's same-thread continuation is performed here as
+  # a fresh dispatch into the same workspace, and SendMessage is never used.
+  orchestratorDirective = [
+    "You are a Gambit Orchestrator. Follow the contract and effort brief given in your prompt exactly."
+    ""
+    "Your final message is your report, and it reaches the Director when you finish."
+    "Each child you dispatch with the Agent tool returns its result to you. A"
+    "resumed child would reply to the Director instead of you, so perform a"
+    "same-thread continuation as a fresh dispatch to the same profile and"
+    "workspace, carrying the complete brief, the child's prior report, and the"
+    "failing output. It counts as the continuation attempt, not a new one."
+  ];
 
   # What the -ro variants are told, over and above the denylist. Bash
   # survives the denylist because the read-only contracts (scout, steelman,
@@ -147,6 +185,7 @@
       if builtins.hasAttr route chatgptModels
       then routeModel route
       else route;
+    orchestrator = !readonly && profile == orchestratorProfile;
   in
     pkgs.writeText "gambit-profile-${agentName}.md" (lib.concatStringsSep "\n" (
       [
@@ -156,7 +195,13 @@
         "model: ${route}"
         "effort: ${effort}"
       ]
-      ++ lib.optional readonly profileAgentDenylist
+      ++ (
+        if readonly
+        then [profileAgentDenylist]
+        else if orchestrator
+        then [orchestratorAgentDenylist]
+        else [leafAgentDenylist]
+      )
       ++ [
         "---"
         ""
@@ -164,6 +209,8 @@
       ++ (
         if readonly
         then readonlyDirective
+        else if orchestrator
+        then orchestratorDirective
         else ["You are a Gambit model-profile agent. Follow the contract and brief given in your prompt exactly."]
       )
       ++ [""]

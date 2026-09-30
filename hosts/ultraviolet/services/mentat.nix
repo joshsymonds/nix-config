@@ -108,10 +108,12 @@
     };
     reminder.enable = true; # 09:00 daily
 
-    # Voice turns ride chatgpt/sol-fast through this host's patchbay (the
-    # Codex upstream in home-manager/hosts/ultraviolet.nix). The caller key
-    # arrives as a systemd credential below; %d is the unit's credentials dir.
+    # Voice turns ride Opus 5.5 at standard speed through this host's patchbay
+    # (picked over Sol fast and Sonnet 5.5 in the cascade-voice bake-off). The
+    # caller key arrives as a systemd credential below; %d is the unit's
+    # credentials dir.
     extraEnv = {
+      MENTAT_VOICE_MODEL = "claude-opus-5-5";
       MENTAT_VOICE_GATEWAY_URL = "http://127.0.0.1:4100";
       MENTAT_VOICE_GATEWAY_KEY_FILE = "%d/patchbay-caller-key";
     };

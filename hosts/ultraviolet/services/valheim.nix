@@ -21,21 +21,11 @@
         set -euo pipefail
 
         state=/var/lib/valheim
+        worlds="$state/worlds_local"
         spool=/var/lib/valheim-backup
         destination=/mnt/backups/valheim
         staging="$spool/.current.$$"
         remote_tmp=
-        restart_needed=0
-        lock_held=0
-        lock=/run/valheim-backup.lock
-
-        release_lock() {
-          if [ "$lock_held" -eq 1 ]; then
-            ${pkgs.util-linux}/bin/flock -u 9
-            exec 9>&-
-            lock_held=0
-          fi
-        }
 
         finish() {
           status=$?
@@ -48,69 +38,65 @@
             echo "failed to clean remote backup temporary file" >&2
             status=1
           fi
-          if ! release_lock; then
-            echo "failed to release Valheim backup lock" >&2
-            status=1
-          fi
-          if [ "$restart_needed" -eq 1 ]; then
-            if ! ${pkgs.systemd}/bin/systemctl start valheim.service; then
-              echo "failed to restore initially running Valheim service" >&2
-              status=1
-            fi
-          fi
           exit "$status"
         }
         trap finish EXIT
         trap 'exit 1' HUP INT TERM
 
-        exec 9>"$lock"
-        if ! ${pkgs.util-linux}/bin/flock -n 9; then
-          echo "another backup is already capturing Valheim state" >&2
-          exit 1
-        fi
-        lock_held=1
+        # Copy the world while the server runs. Every save writes new chunk
+        # generations and a new _main.<N> set, so an unchanged listing across
+        # the copy means no save (or Valheim auto-backup) touched it.
+        fingerprint() {
+          ${pkgs.findutils}/bin/find "$worlds" -type f -printf '%P %s %T@\n' \
+            | ${pkgs.coreutils}/bin/sort
+        }
+
         ${pkgs.coreutils}/bin/mkdir -p "$spool"
         ${pkgs.coreutils}/bin/chmod 0700 "$spool"
 
-        before_save_markers=0
-        if ${pkgs.systemd}/bin/systemctl is-active --quiet valheim.service; then
-          restart_needed=1
-          before_save_markers=$(${pkgs.gnugrep}/bin/grep -Fc 'World save (5/5) done.' "$state/logs/valheim-current.log" || true)
-        fi
-        ${pkgs.systemd}/bin/systemctl stop valheim.service
-        if ${pkgs.systemd}/bin/systemctl is-active --quiet valheim.service; then
-          echo "Valheim remained active after its graceful stop" >&2
+        copied=0
+        for attempt in 1 2 3 4 5; do
+          ${pkgs.coreutils}/bin/rm -rf -- "$staging"
+          ${pkgs.coreutils}/bin/mkdir -p "$staging/state"
+          before=$(fingerprint)
+          ${pkgs.coreutils}/bin/cp -a "$state/." "$staging/state/"
+          after=$(fingerprint)
+          if [ "$before" = "$after" ]; then
+            copied=1
+            break
+          fi
+          echo "world changed during copy (attempt $attempt), retrying" >&2
+          ${pkgs.coreutils}/bin/sleep 5
+        done
+        if [ "$copied" -ne 1 ]; then
+          echo "world kept changing during every copy attempt" >&2
           exit 1
         fi
-        if [ "$restart_needed" -eq 1 ]; then
-          after_save_markers=$(${pkgs.gnugrep}/bin/grep -Fc 'World save (5/5) done.' "$state/logs/valheim-current.log" || true)
-          if [ "$after_save_markers" -le "$before_save_markers" ]; then
-            echo "graceful stop did not record a newly completed world save" >&2
-            exit 1
-          fi
-        fi
 
-        world_directory="$state/worlds_local/Midgard"
-        for suffix in fwl2 db2 chunks; do
-          world_file=$(${pkgs.findutils}/bin/find "$world_directory" \
-            -maxdepth 1 -type f -name "_main.*.$suffix" -size +0c -print -quit)
-          if [ -z "$world_file" ]; then
-            echo "missing or empty pinned world data: _main.*.$suffix" >&2
+        # A committed save is one _main.<N> set ending in its .ok marker, which
+        # Valheim writes last; chunks newer than the marker mean a save was
+        # still in progress.
+        world_directory="$staging/state/worlds_local/Midgard"
+        shopt -s nullglob
+        markers=("$world_directory"/_main.*.ok)
+        shopt -u nullglob
+        if [ "''${#markers[@]}" -ne 1 ]; then
+          echo "expected exactly one committed save marker, found ''${#markers[@]}" >&2
+          exit 1
+        fi
+        marker=''${markers[0]}
+        save=''${marker##*/_main.}
+        save=''${save%.ok}
+        for suffix in chunks db2 fwl2; do
+          if [ ! -s "$world_directory/_main.$save.$suffix" ]; then
+            echo "missing or empty world data: _main.$save.$suffix" >&2
             exit 1
           fi
         done
-
-        ${pkgs.coreutils}/bin/mkdir -p "$staging/state"
-        ${pkgs.coreutils}/bin/cp -a "$state/." "$staging/state/"
-
-        release_lock
-        if [ "$restart_needed" -eq 1 ]; then
-          ${pkgs.systemd}/bin/systemctl start valheim.service
-          if ! ${pkgs.systemd}/bin/systemctl is-active --quiet valheim.service; then
-            echo "failed to restore initially running Valheim service" >&2
-            exit 1
-          fi
-          restart_needed=0
+        if [ -n "$(${pkgs.findutils}/bin/find "$world_directory" -maxdepth 1 \
+          -name '*.chunk' -newer "$marker" -print -quit)" ]; then
+          echo "chunks newer than save $save marker: copy caught a save in progress" >&2
+          exit 1
         fi
 
         # Trigger the automount read-only, then require its real backing rather

@@ -49,7 +49,6 @@ in
   assert unit.StateDirectoryMode == "0700";
   assert unit.WorkingDirectory == "/var/lib/valheim";
   assert unit.Restart == "on-failure";
-  assert lib.hasInfix "flock -n /run/valheim-backup.lock" unit.ExecStartPre;
   assert unit.KillSignal == "SIGINT";
   assert unit.LimitCORE == 0;
   assert unit.StandardOutput == "null";

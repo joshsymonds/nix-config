@@ -1,8 +1,8 @@
 {
   "companyAnnouncements": [],
   "viewMode": "default",
-  "model": "chatgpt/astra",
-  "effortLevel": "xhigh",
+  "model": "claude-opus-5-5",
+  "effortLevel": "high",
   "preferredNotifChannel": "notifications_disabled",
   "permissions": {
     "defaultMode": "bypassPermissions"

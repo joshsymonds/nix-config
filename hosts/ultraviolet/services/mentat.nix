@@ -90,7 +90,6 @@
     enable = true;
     claudePackage = pkgs.claudeCodeCli;
     environmentFile = config.age.secrets."mentat-env".path;
-    maxBudgetUsd = 2.0;
     # Shimmer via its own tailscale-serve front: serve injects the
     # Tailscale-User-Login header (ultraviolet's node identity =
     # josh@joshsymonds.com, on shimmer's allowlist). The direct

@@ -594,9 +594,11 @@ in
     # gpu-nvidia.nix already sets nvidia-drm.modeset=1.)
     boot.initrd.kernelModules = ["nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm"];
 
-    # 5s grace to hit space for the recovery menu — long enough to actually
-    # catch a misbehaving kernel without making routine boots feel sluggish.
-    boot.loader.timeout = 5;
+    # No menu wait: routine boots go straight to the default entry. The
+    # recovery menu is still one keypress away — hold Space (any key works)
+    # from power-on until the menu appears and systemd-boot shows it
+    # instead of auto-booting. Saved ~5s of every boot.
+    boot.loader.timeout = 0;
 
     # ── Boot: initrd hardware modules ──────────────────────────────────
     # Standard for AM5 NVMe + USB. If real hardware reveals missing modules

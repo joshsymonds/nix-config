@@ -46,6 +46,13 @@
       # persistent natively).
       "/var/lib/gluetun"
       "/var/lib/qbittorrent"
+      # Root podman's image store (graphroot). Without it @root rollback
+      # empties the store, so every boot re-pulls the gluetun +
+      # qbittorrent images before the tunnel can come up — a boot with no
+      # network or a Docker Hub rate limit leaves qbittorrent down.
+      # Rootless podman (ComfyUI) keeps its store under ~/.local/share on
+      # @home and needs nothing here.
+      "/var/lib/containers"
       # services.inference-stack — llama-swap GGUF store + Open-WebUI state.
       # GGUFs land under /var/lib/llama-models (fetch-llama-models.service
       # downloads them on activation; ~15-25 GB each). Open-WebUI persists

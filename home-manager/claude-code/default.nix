@@ -762,6 +762,28 @@ in {
         SHARED="$HOME/.claude-shared"
         MARKER="$BUCKET/personal/.migrated"
 
+        # Fast path: the layout is already in place and the NAS isn't
+        # mounted yet — the normal state at boot. Home Manager's activation
+        # runs before systemd-user-sessions (and so before the greeter), and
+        # triggering the /mnt/claude automount here blocks it on
+        # network-online (~3.5s of every boot) only to re-confirm symlinks
+        # that are purely local to read. A later activation with the mount
+        # already up still takes the full path below, which also recreates
+        # any missing bucket dirs.
+        layout_ok=true
+        for d in projects sessions todos tasks; do
+          [ "$(${pkgs.coreutils}/bin/readlink "$HOME/.claude/$d" 2>/dev/null)" = "$BUCKET/personal/$d" ] || layout_ok=false
+        done
+        for d in file-history shell-snapshots; do
+          { [ "$(${pkgs.coreutils}/bin/readlink "$HOME/.claude/$d" 2>/dev/null)" = "$LOCAL/$d" ] && [ -d "$LOCAL/$d" ]; } || layout_ok=false
+        done
+        if [ -d "$SHARED" ] && [ ! -L "$SHARED" ]; then
+          layout_ok=false
+        fi
+        if [ "$layout_ok" = true ] && ! ${pkgs.util-linux}/bin/findmnt -n -t nfs,nfs4 /mnt/claude >/dev/null 2>&1; then
+          exit 0
+        fi
+
         # NAS reachability — try to trigger automount, then verify. Refuse
         # to touch symlinks if the NAS is unreachable so we don't leave
         # the user with dangling targets. `mountpoint -q` is the wrong test:

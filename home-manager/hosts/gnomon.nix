@@ -632,6 +632,11 @@
       OnCalendar = "daily";
       Unit = "gtrash-prune.service";
       Persistent = true;
+      # gtrash scans every mount for trash dirs, which trips each NFS
+      # automount in turn. A missed run catches up at boot; the random
+      # delay (applied after systemd rebases the missed elapse to boot
+      # time) keeps that off the boot path.
+      RandomizedDelaySec = "1h";
     };
     Install.WantedBy = ["timers.target"];
   };

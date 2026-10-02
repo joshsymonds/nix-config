@@ -10,13 +10,66 @@
 
     bepinex = {
       enable = true;
-      plugins.SpreadTheLoad = pkgs.valheim-server.bepinex.plugins.spreadTheLoad;
+      plugins = {
+        SpreadTheLoad = pkgs.valheim-server.bepinex.plugins.spreadTheLoad;
+        ValheimTune = pkgs.valheim-server.bepinex.plugins.valheimTune;
+        PortalGhostFix = pkgs.valheim-server.bepinex.plugins.portalGhostFix;
+        AFKManager = pkgs.valheim-server.bepinex.plugins.afkManager;
+      };
       # Shared objects (creatures, spawners, trees) are simulated by whoever
       # owns them; Futhark's and Björn's machines lag when that is them, so
       # anything they share with Atmus is handed to Atmus. Alone, they keep it.
       configFiles."DeathMonger.SpreadTheLoad.cfg" = ''
         [General]
         Yield Players = 76561198051614518,76561197995483534
+      '';
+      # Vanilla bug fixes only; every performance replacement off. Fix #1:
+      # 1.0's incremental save skips chunks only clients changed, so player
+      # edits there revert on restart (worse with SpreadTheLoad, which routes
+      # more changes through clients). AllPeersPerRound stays off because
+      # SpreadTheLoad already replaces SendZDOToPeers2.
+      configFiles."akoozie.valheimtune.cfg" = ''
+        [Fixes]
+        SaveDirtyFix = true
+        SpawnerLinkFix = true
+        DisconnectNoSleep = true
+        DeadZdoPrune = true
+        GlobalKeyDedupe = true
+
+        [Sync]
+        DirtySets = false
+        TopKSort = false
+        AllPeersPerRound = false
+        OverrideSendWindow = false
+        RelayMinIntervalMs = 0
+
+        [Steam]
+        OverrideSendRate = false
+
+        [Receive]
+        MaxPacketsPerPeerPerFrame = 0
+
+        [Server]
+        TargetFrameRate = 0
+        SkipRenderMesh = false
+        DeferAssetUnload = false
+
+        [Cleanup]
+        FloatingDropsRun = false
+        FloatingDropsDelete = false
+
+        [Compat]
+        DisableOnUnknownBuild = true
+
+        [Measure]
+        LogIntervalSeconds = 300
+        ConfigReloadSeconds = 0
+      '';
+      # Top-left notice only: the chat announcement works by briefly sending
+      # every client a player list with a fake "AFKManager" player in it.
+      configFiles."torokal.afkmanager.cfg" = ''
+        [Announcements]
+        AnnounceInChat = false
       '';
     };
   };

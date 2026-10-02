@@ -45,5 +45,26 @@ in {
       hash = "sha256-Gzf5Ab38A4vRibQdZOrhOTr3HuoxBBM7fEjHK1+nB8Q=";
       pluginDir = "BepInEx/plugins";
     };
+    valheimTune = plugin {
+      owner = "Akoozie";
+      name = "ValheimTune";
+      version = "0.7.8";
+      hash = "sha256-IpFg6SFgDYoVEMO1+50Pazq9cHMrGRPnfi8hJNvGWtU=";
+      pluginDir = "plugins";
+    };
+    portalGhostFix = plugin {
+      owner = "Sfantul";
+      name = "PortalGhostFix";
+      version = "1.0.0";
+      hash = "sha256-isbSZoZT0ypXi7DBny6OoFksgJN08+oZyKKMiEsqK30=";
+      pluginDir = "plugins/PortalGhostFix";
+    };
+    afkManager = plugin {
+      owner = "Torokal";
+      name = "AFKManager";
+      version = "0.3.1";
+      hash = "sha256-I63mWu7BheCpQNbjb6+rWWhLLK8egU3qM9/nZqHVzMI=";
+      pluginDir = "plugins/AFKManager";
+    };
   };
 }

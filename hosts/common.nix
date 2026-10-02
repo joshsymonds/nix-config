@@ -48,6 +48,12 @@ in {
       automatic = true;
       dates = "daily";
       options = "--delete-older-than 3d";
+      # The timer is Persistent, so a run missed while the machine was off
+      # fires as soon as timers start at boot. systemd rebases a missed
+      # calendar elapse to userspace start and then adds the random delay,
+      # so this spreads that catch-up across the first hour instead of
+      # running a 20s I/O-heavy oneshot on the boot path.
+      randomizedDelaySec = "1h";
     };
 
     # Automatic store optimization (hard-linking identical files)

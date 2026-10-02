@@ -244,6 +244,15 @@
     #     of the Cmd press (set_mods) so a mouse-wheel chord picks up Alt.
     leftmeta = layer(alt)
     rightmeta = layer(alt)
+
+    [valheim-x86-64]
+    # Native Linux titles don't get the steam_app_<id> class Proton windows
+    # carry — Valheim's X11 window is `valheim.x86_64` (normalized as above),
+    # so [steam-app-*] never matches it. Same Cmd = real Alt mask, needed for
+    # its BepInEx mods' Alt chords (Runic Storage, Gizmo's Z axis). Option is
+    # still Super here, so Option+Q is niri's close-window, not Alt+Q.
+    leftmeta = layer(alt)
+    rightmeta = layer(alt)
   '';
 
   # Restart keyd-application-mapper when app.conf changes. The mapper
@@ -632,6 +641,11 @@
       OnCalendar = "daily";
       Unit = "gtrash-prune.service";
       Persistent = true;
+      # gtrash scans every mount for trash dirs, which trips each NFS
+      # automount in turn. A missed run catches up at boot; the random
+      # delay (applied after systemd rebases the missed elapse to boot
+      # time) keeps that off the boot path.
+      RandomizedDelaySec = "1h";
     };
     Install.WantedBy = ["timers.target"];
   };

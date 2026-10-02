@@ -5,7 +5,12 @@
   "effortLevel": "high",
   "preferredNotifChannel": "notifications_disabled",
   "permissions": {
-    "defaultMode": "bypassPermissions"
+    "defaultMode": "bypassPermissions",
+    "deny": [
+      "Read(/run/strongbox/**)",
+      "Grep(/run/strongbox/**)",
+      "Glob(/run/strongbox/**)"
+    ]
   },
   "skipDangerousModePermissionPrompt": true,
   "autoUpdater": {
@@ -36,6 +41,15 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/destructive-guard.py"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Read|Grep|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/private-store-guard.py"
           }
         ]
       },

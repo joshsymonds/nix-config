@@ -134,5 +134,17 @@ in {
         })}/settings.json"
       ];
     };
+
+    # The NixOS greetd module makes the unit Type=idle, so systemd holds
+    # each of its execs (the DMS preStart, then greetd itself) until the
+    # job queue drains — capped at 5s + 1s each. Any long oneshot still
+    # starting at boot (a Persistent timer's catch-up run) keeps the queue
+    # busy, so the greeter appeared ~12s after graphical.target. Idle only
+    # exists to keep boot status text off a text greeter's tty; DankGreeter
+    # is a Wayland compositor that owns the VT in graphics mode, so there
+    # is nothing to protect.
+    systemd.services.greetd = lib.mkIf cfg.greeter.enable {
+      serviceConfig.Type = lib.mkForce "simple";
+    };
   };
 }

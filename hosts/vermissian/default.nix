@@ -14,6 +14,7 @@ in
     # You can import other NixOS modules here. atticd-cache comes via common.nix.
     imports = [
       ../../modules/services/cleanup-services.nix
+      ../../modules/services/private-store.nix
       ../../modules/services/cloudflare-tunnel.nix
       ../../modules/services/cloudflare-warp-dns.nix
       ./disko.nix
@@ -25,6 +26,20 @@ in
       # Headless-server hardening (BT module blacklist on top of fleet-wide)
       ../../modules/linux-base/server-hardening.nix
     ];
+
+    services.privateStore.enable = true;
+
+    fileSystems."/mnt/backup" = {
+      device = "${network.infra.nas.ip}:${network.infra.nas.shares.backup}";
+      fsType = "nfs";
+      options = [
+        "nofail"
+        "noauto"
+        "x-systemd.automount"
+        "x-systemd.mount-timeout=10s"
+        "x-systemd.idle-timeout=600"
+      ];
+    };
 
     services.cleanup-services = {
       enable = true;

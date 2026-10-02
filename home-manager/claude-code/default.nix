@@ -704,6 +704,10 @@ in {
             source = ./hooks/destructive-guard.py;
             executable = true;
           };
+          ".claude/hooks/private-store-guard.py" = {
+            source = ./hooks/private-store-guard.py;
+            executable = true;
+          };
           ".claude/hooks/gambit-dispatch-guard.py" = {
             source = ./hooks/gambit-dispatch-guard.py;
             executable = true;

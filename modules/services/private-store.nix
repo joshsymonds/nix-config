@@ -443,19 +443,28 @@ in {
     };
 
     systemd.targets.postgresql.wantedBy = lib.mkForce [];
-    systemd.services.postgresql.serviceConfig = {
-      User = lib.mkForce "strongbox";
-      Group = lib.mkForce "private-store-socket";
-      UMask = lib.mkForce "0007";
-      ReadWritePaths = lib.mkForce [
-        "${cfg.mountPath}/postgresql/data"
-        "${cfg.mountPath}/postgresql/log"
-        databaseSocketDirectory
-      ];
-      LimitCORE = 0;
+    systemd.services.postgresql = {
+      environment = {
+        HOME = cfg.mountPath;
+        TMPDIR = "${cfg.mountPath}/tmp";
+      };
+      serviceConfig = {
+        User = lib.mkForce "strongbox";
+        Group = lib.mkForce "private-store-socket";
+        UMask = lib.mkForce "0007";
+        ReadWritePaths = lib.mkForce [
+          "${cfg.mountPath}/postgresql/data"
+          "${cfg.mountPath}/postgresql/log"
+          "${cfg.mountPath}/tmp"
+          databaseSocketDirectory
+        ];
+        LimitCORE = 0;
+      };
     };
     systemd.services.postgresql-setup = {
       environment = {
+        HOME = cfg.mountPath;
+        TMPDIR = "${cfg.mountPath}/tmp";
         PGHOST = databaseSocketDirectory;
         PGUSER = "postgres";
       };

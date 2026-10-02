@@ -672,6 +672,14 @@
             pkgs = checkPkgs;
             renderedSettings = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home.file.".claude/settings.base.json".source;
           };
+          private-store-vm = import ./tests/private-store-vm.nix {
+            pkgs = checkPkgs;
+            vermissian = self.nixosConfigurations.vermissian.config;
+          };
+          private-store-hook = import ./tests/private-store-hook.nix {
+            pkgs = checkPkgs;
+            renderedSettings = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home.file.".claude/settings.base.json".source;
+          };
           direnv-shell = import ./tests/direnv-shell.nix {inherit pkgs;};
           gambit-rung-agents = import ./tests/gambit-rung-agents.nix {
             pkgs = checkPkgs;

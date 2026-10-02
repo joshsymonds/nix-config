@@ -7,6 +7,18 @@
     enable = true;
     package = pkgs.valheim-server;
     passwordFile = null;
+
+    bepinex = {
+      enable = true;
+      plugins.SpreadTheLoad = pkgs.valheim-server.bepinex.plugins.spreadTheLoad;
+      # Shared objects (creatures, spawners, trees) are simulated by whoever
+      # owns them; Futhark's and Björn's machines lag when that is them, so
+      # anything they share with Atmus is handed to Atmus. Alone, they keep it.
+      configFiles."DeathMonger.SpreadTheLoad.cfg" = ''
+        [General]
+        Yield Players = 76561198051614518,76561197995483534
+      '';
+    };
   };
 
   systemd.services.valheim-backup = {

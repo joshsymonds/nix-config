@@ -29,6 +29,34 @@
         };
       }
     ]).config.systemd.services.valheim.serviceConfig.ExecStart;
+  fakePack = pkgs.runCommand "fake-bepinex-pack" {} ''
+    mkdir -p "$out/BepInEx/core" "$out/BepInEx/config" "$out/doorstop_libs"
+    touch "$out/BepInEx/core/BepInEx.Preloader.dll" "$out/BepInEx/config/BepInEx.cfg" \
+      "$out/doorstop_libs/libdoorstop_x64.so"
+  '';
+  fakePlugin = pkgs.runCommand "fake-plugin" {} ''
+    mkdir -p "$out"
+    touch "$out/Example.dll"
+  '';
+  modded =
+    (evaluate [
+      {
+        services.valheim = {
+          enable = true;
+          package = fakePackage;
+          passwordFile = null;
+          bepinex = {
+            enable = true;
+            pack = fakePack;
+            plugins.Example = fakePlugin;
+            configFiles."example.cfg" = ''
+              [General]
+              Key = 1
+            '';
+          };
+        };
+      }
+    ]).config.systemd.services.valheim.serviceConfig.ExecStart;
   service = enabled.systemd.services.valheim;
   unit = service.serviceConfig;
   launcher = unit.ExecStart;
@@ -86,5 +114,16 @@ in
         echo 'passwordless launcher unexpectedly requires a credential' >&2
         exit 1
       fi
+      if grep -Eq 'DOORSTOP|VALHEIM_LD_PRELOAD|bepinex' ${launcher}; then
+        echo 'vanilla launcher unexpectedly loads BepInEx' >&2
+        exit 1
+      fi
+      grep -F -- 'export DOORSTOP_ENABLED=1' ${modded}
+      grep -F -- 'export DOORSTOP_TARGET_ASSEMBLY="/var/lib/valheim/bepinex/BepInEx/core/BepInEx.Preloader.dll"' ${modded}
+      grep -F -- 'export VALHEIM_LD_PRELOAD=${fakePack}/doorstop_libs/libdoorstop_x64.so' ${modded}
+      grep -F -- '${fakePack}/BepInEx/core "/var/lib/valheim/bepinex/BepInEx/core"' ${modded}
+      grep -F -- "${fakePlugin} /var/lib/valheim/bepinex/BepInEx/plugins/Example" ${modded}
+      grep -F -- "/var/lib/valheim/bepinex/BepInEx/config/example.cfg" ${modded}
+      grep -F -- '-password "$password"' ${modded}
       touch "$out"
     ''

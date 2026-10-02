@@ -31,6 +31,10 @@ runCommand "valheim-server-package-test" {
     mkdir -p "$fixture/server" "$fixture/runtime/linux64" "$fixture/bin"
     cat > "$fixture/bin/steam-run" <<'SH'
   #!/bin/sh
+  if [ -n "''${VALHEIM_TEST_RUNNER_ARGS:-}" ]; then
+    printf '%s\n' "$@" > "$VALHEIM_TEST_RUNNER_ARGS"
+    exit 0
+  fi
   exec "$@"
   SH
     cat > "$fixture/server/valheim_server.x86_64" <<'SH'
@@ -47,6 +51,18 @@ runCommand "valheim-server-package-test" {
     "$fixture/valheim-server" -name 'synthetic server' -port 2456
     printf '%s\n' -name 'synthetic server' -port 2456 > "$fixture/expected-args"
     cmp "$fixture/expected-args" "$fixture/actual-args"
+
+    # Without VALHEIM_LD_PRELOAD the game is launched directly, nothing preloaded.
+    export VALHEIM_TEST_RUNNER_ARGS="$fixture/runner-args"
+    "$fixture/valheim-server" -port 2456
+    printf '%s\n' "$fixture/server/valheim_server.x86_64" -port 2456 > "$fixture/expected-runner"
+    cmp "$fixture/expected-runner" "$fixture/runner-args"
+
+    # With it, the preload is set inside steam-run, for the game only.
+    VALHEIM_LD_PRELOAD=/doorstop/libdoorstop_x64.so "$fixture/valheim-server" -port 2456
+    printf '%s\n' env LD_PRELOAD=/doorstop/libdoorstop_x64.so \
+      "$fixture/server/valheim_server.x86_64" -port 2456 > "$fixture/expected-runner"
+    cmp "$fixture/expected-runner" "$fixture/runner-args"
 
     touch "$out"
 ''

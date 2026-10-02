@@ -46,6 +46,31 @@
       ${pkgs.coreutils}/bin/sleep 1
     done
   '';
+  # BepInEx takes its root from two directories above the preloader it was
+  # handed and writes its cache, config and log there, so it needs a writable
+  # copy of itself rather than store symlinks Doorstop could resolve back into
+  # the store. core/ and plugins/ are rebuilt from the store on every start;
+  # config/ persists, with the declared files rewritten each time.
+  bepinexRoot = "${stateDirectory}/bepinex/BepInEx";
+  bepinexSetup = ''
+    ${pkgs.coreutils}/bin/rm -rf "${bepinexRoot}/core" "${bepinexRoot}/plugins"
+    ${pkgs.coreutils}/bin/mkdir -p "${bepinexRoot}/config" "${bepinexRoot}/plugins"
+    ${pkgs.coreutils}/bin/cp -rL --no-preserve=mode ${cfg.bepinex.pack}/BepInEx/core "${bepinexRoot}/core"
+    if [ ! -e "${bepinexRoot}/config/BepInEx.cfg" ]; then
+      ${pkgs.coreutils}/bin/cp -L --no-preserve=mode ${cfg.bepinex.pack}/BepInEx/config/BepInEx.cfg "${bepinexRoot}/config/BepInEx.cfg"
+    fi
+    ${lib.concatStrings (lib.mapAttrsToList (name: plugin: ''
+        ${pkgs.coreutils}/bin/cp -rL --no-preserve=mode ${plugin} ${lib.escapeShellArg "${bepinexRoot}/plugins/${name}"}
+      '')
+      cfg.bepinex.plugins)}
+    ${lib.concatStrings (lib.mapAttrsToList (name: text: ''
+        ${pkgs.coreutils}/bin/cp --no-preserve=mode ${pkgs.writeText "bepinex-${name}" text} ${lib.escapeShellArg "${bepinexRoot}/config/${name}"}
+      '')
+      cfg.bepinex.configFiles)}
+    export DOORSTOP_ENABLED=1
+    export DOORSTOP_TARGET_ASSEMBLY="${bepinexRoot}/core/BepInEx.Preloader.dll"
+    export VALHEIM_LD_PRELOAD=${cfg.bepinex.pack}/doorstop_libs/libdoorstop_x64.so
+  '';
   launcher = pkgs.writeShellScript "valheim-launch" ''
     set -eu
     log_directory=${stateDirectory}/logs
@@ -56,6 +81,7 @@
     : > "$log_file"
     ${pkgs.coreutils}/bin/chmod 0600 "$log_file"
     printf '%s\n' "valheim invocation start" >> "$log_file"
+    ${lib.optionalString cfg.bepinex.enable bepinexSetup}
 
     password=""
     ${lib.optionalString (cfg.passwordFile != null) ''
@@ -133,6 +159,29 @@ in {
       type = lib.types.port;
       default = 2456;
       description = "Base UDP game port.";
+    };
+
+    bepinex = {
+      enable = lib.mkEnableOption "BepInEx server-side plugins (clients need nothing)";
+
+      pack = lib.mkOption {
+        type = lib.types.package;
+        default = pkgs.valheim-server.bepinex.pack;
+        defaultText = lib.literalExpression "pkgs.valheim-server.bepinex.pack";
+        description = "BepInExPack_Valheim root (BepInEx/, doorstop_libs/).";
+      };
+
+      plugins = lib.mkOption {
+        type = lib.types.attrsOf lib.types.package;
+        default = {};
+        description = "Plugin folders, each installed as BepInEx/plugins/<name>.";
+      };
+
+      configFiles = lib.mkOption {
+        type = lib.types.attrsOf lib.types.lines;
+        default = {};
+        description = "Files written to BepInEx/config/<name> on every start, replacing what was there.";
+      };
     };
   };
 

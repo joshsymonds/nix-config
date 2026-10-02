@@ -8,6 +8,9 @@
   imageDirectory = builtins.dirOf cfg.imagePath;
   mapper = "/dev/mapper/strongbox";
   lockFile = "/run/lock/strongbox.lock";
+  backupMount = "/mnt/backup";
+  backupImage = "${backupMount}/private-store.img";
+  previousBackupImage = "${backupImage}.previous";
   databaseUnit = "postgresql.target";
   databaseSocketDirectory = "${cfg.mountPath}/postgresql/socket";
   sessionSocket = "${cfg.mountPath}/tmux/socket";
@@ -30,6 +33,9 @@
       mapper=${lib.escapeShellArg mapper}
       lock_file=${lib.escapeShellArg lockFile}
       session_socket=${lib.escapeShellArg sessionSocket}
+      backup_mount=${lib.escapeShellArg backupMount}
+      backup_image=${lib.escapeShellArg backupImage}
+      previous_backup_image=${lib.escapeShellArg previousBackupImage}
 
       fail() {
         printf 'strongbox: %s\n' "$*" >&2
@@ -179,6 +185,35 @@
         trap - EXIT
       }
 
+      backup_locked_image() {
+        local filesystem filesystems has_nfs=0 temporary
+        stat -- "$backup_mount/." >/dev/null 2>&1 || return 1
+        filesystems=$(findmnt --noheadings --output FSTYPE --mountpoint "$backup_mount" 2>/dev/null) || return 1
+        while IFS= read -r filesystem; do
+          case "$filesystem" in
+            nfs|nfs4)
+              has_nfs=1
+              break
+              ;;
+          esac
+        done <<< "$filesystems"
+        [ "$has_nfs" -eq 1 ] || return 1
+
+        temporary=$(runuser -u strongbox -- mktemp "$backup_mount/.private-store.img.XXXXXXXXXX") || return 1
+        if ! runuser -u strongbox -- cp -- "$image" "$temporary"; then
+          runuser -u strongbox -- rm -f -- "$temporary" || true
+          return 1
+        fi
+        if { [ -e "$backup_image" ] || [ -L "$backup_image" ]; } && ! runuser -u strongbox -- mv -fT -- "$backup_image" "$previous_backup_image"; then
+          runuser -u strongbox -- rm -f -- "$temporary" || true
+          return 1
+        fi
+        if ! runuser -u strongbox -- mv -fT -- "$temporary" "$backup_image"; then
+          runuser -u strongbox -- rm -f -- "$temporary" || true
+          return 1
+        fi
+      }
+
       close_store() {
         require_root
         acquire_lock
@@ -200,6 +235,10 @@
         fi
         if mountpoint -q "$mount_path" || [ -e "$mapper" ]; then
           report_still_open
+          return 1
+        fi
+        if ! backup_locked_image; then
+          printf 'strongbox: locked, backup failed\n' >&2
           return 1
         fi
       }

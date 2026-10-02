@@ -54,6 +54,11 @@
         flock -x 9
       }
 
+      release_lock() {
+        flock -u 9
+        exec 9>&-
+      }
+
       prompt_passphrase() {
         local label="$1"
         local confirmation
@@ -303,13 +308,22 @@
         [ -t 0 ] && [ -t 1 ] || fail 'remote session requires a PTY'
         local answer attach_status=0
         if [ -e "$mapper" ] || mountpoint -q "$mount_path"; then
-          if [ ! -e "$mapper" ] || ! mountpoint -q "$mount_path" || ! systemctl is-active --quiet strongbox-session.service; then
+          if [ ! -e "$mapper" ] || ! mountpoint -q "$mount_path"; then
             fail 'store is already open or in an inconsistent state'
           fi
         else
           open_store
+          # The attached client must not hold the lifecycle lock, or put, run, and close would wait on it.
+          release_lock
         fi
-        tmux -S "$session_socket" attach-session -t private-shell || attach_status=$?
+        # The private shell ends when its last window exits; recreate the session rather than attach to nothing.
+        if ! runuser -u strongbox -- tmux -S "$session_socket" has-session -t private-shell 2>/dev/null; then
+          acquire_lock
+          systemctl restart strongbox-session.service || fail 'unable to start the private session'
+          release_lock
+        fi
+        # Attach as the owner: a root client would start a root-owned server the session service cannot use.
+        runuser -u strongbox -- tmux -S "$session_socket" attach-session -t private-shell || attach_status=$?
         if ! read -r -p 'Close strongbox? [Y/n] ' answer; then
           report_still_open
           return 1
@@ -478,6 +492,8 @@ in {
       description = "Private strongbox shell session";
       after = ["postgresql.service"];
       requires = ["postgresql.service"];
+      # A configuration switch must never kill a live private shell or the jobs running in it.
+      restartIfChanged = false;
       serviceConfig = {
         Type = "oneshot";
         User = "strongbox";
@@ -489,7 +505,8 @@ in {
           "HISTFILE=/dev/null"
         ];
         ExecStart = "${pkgs.tmux}/bin/tmux -S ${sessionSocket} new-session -d -s private-shell ${pkgs.bash}/bin/bash --noprofile --rcfile ${cfg.mountPath}/.bash_profile";
-        ExecStop = "${pkgs.tmux}/bin/tmux -S ${sessionSocket} kill-server";
+        # The server is already gone when the private shell exited; that is not a stop failure.
+        ExecStop = "-${pkgs.tmux}/bin/tmux -S ${sessionSocket} kill-server";
         RemainAfterExit = true;
         KillMode = "control-group";
         UMask = "0077";

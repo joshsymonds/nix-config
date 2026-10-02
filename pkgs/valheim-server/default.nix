@@ -82,6 +82,7 @@
 
     passthru = {
       inherit rawRuntime rawServer sourceCheck;
+      bepinex = callPackage ./bepinex.nix {};
       tests.package = callPackage ../../tests/valheim-package.nix {
         inherit package source;
         launcherTemplate = ./run-server.sh;

@@ -120,7 +120,7 @@
           fail 'unable to mount encrypted filesystem'
         fi
 
-        if ! chown strongbox:strongbox "$mount_path" || ! chmod 0700 "$mount_path" || ! install -d -o strongbox -g strongbox -m 0700 "$(dirname "$session_socket")" "$mount_path/postgresql/data" "$mount_path/postgresql/log" || ! install -d -o strongbox -g private-store-socket -m 0770 "$mount_path/postgresql/socket"; then
+        if ! chown strongbox:strongbox "$mount_path" || ! chmod 0700 "$mount_path" || ! install -d -o strongbox -g strongbox -m 0700 "$(dirname "$session_socket")" "$mount_path/tmp" "$mount_path/postgresql/data" "$mount_path/postgresql/log" || ! install -d -o strongbox -g private-store-socket -m 0770 "$mount_path/postgresql/socket"; then
           cleanup_open_failure
           fail 'unable to prepare encrypted filesystem'
         fi
@@ -243,7 +243,38 @@
         fi
       }
 
+      remote_session() {
+        if [ "$EUID" -ne 0 ]; then
+          exec sudo -n -- "$0" --remote-session-root
+        fi
+        [ -t 0 ] && [ -t 1 ] || fail 'remote session requires a PTY'
+        local answer attach_status=0
+        if [ -e "$mapper" ] || mountpoint -q "$mount_path"; then
+          if [ ! -e "$mapper" ] || ! mountpoint -q "$mount_path" || ! systemctl is-active --quiet strongbox-session.service; then
+            fail 'store is already open or in an inconsistent state'
+          fi
+        else
+          open_store
+        fi
+        tmux -S "$session_socket" attach-session -t private-shell || attach_status=$?
+        if ! read -r -p 'Close strongbox? [Y/n] ' answer; then
+          report_still_open
+          return 1
+        fi
+        if [ -z "$answer" ] || [ "$answer" = y ] || [ "$answer" = Y ] || [ "$answer" = yes ] || [ "$answer" = YES ]; then
+          close_store || return 1
+        else
+          report_still_open
+        fi
+        return "$attach_status"
+      }
+
       case "''${1:-}" in
+        --remote-session-root)
+          [ "$#" -eq 1 ] || fail 'usage: strongbox'
+          [ "$EUID" -eq 0 ] || fail 'internal remote session must run as root'
+          remote_session
+          ;;
         create)
           [ "$#" -eq 1 ] || fail 'usage: strongbox create'
           create_store
@@ -257,7 +288,11 @@
           close_store
           ;;
         *)
-          fail 'usage: strongbox {create|open|close}'
+          if [ "$#" -eq 0 ]; then
+            remote_session
+          else
+            fail 'usage: strongbox {create|open|close}'
+          fi
           ;;
       esac
     '';
@@ -358,7 +393,12 @@ in {
         User = "strongbox";
         Group = "strongbox";
         WorkingDirectory = cfg.mountPath;
-        ExecStart = "${pkgs.tmux}/bin/tmux -S ${sessionSocket} new-session -d -s private-shell ${pkgs.bash}/bin/bash";
+        Environment = [
+          "HOME=${cfg.mountPath}"
+          "TMPDIR=${cfg.mountPath}/tmp"
+          "HISTFILE=/dev/null"
+        ];
+        ExecStart = "${pkgs.tmux}/bin/tmux -S ${sessionSocket} new-session -d -s private-shell ${pkgs.bash}/bin/bash --noprofile --rcfile ${cfg.mountPath}/.bash_profile";
         ExecStop = "${pkgs.tmux}/bin/tmux -S ${sessionSocket} kill-server";
         RemainAfterExit = true;
         KillMode = "control-group";

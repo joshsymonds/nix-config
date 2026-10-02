@@ -36,12 +36,21 @@
     users.users.intruder = {
       isNormalUser = true;
     };
+    users.users.remoteUser = {
+      isNormalUser = true;
+      extraGroups = ["wheel"];
+    };
     users.users.socketIntruder = {
       isNormalUser = true;
       extraGroups = ["private-store-socket"];
     };
     virtualisation.memorySize = 2048;
-    environment.systemPackages = [pkgs.nfs-utils];
+    environment.systemPackages = [pkgs.nfs-utils pkgs.openssh];
+    services.openssh = {
+      enable = true;
+      settings.PermitRootLogin = "no";
+    };
+    security.sudo.wheelNeedsPassword = false;
     services.nfs.server.enable = nfsServer;
     services.nfs.server.exports = lib.mkIf nfsServer "/export *(rw,fsid=0,no_subtree_check,no_root_squash)";
     systemd.mounts = lib.mkIf nfsServer [
@@ -71,10 +80,40 @@ in
         peerFixture = mkNode {};
         mountFailure = mkNode {mountPath = "/var/lib/strongbox/mount-target";};
         unitFailure = mkNode {failPostgresql = true;};
+        remoteSession = mkNode {nfsServer = true;};
       };
 
       testScript = ''
         start_all()
+
+        remoteSession.wait_for_unit("nfs-server.service")
+        remoteSession.succeed("mount -t tmpfs -o mode=0777,size=1536M tmpfs /export && exportfs -ra")
+        remoteSession.succeed("systemctl start mnt-backup.automount")
+        remoteSession.succeed("ssh-keygen -q -t ed25519 -N \"\" -f /run/strongbox-test-key && install -d -o remoteUser -g users -m 0700 /home/remoteUser/.ssh && install -o remoteUser -g users -m 0600 /run/strongbox-test-key.pub /home/remoteUser/.ssh/authorized_keys && systemctl restart sshd.service")
+        remoteSession.succeed("runuser -u remoteUser -- sudo -n id -u | grep -Fx 0")
+        remoteSession.succeed("${createCommand}")
+        remoteSession.succeed("${openCommand}")
+        remoteSession.succeed("test -d ${privatePath}/tmp")
+        remoteSession.succeed("""cat > ${privatePath}/.bash_profile <<'PROFILE'
+        export PRIVATE_STORE_PROFILE=loaded
+        printf '%s|%s|%s|%s\\n' \"$HOME\" \"$TMPDIR\" \"$PRIVATE_STORE_PROFILE\" \"$(ulimit -c)\" >> \"$HOME/session-environment\"
+        PROFILE
+        """)
+        remoteSession.succeed("strongbox close")
+        root_ssh_status, root_ssh_output = remoteSession.execute("ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@localhost true 2>&1")
+        assert root_ssh_status != 0, root_ssh_output
+        remote_status, remote_output = remoteSession.execute("(sleep 1; printf '${testPassphrase}\\n'; sleep 8; printf '\\002d'; sleep 1; printf 'y\\n') | TERM=xterm-256color ssh -tt -i /run/strongbox-test-key -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost strongbox 2>&1")
+        assert remote_status == 0, remote_output
+        assert "Passphrase:" in remote_output, remote_output
+        assert "Close strongbox?" in remote_output, remote_output
+        remoteSession.succeed("${openCommand}")
+        remoteSession.succeed("for attempt in $(seq 1 50); do [ \"$(wc -l < ${privatePath}/session-environment)\" -ge 2 ] && break; sleep 0.1; done; grep -Fx '${privatePath}|${privatePath}/tmp|loaded|0' ${privatePath}/session-environment | wc -l | grep -Fx 2")
+        remoteSession.succeed("test ! -e ${privatePath}/.bash_history")
+        remote_session_status, remote_session_output = remoteSession.execute("runuser -u intruder -- tmux -S ${sessionSocket} has-session 2>&1")
+        assert remote_session_status != 0
+        assert "Permission denied" in remote_session_output, remote_session_output
+        remoteSession.succeed("strongbox close")
+        remoteSession.succeed("${closedAssertions}")
 
         machine.succeed("! systemctl is-active --quiet postgresql.target && ! systemctl is-active --quiet postgresql.service && ! systemctl is-active --quiet postgresql-setup.service")
         machine.succeed("test \"$(id -u strongbox)\" = 1024")

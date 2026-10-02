@@ -91,8 +91,18 @@ in
         remoteSession.succeed("systemctl start mnt-backup.automount")
         remoteSession.succeed("ssh-keygen -q -t ed25519 -N \"\" -f /run/strongbox-test-key && install -d -o remoteUser -g users -m 0700 /home/remoteUser/.ssh && install -o remoteUser -g users -m 0600 /run/strongbox-test-key.pub /home/remoteUser/.ssh/authorized_keys && systemctl restart sshd.service")
         remoteSession.succeed("runuser -u remoteUser -- sudo -n id -u | grep -Fx 0")
+        remoteSession.succeed("ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost 'test \"$(id -u)\" != 0'")
         remoteSession.succeed("${createCommand}")
         remoteSession.succeed("${openCommand}")
+        upload_status, upload_output = remoteSession.execute("printf 'first upload\\n' | ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost strongbox-put uploaded.txt 2>&1")
+        assert upload_status == 0, upload_output
+        remoteSession.succeed("test \"$(cat ${privatePath}/uploaded.txt)\" = 'first upload' && test \"$(stat -c '%u:%g:%a' ${privatePath}/uploaded.txt)\" = 1024:1024:600")
+        separator_status, separator_output = remoteSession.execute("printf 'invalid\\n' | ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost strongbox-put '../outside' 2>&1")
+        assert separator_status != 0, separator_output
+        remoteSession.succeed("test ! -e /run/outside")
+        overwrite_status, overwrite_output = remoteSession.execute("printf 'replacement\\n' | ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost strongbox-put uploaded.txt 2>&1")
+        assert overwrite_status != 0, overwrite_output
+        remoteSession.succeed("test \"$(cat ${privatePath}/uploaded.txt)\" = 'first upload'")
         remoteSession.succeed("test -d ${privatePath}/tmp")
         remoteSession.succeed("""cat > ${privatePath}/.bash_profile <<'PROFILE'
         export PRIVATE_STORE_PROFILE=loaded
@@ -114,6 +124,10 @@ in
         assert "Permission denied" in remote_session_output, remote_session_output
         remoteSession.succeed("strongbox close")
         remoteSession.succeed("${closedAssertions}")
+        locked_upload_status, locked_upload_output = remoteSession.execute("printf 'locked\\n' | ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost strongbox-put locked.txt 2>&1")
+        assert locked_upload_status != 0, locked_upload_output
+        assert 'locked' in locked_upload_output.lower(), locked_upload_output
+        remoteSession.succeed("test ! -e ${privatePath}/locked.txt")
 
         machine.succeed("! systemctl is-active --quiet postgresql.target && ! systemctl is-active --quiet postgresql.service && ! systemctl is-active --quiet postgresql-setup.service")
         machine.succeed("test \"$(id -u strongbox)\" = 1024")

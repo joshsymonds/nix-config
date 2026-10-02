@@ -243,6 +243,39 @@
         fi
       }
 
+      put_file() {
+        require_root
+        [ "$#" -eq 1 ] || fail 'usage: strongbox-put NAME'
+        local name="$1" temporary target
+        case "$name" in
+          ""|.|..|*/*|*\\*)
+            fail 'name must be a single path component'
+            ;;
+        esac
+        acquire_lock
+        target="$mount_path/$name"
+        if [ ! -e "$mapper" ] || ! mountpoint -q "$mount_path"; then
+          fail 'store is locked'
+        fi
+        temporary=$(mktemp "$mount_path/.strongbox-put.XXXXXXXXXX") || fail 'unable to create upload file'
+        if ! cat > "$temporary"; then
+          rm -f -- "$temporary"
+          fail 'unable to read upload from stdin'
+        fi
+        if ! chown strongbox:strongbox "$temporary" || ! chmod 0600 "$temporary"; then
+          rm -f -- "$temporary"
+          fail 'unable to set upload ownership and permissions'
+        fi
+        if ! ln -T -- "$temporary" "$target"; then
+          rm -f -- "$temporary"
+          if [ -e "$target" ] || [ -L "$target" ]; then
+            fail 'destination already exists; refusing to overwrite it'
+          fi
+          fail 'unable to install upload'
+        fi
+        rm -f -- "$temporary"
+      }
+
       remote_session() {
         if [ "$EUID" -ne 0 ]; then
           exec sudo -n -- "$0" --remote-session-root
@@ -275,6 +308,11 @@
           [ "$EUID" -eq 0 ] || fail 'internal remote session must run as root'
           remote_session
           ;;
+        --put-root)
+          [ "$#" -eq 2 ] || fail 'usage: strongbox-put NAME'
+          [ "$EUID" -eq 0 ] || fail 'internal upload must run as root'
+          put_file "$2"
+          ;;
         create)
           [ "$#" -eq 1 ] || fail 'usage: strongbox create'
           create_store
@@ -295,6 +333,25 @@
           fi
           ;;
       esac
+    '';
+  };
+  strongboxPut = pkgs.writeShellApplication {
+    name = "strongbox-put";
+    text = ''
+      set -euo pipefail
+
+      fail() {
+        printf 'strongbox-put: %s\\n' "$*" >&2
+        exit 1
+      }
+
+      [ "$#" -eq 1 ] || fail 'usage: strongbox-put NAME'
+      case "$1" in
+        ""|.|..|*/*|*\\*)
+          fail 'name must be a single path component'
+          ;;
+      esac
+      exec sudo -n -- ${lib.escapeShellArg "${strongbox}/bin/strongbox"} --put-root "$1"
     '';
   };
 in {
@@ -331,7 +388,7 @@ in {
       "d ${cfg.mountPath} 0700 strongbox strongbox - -"
     ];
 
-    environment.systemPackages = [strongbox pkgs.cryptsetup pkgs.postgresql_17 pkgs.tmux pkgs.util-linux];
+    environment.systemPackages = [strongbox strongboxPut pkgs.cryptsetup pkgs.postgresql_17 pkgs.tmux pkgs.util-linux];
 
     services.postgresql = {
       enable = true;

@@ -109,7 +109,19 @@ in
         printf '%s|%s|%s|%s\\n' \"$HOME\" \"$TMPDIR\" \"$PRIVATE_STORE_PROFILE\" \"$(ulimit -c)\" >> \"$HOME/session-environment\"
         PROFILE
         """)
-        remoteSession.succeed("strongbox close")
+        remoteSession.succeed("install -d -o strongbox -g strongbox -m 0700 /run/strongbox-run-test; rm -f /run/strongbox-run-test/started /run/strongbox-run-test/release /run/strongbox-run-test/result /run/strongbox-run-output /run/strongbox-close-output /run/strongbox-close-status")
+        remoteSession.succeed("""cat > /run/strongbox-run-command <<'RUN'
+        #!${pkgs.bash}/bin/bash
+        touch /run/strongbox-run-test/started
+        while [ ! -e /run/strongbox-run-test/release ]; do sleep 0.1; done
+        printf '%s|%s|%s|%s\\n' \"$(id -u)\" \"$HOME\" \"$TMPDIR\" \"$PRIVATE_STORE_PROFILE\" > /run/strongbox-run-test/result
+        RUN
+        chmod 0755 /run/strongbox-run-command""")
+        remoteSession.succeed("(ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost 'sudo -n strongbox run -- /run/strongbox-run-command' </dev/null > /run/strongbox-run-output 2>&1 & echo $! > /run/strongbox-run-ssh.pid)")
+        remoteSession.succeed("for attempt in $(seq 1 100); do [ -e /run/strongbox-run-test/started ] && exit 0; sleep 0.1; done; cat /run/strongbox-run-output; exit 1")
+        remoteSession.succeed("(strongbox close; echo $? > /run/strongbox-close-status) > /run/strongbox-close-output 2>&1 </dev/null & echo $! > /run/strongbox-close.pid; sleep 1; kill -0 $(cat /run/strongbox-close.pid) && mountpoint -q ${privatePath} && test -e /dev/mapper/strongbox")
+        remoteSession.succeed("touch /run/strongbox-run-test/release; for attempt in $(seq 1 100); do [ -f /run/strongbox-close-status ] && break; sleep 0.1; done; test \"$(cat /run/strongbox-close-status)\" = 0; grep -Fx '1024|${privatePath}|${privatePath}/tmp|loaded' /run/strongbox-run-test/result")
+        remoteSession.succeed("${closedAssertions}")
         root_ssh_status, root_ssh_output = remoteSession.execute("ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@localhost true 2>&1")
         assert root_ssh_status != 0, root_ssh_output
         remote_status, remote_output = remoteSession.execute("(sleep 1; printf '${testPassphrase}\\n'; sleep 8; printf '\\002d'; sleep 1; printf 'y\\n') | TERM=xterm-256color ssh -tt -i /run/strongbox-test-key -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost strongbox 2>&1")
@@ -124,6 +136,9 @@ in
         assert "Permission denied" in remote_session_output, remote_session_output
         remoteSession.succeed("strongbox close")
         remoteSession.succeed("${closedAssertions}")
+        locked_run_status, locked_run_output = remoteSession.execute("ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost 'sudo -n strongbox run -- true' 2>&1")
+        assert locked_run_status != 0, locked_run_output
+        assert "store is locked" in locked_run_output.lower(), locked_run_output
         locked_upload_status, locked_upload_output = remoteSession.execute("printf 'locked\\n' | ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost strongbox-put locked.txt 2>&1")
         assert locked_upload_status != 0, locked_upload_output
         assert 'locked' in locked_upload_output.lower(), locked_upload_output

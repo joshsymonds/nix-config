@@ -243,6 +243,20 @@
         fi
       }
 
+      run_command() {
+        require_root
+        [ "$#" -ge 2 ] && [ "$1" = -- ] || fail 'usage: strongbox run -- CMD [ARG ...]'
+        shift
+        [ "$#" -gt 0 ] || fail 'usage: strongbox run -- CMD [ARG ...]'
+        acquire_lock
+        if [ ! -e "$mapper" ] || ! mountpoint -q "$mount_path"; then
+          fail 'store is locked'
+        fi
+        [ -f "$mount_path/.bash_profile" ] || fail 'store profile is missing'
+
+        runuser -u strongbox -- env HOME="$mount_path" TMPDIR="$mount_path/tmp" bash --noprofile --norc -c "set -e; cd \"\$HOME\"; source \"\$HOME/.bash_profile\"; exec \"\$@\"" strongbox-run "$@"
+      }
+
       put_file() {
         require_root
         [ "$#" -eq 1 ] || fail 'usage: strongbox-put NAME'
@@ -324,6 +338,10 @@
         close)
           [ "$#" -eq 1 ] || fail 'usage: strongbox close'
           close_store
+          ;;
+        run)
+          shift
+          run_command "$@"
           ;;
         *)
           if [ "$#" -eq 0 ]; then

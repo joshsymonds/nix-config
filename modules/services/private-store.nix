@@ -260,7 +260,7 @@
         fi
         [ -f "$mount_path/.bash_profile" ] || fail 'store profile is missing'
 
-        runuser -u strongbox -- env HOME="$mount_path" TMPDIR="$mount_path/tmp" bash --noprofile --norc -c "set -e; cd \"\$HOME\"; source \"\$HOME/.bash_profile\"; exec \"\$@\"" strongbox-run "$@"
+        runuser -u strongbox -- env HOME="$mount_path" TMPDIR="$mount_path/tmp" bash --noprofile --norc -c "set -e; ulimit -c 0; cd \"\$HOME\"; source \"\$HOME/.bash_profile\"; exec \"\$@\"" strongbox-run "$@"
       }
 
       put_file() {

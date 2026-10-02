@@ -114,13 +114,13 @@ in
         #!${pkgs.bash}/bin/bash
         touch /run/strongbox-run-test/started
         while [ ! -e /run/strongbox-run-test/release ]; do sleep 0.1; done
-        printf '%s|%s|%s|%s\\n' \"$(id -u)\" \"$HOME\" \"$TMPDIR\" \"$PRIVATE_STORE_PROFILE\" > /run/strongbox-run-test/result
+        printf '%s|%s|%s|%s|%s\\n' \"$(id -u)\" \"$HOME\" \"$TMPDIR\" \"$PRIVATE_STORE_PROFILE\" \"$(ulimit -c)\" > /run/strongbox-run-test/result
         RUN
         chmod 0755 /run/strongbox-run-command""")
-        remoteSession.succeed("(ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost 'sudo -n strongbox run -- /run/strongbox-run-command' </dev/null > /run/strongbox-run-output 2>&1 & echo $! > /run/strongbox-run-ssh.pid)")
+        remoteSession.succeed("(ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost 'sudo -n bash -c \"ulimit -c unlimited && exec strongbox run -- /run/strongbox-run-command\"' </dev/null > /run/strongbox-run-output 2>&1 & echo $! > /run/strongbox-run-ssh.pid)")
         remoteSession.succeed("for attempt in $(seq 1 100); do [ -e /run/strongbox-run-test/started ] && exit 0; sleep 0.1; done; cat /run/strongbox-run-output; exit 1")
         remoteSession.succeed("(strongbox close; echo $? > /run/strongbox-close-status) > /run/strongbox-close-output 2>&1 </dev/null & echo $! > /run/strongbox-close.pid; sleep 1; kill -0 $(cat /run/strongbox-close.pid) && mountpoint -q ${privatePath} && test -e /dev/mapper/strongbox")
-        remoteSession.succeed("touch /run/strongbox-run-test/release; for attempt in $(seq 1 100); do [ -f /run/strongbox-close-status ] && break; sleep 0.1; done; test \"$(cat /run/strongbox-close-status)\" = 0; grep -Fx '1024|${privatePath}|${privatePath}/tmp|loaded' /run/strongbox-run-test/result")
+        remoteSession.succeed("touch /run/strongbox-run-test/release; for attempt in $(seq 1 100); do [ -f /run/strongbox-close-status ] && break; sleep 0.1; done; test \"$(cat /run/strongbox-close-status)\" = 0; grep -Fx '1024|${privatePath}|${privatePath}/tmp|loaded|0' /run/strongbox-run-test/result")
         remoteSession.succeed("${closedAssertions}")
         root_ssh_status, root_ssh_output = remoteSession.execute("ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no root@localhost true 2>&1")
         assert root_ssh_status != 0, root_ssh_output

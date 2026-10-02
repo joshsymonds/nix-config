@@ -45,7 +45,7 @@
       extraGroups = ["private-store-socket"];
     };
     virtualisation.memorySize = 2048;
-    environment.systemPackages = [pkgs.nfs-utils pkgs.openssh];
+    environment.systemPackages = [pkgs.inotify-tools pkgs.nfs-utils pkgs.openssh];
     services.openssh = {
       enable = true;
       settings.PermitRootLogin = "no";
@@ -153,6 +153,13 @@ in
         machine.succeed("cryptsetup luksDump /var/lib/strongbox/image.img | grep -E 'Version:[[:space:]]+2'")
         machine.succeed("cryptsetup luksDump /var/lib/strongbox/image.img | grep -E 'PBKDF:[[:space:]]+argon2id'")
         machine.fail("printf 'different\\ndifferent\\n' | strongbox create")
+        machine.succeed("${closedAssertions}")
+        machine.succeed("rm /var/lib/strongbox/image.img && chown root:root /var/lib/strongbox && chmod 0755 /var/lib/strongbox")
+        machine.succeed("rm -f /run/strongbox-race-*; mkfifo /run/strongbox-race-passphrase; exec 3<>/run/strongbox-race-passphrase; (inotifywait -e attrib /var/lib/strongbox >/dev/null 2>/run/strongbox-race-watch-output; printf 'competing sentinel' > /var/lib/strongbox/image.img; printf '${testPassphrase}\\n${testPassphrase}\\n' > /run/strongbox-race-passphrase) >/run/strongbox-race-writer-output 2>&1 & echo $! > /run/strongbox-race-writer.pid; for attempt in $(seq 1 100); do grep -q 'Watches established' /run/strongbox-race-watch-output && break; sleep 0.1; done; grep -q 'Watches established' /run/strongbox-race-watch-output; (if strongbox create <&3 > /run/strongbox-race-output 2>&1; then echo 0 > /run/strongbox-race-status; else echo $? > /run/strongbox-race-status; fi) >/run/strongbox-race-creator-output 2>&1 & echo $! > /run/strongbox-race-creator.pid; for attempt in $(seq 1 100); do [ -f /run/strongbox-race-status ] && break; sleep 0.1; done; test -f /run/strongbox-race-status; test \"$(cat /run/strongbox-race-status)\" != 0; test \"$(cat /var/lib/strongbox/image.img)\" = 'competing sentinel'")
+        machine.succeed("test \"$(cat /var/lib/strongbox/image.img)\" = 'competing sentinel'")
+        machine.fail("printf 'different\\ndifferent\\n' | strongbox create")
+        machine.succeed("test \"$(cat /var/lib/strongbox/image.img)\" = 'competing sentinel'")
+        machine.succeed("rm /var/lib/strongbox/image.img && ${createCommand}")
         machine.succeed("${closedAssertions}")
 
         machine.fail("printf 'wrong-passphrase\\n' | strongbox open")

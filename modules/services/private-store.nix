@@ -6,6 +6,7 @@
 }: let
   cfg = config.services.privateStore;
   imageDirectory = builtins.dirOf cfg.imagePath;
+  stagingDirectory = builtins.dirOf imageDirectory;
   mapper = "/dev/mapper/strongbox";
   lockFile = "/run/lock/strongbox.lock";
   backupMount = "/mnt/backup";
@@ -141,15 +142,15 @@
         prompt_passphrase 'New passphrase'
         [ -n "$passphrase" ] || fail 'passphrase must not be empty'
 
-        created=0
         opened=0
+        temporary_image=""
         cleanup_create_failure() {
           local failed=0
           if [ "$opened" -eq 1 ]; then
             close_mapper || failed=1
           fi
-          if [ "$failed" -eq 0 ] && [ "$created" -eq 1 ]; then
-            rm -f -- "$image" || failed=1
+          if [ -n "$temporary_image" ] && ! rm -f -- "$temporary_image"; then
+            printf 'strongbox: unable to remove temporary encrypted image\n' >&2
           fi
           if [ "$failed" -ne 0 ]; then
             report_still_open
@@ -165,13 +166,13 @@
         trap on_create_exit EXIT
 
         umask 077
-        truncate -s 32G "$image"
-        created=1
-        if ! printf '%s' "$passphrase" | cryptsetup luksFormat --batch-mode --type luks2 --pbkdf argon2id --key-file - "$image"; then
+        temporary_image=$(mktemp ${lib.escapeShellArg "${stagingDirectory}/.private-store.XXXXXXXXXX"}) || fail 'unable to create temporary encrypted image'
+        truncate -s 32G "$temporary_image"
+        if ! printf '%s' "$passphrase" | cryptsetup luksFormat --batch-mode --type luks2 --pbkdf argon2id --key-file - "$temporary_image"; then
           unset passphrase
           fail 'unable to initialize LUKS2 image'
         fi
-        if ! printf '%s' "$passphrase" | cryptsetup open --key-file - "$image" strongbox; then
+        if ! printf '%s' "$passphrase" | cryptsetup open --key-file - "$temporary_image" strongbox; then
           unset passphrase
           fail 'unable to open newly initialized image'
         fi
@@ -180,8 +181,13 @@
         mkfs.ext4 -F -m 0 -L strongbox "$mapper"
         close_mapper || fail 'unable to close newly formatted image'
         opened=0
-        chown strongbox:strongbox "$image"
-        chmod 0600 "$image"
+        chown strongbox:strongbox "$temporary_image"
+        chmod 0600 "$temporary_image"
+        if ! ln -T -- "$temporary_image" "$image"; then
+          fail 'encrypted image appeared during creation; refusing to overwrite it'
+        fi
+        rm -f -- "$temporary_image"
+        temporary_image=""
         trap - EXIT
       }
 

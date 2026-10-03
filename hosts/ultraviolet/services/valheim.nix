@@ -7,6 +7,7 @@
     enable = true;
     package = pkgs.valheim-server;
     passwordFile = null;
+    modifiers.deathpenalty = "casual";
 
     bepinex = {
       enable = true;

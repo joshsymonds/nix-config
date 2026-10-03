@@ -45,6 +45,7 @@
           enable = true;
           package = fakePackage;
           passwordFile = null;
+          modifiers.deathpenalty = "casual";
           bepinex = {
             enable = true;
             pack = fakePack;
@@ -125,5 +126,10 @@ in
       grep -F -- "${fakePlugin} /var/lib/valheim/bepinex/BepInEx/plugins/Example" ${modded}
       grep -F -- "/var/lib/valheim/bepinex/BepInEx/config/example.cfg" ${modded}
       grep -F -- '-password "$password"' ${modded}
+      grep -F -- '-modifier deathpenalty casual' ${modded}
+      if grep -F -- '-modifier' ${launcher}; then
+        echo 'unexpected world modifier' >&2
+        exit 1
+      fi
       touch "$out"
     ''

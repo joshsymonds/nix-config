@@ -316,7 +316,8 @@ in
     # Daily knowledge-report drain (fact loop epic 2): leases production
     # knowledge_reports, researches with CLI seats, gates, publishes.
     services.savecraftKnowledgeDrain = {
-      enable = true;
+      # Paused 2026-10-03 until the drain is redesigned (publishes nothing; see savecraft memory drain-gate-broken-since-0909).
+      enable = false;
       repoPath = "/home/joshsymonds/Personal/savecraft";
     };
 

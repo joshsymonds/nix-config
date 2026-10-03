@@ -136,6 +136,25 @@ in
         assert "Permission denied" in remote_session_output, remote_session_output
         remoteSession.succeed("strongbox close")
         remoteSession.succeed("${closedAssertions}")
+        # A session that opened the store must not hold the lifecycle lock while attached.
+        remoteSession.succeed("rm -f /run/strongbox-held.log; ((sleep 1; printf '${testPassphrase}\\n'; sleep 25; printf '\\002d'; sleep 1; printf 'n\\n') | TERM=xterm-256color ssh -tt -i /run/strongbox-test-key -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost strongbox > /run/strongbox-held.log 2>&1 & echo $! > /run/strongbox-held.pid)")
+        remoteSession.succeed("for attempt in $(seq 1 150); do runuser -u strongbox -- tmux -S ${sessionSocket} list-clients -F '#{session_name}' 2>/dev/null | grep -Fx private-shell && exit 0; sleep 0.1; done; cat /run/strongbox-held.log; exit 1")
+        held_put_status, held_put_output = remoteSession.execute("printf 'while attached\\n' | timeout 15 ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost strongbox-put attached.txt 2>&1")
+        assert held_put_status == 0, held_put_output
+        held_run_status, held_run_output = remoteSession.execute("timeout 15 ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost 'sudo -n strongbox run -- true' 2>&1")
+        assert held_run_status == 0, held_run_output
+        remoteSession.succeed("for attempt in $(seq 1 400); do kill -0 $(cat /run/strongbox-held.pid) 2>/dev/null || exit 0; sleep 0.1; done; exit 1")
+        remoteSession.succeed("mountpoint -q ${privatePath}")
+        # A session whose shell has exited is recreated and attached as the owner, never as root.
+        remoteSession.succeed("runuser -u strongbox -- tmux -S ${sessionSocket} kill-server")
+        recreate_status, recreate_output = remoteSession.execute("(sleep 3; printf '\\002d'; sleep 1; printf 'n\\n') | TERM=xterm-256color ssh -tt -i /run/strongbox-test-key -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost strongbox 2>&1")
+        assert recreate_status == 0, recreate_output
+        assert "no sessions" not in recreate_output, recreate_output
+        remoteSession.succeed("test \"$(stat -c %U ${sessionSocket})\" = strongbox")
+        remoteSession.succeed("systemctl is-active --quiet strongbox-session.service")
+        remoteSession.succeed("runuser -u strongbox -- tmux -S ${sessionSocket} has-session -t private-shell")
+        remoteSession.succeed("strongbox close")
+        remoteSession.succeed("${closedAssertions}")
         locked_run_status, locked_run_output = remoteSession.execute("ssh -i /run/strongbox-test-key -o BatchMode=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no remoteUser@localhost 'sudo -n strongbox run -- true' 2>&1")
         assert locked_run_status != 0, locked_run_output
         assert "store is locked" in locked_run_output.lower(), locked_run_output

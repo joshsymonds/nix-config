@@ -10,23 +10,25 @@
     printf '%s\n' "valheim password is invalid" >> "$log_file"
     exit 78
   '';
-  serverArgs = [
-    "-nographics"
-    "-batchmode"
-    "-disable-crash-handler"
-    "-logFile"
-    "-"
-    "-name"
-    cfg.serverName
-    "-world"
-    cfg.worldName
-    "-port"
-    (toString cfg.port)
-    "-public"
-    "0"
-    "-savedir"
-    stateDirectory
-  ];
+  serverArgs =
+    [
+      "-nographics"
+      "-batchmode"
+      "-disable-crash-handler"
+      "-logFile"
+      "-"
+      "-name"
+      cfg.serverName
+      "-world"
+      cfg.worldName
+      "-port"
+      (toString cfg.port)
+      "-public"
+      "0"
+      "-savedir"
+      stateDirectory
+    ]
+    ++ lib.concatLists (lib.mapAttrsToList (name: value: ["-modifier" name value]) cfg.modifiers);
   stopper = pkgs.writeShellScript "valheim-stop" ''
     set -eu
     game_pid=
@@ -159,6 +161,18 @@ in {
       type = lib.types.port;
       default = 2456;
       description = "Base UDP game port.";
+    };
+
+    modifiers = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = {};
+      example = {deathpenalty = "casual";};
+      description = ''
+        World modifiers passed as `-modifier <name> <option>`. The server
+        applies them to the existing world at every load. Names are
+        WorldModifiers values (deathpenalty, combat, resources, raids,
+        portals); options are WorldModifierOption values (casual, veryeasy, ...).
+      '';
     };
 
     bepinex = {

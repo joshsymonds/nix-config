@@ -236,10 +236,15 @@ in {
   # actual mount then. A dead NAS therefore costs zero boot time (instead
   # of the previous ~1m30s NFS mount-unit timeout per share), and only the
   # process actually touching the share pays the latency — capped at 10s
-  # by x-systemd.mount-timeout so a stale process gives up fast. Shares
-  # idle-unmount after 10 minutes so a transient NAS reboot self-heals on
-  # the next access. `nofail` stays as belt-and-suspenders (with automount,
-  # remote-fs.target doesn't gate boot anyway, but the flag is harmless).
+  # by x-systemd.mount-timeout so a stale process gives up fast. Once
+  # mounted, shares stay mounted: no idle-timeout. The mounts are NFSv4.1
+  # `hard`, so a NAS reboot just blocks I/O until the server returns, and
+  # an idle-unmount stops every unit that RequiresMountsFor the share
+  # (container bind mounts live in their own namespace, so the host sees
+  # the share as idle while the container is using it) — that repeatedly
+  # killed sabnzbd on ultraviolet. `nofail` stays as belt-and-suspenders
+  # (with automount, remote-fs.target doesn't gate boot anyway, but the
+  # flag is harmless).
   # Bluedesert isn't authorized for the `creative` share on the NAS (per
   # export ACL), so it gets the other three only.
   fileSystems = let
@@ -251,7 +256,6 @@ in {
         "noauto"
         "x-systemd.automount"
         "x-systemd.mount-timeout=10s"
-        "x-systemd.idle-timeout=600"
       ];
     };
   in
@@ -266,9 +270,7 @@ in {
       })
       # Claude Code and Codex transcripts. Only the three hosts I actually run
       # these agents on mount this; the share isn't exported to the others
-      # either. Idle-timeout is bumped to 1 hour (vs 10 min on the media shares)
-      # because the cache-warm timer + active agent sessions hit this every few
-      # minutes, so frequent remount-thrash would be wasteful.
+      # either.
       (lib.mkIf (builtins.elem config.networking.hostName ["gnomon" "ultraviolet" "vermissian"]) {
         "/mnt/claude" = {
           device = "${nas.ip}:${nas.shares.claude}";
@@ -278,7 +280,6 @@ in {
             "noauto"
             "x-systemd.automount"
             "x-systemd.mount-timeout=10s"
-            "x-systemd.idle-timeout=3600"
             # Revalidate file attributes within 10s (vs the ~60s NFS default)
             # so gnomon's widget notices a remote host's freshly-rewritten
             # summary.json promptly instead of serving a stale cached mtime.

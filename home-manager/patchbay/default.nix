@@ -195,21 +195,23 @@
       lib.mapAttrs (_: chatgptSeat) chatgptModels
     );
 
-  # Marked-subagent Seats: Luna with the effort pinned in the model id
-  # itself — CLIProxyAPI translates a "(medium)"/"(low)" suffix to the OpenAI
-  # reasoning-effort parameter — on the fast tier like every Luna Seat. These
-  # are subagent-only destinations, so they get no public selector: nothing
-  # outside the subagents policy below can name them, and /v1/models never
-  # lists them.
-  subagentSeats = lib.optionalAttrs cfg.codexUpstream.enable {
-    chatgpt-luna-medium = chatgptSeat {
-      model = "gpt-6-luna(medium)";
-      speed = "fast";
+  # Marked-subagent Seats: Sonnet 5.5 pinned on the context's own Claude path
+  # — the caller's subscription through the anthropic forward, or the Attain
+  # Bedrock account. They took over from the Luna Seats on 2026-10-05, when
+  # the Codex allowance stopped covering Luna's load and tiltyard's screen
+  # (ops/sonnet55-screen) measured Sonnet 5.5 level with GPT-6 Sol on first
+  # try. These are subagent-only destinations, so they get no public selector:
+  # nothing outside the subagents policy below can name them, and /v1/models
+  # never lists them.
+  subagentSeats = {
+    anthropic-sonnet55 = {
+      upstream = "https://api.anthropic.com";
+      auth_mode = "forward";
+      model = "claude-sonnet-5-5";
     };
-    chatgpt-luna-low = chatgptSeat {
-      model = "gpt-6-luna(low)";
-      speed = "fast";
-    };
+    # The Bedrock map is keyed by the Seat's pinned model when it has one, so
+    # this resolves through the claude-sonnet-5-5 entry like a caller's own.
+    attain-bedrock-sonnet55 = attainBedrockSeat // {model = "claude-sonnet-5-5";};
   };
 
   # The Attain Bedrock Seat: Claude models signed with SigV4 from the `attain`
@@ -288,63 +290,48 @@
   # against each request, which is what keeps spend attributable per project.
   #
   # Marked subagent traffic (x-claude-code-agent-id) that no public selector
-  # already claims rides Luna instead of the subscription: default Explores
-  # and other unlisted subagents at medium effort, haiku-slot dispatches at
-  # low. Exact pins carve out what must stay native:
+  # already claims rides Sonnet 5.5 on the context's own Claude path: default
+  # Explores, other unlisted subagents, and haiku-slot dispatches. Until
+  # 2026-10-05 this went to Luna on the Codex subscription. Exact pins carve
+  # out what must stay on the model the caller named:
   #
   #   * claude-opus-5 and claude-opus-5-5 -> the context's Claude Seat.
   #     Gambit's worker and escalation ladders TERMINATE at the opus rung,
   #     and the ladder's 100%-solve invariant is exactly that the terminal
   #     rung is native Claude. The rung names the bare `opus` alias, which CC
   #     2.1.280 resolves to claude-opus-5-5 (earlier releases: claude-opus-5),
-  #     so both ids are pinned; without the second, every opus-rung dispatch
-  #     on 2.1.280 fell through to the Luna default.
-  #   * claude-fable-5-1 -> the context's Claude Seat. An explicit
-  #     `model: fable` dispatch otherwise fell through to the Luna default
-  #     and failed with Luna whenever the Codex upstream was down
-  #     (2026-09-25). The wire can't tell an explicit fable dispatch from a
-  #     fable-inheriting one, so default Explores and background forks under
-  #     a fable session ride the Claude Seat too.
+  #     so both ids are pinned.
+  #   * claude-fable-5-1 -> the context's Claude Seat, so an explicit
+  #     `model: fable` dispatch is not demoted to Sonnet. The wire can't tell
+  #     an explicit fable dispatch from a fable-inheriting one, so default
+  #     Explores and background forks under a fable session ride Fable too.
   #   * claude-sonnet-5 and claude-sonnet-5-5 -> the context's Claude Seat.
-  #     The `sonnet` rung is gambit's cheap Claude fallback for workers when
-  #     the Luna pool is cooling down; left unpinned it fell through to the
-  #     Luna default and failed with the same usage_limit_reached the fallback
-  #     was meant to escape (2026-09-15). CC 2.1.284 resolves the bare
-  #     `sonnet` alias to claude-sonnet-5-5 (earlier releases:
-  #     claude-sonnet-5), so both ids are pinned.
-  #   * Both haiku spellings appear on the wire and bindings are exact, so
-  #     the fast tier is pinned twice.
-  #
-  # Only on codexUpstream hosts: the Luna Seats live on the loopback proxy,
-  # and a subagents block naming an absent Seat invalidates the registry.
-  # Dropped while the allowance is exhausted, so every subagent rides the
-  # anthropic default Seat instead of a Luna Seat that can only refuse.
+  #     CC 2.1.284 resolves the bare `sonnet` alias to claude-sonnet-5-5
+  #     (earlier releases: claude-sonnet-5), so both ids are pinned.
+  #   * Both haiku spellings appear on the wire and bindings are exact, so the
+  #     Sonnet default is pinned twice for them.
   bindings = lib.mapAttrs (selector: _: seatID selector) subscriptionSeats;
-  mkContext = claudeSeat:
-    {
-      default_seat = claudeSeat;
-      models = bindings;
-    }
-    // lib.optionalAttrs (cfg.codexUpstream.enable && !cfg.codexUpstream.exhausted) {
-      subagents = {
-        default_seat = "chatgpt-luna-medium";
-        models = {
-          "claude-opus-5" = claudeSeat;
-          "claude-opus-5-5" = claudeSeat;
-          "claude-fable-5-1" = claudeSeat;
-          "claude-sonnet-5" = claudeSeat;
-          "claude-sonnet-5-5" = claudeSeat;
-          "claude-haiku-4-5" = "chatgpt-luna-low";
-          "claude-haiku-4-5-20251001" = "chatgpt-luna-low";
-        };
+  mkContext = claudeSeat: sonnetSeat: {
+    default_seat = claudeSeat;
+    models = bindings;
+    subagents = {
+      default_seat = sonnetSeat;
+      models = {
+        "claude-opus-5" = claudeSeat;
+        "claude-opus-5-5" = claudeSeat;
+        "claude-fable-5-1" = claudeSeat;
+        "claude-sonnet-5" = claudeSeat;
+        "claude-sonnet-5-5" = claudeSeat;
+        "claude-haiku-4-5" = sonnetSeat;
+        "claude-haiku-4-5-20251001" = sonnetSeat;
       };
     };
-  context = mkContext "anthropic";
-  attainContext = mkContext (
+  };
+  context = mkContext "anthropic" "anthropic-sonnet55";
+  attainContext =
     if cfg.attainBedrock.enable
-    then "attain-bedrock"
-    else "anthropic"
-  );
+    then mkContext "attain-bedrock" "attain-bedrock-sonnet55"
+    else context;
 
   # The tiltyard Seats get their own ID space rather than the selector-derived
   # one: the roster selectors are bare identifiers chosen for a results table,
@@ -668,11 +655,9 @@ in {
 
     codexUpstream.exhausted = lib.mkEnableOption ''
       treating the Codex subscription's usage allowance as spent: the
-      chatgpt/* routes stay published for anyone who names one, but marked
-      subagent traffic stops defaulting to the Luna Seats and rides the
-      anthropic forward Seat like everything else, and gambit dispatches from
-      the Claude-only rung map. Set when the allowance runs out; clear when it
-      refills
+      chatgpt/* routes stay published for anyone who names one, and gambit
+      dispatches from the Claude-only rung map. Set when the allowance runs
+      out; clear when it refills
     '';
   };
 

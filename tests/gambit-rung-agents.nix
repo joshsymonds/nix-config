@@ -34,7 +34,6 @@
   # routines or scheduled prompts, write design projects, or render findings
   # to the host instead of returning them.
   expectedLeafDenylist = "disallowedTools: Agent, SendMessage, ListAgents, TaskStop, Skill, EnterWorktree, ExitWorktree, PushNotification, RemoteTrigger, CronCreate, CronDelete, CronList, DesignSync, ReportFindings";
-
   # The route keys patchbay actually publishes under codexUpstream, and the
   # Seat identity each one maps to: the upstream model id (the Pi twin
   # dispatches that id directly on its Codex provider) and the optional speed
@@ -82,12 +81,15 @@ in
     jq -e '
       (.roles | keys | sort)
       == ["conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "orchestrator", "scout", "steelman", "task-reviewer", "test-runner"]
-      and .roles.implementer == {"entry":"luna-high"}
-      and .roles."task-reviewer" == {"entry":"terra-medium","readonly":true}
-      and .roles."finding-verifier" == {"entry":"terra-medium","readonly":true}
-      and .roles."conformance-reviewer" == {"entry":"sol-high","readonly":true}
-      and .roles."integration-reviewer" == {"entry":"sol-high","readonly":true}
-      and .roles.orchestrator.entry == "sol-high"
+      and .roles.implementer == {"entry":"sonnet-high"}
+      and .roles."test-runner" == {"entry":"sonnet-low"}
+      and .roles.scout == {"entry":"sonnet-high","readonly":true}
+      and .roles.steelman == {"entry":"fable-high","readonly":true}
+      and .roles."task-reviewer" == {"entry":"sonnet-high","readonly":true}
+      and .roles."finding-verifier" == {"entry":"sonnet-high","readonly":true}
+      and .roles."conformance-reviewer" == {"entry":"sonnet-high","readonly":true}
+      and .roles."integration-reviewer" == {"entry":"sonnet-high","readonly":true}
+      and .roles.orchestrator.entry == "opus-high"
       and (.roles.orchestrator | has("readonly") | not)
       and (.roles as $roles | ["worker", "finder", "verifier", "reviewer"] | all(. as $old | ($roles | has($old) | not)))
     ' ${fullJson} >/dev/null
@@ -191,8 +193,18 @@ in
     # directive, a writing leaf carries the leaf denylist, and the
     # Orchestrator's writing variant keeps dispatch but cannot send messages,
     # since a resumed child's reply goes to the Director, not to it.
+    # A profile naming a Claude model runs it on Claude Code; its Pi twin still
+    # dispatches the route's Codex model, since Pi has no Anthropic provider.
+    jq -e '
+      .["sonnet-high"] == {"claudeModel":"claude-sonnet-5-5","route":"chatgpt/luna","effort":"high"}
+      and .["sonnet-low"] == {"claudeModel":"claude-sonnet-5-5","route":"chatgpt/luna","effort":"low"}
+      and .["opus-high"] == {"claudeModel":"claude-opus-5-5","route":"chatgpt/sol","effort":"high"}
+      and .["fable-high"] == {"claudeModel":"claude-fable-5-1","route":"chatgpt/astra","effort":"high"}
+    ' ${profilesJson} >/dev/null
+
     for profile in $(jq -r 'keys[]' ${profilesJson}); do
       route=$(jq -r --arg r "$profile" '.[$r].route' ${profilesJson})
+      claude_model=$(jq -r --arg r "$profile" '.[$r].claudeModel // .[$r].route' ${profilesJson})
       effort=$(jq -r --arg r "$profile" '.[$r].effort' ${profilesJson})
 
       plain="${agentsDir}/$profile.md"
@@ -201,7 +213,7 @@ in
       test -f "$ro"
 
       for f in "$plain" "$ro"; do
-        grep -qxF "model: $route" "$f"
+        grep -qxF "model: $claude_model" "$f"
         grep -qxF "effort: $effort" "$f"
         grep -qF "Gambit model profile:" "$f"
         if grep -qF "Gambit rung" "$f"; then
@@ -214,7 +226,7 @@ in
       grep -qF "READ-ONLY advisory variant" "$ro"
       grep -qF "Never run:" "$ro"
 
-      if [ "$profile" = sol-high ]; then
+      if [ "$profile" = opus-high ]; then
         grep -qxF 'disallowedTools: SendMessage, ListAgents' "$plain"
         grep -qF "You are a Gambit Orchestrator." "$plain"
         grep -qF "reaches the Director when you finish" "$plain"
@@ -256,8 +268,8 @@ in
       # An Orchestrator is not a leaf Implementer: it needs scoped child
       # dispatch and task-state tools. Keep the expected privileges independent
       # of the renderer, including the absence of task RPC dispatch.
-      if [ "$profile" = sol-high ]; then
-        grep -qxF 'allowed_subagents: "astra-xhigh-ro, luna-high, luna-low, sol-high-ro, terra-medium-ro"' "$pi_plain"
+      if [ "$profile" = opus-high ]; then
+        grep -qxF 'allowed_subagents: "fable-high-ro, sonnet-high, sonnet-high-ro, sonnet-low"' "$pi_plain"
         grep -qxF 'extensions: ["pi-tasks", "${orchestratorProcessExtension}"]' "$pi_plain"
         grep -qE '^extensions: \["pi-tasks", "/nix/store/[^"/]+/orchestrator-processes/index.ts"\]$' "$pi_plain"
         test -f '${orchestratorProcessExtension}'

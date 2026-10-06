@@ -26,22 +26,48 @@
   # the profile a fast profile on both harnesses: the Claude Code agent gets it from
   # the Seat, the Pi twin from the codex-fast extension below.
   #
-  # The Implementer role is entry-only: Luna is cheap and fast, and its
-  # entry effort is the one the tiltyard screen measured to close the corpus.
+  # A profile with a `claudeModel` runs that Claude model on Claude Code
+  # (patchbay pins the id to the context's Claude Seat) while its Pi twin keeps
+  # `route`: Pi has no Anthropic provider, so it stays on Codex.
+  #
+  # The Implementer role is entry-only, at the effort the tiltyard screen
+  # measured to close the corpus.
   gambitProfiles = {
-    # Implementer entry profile: Luna at high effort, always on the fast tier.
-    # Tiltyard's GPT-6 screen (2026-09-22, 56 audited scenarios x 2, two
-    # attempts per cell like the Implementer's) measured gpt-6-luna at 77%
-    # green at low effort and 95% at high, level with gpt-6-sol and at about
-    # an eighth of Sol's cost per green.
-    "luna-high" = {
+    # Implementer entry profile: Sonnet 5.5 at high effort on Claude Code,
+    # Luna at high effort on Pi. Tiltyard's Sonnet screen (2026-10-05,
+    # ops/sonnet55-screen, the 56 audited scenarios x 2 of the GPT-6 screen)
+    # measured Sonnet 5.5 high at 66% green on the first attempt, against
+    # 62% for gpt-6-luna high and 66% for gpt-6-sol low, with a 75 s median
+    # cell. It stopped on 6 of 8 under-specified probes where Luna stopped on
+    # none, and never blocked a real task. It replaced Luna on Claude Code
+    # when the Codex allowance stopped covering Luna's load.
+    "sonnet-high" = {
+      claudeModel = "claude-sonnet-5-5";
       route = "chatgpt/luna";
       effort = "high";
     };
-    # Test-runner profile: Luna at low effort, always on the fast tier.
-    "luna-low" = {
+    # Test-runner profile: Sonnet 5.5 at low effort on Claude Code, Luna at
+    # low effort on Pi.
+    "sonnet-low" = {
+      claudeModel = "claude-sonnet-5-5";
       route = "chatgpt/luna";
       effort = "low";
+    };
+    # Orchestrator profile: Opus 5.5 at high effort on Claude Code, Sol at high
+    # effort on Pi. Tiltyard's Gambit 2.7 comparison (47 items, 3 replicates)
+    # scored Opus 5.5 0.907-0.909 against Sol's 0.927-0.935, a difference not
+    # significant at n=47.
+    "opus-high" = {
+      claudeModel = "claude-opus-5-5";
+      route = "chatgpt/sol";
+      effort = "high";
+    };
+    # Steelman profile: Fable 5.1 on Claude Code, Astra on Pi. Fable is
+    # reserved for this role alone (its weekly sub-limit is small).
+    "fable-high" = {
+      claudeModel = "claude-fable-5-1";
+      route = "chatgpt/astra";
+      effort = "high";
     };
     # Retained standard-speed profile: Sol. It ran on the fast tier from
     # 2026-09-09 to 2026-09-11 and was the largest Codex-quota draw on the
@@ -181,20 +207,26 @@
   # The description is quoted because it contains a colon; an unquoted YAML
   # plain scalar cannot carry ": ".
   mkProfileAgent = profile: readonly: let
-    inherit ((gambitProfiles // optionalClaudeProfiles).${profile}) route effort;
+    spec = (gambitProfiles // optionalClaudeProfiles).${profile};
+    inherit (spec) route effort;
     agentName = profileAgentName profile readonly;
-    modelLabel =
-      if builtins.hasAttr route chatgptModels
-      then routeModel route
-      else route;
+    # The model id the Claude Code agent sends: a Claude model where the
+    # profile names one, otherwise the patchbay route.
+    model = spec.claudeModel or route;
+    description =
+      if spec ? claudeModel
+      then spec.claudeModel
+      else if builtins.hasAttr route chatgptModels
+      then "${routeModel route} (${route})"
+      else "${route} (${route})";
     orchestrator = !readonly && profile == orchestratorProfile;
   in
     pkgs.writeText "gambit-profile-${agentName}.md" (lib.concatStringsSep "\n" (
       [
         "---"
         "name: ${agentName}"
-        ''description: "Gambit model profile: ${modelLabel} (${route}) at ${effort} effort via patchbay${lib.optionalString readonly ", read-only advisory variant"}"''
-        "model: ${route}"
+        ''description: "Gambit model profile: ${description} at ${effort} effort via patchbay${lib.optionalString readonly ", read-only advisory variant"}"''
+        "model: ${model}"
         "effort: ${effort}"
       ]
       ++ (
@@ -406,34 +438,38 @@
         opus.model = "opus";
         fable.model = "fable";
       };
+    # Interim map while the Codex allowance is gone (2026-10-05): every role
+    # runs a Claude model on Claude Code. Opus orchestrates, Fable steelmans,
+    # and Sonnet takes every other role until tiltyard's claude-tier-trials
+    # names each role's tier; the claude-tier-switch epic then replaces this.
     roles = {
-      implementer.entry = "luna-high";
+      implementer.entry = "sonnet-high";
       scout = {
-        entry = "terra-medium";
+        entry = "sonnet-high";
         readonly = true;
       };
       steelman = {
-        entry = "astra-xhigh";
+        entry = "fable-high";
         readonly = true;
       };
       "task-reviewer" = {
-        entry = "terra-medium";
+        entry = "sonnet-high";
         readonly = true;
       };
       "finding-verifier" = {
-        entry = "terra-medium";
+        entry = "sonnet-high";
         readonly = true;
       };
       "conformance-reviewer" = {
-        entry = "sol-high";
+        entry = "sonnet-high";
         readonly = true;
       };
       "integration-reviewer" = {
-        entry = "sol-high";
+        entry = "sonnet-high";
         readonly = true;
       };
-      "test-runner".entry = "luna-low";
-      orchestrator.entry = "sol-high";
+      "test-runner".entry = "sonnet-low";
+      orchestrator.entry = "opus-high";
     };
   };
 

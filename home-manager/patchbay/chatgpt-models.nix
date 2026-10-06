@@ -28,13 +28,14 @@
   # The capable tier at standard speed: the review finders and verifier, and
   # the brainstorming steelman's neighbour. GPT-6 Sol and Luna are listed by
   # the Codex backend only to clients at 0.155.0 or newer, and CLIProxyAPI's
-  # registry knows them from 7.3.x. Terra has no GPT-6 generation yet.
-  "chatgpt/sol" = {model = "gpt-6-sol";};
+  # registry knows them from 7.3.x. Terra has no GPT-6 generation yet. Sol
+  # runs GPT-6.1 Sol since 2026-10-03, confirmed in /v1/models that day.
+  "chatgpt/sol" = {model = "gpt-6.1-sol";};
   # The same model on the fast tier. Published for direct use; no gambit rung
   # points at it since the worker ladder's second rung returned to standard
   # speed to spare Codex quota.
   "chatgpt/sol-fast" = {
-    model = "gpt-6-sol";
+    model = "gpt-6.1-sol";
     speed = "fast";
   };
   # The fast tier for haiku-slot work and the worker entry rung. Always fast:

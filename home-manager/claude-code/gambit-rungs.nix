@@ -211,8 +211,16 @@
     inherit (spec) route effort;
     agentName = profileAgentName profile readonly;
     # The model id the Claude Code agent sends: a Claude model where the
-    # profile names one, otherwise the patchbay route.
-    model = spec.claudeModel or route;
+    # profile names one, otherwise the patchbay route. A Claude model carries
+    # [1m] for the reason attainModel does in default.nix: behind patchbay's
+    # base URL Claude Code takes Claude 5 models for 200k, and a child opens
+    # ~150k deep, so a bare id compacted every Sonnet child within a few calls
+    # (2026-10-05/06). The suffix is stripped client-side and adds the
+    # context-1m beta.
+    model =
+      if spec ? claudeModel
+      then "${spec.claudeModel}[1m]"
+      else route;
     description =
       if spec ? claudeModel
       then spec.claudeModel

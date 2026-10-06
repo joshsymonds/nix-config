@@ -204,7 +204,9 @@ in
 
     for profile in $(jq -r 'keys[]' ${profilesJson}); do
       route=$(jq -r --arg r "$profile" '.[$r].route' ${profilesJson})
-      claude_model=$(jq -r --arg r "$profile" '.[$r].claudeModel // .[$r].route' ${profilesJson})
+      # A Claude model renders with [1m] so Claude Code behind patchbay keeps
+      # the 1M window; a Codex route renders bare.
+      claude_model=$(jq -r --arg r "$profile" '.[$r] | if .claudeModel then .claudeModel + "[1m]" else .route end' ${profilesJson})
       effort=$(jq -r --arg r "$profile" '.[$r].effort' ${profilesJson})
 
       plain="${agentsDir}/$profile.md"

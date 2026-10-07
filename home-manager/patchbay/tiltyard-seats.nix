@@ -16,7 +16,7 @@
 # An entry with `seat` names a Seat the registry already publishes and adds none;
 # the rest become Seats of their own under `tiltyard-<selector>`.
 {
-  # The five Claude candidates ride the caller's own OAuth credential on
+  # The six Claude candidates ride the caller's own OAuth credential on
   # forward Seats — the subscription already pays for them, so a judgment run
   # spends nothing extra. `model` is the whole point of the Seat: a forward Seat
   # without it would serve whatever model the request already named.
@@ -44,6 +44,16 @@
     upstream = "https://api.anthropic.com";
     auth_mode = "forward";
     model = "claude-sonnet-5-5";
+  };
+  # max_input_tokens publishes Haiku 5.5's native 1M window on /v1/models.
+  # Claude Code itself holds an unknown selector to 200k whatever this says
+  # (CC 2.1.293, print mode, 2026-10-07): a harness gets the 1M window by
+  # naming `haiku55[1m]`, whose suffix is stripped client-side.
+  haiku55 = {
+    upstream = "https://api.anthropic.com";
+    auth_mode = "forward";
+    model = "claude-haiku-5-5";
+    max_input_tokens = 1000000;
   };
 
   # The open-weight candidates, billed per token to the household OpenRouter key

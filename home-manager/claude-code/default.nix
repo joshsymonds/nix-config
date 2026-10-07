@@ -268,11 +268,20 @@
       unpinKey = null;
       aliases = [];
     };
+    "haiku-5-5" = {
+      # `haiku` follows Claude Code's own alias: CC 2.1.293 resolves the bare
+      # name to claude-haiku-5-5 (native 1M window, 128k output, the first
+      # Haiku with an effort setting).
+      model = "claude-haiku-5-5";
+      defaultEffort = "high";
+      unpinKey = null;
+      aliases = ["haiku"];
+    };
     "haiku-4-5" = {
       model = "claude-haiku-4-5-20251001";
       defaultEffort = "high";
       unpinKey = null;
-      aliases = ["haiku"];
+      aliases = [];
     };
   };
 

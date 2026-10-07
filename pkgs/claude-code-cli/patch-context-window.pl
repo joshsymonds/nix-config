@@ -34,53 +34,54 @@ sub pad_comment {
 
 my @subs;
 
-# S1: enable the model-capabilities subsystem. As of 2.1.284 R3n gates the
-# startup models.list fetch, the storage-backed prime read vNo(), and the
-# per-model lookup Nh() (exact id match, then substring). Flipping it also lets
+# S1: enable the model-capabilities subsystem. As of 2.1.293 ohr gates the
+# startup models.list fetch (Ta), the storage-backed prime read, and the
+# per-model lookup Rv() (exact id match, then substring). Flipping it also lets
 # the max_output_tokens resolver source max_tokens from the same cache
-# natively (it already calls Nh(e)?.max_tokens). 2.1.280's new served-catalog
+# natively (it already calls Rv(e)?.max_tokens). 2.1.280's new served-catalog
 # path (servedCatalog / runtime.max_input_tokens) only covers the Anthropic
 # org's Claude models, so this gate is still the only route to a per-model
-# window for foreign ids. (2.1.280's FOn, 2.1.269's Gtn, 2.1.257's K4t.)
+# window for foreign ids. (2.1.284's R3n, 2.1.280's FOn, 2.1.269's Gtn,
+# 2.1.257's K4t.)
 push @subs, {
-    name => 'S1_R3n',
-    find => 'function R3n(){return!1}',
-    repl => 'function R3n(){return!0}',
+    name => 'S1_ohr',
+    find => 'function ohr(){return!1}',
+    repl => 'function ohr(){return!0}',
 };
 
-# S2: in Kh (window resolution), source the per-model input window from the
+# S2: in Iv (window resolution), source the per-model input window from the
 # capabilities cache for non-claude ids instead of the
 # CLAUDE_CODE_MAX_CONTEXT_TOKENS env var. Only the 32-byte env token becomes
-# the 23-byte cache lookup Nh(e)?.max_input_tokens; the 9-byte difference is
-# absorbed by a /* */ comment. The existing non-claude gate Bh(e) and the
-# `return zFe` (200k default) fallthrough are untouched, so claude ids and
-# cache misses (Nh(e) -> undefined) still fall through unchanged. The full
+# the 23-byte cache lookup Rv(e)?.max_input_tokens; the 9-byte difference is
+# absorbed by a /* */ comment. The existing non-claude gate Pv(e) and the
+# `return KVe` (200k default) fallthrough are untouched, so claude ids and
+# cache misses (Rv(e) -> undefined) still fall through unchanged. The full
 # clause is used as the anchor because the bare token is not unique (also in
-# Hh, the DISABLE_COMPACT override, and the unknown-model notice nd).
-# (2.1.280's Ig / ag / Mg / CHe; 2.1.269's Sz / fz / hz / Obe; 2.1.257's
-# PL / vL / kL / Eme.)
+# Mv, the DISABLE_COMPACT override, and the unknown-model notice).
+# (2.1.284's Kh / Nh / Bh / zFe; 2.1.280's Ig / ag / Mg / CHe; 2.1.269's
+# Sz / fz / hz / Obe; 2.1.257's PL / vL / kL / Eme.)
 {
-    my $find      = 'let g=a.CLAUDE_CODE_MAX_CONTEXT_TOKENS;if(g!==void 0&&g>0&&Bh(e))return g;return zFe}';
+    my $find      = 'let g=a.CLAUDE_CODE_MAX_CONTEXT_TOKENS;if(g!==void 0&&g>0&&Pv(e))return g;return KVe}';
     my $token_old = 'a.CLAUDE_CODE_MAX_CONTEXT_TOKENS';
-    my $token_new = 'Nh(e)?.max_input_tokens';
+    my $token_new = 'Rv(e)?.max_input_tokens';
     my $pad       = pad_comment(length($token_old) - length($token_new));
     (my $repl = $find) =~ s/\Q$token_old\E/$token_new$pad/;
-    push @subs, { name => 'S2_Kh', find => $find, repl => $repl };
+    push @subs, { name => 'S2_Iv', find => $find, repl => $repl };
 }
 
 # S3: neuter the 1M-credit clamp by forcing the latch accessor to false. Body
 # becomes `return!1` followed by a /* */ comment padding it to the original
 # length; the original latch call is dropped entirely (no dead RHS to evaluate).
-# (2.1.257's eje accessor is 2.1.269's t4e, 2.1.280's Sst, and 2.1.284's Oht;
-# its only window-path caller is UUr(e,n){return Oht()&&Hh()===void 0&&
-# Kh(e,n)>eK}, which qg(e,n) uses to clamp the resolved window to eK = 200k.)
+# (2.1.257's eje accessor is 2.1.269's t4e, 2.1.280's Sst, 2.1.284's Oht, and
+# 2.1.293's MIt; its only window-path caller is zlo(e,n){return MIt()&&
+# Mv()===void 0&&Iv(e,n)>z3}, which clamps the resolved window to z3 = 200k.)
 {
-    my $find   = 'function Oht(){return n().host.accountCreditLatches.longContext1mCreditsBlocked()}';
-    my $prefix = 'function Oht(){return!1';
+    my $find   = 'function MIt(){return n().host.accountCreditLatches.longContext1mCreditsBlocked()}';
+    my $prefix = 'function MIt(){return!1';
     my $suffix = '}';
     my $padlen = length($find) - length($prefix) - length($suffix);
     my $repl   = $prefix . pad_comment($padlen) . $suffix;
-    push @subs, { name => 'S3_Oht', find => $find, repl => $repl };
+    push @subs, { name => 'S3_MIt', find => $find, repl => $repl };
 }
 
 # Static invariant: every replacement is exactly as long as its find. A failure

@@ -308,8 +308,10 @@
   #   * claude-sonnet-5 and claude-sonnet-5-5 -> the context's Claude Seat.
   #     CC 2.1.284 resolves the bare `sonnet` alias to claude-sonnet-5-5
   #     (earlier releases: claude-sonnet-5), so both ids are pinned.
-  #   * Both haiku spellings appear on the wire and bindings are exact, so the
-  #     Sonnet default is pinned twice for them.
+  #   * Haiku stays on the Sonnet default: CC 2.1.293 resolves the bare
+  #     `haiku` alias to claude-haiku-5-5, and both Haiku 4.5 spellings still
+  #     appear on the wire. Bindings are exact, so each id is pinned. Haiku 5.5
+  #     is under evaluation through the tiltyard context's haiku55 selector.
   bindings = lib.mapAttrs (selector: _: seatID selector) subscriptionSeats;
   mkContext = claudeSeat: sonnetSeat: {
     default_seat = claudeSeat;
@@ -322,6 +324,7 @@
         "claude-fable-5-1" = claudeSeat;
         "claude-sonnet-5" = claudeSeat;
         "claude-sonnet-5-5" = claudeSeat;
+        "claude-haiku-5-5" = sonnetSeat;
         "claude-haiku-4-5" = sonnetSeat;
         "claude-haiku-4-5-20251001" = sonnetSeat;
       };

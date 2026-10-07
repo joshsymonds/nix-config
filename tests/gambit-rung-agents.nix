@@ -85,7 +85,7 @@ in
       and .roles."test-runner" == {"entry":"sonnet-low"}
       and .roles.scout == {"entry":"sonnet-high","readonly":true}
       and .roles.steelman == {"entry":"fable-high","readonly":true}
-      and .roles."task-reviewer" == {"entry":"sonnet-high","readonly":true}
+      and .roles."task-reviewer" == {"entry":"opus-high","readonly":true}
       and .roles."finding-verifier" == {"entry":"sonnet-high","readonly":true}
       and .roles."conformance-reviewer" == {"entry":"sonnet-high","readonly":true}
       and .roles."integration-reviewer" == {"entry":"sonnet-high","readonly":true}
@@ -271,7 +271,7 @@ in
       # dispatch and task-state tools. Keep the expected privileges independent
       # of the renderer, including the absence of task RPC dispatch.
       if [ "$profile" = opus-high ]; then
-        grep -qxF 'allowed_subagents: "fable-high-ro, sonnet-high, sonnet-high-ro, sonnet-low"' "$pi_plain"
+        grep -qxF 'allowed_subagents: "fable-high-ro, opus-high-ro, sonnet-high, sonnet-high-ro, sonnet-low"' "$pi_plain"
         grep -qxF 'extensions: ["pi-tasks", "${orchestratorProcessExtension}"]' "$pi_plain"
         grep -qE '^extensions: \["pi-tasks", "/nix/store/[^"/]+/orchestrator-processes/index.ts"\]$' "$pi_plain"
         test -f '${orchestratorProcessExtension}'

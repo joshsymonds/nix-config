@@ -446,10 +446,9 @@
         opus.model = "opus";
         fable.model = "fable";
       };
-    # Interim map while the Codex allowance is gone (2026-10-05): every role
-    # runs a Claude model on Claude Code. Opus orchestrates, Fable steelmans,
-    # and Sonnet takes every other role until tiltyard's claude-tier-trials
-    # names each role's tier; the claude-tier-switch epic then replaces this.
+    # Every role runs a Claude model on Claude Code, following the tier table
+    # in tiltyard ops/claude-tiers/README.md: Opus orchestrates and reviews
+    # tasks, Fable steelmans, and Sonnet takes every other role.
     roles = {
       implementer.entry = "sonnet-high";
       scout = {
@@ -461,7 +460,7 @@
         readonly = true;
       };
       "task-reviewer" = {
-        entry = "sonnet-high";
+        entry = "opus-high";
         readonly = true;
       };
       "finding-verifier" = {

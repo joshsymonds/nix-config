@@ -195,19 +195,19 @@
       lib.mapAttrs (_: chatgptSeat) chatgptModels
     );
 
-  # Marked-subagent Seats: Sonnet 5.5 pinned on the context's own Claude path
-  # — the caller's subscription through the anthropic forward, or the Attain
-  # Bedrock account. They took over from the Luna Seats on 2026-10-05, when
-  # the Codex allowance stopped covering Luna's load and tiltyard's screen
-  # (ops/sonnet55-screen) measured Sonnet 5.5 level with GPT-6 Sol on first
-  # try. These are subagent-only destinations, so they get no public selector:
+  # Marked-subagent Seats, pinned on the context's own Claude path. Haiku 5.5
+  # on the caller's subscription through the anthropic forward, on trial from
+  # 2026-10-07 (Sonnet 5.5 held it from 2026-10-05, Luna before that); tiltyard
+  # ops/haiku55-screen measures it against Sonnet. The Attain Bedrock account
+  # stays on Sonnet 5.5: its model map has no Haiku 5.5 inference profile.
+  # These are subagent-only destinations, so they get no public selector:
   # nothing outside the subagents policy below can name them, and /v1/models
   # never lists them.
   subagentSeats = {
-    anthropic-sonnet55 = {
+    anthropic-haiku55 = {
       upstream = "https://api.anthropic.com";
       auth_mode = "forward";
-      model = "claude-sonnet-5-5";
+      model = "claude-haiku-5-5";
     };
     # The Bedrock map is keyed by the Seat's pinned model when it has one, so
     # this resolves through the claude-sonnet-5-5 entry like a caller's own.
@@ -290,10 +290,12 @@
   # against each request, which is what keeps spend attributable per project.
   #
   # Marked subagent traffic (x-claude-code-agent-id) that no public selector
-  # already claims rides Sonnet 5.5 on the context's own Claude path: default
-  # Explores, other unlisted subagents, and haiku-slot dispatches. Until
-  # 2026-10-05 this went to Luna on the Codex subscription. Exact pins carve
-  # out what must stay on the model the caller named:
+  # already claims rides the context's small-model Seat (subagentSeats above):
+  # other unlisted subagents and haiku-slot dispatches. The built-in Explore
+  # rides it by agent type (x-claude-code-agent-type, which Claude Code sends
+  # under CLAUDE_CODE_GATEWAY_HINT_HEADERS): it inherits its session's model, so
+  # without the agent-type binding the model pins below would keep it on Opus
+  # or Fable. Exact pins carve out what must stay on the model the caller named:
   #
   #   * claude-opus-5 and claude-opus-5-5 -> the context's Claude Seat.
   #     Gambit's worker and escalation ladders TERMINATE at the opus rung,
@@ -302,35 +304,38 @@
   #     2.1.280 resolves to claude-opus-5-5 (earlier releases: claude-opus-5),
   #     so both ids are pinned.
   #   * claude-fable-5-1 -> the context's Claude Seat, so an explicit
-  #     `model: fable` dispatch is not demoted to Sonnet. The wire can't tell
-  #     an explicit fable dispatch from a fable-inheriting one, so default
-  #     Explores and background forks under a fable session ride Fable too.
+  #     `model: fable` dispatch is not demoted. The model can't tell an
+  #     explicit fable dispatch from a fable-inheriting one, so background
+  #     forks under a fable session ride Fable too.
   #   * claude-sonnet-5 and claude-sonnet-5-5 -> the context's Claude Seat.
   #     CC 2.1.284 resolves the bare `sonnet` alias to claude-sonnet-5-5
   #     (earlier releases: claude-sonnet-5), so both ids are pinned.
-  #   * Haiku stays on the Sonnet default: CC 2.1.293 resolves the bare
-  #     `haiku` alias to claude-haiku-5-5, and both Haiku 4.5 spellings still
-  #     appear on the wire. Bindings are exact, so each id is pinned. Haiku 5.5
-  #     is under evaluation through the tiltyard context's haiku55 selector.
+  #   * Every Haiku id rides the small-model Seat: CC 2.1.293 resolves the
+  #     bare `haiku` alias to claude-haiku-5-5, both Haiku 4.5 spellings still
+  #     appear on the wire, and Gambit's haiku-high profile names
+  #     claude-haiku-5-5. Bindings are exact, so each id is pinned. On Attain
+  #     Bedrock the small-model Seat is Sonnet 5.5, so a Haiku dispatch there
+  #     runs Sonnet.
   bindings = lib.mapAttrs (selector: _: seatID selector) subscriptionSeats;
-  mkContext = claudeSeat: sonnetSeat: {
+  mkContext = claudeSeat: smallSeat: {
     default_seat = claudeSeat;
     models = bindings;
     subagents = {
-      default_seat = sonnetSeat;
+      default_seat = smallSeat;
+      agent_types.Explore = smallSeat;
       models = {
         "claude-opus-5" = claudeSeat;
         "claude-opus-5-5" = claudeSeat;
         "claude-fable-5-1" = claudeSeat;
         "claude-sonnet-5" = claudeSeat;
         "claude-sonnet-5-5" = claudeSeat;
-        "claude-haiku-5-5" = sonnetSeat;
-        "claude-haiku-4-5" = sonnetSeat;
-        "claude-haiku-4-5-20251001" = sonnetSeat;
+        "claude-haiku-5-5" = smallSeat;
+        "claude-haiku-4-5" = smallSeat;
+        "claude-haiku-4-5-20251001" = smallSeat;
       };
     };
   };
-  context = mkContext "anthropic" "anthropic-sonnet55";
+  context = mkContext "anthropic" "anthropic-haiku55";
   attainContext =
     if cfg.attainBedrock.enable
     then mkContext "attain-bedrock" "attain-bedrock-sonnet55"

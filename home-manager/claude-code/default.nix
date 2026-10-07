@@ -108,6 +108,11 @@
           }
           // lib.optionalAttrs (patchbayBaseUrl != null) {
             ANTHROPIC_BASE_URL = patchbayBaseUrl;
+            # Report each subagent's agent type in x-claude-code-agent-type,
+            # which patchbay's subagents.agent_types policy routes on: the
+            # built-in Explore inherits its session's model, so the model alone
+            # cannot send it to the small-model Seat.
+            CLAUDE_CODE_GATEWAY_HINT_HEADERS = "1";
           };
       }
       // lib.optionalAttrs (defaultModelIsChatgpt && !codexUpstream) {

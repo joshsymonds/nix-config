@@ -12,23 +12,20 @@
   orchestratorProcessExtension ? "${import ../pi/tool-packages {inherit lib pkgs;}}/orchestrator-processes/index.ts",
 }: rec {
   # ── Gambit profile agents ──────────────────────────────────────────────────
-  # Gambit's non-Claude model profiles ship as Claude Code SUBAGENT
-  # DEFINITIONS, not as model parameters. The Agent tool's `model:` argument
-  # is enum-locked (sonnet/opus/haiku/fable/inherit), so a patchbay route id
-  # like chatgpt/sol can only reach the wire through a subagent's
-  # frontmatter, whose `model` field accepts a full model id. Gambit
-  # dispatches a profile by subagent_type and passes the real contract by path
-  # in the prompt, so these bodies stay deliberately generic and minimal.
+  # Gambit's model profiles ship as Claude Code SUBAGENT DEFINITIONS, not as
+  # model parameters. The Agent tool's `model:` argument is enum-locked
+  # (sonnet/opus/haiku/fable/inherit), so a profile's model and effort reach
+  # the wire only through a subagent's frontmatter. Gambit dispatches a
+  # profile by subagent_type and passes the real contract by path in the
+  # prompt, so these bodies stay deliberately generic and minimal.
   #
-  # Each `route` must be a route key patchbay publishes under codexUpstream;
-  # home-manager/patchbay/chatgpt-models.nix owns that list and the check
-  # asserts the two agree. A route whose Seat carries speed = "fast" makes
-  # the profile a fast profile on both harnesses: the Claude Code agent gets it from
-  # the Seat, the Pi twin from the codex-fast extension below.
-  #
-  # A profile with a `claudeModel` runs that Claude model on Claude Code
-  # (patchbay pins the id to a Seat that serves it) while its Pi twin keeps
-  # `route`: Pi has no Anthropic provider, so it stays on Codex.
+  # Every profile runs its `claudeModel` on Claude Code. Its Pi twin runs
+  # `route` instead, since Pi has no Anthropic provider: each `route` must be
+  # a route key patchbay publishes under codexUpstream
+  # (home-manager/patchbay/chatgpt-models.nix owns that list and the check
+  # asserts the two agree), and a route whose Seat carries speed = "fast"
+  # makes the Pi twin load the codex-fast extension below. No profile
+  # dispatches a Codex or third-party route on Claude Code.
   #
   # The Implementer role is entry-only, at the effort the tiltyard screen
   # measured to close the corpus.
@@ -88,53 +85,6 @@
     "fable-high" = {
       claudeModel = "claude-fable-5-1";
       route = "chatgpt/astra";
-      effort = "high";
-    };
-    # Retained standard-speed profile: Sol. It ran on the fast tier from
-    # 2026-09-09 to 2026-09-11 and was the largest Codex-quota draw on the
-    # profile catalog, so it went back to standard.
-    "sol-low" = {
-      route = "chatgpt/sol";
-      effort = "low";
-    };
-    # Scout profile: Terra, always on the fast tier.
-    "terra-medium" = {
-      route = "chatgpt/terra";
-      effort = "medium";
-    };
-    # Orchestrator profile: Sol at high effort runs one effort, review, or
-    # release from the durable record (gambit contracts/models.md). Chosen by
-    # Josh on 2026-09-12 when the judgment campaign was stopped short of its
-    # table to save quota.
-    "sol-high" = {
-      route = "chatgpt/sol";
-      effort = "high";
-    };
-    # Retained Sol xhigh profile for explicit/manual dispatch.
-    "sol-xhigh" = {
-      route = "chatgpt/sol";
-      effort = "xhigh";
-    };
-    # Retained Astra high profile for explicit/manual dispatch. Claude Code
-    # reaches it through patchbay's HTTPS path (cli-proxy-api), while Pi uses
-    # Codex WebSocket. It is not an implementation escalation target.
-    "astra-high" = {
-      route = "chatgpt/astra";
-      effort = "high";
-    };
-    # Astra at its highest effort: the read-only steelman pass brainstorming
-    # runs on an agreed design.
-    "astra-xhigh" = {
-      route = "chatgpt/astra";
-      effort = "xhigh";
-    };
-  };
-
-  # Explicit Claude Code dispatch only: these never enter Gambit's role map
-  # or Pi's agent directory. Install each pair only where its route is declared.
-  optionalClaudeProfiles = {
-    "singularity-flash-high" = {
-      route = "singularity/deepseek-flash";
       effort = "high";
     };
   };
@@ -228,26 +178,16 @@
   # The description is quoted because it contains a colon; an unquoted YAML
   # plain scalar cannot carry ": ".
   mkProfileAgent = profile: readonly: let
-    spec = (gambitProfiles // optionalClaudeProfiles).${profile};
-    inherit (spec) route effort;
+    spec = gambitProfiles.${profile};
+    inherit (spec) effort;
     agentName = profileAgentName profile readonly;
-    # The model id the Claude Code agent sends: a Claude model where the
-    # profile names one, otherwise the patchbay route. A Claude model carries
-    # [1m] for the reason attainModel does in default.nix: behind patchbay's
-    # base URL Claude Code takes Claude 5 models for 200k, and a child opens
-    # ~150k deep, so a bare id compacted every Sonnet child within a few calls
-    # (2026-10-05/06). The suffix is stripped client-side and adds the
-    # context-1m beta.
-    model =
-      if spec ? claudeModel
-      then "${spec.claudeModel}[1m]"
-      else route;
-    description =
-      if spec ? claudeModel
-      then spec.claudeModel
-      else if builtins.hasAttr route chatgptModels
-      then "${routeModel route} (${route})"
-      else "${route} (${route})";
+    # The model id the Claude Code agent sends. It carries [1m] for the reason
+    # attainModel does in default.nix: behind patchbay's base URL Claude Code
+    # takes Claude 5 models for 200k, and a child opens ~150k deep, so a bare
+    # id compacted every Sonnet child within a few calls (2026-10-05/06). The
+    # suffix is stripped client-side and adds the context-1m beta.
+    model = "${spec.claudeModel}[1m]";
+    description = spec.claudeModel;
     orchestrator = !readonly && profile == orchestratorProfile;
   in
     pkgs.writeText "gambit-profile-${agentName}.md" (lib.concatStringsSep "\n" (
@@ -287,15 +227,6 @@
         path = mkProfileAgent profile readonly;
       }) [false true]
   ) (lib.attrNames gambitProfiles);
-
-  optionalClaudeProfileAgentEntries = routes:
-    lib.concatMap (
-      profile:
-        map (readonly: {
-          name = "${profileAgentName profile readonly}.md";
-          path = mkProfileAgent profile readonly;
-        }) [false true]
-    ) (lib.attrNames (lib.filterAttrs (_: spec: builtins.elem spec.route routes) optionalClaudeProfiles));
 
   # Nested dispatch is opt-in independently of extension loading. Permit the
   # Orchestrator to reach exactly the non-Orchestrator role targets and advisory

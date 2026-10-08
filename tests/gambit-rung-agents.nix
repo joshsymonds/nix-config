@@ -14,7 +14,6 @@
     (modelProfileData)
     gambitProfiles
     profileAgentEntries
-    optionalClaudeProfileAgentEntries
     piProfileAgentEntries
     omakasePiProfiles
     gambitModelsFull
@@ -59,13 +58,6 @@
   # the frontmatter can be read back off disk.
   agentsDir = pkgs.linkFarm "gambit-profile-agents-check-dir" profileAgentEntries;
   piAgentsDir = pkgs.linkFarm "gambit-pi-profile-agents-check-dir" piProfileAgentEntries;
-  optionalAgentsDir = assert optionalClaudeProfileAgentEntries [] == [];
-  assert optionalClaudeProfileAgentEntries ["chatgpt/sol"] == [];
-  assert map (entry: entry.name) (optionalClaudeProfileAgentEntries ["singularity/deepseek-flash"])
-  == ["singularity-flash-high.md" "singularity-flash-high-ro.md"];
-  assert !(gambitModelsFull.profiles ? singularity-flash-high);
-  assert !(gambitModelsClaudeOnly.profiles ? singularity-flash-high);
-    pkgs.linkFarm "gambit-optional-claude-agents-check-dir" (optionalClaudeProfileAgentEntries ["singularity/deepseek-flash"]);
 in
   pkgs.runCommand "gambit-rung-agents-check" {
     nativeBuildInputs = [pkgs.jq];
@@ -205,11 +197,15 @@ in
       and .["fable-high"] == {"claudeModel":"claude-fable-5-1","route":"chatgpt/astra","effort":"high"}
     ' ${profilesJson} >/dev/null
 
+    # Every profile names a Claude model: none dispatches a Codex or
+    # third-party route on Claude Code.
+    jq -e 'all(.[]; (.claudeModel | type) == "string" and (.claudeModel | startswith("claude-")))' ${profilesJson} >/dev/null
+
     for profile in $(jq -r 'keys[]' ${profilesJson}); do
       route=$(jq -r --arg r "$profile" '.[$r].route' ${profilesJson})
-      # A Claude model renders with [1m] so Claude Code behind patchbay keeps
-      # the 1M window; a Codex route renders bare.
-      claude_model=$(jq -r --arg r "$profile" '.[$r] | if .claudeModel then .claudeModel + "[1m]" else .route end' ${profilesJson})
+      # Every profile renders its Claude model with [1m], so Claude Code behind
+      # patchbay keeps the 1M window.
+      claude_model=$(jq -r --arg r "$profile" '.[$r].claudeModel + "[1m]"' ${profilesJson})
       effort=$(jq -r --arg r "$profile" '.[$r].effort' ${profilesJson})
 
       plain="${agentsDir}/$profile.md"
@@ -350,29 +346,6 @@ in
         echo "omakase profile $profile shadows a Codex profile" >&2
         exit 1
       fi
-    done
-
-    # Optional beta agents share the Claude renderer, never Pi or role defaults.
-    plain="${optionalAgentsDir}/singularity-flash-high.md"
-    ro="${optionalAgentsDir}/singularity-flash-high-ro.md"
-    for f in "$plain" "$ro"; do
-      test -f "$f"
-      grep -qxF 'model: singularity/deepseek-flash' "$f"
-      grep -qxF 'effort: high' "$f"
-    done
-    grep -qxF 'name: singularity-flash-high' "$plain"
-    grep -qxF 'name: singularity-flash-high-ro' "$ro"
-    grep -qxF ${lib.escapeShellArg expectedDenylist} "$ro"
-    grep -qF 'READ-ONLY advisory variant' "$ro"
-    grep -qF 'Never run:' "$ro"
-    grep -qxF ${lib.escapeShellArg expectedLeafDenylist} "$plain"
-    if grep -qF 'READ-ONLY' "$plain"; then
-      echo 'writing Singularity agent carries read-only restrictions' >&2
-      exit 1
-    fi
-    for name in singularity-flash-high singularity-flash-high-ro; do
-      test ! -e "${piAgentsDir}/$name.md"
-      test ! -e "${agentsDir}/$name.md"
     done
 
     touch "$out"

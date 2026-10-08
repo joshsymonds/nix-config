@@ -290,49 +290,33 @@
   # against each request, which is what keeps spend attributable per project.
   #
   # Marked subagent traffic (x-claude-code-agent-id) that no public selector
-  # already claims rides the context's small-model Seat (subagentSeats above):
-  # other unlisted subagents and haiku-slot dispatches. The built-in Explore
-  # rides it by agent type (x-claude-code-agent-type, which Claude Code sends
-  # under CLAUDE_CODE_GATEWAY_HINT_HEADERS): it inherits its session's model, so
-  # without the agent-type binding the model pins below would keep it on Opus
-  # or Fable. Exact pins carve out what must stay on the model the caller named:
+  # already claims rides the model it asked for on the context's Claude Seat,
+  # so an agent naming a model patchbay has never heard of runs that model
+  # rather than a policy default. Two classes ride the small-model Seat
+  # (subagentSeats above) instead:
   #
-  #   * claude-opus-5 and claude-opus-5-5 -> the context's Claude Seat.
-  #     Gambit's worker and escalation ladders TERMINATE at the opus rung,
-  #     and the ladder's 100%-solve invariant is exactly that the terminal
-  #     rung is native Claude. The rung names the bare `opus` alias, which CC
-  #     2.1.280 resolves to claude-opus-5-5 (earlier releases: claude-opus-5),
-  #     so both ids are pinned.
-  #   * claude-fable-5-1 -> the context's Claude Seat, so an explicit
-  #     `model: fable` dispatch is not demoted. The model can't tell an
-  #     explicit fable dispatch from a fable-inheriting one, so background
-  #     forks under a fable session ride Fable too.
-  #   * claude-sonnet-5 and claude-sonnet-5-5 -> the context's Claude Seat.
-  #     CC 2.1.284 resolves the bare `sonnet` alias to claude-sonnet-5-5
-  #     (earlier releases: claude-sonnet-5), so both ids are pinned.
-  #   * Every Haiku id rides the small-model Seat: CC 2.1.293 resolves the
-  #     bare `haiku` alias to claude-haiku-5-5, both Haiku 4.5 spellings still
-  #     appear on the wire, and Gambit's haiku-high profile names
-  #     claude-haiku-5-5. Bindings are exact, so each id is pinned. On Attain
-  #     Bedrock the small-model Seat is Sonnet 5.5, so a Haiku dispatch there
-  #     runs Sonnet.
+  #   * The built-in Explore, by agent type (x-claude-code-agent-type, which
+  #     Claude Code sends under CLAUDE_CODE_GATEWAY_HINT_HEADERS). It inherits
+  #     its session's model, so only the agent type tells it apart.
+  #   * Every Haiku id: CC 2.1.293 resolves the bare `haiku` alias to
+  #     claude-haiku-5-5, both Haiku 4.5 spellings still appear on the wire,
+  #     and Gambit's Haiku profiles name claude-haiku-5-5. Bindings are exact,
+  #     so each id is pinned.
+  #
+  # On Attain Bedrock the small-model Seat is Sonnet 5.5, so a Haiku dispatch
+  # or an Explore there runs Sonnet.
   bindings = lib.mapAttrs (selector: _: seatID selector) subscriptionSeats;
   mkContext = claudeSeat: smallSeat: {
     default_seat = claudeSeat;
     models = bindings;
     subagents = {
-      default_seat = smallSeat;
+      default_seat = claudeSeat;
       agent_types.Explore = smallSeat;
-      models = {
-        "claude-opus-5" = claudeSeat;
-        "claude-opus-5-5" = claudeSeat;
-        "claude-fable-5-1" = claudeSeat;
-        "claude-sonnet-5" = claudeSeat;
-        "claude-sonnet-5-5" = claudeSeat;
-        "claude-haiku-5-5" = smallSeat;
-        "claude-haiku-4-5" = smallSeat;
-        "claude-haiku-4-5-20251001" = smallSeat;
-      };
+      models = lib.genAttrs [
+        "claude-haiku-5-5"
+        "claude-haiku-4-5"
+        "claude-haiku-4-5-20251001"
+      ] (_: smallSeat);
     };
   };
   context = mkContext "anthropic" "anthropic-haiku55";

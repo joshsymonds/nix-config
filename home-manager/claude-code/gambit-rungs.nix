@@ -33,10 +33,20 @@
   # The Implementer role is entry-only, at the effort the tiltyard screen
   # measured to close the corpus.
   gambitProfiles = {
-    # Implementer entry profile, on trial from 2026-10-07: Haiku 5.5 at high
-    # effort on Claude Code, Luna at high effort on Pi. Haiku 5.5 is the first
-    # Haiku with an effort setting; tiltyard ops/haiku55-screen measures it
-    # against Sonnet 5.5 on the same corpus.
+    # Implementer entry profile: Haiku 5.5 at medium effort on Claude Code,
+    # Luna at medium effort on Pi. Tiltyard's Haiku screen (2026-10-07,
+    # ops/haiku55-screen, the same 56 scenarios x 2) measured Haiku first-try
+    # green flat at 62-66% from low to xhigh effort, level with Sonnet 5.5
+    # high's 66%; with one resumed retry, Haiku medium reached 92% against
+    # Sonnet's 98%, at roughly a fifth to an eighth of the list cost per green.
+    # Medium matched high's green rate at half the cost and wall time.
+    "haiku-medium" = {
+      claudeModel = "claude-haiku-5-5";
+      route = "chatgpt/luna";
+      effort = "medium";
+    };
+    # Scout profile: Haiku 5.5 at high effort, the setting the reviewer
+    # corpus graded (0.810 against a 0.806 bar; Sonnet 5.5 high 0.922).
     "haiku-high" = {
       claudeModel = "claude-haiku-5-5";
       route = "chatgpt/luna";
@@ -50,8 +60,8 @@
     # cell. It stopped on 6 of 8 under-specified probes where Luna stopped on
     # none, and never blocked a real task. It replaced Luna on Claude Code
     # when the Codex allowance stopped covering Luna's load, and was the
-    # implementer entry until the Haiku 5.5 trial; scout and the reviewers
-    # still enter here.
+    # implementer and scout entry until Haiku 5.5; finding-verifier and the
+    # reviewers still enter here.
     "sonnet-high" = {
       claudeModel = "claude-sonnet-5-5";
       route = "chatgpt/luna";
@@ -459,12 +469,12 @@
       };
     # Every role runs a Claude model on Claude Code, following the tier table
     # in tiltyard ops/claude-tiers/README.md: Opus orchestrates and reviews
-    # tasks, Fable steelmans, and Sonnet takes every other role except the
-    # implementer, which is on a Haiku 5.5 trial (ops/haiku55-screen).
+    # tasks, Fable steelmans, Haiku 5.5 implements and scouts
+    # (ops/haiku55-screen), and Sonnet takes every other role.
     roles = {
-      implementer.entry = "haiku-high";
+      implementer.entry = "haiku-medium";
       scout = {
-        entry = "sonnet-high";
+        entry = "haiku-high";
         readonly = true;
       };
       steelman = {

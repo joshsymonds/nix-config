@@ -45,10 +45,10 @@
     auth_mode = "forward";
     model = "claude-sonnet-5-5";
   };
-  # max_input_tokens publishes Haiku 5.5's native 1M window on /v1/models.
-  # Claude Code itself holds an unknown selector to 200k whatever this says
-  # (CC 2.1.293, print mode, 2026-10-07): a harness gets the 1M window by
-  # naming `haiku55[1m]`, whose suffix is stripped client-side.
+  # max_input_tokens publishes Haiku 5.5's native 1M window on /v1/models,
+  # which the patched Claude Code reads at startup for a selector it does not
+  # know (pkgs/claude-code-cli); stock Claude Code holds such a selector to
+  # 200k.
   haiku55 = {
     upstream = "https://api.anthropic.com";
     auth_mode = "forward";

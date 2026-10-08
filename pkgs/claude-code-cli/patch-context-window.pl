@@ -2,9 +2,9 @@
 # Teach the bun-compiled `claude` binary the true per-model context window for
 # non-Claude ("foreign") models, via three LENGTH-PRESERVING substitutions in
 # the embedded JS. Bun single-file executables do not integrity-check the
-# embedded script (same property the tengu_fleet_past_sessions patch relies on),
-# but byte offsets must not move, so every replacement is exactly as long as
-# what it replaces.
+# embedded script, but byte offsets must not move, so every replacement is
+# exactly as long as what it replaces. The edits take effect only once
+# drop-bytecode.pl strips the patched module's precompiled bytecode.
 #
 # Safety model (mirrors the fleet-gate warn-and-ship-stock behaviour): every
 # anchor is verified BEFORE any edit is applied. If any anchor's occurrence

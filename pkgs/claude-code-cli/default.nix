@@ -48,6 +48,15 @@ in
         mkdir -p "$out/bin"
         cp "$src" "$out/bin/claude"
         chmod +wx "$out/bin/claude"
+      ''
+      + lib.optionalString stdenv.hostPlatform.isLinux ''
+        patchelf --set-interpreter "$(cat ${stdenv.cc}/nix-support/dynamic-linker)" "$out/bin/claude"
+      ''
+      + ''
+        # Keep the runnable, unpatched binary: drop-bytecode.pl below diffs the
+        # patched modules against it, and the sanity gate falls back to it.
+        cp "$out/bin/claude" "$TMPDIR/claude.stock"
+
         # Neuter the tengu_fleet_past_sessions feature gate so the agents view
         # stops listing every past transcript as an "earlier" row (server-side
         # rollout, no user-facing off switch). The replacement MUST be the same
@@ -61,23 +70,13 @@ in
           echo "warning: tengu_fleet_past_sessions gate not found; upstream may have renamed it" >&2
         fi
         perl -pi -e 's/tengu_fleet_past_sessions/tengu_fleet_past_sessionz/g' "$out/bin/claude"
-      ''
-      + lib.optionalString stdenv.hostPlatform.isLinux ''
-        patchelf --set-interpreter "$(cat ${stdenv.cc}/nix-support/dynamic-linker)" "$out/bin/claude"
-      ''
-      + ''
+
         # Teach Claude Code the true per-model context window for non-Claude
         # ("foreign") models via three length-preserving substitutions in the
-        # embedded JS (same bun-no-integrity-check property the fleet patch above
-        # relies on). The script verifies every anchor BEFORE editing and, on any
-        # drift (a version bump renamed the minified symbols), applies none and
-        # ships the stock binary with a loud warning — the build does not fail,
-        # and stock still honours CLAUDE_CODE_MAX_CONTEXT_TOKENS natively.
-        #
-        # Back up the proven stock binary first (already fleet-patched and, on
-        # Linux, patchelf'd, so it is runnable) so the sanity gate below can fall
-        # back to it if the patched binary won't start.
-        cp "$out/bin/claude" "$TMPDIR/claude.stock"
+        # embedded JS. The script verifies every anchor BEFORE editing and, on
+        # any drift (a version bump renamed the minified symbols), applies none
+        # and ships the binary unpatched with a loud warning — the build does
+        # not fail, and stock still honours CLAUDE_CODE_MAX_CONTEXT_TOKENS.
         perl ${./patch-context-window.pl} "$out/bin/claude"
 
         # Report which agent's transcript view is focused in the
@@ -87,8 +86,14 @@ in
         # never sets `focused` and Steward falls back to the aggregate view.
         perl ${./patch-agent-focus.pl} "$out/bin/claude"
 
+        # The patches above edit embedded JS source, but Bun runs a module's
+        # precompiled bytecode whenever it has some, so the edits only take
+        # effect once the patched modules lose their bytecode and compile from
+        # source. Every patch since at least 2.1.257 was inert without this.
+        perl ${./drop-bytecode.pl} "$TMPDIR/claude.stock" "$out/bin/claude"
+
         # Runnable sanity gate: the patched binary must still start. On failure,
-        # restore the stock backup (do not fail the build).
+        # restore the unpatched binary (do not fail the build).
         export HOME="$TMPDIR"
         if ! timeout 120 "$out/bin/claude" --version >/dev/null 2>&1; then
           echo "warning: [cc-window] patched claude --version failed sanity; restoring stock binary" >&2

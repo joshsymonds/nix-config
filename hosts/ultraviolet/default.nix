@@ -53,6 +53,7 @@ in
       ./services/obsidian.nix
       ./services/nextdns-linkip.nix
       ./services/sound-stage.nix
+      ./services/playroom.nix
       ./services/savecraft-egress.nix
       ./services/valheim.nix
 

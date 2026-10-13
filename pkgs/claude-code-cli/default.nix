@@ -5,6 +5,7 @@
   patchelf,
   glibc,
   perl,
+  darwin,
 }: let
   version = "2.1.293";
   gcsBase = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/${version}";
@@ -91,6 +92,17 @@ in
         # effect once the patched modules lose their bytecode and compile from
         # source. Every patch since at least 2.1.257 was inert without this.
         perl ${./drop-bytecode.pl} "$TMPDIR/claude.stock" "$out/bin/claude"
+      ''
+      + lib.optionalString stdenv.hostPlatform.isDarwin ''
+
+        # Any byte edit invalidates the embedded code signature, and macOS
+        # SIGKILLs a Mach-O with an invalid signature at exec. Re-sign ad hoc
+        # here, before the sanity gate, so the gate exercises the binary that
+        # actually ships.
+        source ${darwin.signingUtils}
+        sign "$out/bin/claude"
+      ''
+      + ''
 
         # Runnable sanity gate: the patched binary must still start. On failure,
         # restore the unpatched binary (do not fail the build).

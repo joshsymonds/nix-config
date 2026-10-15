@@ -14,6 +14,7 @@
     ../ntfy-notify
     ../savecraftd
     ../patchbay
+    ../parlor
   ];
 
   # Do not install the standalone qBittorrent app here: it bypasses the VPN.
@@ -37,6 +38,11 @@
     enable = true;
     server = "production";
   };
+
+  # Parlor serve daemon (CPU torch) on port 4110 and the parlor-score CLI,
+  # with module defaults.
+  services.parlor.enable = true;
+  programs.parlor-score.enable = true;
 
   home.packages = with pkgs; [
     # Gaming auxiliaries (Steam itself is system-level via programs.steam)

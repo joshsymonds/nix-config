@@ -3,6 +3,7 @@
     ../headless-x86_64-linux.nix
     ../claude-code/transcripts.nix
     ../go
+    ../parlor
     ../patchbay
     ../patchbay/singularity.nix
   ];
@@ -43,6 +44,8 @@
   ];
 
   programs.go.enable = true;
+
+  programs.parlor-score.enable = true;
 
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
 

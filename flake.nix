@@ -285,6 +285,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Parlor — the `parlor serve` daemon and the `parlor-score` CLI
+    parlor = {
+      url = "git+ssh://git@github.com/joshsymonds/parlor.git?ref=main";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # nix-gaming-edge — proton-cachyos (the SLR x86_64-v3 build). Replaces
     # proton-ge-bin on gnomon. Cache (tokidoki) is wired in on gnomon only —
     # the only host that consumes any of this.

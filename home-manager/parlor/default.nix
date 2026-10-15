@@ -1,0 +1,64 @@
+# parlor — the `parlor serve` daemon and the `parlor-score` CLI, both from the
+# parlor flake.
+#
+# The daemon runs as a user service. Its model directory defaults to a path
+# under the user's home (parlor's own default), so weights never enter the
+# nix store.
+{
+  config,
+  inputs,
+  lib,
+  pkgs,
+  ...
+}: let
+  cfg = config.services.parlor;
+  scoreCfg = config.programs.parlor-score;
+  system = pkgs.stdenv.hostPlatform.system;
+in {
+  options = {
+    services.parlor = {
+      enable = lib.mkEnableOption "the parlor serve daemon";
+
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 4110;
+        description = "Port the parlor daemon listens on.";
+      };
+
+      host = lib.mkOption {
+        type = lib.types.str;
+        default = "0.0.0.0";
+        description = "Address the parlor daemon binds to.";
+      };
+
+      package = lib.mkOption {
+        type = lib.types.package;
+        default = inputs.parlor.packages.${system}.parlor;
+        defaultText = lib.literalExpression "inputs.parlor.packages.\${system}.parlor";
+        description = "The parlor package to run.";
+      };
+    };
+
+    programs.parlor-score = {
+      enable = lib.mkEnableOption "the parlor-score CLI";
+    };
+  };
+
+  config = lib.mkMerge [
+    (lib.mkIf cfg.enable {
+      systemd.user.services.parlor = {
+        Unit.Description = "parlor — serve daemon";
+        Service = {
+          ExecStart = "${cfg.package}/bin/parlor serve --host ${cfg.host} --port ${toString cfg.port}";
+          Restart = "on-failure";
+          RestartSec = 5;
+        };
+        Install.WantedBy = ["default.target"];
+      };
+    })
+
+    (lib.mkIf scoreCfg.enable {
+      home.packages = [inputs.parlor.packages.${system}.parlor-score];
+    })
+  ];
+}

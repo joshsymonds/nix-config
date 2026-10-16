@@ -345,9 +345,11 @@ in {
     (lib.mkIf cfg.ollama.enable {
       services.ollama = {
         enable = true;
-        # Same edge input and Blackwell-only CUDA config as llama-cpp, so the
-        # decision-model API (Ollama 0.35.1+) rides the same bumps.
-        package = inferencePkgs.ollama-cuda;
+        # Host nixpkgs at the default CUDA arches, so ollama-cuda comes from
+        # cache.nixos-cuda.org instead of a ~45 min Blackwell-only rebuild
+        # (see the cudaArches note in hosts/gnomon). Needs Ollama 0.35.1+ for
+        # the decision-model API.
+        package = pkgs.ollama-cuda;
         # Loopback only: Ollama has no auth, like the llama-server backends.
         host = "127.0.0.1";
         port = cfg.ollama.port;

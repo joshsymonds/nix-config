@@ -7,7 +7,7 @@
 
     # Side-channel nixpkgs pinned to current unstable HEAD, used by the
     # inference-stack module (modules/services/inference-stack.nix) for
-    # llama-cpp + llama-swap only. Decoupled from the main `nixpkgs`
+    # llama-cpp, llama-swap and Ollama (decision models) only. Decoupled from the main `nixpkgs`
     # input so the inference toolchain can ride the edge (new model
     # arches, MoE-offload flags, perf fixes land in llama.cpp on a
     # weekly cadence) without dragging a 200-package rebuild every time

@@ -137,6 +137,13 @@ in
     services.inference-stack = {
       enable = true;
       openWebUI.port = 8081;
+      # Clef-flash: Cloudflare's 9B decision model (yes/no, choice, score
+      # probabilities over text) via Ollama's /v1/systemone on :11435.
+      # ~11-12 GB of VRAM while loaded; unloads after 5 min idle.
+      ollama = {
+        enable = true;
+        models = ["clef-flash:9b"];
+      };
       models = let
         base = "https://huggingface.co/nohurry/gemma-4-26B-A4B-it-heretic-GUFF/resolve/main";
         # Dense Gemma 4 12B, Heretic-abliterated by igorls (0/100 genuine

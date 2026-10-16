@@ -130,6 +130,24 @@ in {
       default = false;
       description = "Open firewall ports for llama-swap and (if enabled) Open-WebUI.";
     };
+
+    ollama = {
+      enable = lib.mkEnableOption ''
+        Ollama beside llama-swap, for decision models (Cloudflare's Clef) whose
+        schema head only Ollama serves, at /v1/systemone. llama-server has no
+        such endpoint; generative models stay on llama-swap'';
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 11435;
+        description = "Loopback port Ollama listens on. 11434 belongs to llama-swap.";
+      };
+      models = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        example = ["clef-flash:9b"];
+        description = "Ollama library tags pulled by ollama-model-loader.service after Ollama starts.";
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable (lib.mkMerge [
@@ -321,6 +339,30 @@ in {
       };
 
       users.groups.open-webui = {};
+    })
+
+    # ── Ollama for decision models ───────────────────────────────────────
+    (lib.mkIf cfg.ollama.enable {
+      services.ollama = {
+        enable = true;
+        # Same edge input and Blackwell-only CUDA config as llama-cpp, so the
+        # decision-model API (Ollama 0.35.1+) rides the same bumps.
+        package = inferencePkgs.ollama-cuda;
+        # Loopback only: Ollama has no auth, like the llama-server backends.
+        host = "127.0.0.1";
+        port = cfg.ollama.port;
+        loadModels = cfg.ollama.models;
+        # A static user keeps the store at a real /var/lib/ollama that
+        # impermanence can bind-mount; DynamicUser would put it behind
+        # /var/lib/private.
+        user = "ollama";
+        environmentVariables = {
+          # Same 5 min idle unload as llama-swap's TTL, and one model at a
+          # time, so Ollama never holds VRAM long against llama-swap or ComfyUI.
+          OLLAMA_KEEP_ALIVE = "5m";
+          OLLAMA_MAX_LOADED_MODELS = "1";
+        };
+      };
     })
   ]);
 }

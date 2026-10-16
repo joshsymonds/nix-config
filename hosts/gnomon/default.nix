@@ -39,6 +39,15 @@ in
         group = "joshsymonds";
         mode = "0755";
       }
+      # DynamicUser state (Ollama's pulled models: Clef-flash, ~11 GB).
+      # systemd keeps it under /var/lib/private and requires that directory
+      # to be 0700, which a listOf-str entry's root:0755 parent would break.
+      {
+        directory = "/var/lib/private";
+        user = "root";
+        group = "root";
+        mode = "0700";
+      }
     ];
 
     # ── Keyboard: static Mac-style modifier remap on the Q6 HE ──────────

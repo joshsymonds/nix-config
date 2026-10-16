@@ -61,9 +61,6 @@
       # system-owned so plain listOf-str entries work.
       "/var/lib/llama-models"
       "/var/lib/open-webui"
-      # Ollama's pulled models (Clef-flash, ~11 GB), so a boot doesn't
-      # re-download them. Static ollama user, so a plain entry works.
-      "/var/lib/ollama"
       # NOTE: /var/lib/comfyui is intentionally NOT here — it needs
       # user-owned persist backing for rootless podman, so it's declared
       # in hosts/gnomon/default.nix via impermanence's native

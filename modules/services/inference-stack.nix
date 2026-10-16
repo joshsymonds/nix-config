@@ -352,9 +352,10 @@ in {
         host = "127.0.0.1";
         port = cfg.ollama.port;
         loadModels = cfg.ollama.models;
-        # A static user keeps the store at a real /var/lib/ollama that
-        # impermanence can bind-mount; DynamicUser would put it behind
-        # /var/lib/private.
+        # The module always sets DynamicUser, so the store lives at
+        # /var/lib/private/ollama behind a /var/lib/ollama symlink; persist
+        # that path, never /var/lib/ollama (a bind mount there blocks the
+        # symlink). A static user keeps the store's owner UID stable.
         user = "ollama";
         environmentVariables = {
           # Same 5 min idle unload as llama-swap's TTL, and one model at a

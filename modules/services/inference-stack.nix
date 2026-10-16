@@ -8,7 +8,7 @@
   cfg = config.services.inference-stack;
   caches = import ../../lib/caches.nix;
 
-  # Bleeding-edge llama-cpp + llama-swap from nixpkgs-inference (a dedicated
+  # Bleeding-edge llama-cpp, llama-swap and Ollama from nixpkgs-inference (a dedicated
   # side-channel input pinned to unstable HEAD; see flake.nix). The inference
   # toolchain (llama.cpp upstream) ships new model arches and perf flags on
   # a weekly cadence — riding the edge here decouples those bumps from the
@@ -17,11 +17,11 @@
     system = pkgs.stdenv.hostPlatform.system;
     config = {
       allowUnfree = true;
+      # Default CUDA arches, which include 12.0 (the 5070 Ti), so llama-cpp
+      # comes prebuilt from cache.nixos-cuda.org. nixpkgs passes the arch
+      # list explicitly with GGML_NATIVE off, so a Blackwell-only list would
+      # compile the same plain sm_120 kernels, just locally.
       cudaSupport = true;
-      # Gnomon's RTX 5070 Ti is Blackwell compute capability 12.0. Keeping the
-      # side-channel closure host-specific avoids sandboxed `-arch=native`
-      # falling back to sm_75 and avoids compiling eight irrelevant targets.
-      cudaCapabilities = ["12.0"];
     };
   };
   openWebUIPkgs = import inputs.nixpkgs-open-webui {
@@ -345,11 +345,9 @@ in {
     (lib.mkIf cfg.ollama.enable {
       services.ollama = {
         enable = true;
-        # Host nixpkgs at the default CUDA arches, so ollama-cuda comes from
-        # cache.nixos-cuda.org instead of a ~45 min Blackwell-only rebuild
-        # (see the cudaArches note in hosts/gnomon). Needs Ollama 0.35.1+ for
-        # the decision-model API.
-        package = pkgs.ollama-cuda;
+        # Rides the edge input with llama-cpp, prebuilt from
+        # cache.nixos-cuda.org. Needs Ollama 0.35.1+ for the decision-model API.
+        package = inferencePkgs.ollama-cuda;
         # Loopback only: Ollama has no auth, like the llama-server backends.
         host = "127.0.0.1";
         port = cfg.ollama.port;

@@ -28,6 +28,14 @@
     system = pkgs.stdenv.hostPlatform.system;
     config.allowUnfree = true;
   };
+  # Ollama 0.40.4 from the same master input, with CUDA (see services.ollama).
+  ollamaPkgs = import inputs.nixpkgs-open-webui {
+    system = pkgs.stdenv.hostPlatform.system;
+    config = {
+      allowUnfree = true;
+      cudaSupport = true;
+    };
+  };
   llamaCpp = inferencePkgs.llama-cpp;
   llamaSwap = inferencePkgs.llama-swap;
   llamaServer = "${llamaCpp}/bin/llama-server";
@@ -345,9 +353,12 @@ in {
     (lib.mkIf cfg.ollama.enable {
       services.ollama = {
         enable = true;
-        # Rides the edge input with llama-cpp, prebuilt from
-        # cache.nixos-cuda.org. Needs Ollama 0.35.1+ for the decision-model API.
-        package = inferencePkgs.ollama-cuda;
+        # Temporary: Ollama's clef-flash manifest needs 0.40.4+, which only
+        # nixpkgs master (the Open-WebUI input) carries, uncached. Built
+        # locally for the 5070 Ti alone (sm_120) to keep the compile short.
+        # Once nixos-unstable has a cached 0.40.4+, return to
+        # `inferencePkgs.ollama-cuda` and drop ollamaPkgs.
+        package = ollamaPkgs.ollama-cuda.override {cudaArches = ["sm_120"];};
         # Loopback only: Ollama has no auth, like the llama-server backends.
         host = "127.0.0.1";
         port = cfg.ollama.port;

@@ -3221,6 +3221,27 @@
         "type": "github"
       }
     },
+    "parlor": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1792340553,
+        "narHash": "sha256-Ah+Db98TIEK5NFvWUA8NXFF1+JNgduPXkvlLl4K8B58=",
+        "ref": "main",
+        "rev": "29bd308869d2d8cfdb5702685d5b137e5c7f5f5e",
+        "revCount": 84,
+        "type": "git",
+        "url": "ssh://git@github.com/joshsymonds/parlor.git"
+      },
+      "original": {
+        "ref": "main",
+        "type": "git",
+        "url": "ssh://git@github.com/joshsymonds/parlor.git"
+      }
+    },
     "patchbay": {
       "flake": false,
       "locked": {
@@ -3485,6 +3506,7 @@
         "nixpkgs-inference": "nixpkgs-inference",
         "nixpkgs-open-webui": "nixpkgs-open-webui",
         "openai-plugins": "openai-plugins",
+        "parlor": "parlor",
         "patchbay": "patchbay",
         "redlib-fork": "redlib-fork",
         "rust-overlay": "rust-overlay_4",

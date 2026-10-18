@@ -8,7 +8,7 @@
   cfg = config.services.inference-stack;
   caches = import ../../lib/caches.nix;
 
-  # Bleeding-edge llama-cpp + llama-swap from nixpkgs-inference (a dedicated
+  # Bleeding-edge llama-cpp, llama-swap and Ollama from nixpkgs-inference (a dedicated
   # side-channel input pinned to unstable HEAD; see flake.nix). The inference
   # toolchain (llama.cpp upstream) ships new model arches and perf flags on
   # a weekly cadence — riding the edge here decouples those bumps from the
@@ -17,16 +17,24 @@
     system = pkgs.stdenv.hostPlatform.system;
     config = {
       allowUnfree = true;
+      # Default CUDA arches, which include 12.0 (the 5070 Ti), so llama-cpp
+      # comes prebuilt from cache.nixos-cuda.org. nixpkgs passes the arch
+      # list explicitly with GGML_NATIVE off, so a Blackwell-only list would
+      # compile the same plain sm_120 kernels, just locally.
       cudaSupport = true;
-      # Gnomon's RTX 5070 Ti is Blackwell compute capability 12.0. Keeping the
-      # side-channel closure host-specific avoids sandboxed `-arch=native`
-      # falling back to sm_75 and avoids compiling eight irrelevant targets.
-      cudaCapabilities = ["12.0"];
     };
   };
   openWebUIPkgs = import inputs.nixpkgs-open-webui {
     system = pkgs.stdenv.hostPlatform.system;
     config.allowUnfree = true;
+  };
+  # Ollama 0.40.4 from the same master input, with CUDA (see services.ollama).
+  ollamaPkgs = import inputs.nixpkgs-open-webui {
+    system = pkgs.stdenv.hostPlatform.system;
+    config = {
+      allowUnfree = true;
+      cudaSupport = true;
+    };
   };
   llamaCpp = inferencePkgs.llama-cpp;
   llamaSwap = inferencePkgs.llama-swap;
@@ -129,6 +137,24 @@ in {
       type = lib.types.bool;
       default = false;
       description = "Open firewall ports for llama-swap and (if enabled) Open-WebUI.";
+    };
+
+    ollama = {
+      enable = lib.mkEnableOption ''
+        Ollama beside llama-swap, for decision models (Cloudflare's Clef) whose
+        schema head only Ollama serves, at /v1/systemone. llama-server has no
+        such endpoint; generative models stay on llama-swap'';
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 11435;
+        description = "Loopback port Ollama listens on. 11434 belongs to llama-swap.";
+      };
+      models = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [];
+        example = ["clef-flash:9b"];
+        description = "Ollama library tags pulled by ollama-model-loader.service after Ollama starts.";
+      };
     };
   };
 
@@ -321,6 +347,34 @@ in {
       };
 
       users.groups.open-webui = {};
+    })
+
+    # ── Ollama for decision models ───────────────────────────────────────
+    (lib.mkIf cfg.ollama.enable {
+      services.ollama = {
+        enable = true;
+        # Temporary: Ollama's clef-flash manifest needs 0.40.4+, which only
+        # nixpkgs master (the Open-WebUI input) carries, uncached. Built
+        # locally for the 5070 Ti alone (sm_120) to keep the compile short.
+        # Once nixos-unstable has a cached 0.40.4+, return to
+        # `inferencePkgs.ollama-cuda` and drop ollamaPkgs.
+        package = ollamaPkgs.ollama-cuda.override {cudaArches = ["sm_120"];};
+        # Loopback only: Ollama has no auth, like the llama-server backends.
+        host = "127.0.0.1";
+        port = cfg.ollama.port;
+        loadModels = cfg.ollama.models;
+        # The module always sets DynamicUser, so the store lives at
+        # /var/lib/private/ollama behind a /var/lib/ollama symlink; persist
+        # that path, never /var/lib/ollama (a bind mount there blocks the
+        # symlink). A static user keeps the store's owner UID stable.
+        user = "ollama";
+        environmentVariables = {
+          # Same 5 min idle unload as llama-swap's TTL, and one model at a
+          # time, so Ollama never holds VRAM long against llama-swap or ComfyUI.
+          OLLAMA_KEEP_ALIVE = "5m";
+          OLLAMA_MAX_LOADED_MODELS = "1";
+        };
+      };
     })
   ]);
 }

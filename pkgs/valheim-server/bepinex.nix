@@ -48,8 +48,8 @@ in {
     valheimTune = plugin {
       owner = "Akoozie";
       name = "ValheimTune";
-      version = "0.7.8";
-      hash = "sha256-IpFg6SFgDYoVEMO1+50Pazq9cHMrGRPnfi8hJNvGWtU=";
+      version = "0.7.9";
+      hash = "sha256-5Sqc0Ee1dwhr3o6wDVc3cQ8+e9Y4HOKk6zMMKmfV9jU=";
       pluginDir = "plugins";
     };
     portalGhostFix = plugin {

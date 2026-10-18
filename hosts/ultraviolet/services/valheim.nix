@@ -28,7 +28,8 @@
       # 1.0's incremental save skips chunks only clients changed, so player
       # edits there revert on restart (worse with SpreadTheLoad, which routes
       # more changes through clients). AllPeersPerRound stays off because
-      # SpreadTheLoad already replaces SendZDOToPeers2.
+      # SpreadTheLoad already replaces SendZDOToPeers2. 1.0.20 is listed by
+      # hand: every method the plugin patches is unchanged from 1.0.17.
       configFiles."akoozie.valheimtune.cfg" = ''
         [Fixes]
         SaveDirtyFix = true
@@ -60,6 +61,7 @@
         FloatingDropsDelete = false
 
         [Compat]
+        KnownGoodBuilds = 1.0.7, 1.0.12, 1.0.14, 1.0.15, 1.0.16, 1.0.17, 1.0.20
         DisableOnUnknownBuild = true
 
         [Measure]

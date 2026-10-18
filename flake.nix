@@ -7,7 +7,7 @@
 
     # Side-channel nixpkgs pinned to current unstable HEAD, used by the
     # inference-stack module (modules/services/inference-stack.nix) for
-    # llama-cpp + llama-swap only. Decoupled from the main `nixpkgs`
+    # llama-cpp, llama-swap and Ollama only. Decoupled from the main `nixpkgs`
     # input so the inference toolchain can ride the edge (new model
     # arches, MoE-offload flags, perf fixes land in llama.cpp on a
     # weekly cadence) without dragging a 200-package rebuild every time
@@ -356,8 +356,11 @@
 
     # Devenv for development environments
     # No nixpkgs.follows — devenv 2.0 bundles a nix fork (cachix/nix) that
-    # requires its own pinned nixpkgs to build correctly.
-    devenv.url = "github:cachix/devenv";
+    # requires its own pinned nixpkgs to build correctly. Pinned to a release
+    # tag: devenv.cachix.org serves releases, while a fresh main commit can be
+    # uncached with a bundled Nix that fails to build (main 0b7e9055,
+    # 2026-10-16). Bump by editing the tag.
+    devenv.url = "github:cachix/devenv/v2.4.0";
 
     # Determinate Nix - consistent Nix with parallel eval, flake stability
     # No nixpkgs.follows — keeps FlakeHub Cache hits
@@ -440,7 +443,6 @@
           ./hosts/common.nix
           inputs.agenix.nixosModules.default
           inputs.savecraft.nixosModules.pob-server
-          inputs.savecraft.nixosModules.knowledge-drain
           inputs.mentat.nixosModules.default
           ({outputs, ...}: {
             nixpkgs.overlays = [outputs.overlays.privatePackages];

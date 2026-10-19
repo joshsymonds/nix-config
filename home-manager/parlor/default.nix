@@ -59,6 +59,9 @@ in {
 
     (lib.mkIf scoreCfg.enable {
       home.packages = [inputs.parlor.packages.${system}.parlor-score];
+      # The voice pointer lives in the private parlor repo; only the import
+      # wiring is public.
+      programs.claudeCode.memoryImports."parlor.md" = inputs.parlor + "/voice/CLAUDE.md";
     })
   ];
 }

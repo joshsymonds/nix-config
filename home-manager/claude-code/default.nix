@@ -619,6 +619,18 @@ in {
     '';
   };
 
+  options.programs.claudeCode.memoryImports = lib.mkOption {
+    type = lib.types.attrsOf lib.types.path;
+    default = {};
+    description = ''
+      Extra markdown files rendered to ~/.claude/<name> and imported from
+      CLAUDE.md via @<name>, after @host.md and @fleet.md. Lets a module
+      sourced from a private flake input add global instructions without
+      their text appearing in this repository.
+      Map entries: file name → source file.
+    '';
+  };
+
   options.programs.claudeCode.extraSkills = lib.mkOption {
     type = lib.types.attrsOf lib.types.path;
     default = {};
@@ -676,7 +688,7 @@ in {
         )
         commandFiles;
       # CLAUDE.md is written as text (not symlinked) so the trailing
-      # @host.md and @fleet.md imports resolve relative to ~/.claude
+      # @host.md, @fleet.md, and memoryImports resolve relative to ~/.claude
       # rather than the nix store path the symlink would otherwise expose.
       # Per Claude Code's memory docs, relative @-imports resolve relative
       # to the file containing them.
@@ -687,7 +699,14 @@ in {
 
           @host.md
           @fleet.md
-        '';
+        ''
+        + lib.concatMapStrings (name: "@${name}\n") (lib.attrNames cfg.memoryImports);
+
+      memoryImportAttrs =
+        lib.mapAttrs' (
+          name: source: lib.nameValuePair ".claude/${name}" {inherit source;}
+        )
+        cfg.memoryImports;
 
       commandFileAttrs =
         lib.mapAttrs' (
@@ -697,6 +716,7 @@ in {
     in
       lib.mkMerge [
         commandFileAttrs
+        memoryImportAttrs
         {
           # ccrender produces the real settings.json from this at activation
           # (see the ccrender comment above for why it can't be a store

@@ -79,17 +79,19 @@
     ++ gpu.extra-trusted-public-keys;
 in
   assert !(caches ? garnix);
+  assert !(caches ? lantian);
   assert universal.extra-substituters == universalUrls;
   assert universal.extra-trusted-public-keys == universalKeys;
   assert gpu.extra-substituters == universalUrls ++ [caches.cuda.url];
   assert gpu.extra-trusted-public-keys == universalKeys ++ [caches.cuda.publicKey];
-  assert gaming.extra-substituters == universalUrls ++ [caches.tokidoki.url caches.lantian.url];
-  assert gaming.extra-trusted-public-keys == universalKeys ++ [caches.tokidoki.publicKey caches.lantian.publicKey];
+  assert gaming.extra-substituters == universalUrls ++ [caches.tokidoki.url];
+  assert gaming.extra-trusted-public-keys == universalKeys ++ [caches.tokidoki.publicKey];
   assert cudaConsumer.extra-substituters == universalUrls ++ [caches.cuda.url];
   assert cudaConsumer.extra-trusted-public-keys == universalKeys ++ [caches.cuda.publicKey];
   assert gpuOptOut.extra-substituters == universalUrls;
   assert gpuOptOut.extra-trusted-public-keys == universalKeys;
   assert lib.all (value: !(lib.hasInfix "garnix" value)) allConfiguredValues;
+  assert lib.all (value: !(lib.hasInfix "lantian" value)) allConfiguredValues;
     pkgs.runCommand "substituters-check" {} ''
       touch "$out"
     ''

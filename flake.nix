@@ -333,11 +333,10 @@
     #
     # NB: deliberately NOT `inputs.nixpkgs.follows = "nixpkgs"`. The
     # upstream README warns ("there can be mismatch between patches and
-    # kernel version") and their lantian Attic cache is built against
-    # their pinned nixpkgs. Same reasoning as nix-gaming-edge above.
+    # kernel version"). Same reasoning as nix-gaming-edge above.
     #
-    # Cache: lantian Attic (https://attic.xuyh0120.win/lantian) is wired in
-    # on gnomon only via nix.settings.
+    # No binary cache: upstream's lantian Attic was compromised (see
+    # lib/caches.nix), so the kernel builds from source on gnomon.
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
 
     # spicetify-nix — declarative Spotify customization via spicetify-cli.

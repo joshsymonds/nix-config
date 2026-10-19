@@ -48,10 +48,9 @@
     url = "https://nix-cache.tokidoki.dev/tokidoki";
     publicKey = "tokidoki:MD4VWt3kK8Fmz3jkiGoNRJIW31/QAm7l1Dcgz2Xa4hk=";
   };
-  # lantian: xddxdd/nix-cachyos-kernel kernel binaries. Without it the
-  # CachyOS kernel rebuilds from source on every bump.
-  lantian = {
-    url = "https://attic.xuyh0120.win/lantian";
-    publicKey = "lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc=";
-  };
+  # lantian (xddxdd/nix-cachyos-kernel's Attic) was removed 2026-10-19:
+  # its operator took every server down on 2026-10-15 after an attacker
+  # got in (github.com/xddxdd/nix-cachyos-kernel/issues/110), so neither
+  # the URL nor its signing key is trusted. The CachyOS kernel builds
+  # from source. Re-add only with a newly announced key.
 }

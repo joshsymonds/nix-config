@@ -67,12 +67,10 @@ in {
         caches.cuda.url
       ]
       # ─── Gaming (gated on programs.steam.enable) ───────────
-      # proton-cachyos prebuilts + CachyOS kernel binaries.
-      # Without these, proton-cachyos rebuilds clang (~30 min)
-      # and the CachyOS kernel rebuilds on every bump.
+      # proton-cachyos prebuilts. Without this, proton-cachyos
+      # rebuilds clang (~30 min).
       ++ lib.optionals hasSteam [
         caches.tokidoki.url
-        caches.lantian.url
       ];
 
     extra-trusted-public-keys =
@@ -87,7 +85,6 @@ in {
       ]
       ++ lib.optionals hasSteam [
         caches.tokidoki.publicKey
-        caches.lantian.publicKey
       ];
   };
 }

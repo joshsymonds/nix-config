@@ -449,7 +449,7 @@ in
     hardware.steam-hardware.enable = true;
 
     # Substituters live in modules/nix/substituters.nix (single source
-    # of truth, feature-gated). gnomon picks up tokidoki + lantian because
+    # of truth, feature-gated). gnomon picks up tokidoki because
     # programs.steam.enable=true below, and the CUDA cache because
     # hardware.gpu-nvidia.enable=true above.
 
@@ -523,8 +523,8 @@ in
     # MOVBE) in kernel code; SIMD subsystems like crypto/RAID are
     # runtime-dispatched via alternative_call regardless of -march.
     # Userspace v3 (proton-cachyos) keeps its v3 builds where AVX2
-    # actually fires in hot loops; the kernel is generic and substituted
-    # from the retained lantian Attic cache.
+    # actually fires in hot loops; the kernel is generic and builds from
+    # source (no binary cache; see lib/caches.nix).
     #
     # The -lto variant is also skipped — clang+ThinLTO would force the
     # out-of-tree it87 module below to build with LLVM too
@@ -589,9 +589,8 @@ in
     # (duty cycle) under /sys/class/hwmon/, which lm_sensors / hass-cli
     # can surface for monitoring.
     #
-    # NB: lantian Attic does NOT pre-build kernel modules other than zfs,
-    # so this rebuilds locally on every kernel bump. Few minutes per
-    # `update`; acceptable trade for the fan visibility.
+    # Rebuilds locally on every kernel bump, along with the kernel itself.
+    # Few minutes per `update`; acceptable trade for the fan visibility.
     boot.extraModulePackages = [
       config.boot.kernelPackages.it87
     ];

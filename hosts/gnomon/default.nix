@@ -173,14 +173,14 @@ in
         # Common runtime flags. --fit on auto-picks the offload split.
         # --mlock + --no-mmap forces all weight pages resident in RAM,
         # which matters for the CPU-side experts in MoE partial offload.
-        commonFlags =
+        commonFlagsWith = np:
           [
             "--fit"
             "on"
             "--fit-target"
             "256"
             "-np"
-            "1"
+            np
             "-fa"
             "on"
             "--mlock"
@@ -195,6 +195,7 @@ in
             "q8_0"
           ]
           ++ samplerFlags;
+        commonFlags = commonFlagsWith "1";
       in {
         "gemma4-heretic-iq4xs" = {
           ggufUrl = "${base}/gemma-4-26b-a4b-it-heretic.iq4_xs.gguf";
@@ -227,6 +228,12 @@ in
           ggufUrl = "https://huggingface.co/ggml-org/gemma-4-12B-it-GGUF/resolve/main/gemma-4-12B-it-Q8_0.gguf";
           flags = commonFlags ++ ["--fit-ctx" "32768" "--reasoning-budget" "0"];
         };
+        # np4 twins for parlor's pairs job (pairs --workers 4): same GGUF,
+        # flags and total context, with -np 4 so four requests run in flight.
+        "gemma4-12b-it-np4" = {
+          ggufUrl = "https://huggingface.co/ggml-org/gemma-4-12B-it-GGUF/resolve/main/gemma-4-12B-it-Q8_0.gguf";
+          flags = commonFlagsWith "4" ++ ["--fit-ctx" "32768" "--reasoning-budget" "0"];
+        };
         # Qwen3.8-27B (released 2026-08-15 JST) — Tiltyard local-pilot
         # seats. Unsloth GGUFs, arch qwen35, MTP tensors stripped (no
         # spec-draft flags). NO sampler flags baked in: the Tiltyard
@@ -248,6 +255,32 @@ in
             "32768"
             "-np"
             "1"
+            "-fa"
+            "on"
+            "--mlock"
+            "--no-mmap"
+            "-b"
+            "512"
+            "-ub"
+            "512"
+            "-ctk"
+            "q8_0"
+            "-ctv"
+            "q8_0"
+            "--jinja"
+            "--reasoning-format"
+            "deepseek"
+          ];
+        };
+        "qwen3.8-27b-iq4xs-np4" = {
+          ggufUrl = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-IQ4_XS.gguf";
+          flags = [
+            "-ngl"
+            "53"
+            "-c"
+            "32768"
+            "-np"
+            "4"
             "-fa"
             "on"
             "--mlock"

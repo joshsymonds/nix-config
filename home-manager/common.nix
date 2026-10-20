@@ -111,8 +111,8 @@ in {
             src = pkgs.fetchFromGitHub {
               owner = "rbenv";
               repo = "ruby-build";
-              rev = "v20251008";
-              hash = "sha256-FZRp7O4YjDV+EOvwuaqWaQ6LfzL9vENBaIPot5G89Z0=";
+              rev = "v20261013";
+              hash = "sha256-CYG0Bd8U4w+JBKHmk4mgXvtvwmcuq8tKc8xyOg8jgDY=";
             };
           }
         ];

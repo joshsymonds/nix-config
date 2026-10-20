@@ -498,9 +498,9 @@
   # every host. The first snapshot is backdated to 2026-09-11, the ledger's
   # first metered Claude row, so repricing can reach the whole history.
   litellmPrices = {
-    rev = "56a63b4b296015511a2fdfeb576337548378892b";
-    sha256 = "098vcy63gidm4g24acp2zv8lvn1a4rsmxd3jccdlrl2rm1cbm9dh";
-    effectiveFrom = "2026-09-11T00:00:00Z";
+    rev = "6b387e84b5fc487a2c4ed9e2eeef0c6dc008a98b";
+    sha256 = "00snkxww3dmmzpadm90dmlf8f0154qv6a5jgvdvfarxqad43nfg9";
+    effectiveFrom = "2026-10-19T00:00:00Z";
   };
   litellmCatalog = lib.importJSON (builtins.fetchurl {
     url = "https://raw.githubusercontent.com/BerriAI/litellm/${litellmPrices.rev}/model_prices_and_context_window.json";

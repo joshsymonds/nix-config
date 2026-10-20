@@ -31,13 +31,13 @@ in {
 
     image = lib.mkOption {
       type = lib.types.str;
-      default = "lscr.io/linuxserver/qbittorrent:5.0.4";
+      default = "lscr.io/linuxserver/qbittorrent:5.2.4";
       description = "qBittorrent OCI image. linuxserver's image runs qbittorrent-nox and reads PUID/PGID.";
     };
 
     gluetunImage = lib.mkOption {
       type = lib.types.str;
-      default = "docker.io/qmcgaw/gluetun:v3.40.0";
+      default = "docker.io/qmcgaw/gluetun:v3.41.3";
       description = "gluetun OCI image. Pinned to a known-good tag; bump deliberately.";
     };
 
@@ -193,7 +193,7 @@ in {
               WIREGUARD_ADDRESSES_SECRETFILE = "/gluetun/wireguard/addresses";
               WIREGUARD_PRESHARED_KEY = ""; # Mullvad and most providers omit it.
               FIREWALL = "on";
-              DOT = "on"; # DNS-over-TLS to gluetun's resolver inside the netns.
+              DNS_SERVER = "on"; # gluetun's resolver inside the netns; DNS-over-TLS upstream by default.
               BLOCK_MALICIOUS =
                 if cfg.vpn.blockMalicious
                 then "on"
@@ -202,8 +202,6 @@ in {
                 if cfg.vpn.portForwarding
                 then "on"
                 else "off";
-              HEALTH_VPN_DURATION_INITIAL = "30s";
-              HEALTH_VPN_DURATION_ADDITION = "10s";
               # The server list baked into a pinned gluetun image goes
               # stale as the provider retires and re-keys relays; a dead
               # peer handshakes silently into nothing. Refresh the list

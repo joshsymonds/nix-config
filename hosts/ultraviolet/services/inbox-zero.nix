@@ -11,7 +11,7 @@
 #
 # All non-web containers stay on the inbox-zero Podman network with no host-port
 # exposure; only the web container publishes a port (127.0.0.1:3000), reached publicly
-# via Cloudflare Tunnel (configured out-of-band in the CF dashboard). The six cron
+# via Cloudflare Tunnel (configured out-of-band in the CF dashboard). The cron
 # timers and the real OAuth/LLM/Pub/Sub credentials come in later tasks. The system
 # Postgres on this host is intentionally left untouched.
 {
@@ -23,13 +23,14 @@
   # floating tag — so the deployed version changes exclusively via this line.
   # Upstream's release tags dropped the "v" prefix after v2.25.8 (releases
   # continue as e.g. 2.30.0 on both ghcr and Docker Hub). This digest is
-  # upstream main @ ab9fc4f (2026-07-03), newer than the 2.30.0 release.
+  # upstream main @ 6cdf759 (:latest, 2026-10-20), newer than the 2.30.0
+  # release (still the newest tag).
   # Bump deliberately, preferring a release tag:
   #   skopeo inspect --format '{{.Digest}}' docker://ghcr.io/elie222/inbox-zero:2.30.0
   # (or :latest with the .revision label for a main snapshot), then update the
   # digest and version note here, rebuild, and restart
   # podman-inbox-zero-web + podman-inbox-zero-worker.
-  inboxZeroImage = "ghcr.io/elie222/inbox-zero@sha256:3fba3e9c062dcc3fdc696f0337146c94b994de94469629bd8363063ca6378b8b";
+  inboxZeroImage = "ghcr.io/elie222/inbox-zero@sha256:9c61d54b9c8c73b72e0c35ab339bae011329444abd8c5f2c62bb9fd65225ae5f";
 
   # Assembles /run/inbox-zero/runtime.env for the web and worker containers.
   # Referenced from the podman services' restartTriggers so env changes here
@@ -67,13 +68,10 @@
       ${pkgs.coreutils}/bin/printf 'DATABASE_URL=postgresql://inbox_zero:%s@inbox-zero-postgres:5432/inbox_zero?schema=public&connection_limit=10\n' "$ENCODED_PW"
       ${pkgs.coreutils}/bin/printf 'DIRECT_URL=postgresql://inbox_zero:%s@inbox-zero-postgres:5432/inbox_zero?schema=public\n' "$ENCODED_PW"
 
-      # Upstash REST shim endpoints (used by the Next.js web app).
-      echo "UPSTASH_REDIS_URL=http://inbox-zero-redis-http:80"
-      ${pkgs.coreutils}/bin/printf 'UPSTASH_REDIS_TOKEN=%s\n' "$SRH_TOKEN"
-      # Inbox Zero accepts the *_REST_* names too; emit both forms so whichever the
-      # upstream code reads first works.
-      echo "UPSTASH_REDIS_REST_URL=http://inbox-zero-redis-http:80"
-      ${pkgs.coreutils}/bin/printf 'UPSTASH_REDIS_REST_TOKEN=%s\n' "$SRH_TOKEN"
+      # Upstash REST shim endpoint (used by the Next.js web app). Upstream
+      # renamed UPSTASH_REDIS_URL/TOKEN to REDIS_HTTP_URL/TOKEN.
+      echo "REDIS_HTTP_URL=http://inbox-zero-redis-http:80"
+      ${pkgs.coreutils}/bin/printf 'REDIS_HTTP_TOKEN=%s\n' "$SRH_TOKEN"
 
       # Direct Redis URL for the BullMQ worker — BullMQ speaks raw Redis pub/sub
       # and cannot use the REST shim. The web container ignores REDIS_URL.
@@ -96,7 +94,7 @@
     } > /run/inbox-zero/runtime.env
   '';
 
-  # Six scheduled jobs replacing the upstream Alpine cron sidecar.
+  # Scheduled jobs replacing the upstream Alpine cron sidecar.
   # Cadences and paths verified verbatim against
   # https://github.com/elie222/inbox-zero/blob/main/docker-compose.yml
   mkCronService = name: path: {
@@ -215,7 +213,7 @@ in {
   };
 
   # Runtime env merging: agenix env (AUTH_SECRET, ANTHROPIC_API_KEY, OAuth ids/secrets,
-  # SRH_TOKEN, etc.) plus dynamically-assembled DATABASE_URL, UPSTASH_REDIS_*,
+  # SRH_TOKEN, etc.) plus dynamically-assembled DATABASE_URL, REDIS_HTTP_*,
   # NEXT_PUBLIC_BASE_URL, AUTH_URL, DEFAULT_LLM_PROVIDER. Consumed by both web and
   # worker containers via environmentFiles.
   systemd.services.inbox-zero-runtime-env = {
@@ -425,6 +423,13 @@ in {
   systemd.services."inbox-zero-cron-resend-digest" = mkCronService "resend-digest" "/api/resend/digest/all";
   systemd.services."inbox-zero-cron-meeting-briefs" = mkCronService "meeting-briefs" "/api/meeting-briefs";
   systemd.services."inbox-zero-cron-watch-all" = mkCronService "watch-all" "/api/watch/all";
+  systemd.services."inbox-zero-cron-meeting-recorder" = mkCronService "meeting-recorder" "/api/meeting-recorder/schedule";
+  systemd.services."inbox-zero-cron-reasoning-retention" = mkCronService "reasoning-retention" "/api/cron/reasoning-retention";
+  systemd.services."inbox-zero-cron-mobile-push-retention" = mkCronService "mobile-push-retention" "/api/cron/mobile-push-retention";
+  systemd.services."inbox-zero-cron-email-send-operation-retention" = mkCronService "email-send-operation-retention" "/api/cron/email-send-operation-retention";
+  systemd.services."inbox-zero-cron-draft-cleanup" = mkCronService "draft-cleanup" "/api/cron/draft-cleanup";
+  systemd.services."inbox-zero-cron-resend-inbox-health" = mkCronService "resend-inbox-health" "/api/resend/inbox-health/all";
+  systemd.services."inbox-zero-cron-resend-summary" = mkCronService "resend-summary" "/api/resend/summary/all";
 
   systemd.timers."inbox-zero-cron-scheduled-actions" = mkCronTimer 900;
   systemd.timers."inbox-zero-cron-automation-jobs" = mkCronTimer 900;
@@ -432,4 +437,11 @@ in {
   systemd.timers."inbox-zero-cron-resend-digest" = mkCronTimer 1800;
   systemd.timers."inbox-zero-cron-meeting-briefs" = mkCronTimer 900;
   systemd.timers."inbox-zero-cron-watch-all" = mkCronTimer 21600;
+  systemd.timers."inbox-zero-cron-meeting-recorder" = mkCronTimer 300;
+  systemd.timers."inbox-zero-cron-reasoning-retention" = mkCronTimer 86400;
+  systemd.timers."inbox-zero-cron-mobile-push-retention" = mkCronTimer 86400;
+  systemd.timers."inbox-zero-cron-email-send-operation-retention" = mkCronTimer 86400;
+  systemd.timers."inbox-zero-cron-draft-cleanup" = mkCronTimer 86400;
+  systemd.timers."inbox-zero-cron-resend-inbox-health" = mkCronTimer 86400;
+  systemd.timers."inbox-zero-cron-resend-summary" = mkCronTimer 604800;
 }

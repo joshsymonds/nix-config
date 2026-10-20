@@ -22,7 +22,7 @@
     containers = {
       # Gluetun VPN container - handles all VPN connectivity
       gluetun = {
-        image = "docker.io/qmcgaw/gluetun:v3.40.0"; # Pin to stable version
+        image = "docker.io/qmcgaw/gluetun:v3.41.3"; # Pin to stable version
 
         environment = {
           VPN_SERVICE_PROVIDER = "mullvad";
@@ -35,7 +35,7 @@
 
           # Killswitch is enabled by default in Gluetun
           FIREWALL = "on";
-          DOT = "on"; # DNS over TLS
+          DNS_SERVER = "on"; # Built-in resolver; upstream defaults to DNS over TLS
           BLOCK_MALICIOUS = "on";
           BLOCK_ADS = "off"; # Set to "on" if you want ad blocking
 
@@ -45,10 +45,6 @@
           # HTTP proxy for LAN devices / testing
           HTTPPROXY = "on";
           FIREWALL_OUTBOUND_SUBNETS = "172.31.0.0/24";
-
-          # Health check
-          HEALTH_VPN_DURATION_INITIAL = "30s";
-          HEALTH_VPN_DURATION_ADDITION = "10s";
 
           # Refresh Mullvad's relay list daily into the persisted
           # /gluetun/servers.json; the list baked into the pinned image
@@ -87,7 +83,7 @@
 
       # SABnzbd container - routes through Gluetun
       sabnzbd = {
-        image = "docker.io/linuxserver/sabnzbd:4.5.2";
+        image = "docker.io/linuxserver/sabnzbd:5.1.3";
 
         environment = {
           PUID = "1000";

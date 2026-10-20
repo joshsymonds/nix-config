@@ -231,9 +231,11 @@ in
         };
         # np4 twins for parlor's pairs job (pairs --workers 4): same GGUF,
         # flags and total context, with -np 4 so four requests run in flight.
+        # Explicit -c: --fit-ctx alone gives every slot 32k, four times the
+        # 1-slot KV, and fit then spills layers to CPU (measured 2026-10-20).
         "gemma4-12b-it-np4" = {
           ggufUrl = "https://huggingface.co/ggml-org/gemma-4-12B-it-GGUF/resolve/main/gemma-4-12B-it-Q8_0.gguf";
-          flags = commonFlagsWith "4" ++ ["--fit-ctx" "32768" "--reasoning-budget" "0"];
+          flags = commonFlagsWith "4" ++ ["-c" "32768" "--reasoning-budget" "0"];
         };
         # Qwen3.8-27B (released 2026-08-15 JST) — Tiltyard local-pilot
         # seats. Unsloth GGUFs, arch qwen35, MTP tensors stripped (no
@@ -273,11 +275,14 @@ in
             "deepseek"
           ];
         };
+        # Four slots need a larger compute buffer, so -ngl 53 fails with a
+        # CUDA allocation error; 47/65 measured 2026-10-20 at 24 tok/s
+        # aggregate over 4 slots (vs 11 single-slot) with ~1.4 GB spare.
         "qwen3.8-27b-iq4xs-np4" = {
           ggufUrl = "https://huggingface.co/unsloth/Qwen3.8-27B-GGUF/resolve/main/Qwen3.8-27B-IQ4_XS.gguf";
           flags = [
             "-ngl"
-            "53"
+            "47"
             "-c"
             "32768"
             "-np"

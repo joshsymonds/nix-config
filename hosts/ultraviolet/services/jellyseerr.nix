@@ -1,15 +1,19 @@
 _: {
+  # Seerr (the merged Jellyseerr/Overseerr successor) runs as the image's
+  # `node` user (UID 1000), so the config tree must be owned by it.
   systemd.tmpfiles.rules = [
-    "d /etc/jellyseerr/config 0644 root root -"
+    "d /etc/jellyseerr/config 0755 1000 1000 -"
+    "Z /etc/jellyseerr/config - 1000 1000 -"
   ];
 
   virtualisation.oci-containers.containers.jellyseerr = {
-    image = "docker.io/fallenbagel/jellyseerr:2.7.3";
+    image = "ghcr.io/seerr-team/seerr:v3.5.0";
     ports = [
       "5055:5055"
     ];
     extraOptions = [
       "--network=host"
+      "--init"
       "--cpu-shares=1024"
       "--memory=2g"
       "--security-opt=no-new-privileges"

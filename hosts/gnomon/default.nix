@@ -141,8 +141,8 @@ in
     # same hardware): --fit on auto-probes VRAM and picks MoE offload
     # depth; -np 1 drops recurrent state for single-user; -fa on +
     # q8_0 KV cache halves KV memory; -ub 2048 raises prefill
-    # throughput; --mlock pins RAM pages so partial-offload doesn't
-    # page-fault.
+    # throughput; --load-mode mlock pins RAM pages so partial-offload
+    # doesn't page-fault.
     services.inference-stack = {
       enable = true;
       openWebUI.port = 8081;
@@ -171,8 +171,9 @@ in
           "0.0"
         ];
         # Common runtime flags. --fit on auto-picks the offload split.
-        # --mlock + --no-mmap forces all weight pages resident in RAM,
-        # which matters for the CPU-side experts in MoE partial offload.
+        # --load-mode mlock (no mmap, locked pages; llama.cpp build 11429
+        # replaced --mlock/--no-mmap with it) keeps all weight pages resident
+        # in RAM, which matters for the CPU-side experts in MoE partial offload.
         commonFlagsWith = np:
           [
             "--fit"
@@ -183,8 +184,8 @@ in
             np
             "-fa"
             "on"
-            "--mlock"
-            "--no-mmap"
+            "--load-mode"
+            "mlock"
             "-b"
             "512"
             "-ub"
@@ -257,8 +258,8 @@ in
             "1"
             "-fa"
             "on"
-            "--mlock"
-            "--no-mmap"
+            "--load-mode"
+            "mlock"
             "-b"
             "512"
             "-ub"
@@ -283,8 +284,8 @@ in
             "4"
             "-fa"
             "on"
-            "--mlock"
-            "--no-mmap"
+            "--load-mode"
+            "mlock"
             "-b"
             "512"
             "-ub"
@@ -309,8 +310,8 @@ in
             "1"
             "-fa"
             "on"
-            "--mlock"
-            "--no-mmap"
+            "--load-mode"
+            "mlock"
             "-b"
             "512"
             "-ub"
@@ -349,8 +350,8 @@ in
             "1"
             "-fa"
             "on"
-            "--mlock"
-            "--no-mmap"
+            "--load-mode"
+            "mlock"
             "-b"
             "512"
             "-ub"

@@ -66,7 +66,7 @@
         example = lib.literalExpression ''
           [
             "--fit" "on" "--fit-ctx" "16384" "--fit-target" "256"
-            "-np" "1" "-fa" "on" "--mlock" "--no-mmap"
+            "-np" "1" "-fa" "on" "--load-mode" "mlock"
             "-b" "2048" "-ub" "2048"
             "-ctk" "q8_0" "-ctv" "q8_0"
             "--temp" "1.0" "--top-p" "0.95" "--top-k" "64" "--min-p" "0.0"

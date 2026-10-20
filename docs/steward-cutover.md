@@ -4,7 +4,7 @@ This configuration preserves the deployed user configuration from deployed user 
 2b1a0eeb85461bccbc42808c94a666eef07aa127 (published from
 `worktree-astra-xhigh-steelman`), which is newer than local main
 `8d8c473`. It consumes the intended Steward source
-`joshsymonds/steward` at `3516f7989d768a9045b0fab9dee8ef08a798fcd0` for
+`joshsymonds/steward` at `f26cdde8f8ce7dc079896bcae7a8747151158778` for
 Vermissian; neither pin is a release claim.
 
 ## Shared ownership
@@ -50,7 +50,8 @@ of the merged deployed-user-preserving configuration.
 
 Run the lightweight gate against the merged deployed-user-preserving configuration. It
 verifies the consumer obligations unconditionally, including Pi's tasks, goal,
-LSP, browser/web/process tools and context, plus Claude and Pi Astra defaults.
+LSP, browser/web/process tools and context, plus the Claude Opus 5.5 and Pi
+Astra defaults.
 Use the published package selected by the pinned Steward input:
 
 ```sh

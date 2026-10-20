@@ -3,8 +3,8 @@
   nodeModules,
 }: let
   piGoalSource = pkgs.fetchzip {
-    url = "https://registry.npmjs.org/@narumitw/pi-goal/-/pi-goal-0.54.3.tgz";
-    hash = "sha256-Zw+7QW0g4Xk5EXhCwkB+fBXxe5+3nsfNLAyVuzP6v78=";
+    url = "https://registry.npmjs.org/@narumitw/pi-goal/-/pi-goal-0.54.13.tgz";
+    hash = "sha256-gC58I5R2J3JfXGhnsI6u4E0TBp8L10G5xDDrojMDRvU=";
   };
 
   piTuiKit = pkgs.fetchzip {
@@ -22,7 +22,7 @@
     hash = "sha256-fcEJdFLzFkMR1rlm9sPVCr6A8YhUgm6+JNlLjMIrHk0=";
   };
 in
-  pkgs.runCommand "pi-goal-0.54.3" {} ''
+  pkgs.runCommand "pi-goal-0.54.13" {} ''
     cp -r ${piGoalSource} $out
     chmod -R u+w $out
     patch -p1 -d $out < ${./pi-goal-goal-end.patch}

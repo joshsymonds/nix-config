@@ -31,12 +31,12 @@
     # a UUID temporary profile per browser daemon and removes it on close.
   });
 
-  native = pkgs.stdenvNoCC.mkDerivation {
+  native = pkgs.stdenvNoCC.mkDerivation rec {
     pname = "agent-browser-native";
-    version = "0.36.0";
+    version = "0.39.1";
     src = pkgs.fetchurl {
-      url = "https://registry.npmjs.org/agent-browser/-/agent-browser-0.36.0.tgz";
-      hash = "sha256-hYp1N2ADTXPGvBfdiV+RFB7wPD/MqXg0izeOJtLWF+Q=";
+      url = "https://registry.npmjs.org/agent-browser/-/agent-browser-${version}.tgz";
+      hash = "sha256-nvtN4aVAbxsy38yiiQ4nIFPKrOM2m2KU1HJAOE4KRzI=";
     };
     sourceRoot = "package";
     dontConfigure = true;
@@ -57,12 +57,6 @@
     };
   };
 in {
-  extension = pkgs.fetchzip {
-    name = "pi-agent-browser-native-0.6.6";
-    url = "https://registry.npmjs.org/pi-agent-browser-native/-/pi-agent-browser-native-0.6.6.tgz";
-    hash = "sha256-B5bORvUtLetBJrnUHhJQU9nB0kTZbV9NcJJEU8od5IQ=";
-  };
-
   # Also available to the Pi launcher, so extension-side launch/restore
   # planning sees the same defaults. The CLI wrapper reasserts this even
   # when script mode strips AGENT_BROWSER_* from the child environment.

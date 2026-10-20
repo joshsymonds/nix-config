@@ -13,23 +13,23 @@
 }:
 buildNpmPackage (finalAttrs: {
   pname = "pi-coding-agent";
-  version = "0.85.1";
+  version = "1.3.0";
 
   src = fetchFromGitHub {
     owner = "earendil-works";
     repo = "pi";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-gU8BSiqqOYt2RRuQONHHGvZeSM5KFQVrwif9bmuUXUc=";
+    hash = "sha256-AsutbwnjiwwLkB5tqLW+1GdGZyLmXsU0W+SNdNhJu7U=";
   };
 
-  npmDepsHash = "sha256-jzlsZIQzfl1FCZZ5//dHFWwMfBZQ4nRD6KB4HHifPqE=";
+  npmDepsHash = "sha256-+gFyvrhkCsF99oNvs0gBmLXnDW0hWnZI/wFId7UbI6Q=";
 
   # Upstream generates the provider model catalog with network access and
   # leaves it out of the source tarball. The matching published pi-ai package
   # contains the hydrated catalog needed by the offline Nix build.
   modelData = fetchurl {
     url = "https://registry.npmjs.org/@earendil-works/pi-ai/-/pi-ai-${finalAttrs.version}.tgz";
-    hash = "sha256-r30RmGF5RFzm/oizfVfeIvgjwP/TplyuMcVVt/XpklM=";
+    hash = "sha256-U0PhY5vzQ73DNE3zrWwxwFpQtoutB6xrzhCJDUtrimE=";
   };
 
   preConfigure = ''
@@ -45,17 +45,11 @@ buildNpmPackage (finalAttrs: {
 
   nativeBuildInputs = [makeBinaryWrapper];
 
+  # Upstream's own offline build: every workspace in dependency order, with
+  # pi-ai's model-data check standing in for network catalog generation.
   buildPhase = ''
     runHook preBuild
-    npx tsgo -p packages/chord/tsconfig.build.json
-    npx tsgo -p packages/tui/tsconfig.build.json
-    npx tsgo -p packages/telemetry/tsconfig.build.json
-    npx tsgo -p packages/ai/tsconfig.build.json
-    npx tsgo -p packages/agent/tsconfig.build.json
-    npx tsgo -p packages/protocol/tsconfig.build.json
-    npx tsgo -p packages/server/tsconfig.build.json
-    npx tsgo -p packages/client/tsconfig.build.json
-    npm run build --workspace=packages/coding-agent
+    npm run build:offline
     runHook postBuild
   '';
 
@@ -68,12 +62,10 @@ buildNpmPackage (finalAttrs: {
   postInstall =
     ''
       local nm="$out/lib/node_modules/pi-monorepo/node_modules"
-      for ws in @earendil-works/chord:packages/chord \
+      for ws in @earendil-works/pi-agent-core:packages/agent \
                 @earendil-works/pi-ai:packages/ai \
-                @earendil-works/pi-agent-core:packages/agent \
-                @earendil-works/pi-client:packages/client \
-                @earendil-works/pi-protocol:packages/protocol \
-                @earendil-works/pi-server:packages/server \
+                @earendil-works/pi-codemode:packages/codemode \
+                @earendil-works/pi-mcp:packages/mcp \
                 @earendil-works/pi-telemetry:packages/telemetry \
                 @earendil-works/pi-tui:packages/tui; do
         IFS=: read -r pkg src <<< "$ws"

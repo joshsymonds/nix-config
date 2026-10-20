@@ -95,7 +95,7 @@ test("flake pins the canonical Steward repository and actual locked implementati
   const lock = JSON.parse(readFileSync(resolve(repository, "flake.lock"), "utf8"));
   assert.match(
     flake,
-    /steward\.url = "github:joshsymonds\/steward\/3516f7989d768a9045b0fab9dee8ef08a798fcd0";/,
+    /steward\.url = "github:joshsymonds\/steward\/f26cdde8f8ce7dc079896bcae7a8747151158778";/,
   );
   assert.equal(lock.nodes.root.inputs.steward, "steward");
   assert.deepEqual(
@@ -108,7 +108,7 @@ test("flake pins the canonical Steward repository and actual locked implementati
     {
       owner: "joshsymonds",
       repo: "steward",
-      rev: "3516f7989d768a9045b0fab9dee8ef08a798fcd0",
+      rev: "f26cdde8f8ce7dc079896bcae7a8747151158778",
       type: "github",
     },
   );
@@ -192,8 +192,8 @@ test("Claude has direct native root Stop, input, cleanup, and statusline wiring"
   }]);
   assert.ok(!("SubagentStop" in actual.hooks));
 
-  assert.equal(actual.model, "chatgpt/astra");
-  assert.equal(actual.effortLevel, "xhigh");
+  assert.equal(actual.model, "claude-opus-5-5");
+  assert.equal(actual.effortLevel, "high");
 });
 
 test("AWS profile mirror follows Steward's canonical state-file contract atomically", () => {
@@ -215,20 +215,20 @@ test("evaluated current Pi config preserves tools and uses one paired Steward gr
   const pi = evaluateCutover().pi;
   assert.equal(pi.package, "@STEWARD_PACKAGE@");
   assert.deepEqual(pi.packages, [
-    "/nix/store/fixture-pi-tasks-0.9.0",
+    "/nix/store/fixture-pi-tasks-0.9.1",
     "@STEWARD_EXTENSION_ROOT@",
-    "/nix/store/fixture-pi-goal-0.54.3",
-    "/nix/store/fixture-pi-lsp-0.49.7",
+    "/nix/store/fixture-pi-goal-0.54.13",
+    "/nix/store/fixture-pi-lsp-0.49.10",
     { source: "/nix/store/fixture-pi-workflow-tools/node_modules/@aliou/pi-processes", prompts: [], themes: [] },
     { source: "/nix/store/fixture-pi-workflow-tools/node_modules/pi-web-access", skills: [], prompts: [], themes: [] },
-    { source: "/nix/store/fixture-pi-agent-browser-native-0.6.6", skills: [], prompts: [], themes: [] },
+    { source: "/nix/store/fixture-pi-workflow-tools/node_modules/pi-agent-browser-native", skills: [], prompts: [], themes: [] },
   ]);
   assert.deepEqual(Object.keys(pi.lsp.servers).sort(), ["gopls", "nixd", "pyright", "typescript"]);
   assert.equal(pi.lsp.servers.typescript.initialization.tsserver.path, "/nix/store/fixture-typescript/lib/node_modules/typescript/lib/tsserver.js");
   assert.equal(pi.homeFileNames.includes(".pi/agent/extensions/cc-tools.ts"), false);
   assert.ok(pi.homeFileNames.includes(".pi/agent/extensions/processes.json"));
   assert.equal(pi.browserCli, "/nix/store/fixture-agent-browser/bin/agent-browser");
-  assert.equal(pi.agents, "/nix/store/fixture-pi-gambit-rung-agents");
+  assert.equal(pi.agents, "/nix/store/fixture-pi-gambit-profile-agents");
   assert.equal(pi.context, readFileSync(resolve(repository, "home-manager/pi/AGENTS.md"), "utf8"));
   assert.deepEqual(pi.browser, {
     version: 1,
@@ -245,9 +245,9 @@ test("evaluated current Pi config preserves tools and uses one paired Steward gr
     [pi.defaultProvider, pi.defaultModel, pi.defaultThinkingLevel],
     ["openai-codex", "gpt-6-astra", "high"],
   );
-  assert.equal(pi.models.providers["openai-codex"].models[0].id, "gpt-6-astra");
+  assert.deepEqual(pi.models.providers["openai-codex"].models.map(({ id }) => id), ["gpt-6-sol", "gpt-6-luna"]);
   assert.deepEqual(pi.tasks, { taskScope: "session-global", autoCascade: false, autoClearCompleted: "never" });
-  assert.deepEqual(pi.goal, { rpc: { enabled: false }, continuationLimits: { automaticTurns: null, noProgressTurns: null } });
+  assert.deepEqual(pi.goal, { rpc: { enabled: false }, continuationLimits: { automaticTurns: 25, noProgressTurns: 3 } });
   assert.match(pi.goalTypebox, /@STEWARD_NODE_MODULES@\/typebox/);
   assert.deepEqual(pi.subagents, {
     backgroundByDefault: true,

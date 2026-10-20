@@ -30,15 +30,15 @@ node home-manager/pi/prompt.smoke.mjs "$pi_root" ~/.pi/agent/AGENTS.md
 
 ## Installed: processes, web access, and browser automation
 
-Run `/reload` or start a new Pi session. Pi remains **0.85.0**; no upgrade was
+Run `/reload` or start a new Pi session. Pi is **0.85.1** (steward's pin); no upgrade was
 needed for these packages. Existing Gambit agents keep their extension restrictions.
 
 | Package | Installed version | Entry point |
 |---|---|---|
-| @aliou/pi-processes | 0.12.0 | `process`; `/ps`, `/ps:logs`, `/ps:kill` |
-| pi-web-access | 0.28.0 | `web_search`, `fetch_content`, `get_search_content`, `source_check` |
-| pi-agent-browser-native | 0.6.6 | `agent_browser` |
-| Upstream native agent-browser | 0.36.0 | Nix-managed `~/.local/bin/agent-browser` |
+| @aliou/pi-processes | 0.12.0 (0.13.x needs Pi ≥0.87) | `process`; `/ps`, `/ps:logs`, `/ps:kill` |
+| pi-web-access | 0.43.0 | `web_search`, `fetch_content`, `get_search_content`, `source_check` |
+| pi-agent-browser-native | 0.6.9 (0.7+ replaces isolated script mode) | `agent_browser` |
+| Upstream native agent-browser | 0.39.1 | Nix-managed `~/.local/bin/agent-browser` |
 
 `home-manager/pi/tool-packages/` locks the complete process/web dependency graph.
 Nix installs it offline without npm lifecycle scripts or auto-installed SDK peers.
@@ -116,7 +116,7 @@ services are unavailable. No tests sent private content or invoked a model.
 
 ## Installed: targeted LSP feedback
 
-`home-manager/pi/default.nix` pins **@narumitw/pi-lsp 0.49.7** and configures
+`home-manager/pi/default.nix` pins **@narumitw/pi-lsp 0.49.10** and configures
 Nix, Python, TypeScript/JavaScript, and Go using existing language servers from
 the Helix configuration. Pi supplies the package's only runtime peer, TypeBox.
 No npm lifecycle scripts or language-server installers run during packaging.

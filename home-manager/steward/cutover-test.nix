@@ -23,7 +23,7 @@ let
     nodeModules = "@STEWARD_NODE_MODULES@";
   };
   checkedRunCommand = name: _: script:
-    assert !(builtins.elem name ["pi-tasks-0.9.0" "pi-goal-0.54.3" "pi-lsp-0.49.7"])
+    assert !(builtins.elem name ["pi-tasks-0.9.1" "pi-goal-0.54.13" "pi-lsp-0.49.10"])
     || lib.hasInfix "@STEWARD_NODE_MODULES@/typebox" script;
       fake "/nix/store/fixture-${name}" {inherit script;};
   pkgs = rec {
@@ -167,7 +167,7 @@ in {
     defaultProvider = pi.programs.pi-coding-agent.settings.defaultProvider;
     defaultModel = pi.programs.pi-coding-agent.settings.defaultModel;
     defaultThinkingLevel = pi.programs.pi-coding-agent.settings.defaultThinkingLevel;
-    models = builtins.fromJSON pi.home.file.".pi/agent/models.json".text;
+    models = pi.programs.pi-coding-agent.models;
     browser = builtins.fromJSON pi.home.file.".pi/config/pi-agent-browser-native/config.json".text;
     processes = builtins.fromJSON pi.home.file.".pi/agent/extensions/processes.json".text;
     lsp =

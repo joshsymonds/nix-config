@@ -9,21 +9,21 @@
   stewardRuntime = inputs.steward.packages.${system}.steward-pi-runtime;
 
   compactTranscript = pkgs.fetchzip {
-    url = "https://registry.npmjs.org/pi-compact-transcript/-/pi-compact-transcript-0.8.1.tgz";
-    hash = "sha256-KdQZhE9fAo5ZSdQp44bmJ2Q9qCpF33Hknu+mGHc+A0k=";
+    url = "https://registry.npmjs.org/pi-compact-transcript/-/pi-compact-transcript-0.11.1.tgz";
+    hash = "sha256-Dsxb+sG4tEt2A29ZpPeujny+c8Ay6YqNyyYo3ZhxYqA=";
   };
 
   piTasksSource = pkgs.fetchzip {
-    url = "https://registry.npmjs.org/@tintinweb/pi-tasks/-/pi-tasks-0.9.0.tgz";
-    hash = "sha256-9mTixVJ37vG8w1RK6frUlRfXTi/7oApiAj5P1o98jh0=";
+    url = "https://registry.npmjs.org/@tintinweb/pi-tasks/-/pi-tasks-0.9.1.tgz";
+    hash = "sha256-wts8UChKUnqZGMLOnCvvL1Hk0DWfXzFd3JxDQZxVj20=";
   };
 
   piLspSource = pkgs.fetchzip {
-    url = "https://registry.npmjs.org/@narumitw/pi-lsp/-/pi-lsp-0.49.7.tgz";
-    hash = "sha256-v6NQ311vtZl2x0PAEkGCIDzR3IixEd1t0Bg5h3jzM9E=";
+    url = "https://registry.npmjs.org/@narumitw/pi-lsp/-/pi-lsp-0.49.10.tgz";
+    hash = "sha256-vLUfUaQFbKLLpySX94FR0oaCqkcL6XcVCXU+TyP12xE=";
   };
 
-  piTasks = pkgs.runCommand "pi-tasks-0.9.0" {} ''
+  piTasks = pkgs.runCommand "pi-tasks-0.9.1" {} ''
     cp -r ${piTasksSource} $out
     chmod -R u+w $out
     mkdir -p $out/node_modules
@@ -35,7 +35,7 @@
     nodeModules = stewardRuntime.nodeModules;
   };
 
-  piLsp = pkgs.runCommand "pi-lsp-0.49.7" {} ''
+  piLsp = pkgs.runCommand "pi-lsp-0.49.10" {} ''
     cp -r ${piLspSource} $out
     chmod -R u+w $out
     mkdir -p $out/node_modules
@@ -177,7 +177,7 @@ in {
           themes = [];
         }
         {
-          source = "${browser.extension}";
+          source = "${workflowTools}/node_modules/pi-agent-browser-native";
           skills = [];
           prompts = [];
           themes = [];
@@ -197,8 +197,9 @@ in {
       webSearch.enabled = false;
       browser.executablePath = browser.chromiumExecutable;
     };
-    # 0.28.0 uses the legacy ~/.pi path; XDG and explicit agent-dir launches
-    # select the other locations. All three contain the same non-secret defaults.
+    # pi-web-access reads $XDG_CONFIG_HOME/pi, the legacy ~/.pi, or the agent
+    # dir depending on the launch environment. All three contain the same
+    # non-secret defaults.
     ".pi/web-search.json".source = ./web-search.json;
     ".config/pi/web-search.json".source = ./web-search.json;
     ".pi/agent/web-search.json".source = ./web-search.json;

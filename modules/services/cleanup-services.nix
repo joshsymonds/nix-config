@@ -33,6 +33,28 @@ in {
       description = "Run 'nix-collect-garbage --delete-older-than 3d' + 'nix-store --gc' in the cleanup pass.";
     };
 
+    staleGcRootPrune = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Before the Nix GC, delete indirect GC roots under /home and /root
+        (`nix build` result links, nix-direnv/devenv profiles, agent build
+        artifacts) whose symlink is older than staleGcRootAgeDays.
+        --delete-older-than only ages profile generations, so these roots
+        never expire: on ultraviolet (Oct 2026) a July `result` link and
+        months-old project shells pinned ~37G and starved SABnzbd's
+        free-space floor. Profiles (home-manager, nix profile) are skipped.
+        A deleted root costs one re-substitute or rebuild on next use; paths
+        held by a running shell stay alive through their /proc roots.
+      '';
+    };
+
+    staleGcRootAgeDays = lib.mkOption {
+      type = lib.types.ints.positive;
+      default = 14;
+      description = "Minimum symlink age in days before an indirect GC root is deleted.";
+    };
+
     tmpPrune = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -155,6 +177,26 @@ in {
               ${pkgs.findutils}/bin/find "$d" -mindepth 1 -type d -empty -delete || true
             done
             echo "Home build-cache prune completed"
+          ''}
+
+          ${lib.optionalString cfg.staleGcRootPrune ''
+            echo "Expiring indirect GC roots idle >${toString cfg.staleGcRootAgeDays}d..."
+            for auto in /nix/var/nix/gcroots/auto/*; do
+              link=$(${pkgs.coreutils}/bin/readlink "$auto") || continue
+              case "$link" in
+                */.local/state/home-manager/* | */.local/state/nix/profiles/*) continue ;;
+                /home/* | /root/*) ;;
+                *) continue ;;
+              esac
+              [ -L "$link" ] || continue
+              target=$(${pkgs.coreutils}/bin/readlink "$link") || continue
+              case "$target" in /nix/store/*) ;; *) continue ;; esac
+              if [ -n "$(${pkgs.findutils}/bin/find -P "$link" -maxdepth 0 \
+                -mtime +${toString cfg.staleGcRootAgeDays})" ]; then
+                echo "expired $link -> $target"
+                rm -f -- "$link" "$auto" || true
+              fi
+            done
           ''}
 
           ${lib.optionalString cfg.nixGC ''

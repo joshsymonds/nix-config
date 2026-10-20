@@ -74,18 +74,12 @@
   ];
 
   # ── GPU: host-claimed NVIDIA for llama.cpp ───────────────────────────
-  # Same 610.57.04 new-feature-branch pin as gnomon (Blackwell fixes;
-  # see gnomon/default.nix for the Xid 109 rationale). Same cachyos
-  # kernel, so the pin carries over verbatim.
+  # Same new-feature-branch driver as gnomon (Blackwell fixes; see
+  # gnomon/default.nix for the Xid 109 rationale). Same cachyos kernel,
+  # so the choice carries over verbatim.
   hardware.gpu-nvidia = {
     enable = true;
-    package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
-      version = "610.57.04";
-      sha256_64bit = "sha256-suk1xmuDuwDAyFe8jg7g/VLekoa0DJzB7sKafOfrEW0=";
-      openSha256 = "sha256-rQHOOOY4KL92Ww3KDwh+j4eGU7oNAH8LutZC5wmFnPo=";
-      settingsSha256 = "sha256-ZEMo8I8Zc2Tq6RVDNYpAH+f094dUaZiBqO+5f6lIjRI=";
-      persistencedSha256 = "sha256-aXmD2VY1RLlgAnlHhOUMWzvMyhI6JTClcFLm4imF/mA=";
-    };
+    package = config.boot.kernelPackages.nvidiaPackages.new_feature;
   };
 
   # ── Inference stack: llama-swap + llama-server + Open-WebUI ─────────

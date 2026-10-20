@@ -68,6 +68,13 @@ in {
       enableDynamicTheming = true;
       enableSystemMonitoring = true;
       enableVPN = true;
+      # nixpkgs' quickshell (0.3.2), not the DMS fork's pinned build: the
+      # fork's flake still pins quickshell 783c953 (2026-04, 0.2.1), which
+      # no longer compiles against nixpkgs' Qt 6.12 (QMetaType static
+      # asserts in the Hyprland IPC module). Upstream DMS made the same
+      # move in AvengeMedia/DankMaterialShell#2417 (2026-05-14) and
+      # recommends ≥0.3.0. Drop once the fork merges that change.
+      quickshell.package = pkgs.quickshell;
     };
 
     # niri-flake unconditionally ships a polkit-kde-agent unit
@@ -89,6 +96,8 @@ in {
     programs.dank-material-shell.greeter = lib.mkIf cfg.greeter.enable {
       enable = true;
       compositor.name = "niri";
+      # Same quickshell as the shell above (see the note there).
+      quickshell.package = pkgs.quickshell;
       # Without customConfig, the dms-greeter wrapper generates a niri
       # config hardcoding `debug { keep-max-bpc-unchanged }` — a flag
       # niri removed (upstream f9f43d82, in our fork since the 2026-06-10

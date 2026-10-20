@@ -74,6 +74,86 @@ in {
       in
         (inputs.niri-flake.lib.internal.make-package-set niriPkgs).niri-unstable;
 
+      # Backports of nixpkgs test fixes that nixos-unstable (09063bd,
+      # 2026-10-17) doesn't carry yet; each package fails to build there.
+      # Drop each once the flake's nixpkgs has it.
+      # - syrupy_5 users: nixpkgs moved `syrupy` to 6.x, whose snapshot
+      #   format breaks older snapshot files. Master adds `syrupy_5`
+      #   (NixOS/nixpkgs#575117; this is its 5.5.3 derivation) and pins these
+      #   packages to it. Several are Home Assistant integration libraries
+      #   (gotailwind and tailscale fail on ultraviolet).
+      # - detect-secrets (via prowler): unidiff 1.0.1 rejects the fixture diff
+      #   in TestScanDiff; master disables test_success and
+      #   test_filename_filters_are_invoked_first for it.
+      # - pyopenjtalk-plus (via piper-tts): Cython 3.3.0 changed an error
+      #   message one test matches; NixOS/nixpkgs#576063 applies upstream's
+      #   test fix.
+      pythonPackagesExtensions =
+        prev.pythonPackagesExtensions
+        ++ [
+          (pyfinal: pyprev:
+            {
+              syrupy_5 = pyprev.syrupy.overridePythonAttrs (_: rec {
+                version = "5.5.3";
+                src = prev.fetchFromGitHub {
+                  owner = "syrupy-project";
+                  repo = "syrupy";
+                  tag = "v${version}";
+                  hash = "sha256-aFwYJsDviI7j7xeEdtDGy0t4JCLMr/z57Gjl9mQo0SE=";
+                };
+              });
+              pyopenjtalk-plus = pyprev.pyopenjtalk-plus.overridePythonAttrs (o: {
+                patches =
+                  (o.patches or [])
+                  ++ [
+                    (prev.fetchpatch {
+                      name = "fix-cython-3.3.0.patch";
+                      url = "https://github.com/tsukumijima/pyopenjtalk-plus/commit/90b644f9e9d397882e6eafe4dcd1843a4fde6a63.patch";
+                      includes = ["tests/test_frontend.py"];
+                      hash = "sha256-Jb7T/bRUHxqwBLwV6xYC/teaFHm5GmqJxA7sCX+oiNI=";
+                    })
+                  ];
+              });
+              detect-secrets = pyprev.detect-secrets.overridePythonAttrs (o: {
+                disabledTests =
+                  (o.disabledTests or [])
+                  ++ [
+                    "test_success"
+                    "test_filename_filters_are_invoked_first"
+                  ];
+              });
+            }
+            // prev.lib.genAttrs [
+              "aiotankerkoenig"
+              "autarco"
+              "bring-api"
+              "gios"
+              "gotailwind"
+              "habiticalib"
+              "hdate"
+              "nettigo-air-monitor"
+              "nice-go"
+              "p1monitor"
+              "pyfirefly"
+              "python-homewizard-energy"
+              "python-roborock"
+              "systembridgeconnector"
+              "systembridgemodels"
+              "tailscale"
+              "vehicle"
+            ] (name: pyprev.${name}.override {syrupy = pyfinal.syrupy_5;}))
+        ];
+
+      # khal (DMS calendar events) fails to produce its `man` output: with
+      # __structuredAttrs, sphinxHook keeps only the first sphinxBuilders
+      # entry, so only HTML gets built. Fixed on staging
+      # (NixOS/nixpkgs#573479, a mass rebuild); until it reaches the flake's
+      # nixpkgs, pass both builders as one entry, as nixpkgs did for
+      # borgbackup (NixOS/nixpkgs#573482). Drop once the hook fix lands.
+      khal = prev.khal.overridePythonAttrs (_: {
+        sphinxBuilders = ["html man"];
+      });
+
       # redlib-veraticus needs flake inputs (crane, redlib-fork, rust-overlay)
       # so it isn't in pkgs/simple.nix's plain-callPackage set; pkgs/default.nix
       # (the `nix build .#redlib-veraticus` path) wires the same inputs

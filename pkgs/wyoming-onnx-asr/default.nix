@@ -9,9 +9,10 @@
 # Upstream is a single-file Python server with bare requirements files, so
 # this wraps it over a python3.withPackages environment from nixpkgs rather
 # than buildPythonApplication. Upstream pins wyoming==1.8.0 and
-# onnxruntime>=1.25.1; nixpkgs ships 1.9.0/1.24.4 — the APIs used
+# onnxruntime>=1.25.1; nixpkgs ships 1.10.2/1.27.1 — the APIs used
 # (wyoming.server/asr/audio/info, ort.SessionOptions) are stable across
-# those versions, verified live at deploy.
+# those versions (verified live at deploy on wyoming 1.9.0; imports
+# re-checked against 1.10.2 via --help).
 let
   python = python3.withPackages (ps:
     [

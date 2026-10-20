@@ -99,14 +99,13 @@ in
       # fails to compile against linux-cachyos 7.2.4. 610.57.04 is
       # nixpkgs' current new_feature (hashes copied from there) and is
       # Hydra-built against linux 7.2.6.
-      # Delete once the flake's nixpkgs ships a fixed production branch.
-      package = config.boot.kernelPackages.nvidiaPackages.mkDriver {
-        version = "610.57.04";
-        sha256_64bit = "sha256-suk1xmuDuwDAyFe8jg7g/VLekoa0DJzB7sKafOfrEW0=";
-        openSha256 = "sha256-rQHOOOY4KL92Ww3KDwh+j4eGU7oNAH8LutZC5wmFnPo=";
-        settingsSha256 = "sha256-ZEMo8I8Zc2Tq6RVDNYpAH+f094dUaZiBqO+5f6lIjRI=";
-        persistencedSha256 = "sha256-aXmD2VY1RLlgAnlHhOUMWzvMyhI6JTClcFLm4imF/mA=";
-      };
+      #
+      # 610.57.04 → new_feature (2026-10-19): track the branch attribute
+      # instead of hand-copied mkDriver hashes. kernelPackages comes from
+      # nix-cachyos-kernel, so this is ITS pinned nixpkgs' new_feature
+      # (615.78.08 with linux-cachyos 7.2.11 at the switch, open module
+      # built against that kernel before deploying).
+      package = config.boot.kernelPackages.nvidiaPackages.new_feature;
       # cudaArches deliberately left at module default (empty list).
       # Pinning to ["12.0"] (Blackwell-only) was technically tighter
       # but every CUDA package's hash diverged from cache.nixos-cuda.org

@@ -312,7 +312,18 @@ in {
         enable = true;
         # Chat response handling changes quickly upstream. Consume the narrow
         # Open WebUI edge input without moving the host's primary nixpkgs pin.
-        package = openWebUIPkgs.open-webui;
+        #
+        # The override splits makeWrapperArgs into separate arguments: master
+        # passes them as a structured array now, so upstream's single
+        # "--set FRONTEND_BUILD_DIR …" string reaches makeWrapper as one
+        # argument and the build dies. Drop once upstream splits it.
+        package = openWebUIPkgs.open-webui.overridePythonAttrs (_: {
+          makeWrapperArgs = [
+            "--set"
+            "FRONTEND_BUILD_DIR"
+            "${openWebUIPkgs.open-webui.frontend}/share/open-webui"
+          ];
+        });
         host = cfg.openWebUI.host;
         port = cfg.openWebUI.port;
         environment = {

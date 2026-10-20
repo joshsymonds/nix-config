@@ -24,7 +24,7 @@
     # individual skills can be installed declaratively without mutable
     # `codex plugin add` state.
     openai-plugins = {
-      url = "github:openai/plugins/bd2122cb92f2ade874d8c2b1d00383976ab9415b";
+      url = "github:openai/plugins/0722921d5542fc593105c27bd52630babd8b8c2a";
       flake = false;
     };
 
@@ -104,12 +104,13 @@
 
     # Lanzaboote — Secure Boot for NixOS (signed UKI; PCR 7 binding for TPM-sealed LUKS)
     lanzaboote = {
-      url = "github:nix-community/lanzaboote/v1.1.0";
+      url = "github:nix-community/lanzaboote/v1.2.0";
       inputs.nixpkgs.follows = "nixpkgs";
-      # v1.1.0 carries a June 2026 rust-overlay whose toolchain wrapper still
-      # reads stdenv.isLinux/isDarwin (deprecation warning on every lanzaboote
-      # host eval). lanzaboote pins its rustc via a rustup toolchain file, so
-      # following our newer rust-overlay changes only the wrapper recipe.
+      # Follow our rust-overlay: v1.1.0's own lock carried a June 2026
+      # rust-overlay whose toolchain wrapper read stdenv.isLinux/isDarwin
+      # (deprecation warning on every lanzaboote host eval). lanzaboote pins
+      # its rustc via a rustup toolchain file, so following ours changes only
+      # the wrapper recipe.
       inputs.rust-overlay.follows = "rust-overlay";
     };
 
@@ -337,7 +338,15 @@
     #
     # No binary cache: upstream's lantian Attic was compromised (see
     # lib/caches.nix), so the kernel builds from source on gnomon.
-    nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
+    #
+    # Tracks `master`, not upstream's recommended `release`: `release` only
+    # advances after the lantian Hydra builds a kernel into that cache, and
+    # with both gone it froze at 2026-09-28. Its kernel, built by that era's
+    # nixpkgs, ships no modules.cer, which our nixpkgs' aggregateModules
+    # requires since NixOS/nixpkgs@6bd75267 (2026-10-13), so gnomon's
+    # kernel-modules tree failed to build. `master` is the same daily-synced
+    # source, just without the cache gate we can no longer use.
+    nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/master";
 
     # spicetify-nix — declarative Spotify customization via spicetify-cli.
     # Wraps the nixpkgs `spotify` derivation in a script that runs

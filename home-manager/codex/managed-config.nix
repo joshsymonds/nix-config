@@ -2,7 +2,7 @@
   lib,
   pkgs,
 }: let
-  # Codex 0.144.4's default guidance names the default collaboration
+  # Codex 0.163.0's default guidance names the default collaboration
   # namespace. Keep its complete role-specific semantics while pointing the
   # tool example at the non-reserved namespace configured below.
   multiAgentSharedUsageHint = ''
@@ -21,6 +21,7 @@
     All agents in the team, including the agents that you can assign tasks to, are equally intelligent and capable, and have access to the same set of tools.
 
     You can use `spawn_agent` to create a new agent, `followup_task` to give an existing agent a new task and trigger a turn, and `send_message` to pass a message to a running agent without triggering a turn.
+    `send_message` calls may be read by a human, so ensure they are legible. Always put proper spaces between words and/or numbers.
     Child agents can also spawn their own sub-agents.
     You can decide how much context you want to propagate to your sub-agents with the `fork_turns` parameter.
 
@@ -43,9 +44,11 @@
     You can spawn sub-agents to handle subtasks, and those sub-agents can spawn their own sub-agents. All agents in the team, including the agents that you can assign tasks to, are equally intelligent and capable, and have access to the same set of tools.
 
     You can use `spawn_agent` to create a new agent, `followup_task` to give an existing agent a new task and trigger a turn, and `send_message` to pass a message to a running agent.
+    `send_message` calls may be read by a human, so ensure they are legible. Always put proper spaces between words and/or numbers.
     Child agents can also spawn their own sub-agents.
 
     When you provide a response in the final channel, that content is immediately delivered back to your parent agent.
+    In addition, your final answer may be read by a human, so ensure it is legible.
 
     You will receive messages in the analysis channel in the form:
     ```

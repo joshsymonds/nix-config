@@ -1,17 +1,19 @@
 {
   lib,
+  stdenv,
   python3Packages,
   fetchFromGitHub,
+  procps,
 }:
 python3Packages.buildPythonApplication rec {
   pname = "claude-swap";
-  version = "0.25.0";
+  version = "0.27.2";
 
   src = fetchFromGitHub {
     owner = "realiti4";
     repo = "claude-swap";
     rev = "v${version}";
-    hash = "sha256-BDfwyH7h7Ii7QYaunHDnf0Epk5nUEd8OdOH3QCf1CJU=";
+    hash = "sha256-bOoK2yqk4Uk8xnm21EaJEWBLx9kf5HoeFVe5rbj4WZ4=";
   };
 
   pyproject = true;
@@ -24,15 +26,24 @@ python3Packages.buildPythonApplication rec {
     truststore
   ];
 
-  # Upstream pins textual>=8.2.8; nixpkgs ships 8.2.7 (one patch behind).
-  pythonRelaxDeps = ["textual"];
+  # process_detection shells out to `ps -o lstart=` to match the procStart
+  # stamp claude writes into its session record. macOS always has /bin/ps;
+  # on Linux it has to come from procps, at runtime and in the check sandbox.
+  makeWrapperArgs = lib.optionals stdenv.hostPlatform.isLinux [
+    "--prefix"
+    "PATH"
+    ":"
+    (lib.makeBinPath [procps])
+  ];
 
   # Upstream's pytest addopts default to `-n auto --dist loadgroup`.
-  nativeCheckInputs = with python3Packages; [
-    pytestCheckHook
-    pytest-asyncio
-    pytest-xdist
-  ];
+  nativeCheckInputs =
+    (with python3Packages; [
+      pytestCheckHook
+      pytest-asyncio
+      pytest-xdist
+    ])
+    ++ lib.optionals stdenv.hostPlatform.isLinux [procps];
 
   # tests/conftest.py installs an audit hook that refuses writes under the
   # "real" account store, resolved with $HOME cleared (falls back to the

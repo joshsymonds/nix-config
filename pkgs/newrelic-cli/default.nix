@@ -3,12 +3,12 @@
   stdenv,
   fetchurl,
 }: let
-  version = "0.111.3";
+  version = "0.115.2";
 
   sources = {
     "x86_64-linux" = {
       url = "https://github.com/newrelic/newrelic-cli/releases/download/v${version}/newrelic-cli_${version}_Linux_x86_64.tar.gz";
-      hash = "sha256-P7dac+eOlDIko+FmTUjZJpehCBycOTqqW5dhfPymOEU=";
+      hash = "sha256-IYEUcP6Nu4bNPrPMktm5lz0zRLUTPusv6Ouy5x689gg=";
     };
   };
 

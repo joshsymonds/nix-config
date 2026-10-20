@@ -5,20 +5,23 @@
 }:
 buildGoModule rec {
   pname = "nuclei";
-  version = "3.3.7";
+  version = "3.11.1";
 
   src = fetchFromGitHub {
     owner = "projectdiscovery";
     repo = pname;
     rev = "v${version}";
-    hash = "sha256-cvbxLEXPvJgAWHAMmHXPyHtBkYOOXj9xz1zfrm8oLG4=";
+    hash = "sha256-iXeMYiri3gwfjXnWgSgGOtcXFqZynSzGXnVIM6hOH5Y=";
   };
 
-  vendorHash = "sha256-2zrT/oQc+cgnxN7Y8S5Lx+Aapf10aInjUtRW73N0O3o=";
+  vendorHash = "sha256-pqjbEuQXGv0KuQwAFrjLg0WfolfiJ4qCzhPLJT53Us0=";
 
   subPackages = [
     "cmd/nuclei"
   ];
+
+  # cmd/nuclei's tests write the templates config under $HOME/.config/nuclei.
+  preCheck = "export HOME=$TMPDIR";
 
   ldflags = [
     "-s"

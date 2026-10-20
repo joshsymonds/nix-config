@@ -2,7 +2,7 @@
 #
 # Source is Anthropic's *official* native-Linux build, pulled straight from
 # their apt repository's pool (https://downloads.claude.ai/claude-desktop/apt).
-# The `.deb` is a self-contained Electron 42 bundle with the app.asar, locales,
+# The `.deb` is a self-contained Electron 44 bundle with the app.asar, locales,
 # tray icons, the Cowork helper, virtiofsd and the Cowork VM image already laid
 # out under resources/ — no Windows `.exe` extraction or asar repacking needed.
 # So packaging is the standard "prebuilt Electron .deb" recipe: extract,
@@ -63,19 +63,20 @@
   nspr,
   nss,
   pango,
+  pipewire,
   systemd,
 }: let
-  version = "1.52386.0";
+  version = "2.42304.2";
   debBase = "https://downloads.claude.ai/claude-desktop/apt/stable/pool/main/c/claude-desktop";
 
   srcs = {
     "x86_64-linux" = fetchurl {
       url = "${debBase}/claude-desktop_${version}_amd64.deb";
-      hash = "sha256-nF0RPqLDHA1PYHXALmGAv0q1PTVza5pJfODoT2LpZUs=";
+      hash = "sha256-OKfVi1ipdsiMplLqovesAsh8SjiK4w9GjXK3kOa1f5A=";
     };
     "aarch64-linux" = fetchurl {
       url = "${debBase}/claude-desktop_${version}_arm64.deb";
-      hash = "sha256-ccfTKo7e5Xhw21T1mkVb0F+SsuGLRaFRC2ypCZ69d9c=";
+      hash = "sha256-APuFZMoVYIaxHTLwa7mld07xCE9GMtAV9kjcJbf+Prs=";
     };
   };
 in
@@ -130,6 +131,9 @@ in
       nspr
       nss
       pango
+      # 2.x: @ant/claude-native's claude-native-binding.node links
+      # libpipewire-0.3 (DT_NEEDED, so autoPatchelf must resolve it).
+      pipewire
       systemd
       stdenv.cc.cc.lib
     ];

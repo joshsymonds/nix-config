@@ -4,7 +4,7 @@
   fetchurl,
   autoPatchelfHook,
 }: let
-  version = "2.12.2";
+  version = "2.15.0";
 
   platform =
     if stdenv.hostPlatform.isLinux && stdenv.hostPlatform.isx86_64
@@ -21,10 +21,10 @@
     url = "https://github.com/golangci/golangci-lint/releases/download/v${version}/golangci-lint-${version}-${platform}.tar.gz";
     hash =
       {
-        "linux-amd64" = "sha256-jfWA0mcP7Y+phKrAUHCZr43ydeZlIV9ceirjlDiTpVM=";
-        "linux-arm64" = "sha256-RM1AqMdshnVTda3+6lLP01M8tD171kd3HgrgZeFm3zo=";
-        "darwin-amd64" = "sha256-9vBtlLYkFSHFPRVFDFIJsCgnC/lm+EKvsRwDDHn1vBY=";
-        "darwin-arm64" = "sha256-qcVEmHMbMSj3ngkL5hEPPl//zMYXsIFC7SRNQSbHPyk=";
+        "linux-amd64" = "sha256-m3/mpr9jNLmN7PjYaxFBXqeImv2r3RlZ/c4jryqevOo=";
+        "linux-arm64" = "sha256-tNjxcGizXuYGDML2mhb7SHQNcG+7qBZhwxhknBFKaZg=";
+        "darwin-amd64" = "sha256-dnuJmigoXoje0oI9XcxLxe9oEXPrLYDwKaexfuTs47g=";
+        "darwin-arm64" = "sha256-0eQJSBqMqEbEvJfngetcsb1cIzU6Czl3ocvaGxtkR9U=";
       }.${
         platform
       };

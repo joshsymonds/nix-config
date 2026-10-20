@@ -52,20 +52,22 @@
   libxtst,
   nspr,
   nss,
+  openssl,
   pango,
   systemd,
+  tpm2-tss,
 }: let
-  version = "26.908.40834";
+  version = "26.1013.40934";
   debBase = "https://persistent.oaistatic.com/codex-app-prod/linux/deb/pool/main/c/chatgpt";
 
   sourceMetadata = {
     "x86_64-linux" = {
       url = "${debBase}/chatgpt_${version}_amd64.deb";
-      hash = "sha256-2je457zvquoBnEeMrL5sc+4d3RXg4euzx+8KQt2BisI=";
+      hash = "sha256-PKWef5pmQbni+5rWgGg3hLWrgCb/dBj7ISoOvl3zodc=";
     };
     "aarch64-linux" = {
       url = "${debBase}/chatgpt_${version}_arm64.deb";
-      hash = "sha256-uuXFylhWJaEWqId97cRV5MJ8oCBj6pPb1qBQbtahLTE=";
+      hash = "sha256-mrLLuvM86+qh4G61yreBKJNvknoNl78A5AaU5fMcYps=";
     };
   };
 
@@ -135,6 +137,10 @@ in
       pango
       systemd
       stdenv.cc.cc.lib
+      # resources/native/remote-control-device-key.node (26.10xx+) links
+      # libtss2-{esys,mu,tcti-device} and libcrypto.so.3 directly.
+      openssl
+      tpm2-tss
     ];
 
     runtimeDependencies = [

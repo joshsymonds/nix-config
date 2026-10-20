@@ -1,100 +1,136 @@
 # qwen-code at upstream latest — local bump of the nixpkgs expression.
-# Unlike upstream nixpkgs we keep node-pty and keytar: the strip was a
-# Darwin workaround, and 0.21.x's core type-imports @lydell/node-pty so
-# stripping now breaks tsc. Linux-only as a result.
-# (nixpkgs is stuck at 0.16.0 even on master; we want the current
-# release for the Tiltyard harness arm: newer context-window handling
-# and five minor versions of headless fixes). Same shape as
-# pkgs/by-name/qw/qwen-code/package.nix upstream, version + hashes
-# bumped. Drop this file when nixpkgs catches up.
+# nixpkgs now carries the pnpm-based build (upstream moved from npm to
+# pnpm in 0.22) but trails upstream; we want the current release for the
+# Tiltyard harness arm. Same shape as pkgs/by-name/qw/qwen-code/package.nix
+# upstream minus its Darwin node-pty/keytar workarounds (the only consumer,
+# modules/services/inference-stack.nix, is Linux), version + hashes bumped.
+# Drop this file when nixpkgs catches up.
 {
   lib,
-  buildNpmPackage,
-  nodejs_22,
+  stdenvNoCC,
+  nodejs,
+  pnpm_11,
+  fetchPnpmDeps,
+  pnpmConfigHook,
   fetchFromGitHub,
-  jq,
   git,
   ripgrep,
   pkg-config,
   glib,
   libsecret,
-}:
-buildNpmPackage (finalAttrs: {
-  pname = "qwen-code";
-  version = "0.21.12";
+  versionCheckHook,
+}: let
+  pnpm = pnpm_11;
+in
+  stdenvNoCC.mkDerivation (finalAttrs: {
+    pname = "qwen-code";
+    version = "0.25.3";
 
-  src = fetchFromGitHub {
-    owner = "QwenLM";
-    repo = "qwen-code";
-    tag = "v${finalAttrs.version}";
-    hash = "sha256-do586hHiIlDQ8dojVJxba6P2gnI/FY1m9CxCljr2X38=";
-  };
+    src = fetchFromGitHub {
+      owner = "QwenLM";
+      repo = "qwen-code";
+      tag = "v${finalAttrs.version}";
+      hash = "sha256-fHDvs5l7nqi/Wv+VLGaHPNiXqV1IKoxS30l1BpZPmmo=";
+    };
 
-  npmDepsFetcherVersion = 2;
-  npmDepsHash = "sha256-8JntRCj1+mBD9+jUOP172h+0PV2nPZ64HghuybFND5k=";
+    pnpmDeps = fetchPnpmDeps {
+      inherit
+        (finalAttrs)
+        pname
+        version
+        src
+        ;
+      inherit pnpm;
+      fetcherVersion = 4;
+      hash = "sha256-6mzPUw8TMvZe72qSgiFXTJZB3ECEjw0b8HEVrPLVQt4=";
+    };
 
-  # npm 11 incompatible with fetchNpmDeps
-  # https://github.com/NixOS/nixpkgs/issues/474535
-  nodejs = nodejs_22;
+    nativeBuildInputs = [
+      nodejs
+      pnpm
+      pnpmConfigHook
+      pkg-config
+      git
+    ];
 
-  nativeBuildInputs = [
-    jq
-    pkg-config
-    git
-  ];
+    buildInputs = [
+      ripgrep
+      glib
+      libsecret
+      nodejs
+    ];
 
-  buildInputs = [
-    ripgrep
-    glib
-    libsecret
-  ];
+    # Use the local pnpm instead of letting corepack fetch one.
+    postPatch = ''
+      substituteInPlace scripts/build.js \
+        --replace-fail 'corepack pnpm' 'pnpm'
+    '';
 
-  postPatch = ''
-    # The vscode-ide-companion workspace fails its check-types under the
-    # sandbox (webview DOM types) and is irrelevant to the CLI — no-op
-    # its build. Scripts aren't covered by npmDepsHash.
-    ${jq}/bin/jq '.scripts.build = "echo vscode companion skipped"'       packages/vscode-ide-companion/package.json > companion.tmp       && mv companion.tmp packages/vscode-ide-companion/package.json
-  '';
+    env.CI = true;
 
-  buildPhase = ''
-    runHook preBuild
+    buildPhase = ''
+      runHook preBuild
 
-    # 0.21.x grew more internal workspaces (acp-bridge, core subpath
-    # exports); build them all via the root build:packages script
-    # instead of the 0.16.0-era hand-picked list. bundle re-runs
-    # generate itself.
-    # Upstream's own orchestrator: dependency-ordered workspace builds
-    # (core -> web-templates -> channels -> acp-bridge -> cli), runs
-    # `npm run generate` itself, and --cli-only skips the webui /
-    # web-shell / vscode-companion / chrome-extension packages that
-    # fail (and are useless) in the sandbox.
-    node scripts/build.js --cli-only
-    npm run bundle
+      # The root postinstall (skipped by pnpmConfigHook) applies the ink
+      # patch packages/cli typechecks against.
+      pnpm exec patch-package
 
-    runHook postBuild
-  '';
+      # pnpmConfigHook only patches the root node_modules. Workspaces with
+      # nested .bin (web-shell's vite) keep /usr/bin/env otherwise.
+      patchShebangs packages/*/node_modules
 
-  installPhase = ''
-    runHook preInstall
+      # Upstream's own heap cap; tsc OOMs without it.
+      export NODE_OPTIONS="--max-old-space-size=4096"
 
-    mkdir -p $out/bin $out/share/qwen-code
-    cp -r dist/* $out/share/qwen-code/
-    # Install production dependencies only
-    npm prune --production
-    cp -r node_modules $out/share/qwen-code/
-    # Remove broken symlinks that cause issues in Nix environment
-    find $out/share/qwen-code/node_modules -type l -delete || true
-    patchShebangs $out/share/qwen-code
-    ln -s $out/share/qwen-code/cli.js $out/bin/qwen
+      npm run generate
 
-    runHook postInstall
-  '';
+      # Upstream's orchestrator: dependency-ordered workspace builds of
+      # everything the CLI bundle pulls in; --cli-only skips the webui /
+      # web-shell / vscode-companion / chrome-extension packages that fail
+      # (and are useless) in the sandbox.
+      node scripts/build.js --cli-only
 
-  meta = {
-    description = "Coding agent that lives in digital world";
-    homepage = "https://github.com/QwenLM/qwen-code";
-    mainProgram = "qwen";
-    license = lib.licenses.asl20;
-    platforms = lib.platforms.linux;
-  };
-})
+      npm run bundle
+
+      runHook postBuild
+    '';
+
+    installPhase = ''
+      runHook preInstall
+
+      mkdir -p $out/bin $out/share/qwen-code
+
+      cp -r dist/* $out/share/qwen-code/
+
+      # dist/cli.js has no shebang; upstream's bin wrapper relaunches it with
+      # node --expose-gc and reads package.json for the reported version.
+      cp scripts/cli-entry.js $out/share/qwen-code/cli-entry.js
+      cp package.json $out/share/qwen-code/package.json
+
+      # Production dependencies only.
+      pnpm install --offline --prod --frozen-lockfile --ignore-scripts
+      cp -r node_modules $out/share/qwen-code/
+
+      # Remove broken symlinks that cause issues in the Nix environment.
+      find $out/share/qwen-code/node_modules -type l -delete || true
+
+      patchShebangs $out/share/qwen-code
+
+      ln -s $out/share/qwen-code/cli-entry.js $out/bin/qwen
+
+      runHook postInstall
+    '';
+
+    doInstallCheck = true;
+    nativeInstallCheckInputs = [versionCheckHook];
+
+    strictDeps = true;
+
+    meta = {
+      description = "Coding agent that lives in digital world";
+      homepage = "https://github.com/QwenLM/qwen-code";
+      mainProgram = "qwen";
+      license = lib.licenses.asl20;
+      platforms = lib.platforms.linux;
+    };
+  })

@@ -1,16 +1,8 @@
 diff --git a/internal/runtime/executor/codex_websockets_executor.go b/internal/runtime/executor/codex_websockets_executor.go
-index 84c4069..6c2aaaf 100644
+index 65ec499..18379cd 100644
 --- a/internal/runtime/executor/codex_websockets_executor.go
 +++ b/internal/runtime/executor/codex_websockets_executor.go
-@@ -12,6 +12,7 @@ import (
- 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
- 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
- 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
-+	"github.com/tidwall/gjson"
- )
- 
- // CodexWebsocketsExecutor executes Codex Responses requests using a WebSocket transport.
-@@ -31,11 +32,15 @@ func NewCodexWebsocketsExecutor(cfg *config.Config) *CodexWebsocketsExecutor {
+@@ -33,11 +33,15 @@ func NewCodexWebsocketsExecutor(cfg *config.Config) *CodexWebsocketsExecutor {
  	}
  }
  
@@ -30,7 +22,7 @@ index 84c4069..6c2aaaf 100644
  type CodexAutoExecutor struct {
  	httpExec *CodexExecutor
  	wsExec   *CodexWebsocketsExecutor
-@@ -68,7 +73,7 @@ func (e *CodexAutoExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth
+@@ -75,7 +79,7 @@ func (e *CodexAutoExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth
  	if e == nil || e.httpExec == nil || e.wsExec == nil {
  		return cliproxyexecutor.Response{}, fmt.Errorf("codex auto executor: executor is nil")
  	}
@@ -39,7 +31,7 @@ index 84c4069..6c2aaaf 100644
  		return e.wsExec.Execute(ctx, auth, req, opts)
  	}
  	if cliproxyexecutor.RequiredUpstreamWebsocket(ctx) {
-@@ -81,7 +86,7 @@ func (e *CodexAutoExecutor) ExecuteStream(ctx context.Context, auth *cliproxyaut
+@@ -88,7 +92,7 @@ func (e *CodexAutoExecutor) ExecuteStream(ctx context.Context, auth *cliproxyaut
  	if e == nil || e.httpExec == nil || e.wsExec == nil {
  		return nil, fmt.Errorf("codex auto executor: executor is nil")
  	}
@@ -48,7 +40,7 @@ index 84c4069..6c2aaaf 100644
  		return e.wsExec.ExecuteStream(ctx, auth, req, opts)
  	}
  	if cliproxyexecutor.RequiredUpstreamWebsocket(ctx) {
-@@ -118,6 +123,22 @@ func (e *CodexAutoExecutor) UpstreamDisconnectChan(sessionID string) <-chan erro
+@@ -139,6 +143,22 @@ func (e *CodexAutoExecutor) UpstreamDisconnectChan(sessionID string) <-chan erro
  	return e.wsExec.UpstreamDisconnectChan(sessionID)
  }
  
@@ -72,10 +64,10 @@ index 84c4069..6c2aaaf 100644
  	if auth == nil {
  		return false
 diff --git a/internal/runtime/executor/codex_websockets_executor_test.go b/internal/runtime/executor/codex_websockets_executor_test.go
-index 8a363e2..b59b9fa 100644
+index 47e957f..749e227 100644
 --- a/internal/runtime/executor/codex_websockets_executor_test.go
 +++ b/internal/runtime/executor/codex_websockets_executor_test.go
-@@ -3404,3 +3404,96 @@ func TestCodexWebsockets_SendErrorLogsSessionObject(t *testing.T) {
+@@ -3290,3 +3290,96 @@ func TestCodexWebsockets_SendErrorLogsSessionObject(t *testing.T) {
  		t.Fatalf("expected reason=send_error in log output, got: %s", logOutput)
  	}
  }

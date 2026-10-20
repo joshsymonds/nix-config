@@ -28,12 +28,12 @@
     '';
 in {
   # Root of the pack: BepInEx/{core,config}, doorstop_libs/, start scripts.
-  pack = runCommand "bepinexpack-valheim-5.4.2350" {} ''
+  pack = runCommand "bepinexpack-valheim-5.4.2351" {} ''
     cp -r ${thunderstore {
       owner = "denikson";
       name = "BepInExPack_Valheim";
-      version = "5.4.2350";
-      hash = "sha256-CKWxgI6Q/Hew5Sev5qxZiJk/dtOfUFuR9HN/iUTIVGY=";
+      version = "5.4.2351";
+      hash = "sha256-FsUroDyXQ7q1ZSWga9yIwyu71Q+2eBii6aP8Zl7Xt5Q=";
     }}/BepInExPack_Valheim "$out"
   '';
 
@@ -41,15 +41,15 @@ in {
     spreadTheLoad = plugin {
       owner = "DeathMonger";
       name = "SpreadTheLoad";
-      version = "0.2.1";
-      hash = "sha256-Gzf5Ab38A4vRibQdZOrhOTr3HuoxBBM7fEjHK1+nB8Q=";
+      version = "0.3.0";
+      hash = "sha256-DRgWQawufXV25DyXot0v/Qm9ya47JoJAhuVrr5L3dYw=";
       pluginDir = "BepInEx/plugins";
     };
     valheimTune = plugin {
       owner = "Akoozie";
       name = "ValheimTune";
-      version = "0.7.9";
-      hash = "sha256-5Sqc0Ee1dwhr3o6wDVc3cQ8+e9Y4HOKk6zMMKmfV9jU=";
+      version = "0.7.10";
+      hash = "sha256-8CgZKA5NFeotI9rtr2cETQ+/9G0c0EJhzUwmIhOa1i0=";
       pluginDir = "plugins";
     };
     portalGhostFix = plugin {

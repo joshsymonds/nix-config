@@ -5,13 +5,13 @@
 }:
 buildGoModule (finalAttrs: {
   pname = "cliproxyapi";
-  version = "7.3.13";
+  version = "8.0.35";
 
   src = fetchFromGitHub {
     owner = "router-for-me";
     repo = "CLIProxyAPI";
     tag = "v${finalAttrs.version}";
-    hash = "sha256-9ZiYPBEoxTcZaomY0Be4Q5hwQf5FCfdbvcJzYEGI+So=";
+    hash = "sha256-XKCLx3wMlTJHGC8c0SUt/CVXzeqVEkP8s1nwV2gYZlM=";
   };
 
   # Built from source rather than the upstream release binary so this patch

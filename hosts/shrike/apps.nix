@@ -46,6 +46,14 @@
       label = "Obtainium";
       source = "https://github.com/ImranR98/Obtainium/releases";
     }
+    # Patches the official Reddit app (ads hidden, links opened externally)
+    # on-device from an APKMirror .apkm bundle. The patched Reddit it
+    # installs is signed locally, so it's tracked by hand, not here.
+    {
+      id = "app.morphe.manager";
+      label = "Morphe Manager";
+      source = "https://github.com/MorpheApp/morphe-manager/releases";
+    }
   ];
 
   play = [

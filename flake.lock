@@ -770,11 +770,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792603181,
-        "narHash": "sha256-cXa7xJLZvnPFG7goWaExegZISe2njoe6UoGFJDoaAB0=",
+        "lastModified": 1792616344,
+        "narHash": "sha256-LXFtdVq5oU10JjgFOghm3Dm1tt1YREhAo1kBzq6y/9I=",
         "owner": "joshsymonds",
         "repo": "DankMaterialShell",
-        "rev": "b5fb1a5e182855d83b07072df984b900299e47a5",
+        "rev": "3d80ce22a502f33c3f53dccf3149205c0288bf19",
         "type": "github"
       },
       "original": {

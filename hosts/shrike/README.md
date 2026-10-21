@@ -150,11 +150,17 @@ phone's browser open the file on GitHub and tap the **copy raw
 contents** button — the whole shader lands on the clipboard in one tap.
 Paste into a new shader in the app. Then:
 system wallpaper picker → Live wallpapers → Shader Editor → set for
-home + lock screen. Cap the frame rate in the app's settings (~30fps
-reads identically, halves the battery cost). If it can't hold 30fps
-(check with the keyboard hidden and the charger off — the GPU
-throttles on battery), lower the shader's quality spinner (1/2 renders
-a quarter of the pixels).
+home + lock screen.
+
+Shader Editor has no frame-rate cap: while visible, the wallpaper
+renders every frame at the display's refresh rate. Its cost shows in
+the editor: open the shader, hide the keyboard, unplug (the GPU
+throttles on battery) and read the FPS in the toolbar's quality
+spinner label. The counter tops out at the refresh rate; anything
+below it means the GPU is flat out rendering this shader. Lower the
+quality spinner (1/2 renders a quarter of the pixels) until it holds
+the refresh rate with room to spare. Battery: Settings → Battery →
+Battery usage lists the wallpaper under Shader Editor.
 
 After changing the shared shader/uniforms: `update` regenerates the
 file; re-paste into Shader Editor (its storage is app-internal — the

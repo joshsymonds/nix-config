@@ -2,10 +2,10 @@
 // Assembled by modules/desktop/chrome-hexrain (Shader Editor
 // target). Paste the whole file into a new shader in the Shader
 // Editor app, then: system wallpaper picker -> Live wallpapers ->
-// Shader Editor -> apply to home + lock screen. Cap the frame
-// rate in the app's settings (~30fps reads identically, halves
-// the battery cost) and, if it can't hold 30fps, lower the
-// quality spinner (render resolution).
+// Shader Editor -> apply to home + lock screen. It renders at the
+// display's refresh rate (the app has no frame cap); if the
+// editor's FPS readout falls below that, lower the quality
+// spinner (render resolution).
 
 precision highp float;
 precision highp int;

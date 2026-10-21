@@ -80,12 +80,26 @@ in {
     hardware.nvidia-container-toolkit.enable = cfg.containerToolkit;
 
     # A driver bump swaps the userspace libs while the old kernel module stays
-    # loaded until reboot, so restarting the CDI generator mid-switch fails with
+    # loaded until reboot, so running the CDI generator mid-switch fails with
     # NVML "Driver/library version mismatch" — and that failed unit makes
     # switch-to-configuration exit 4, which leaves nh's boot profile on the old
     # generation. Regenerate the spec on the next boot instead.
-    systemd.services.nvidia-container-toolkit-cdi-generator.restartIfChanged =
-      lib.mkIf cfg.containerToolkit false;
+    systemd.services.nvidia-container-toolkit-cdi-generator = lib.mkIf cfg.containerToolkit {
+      # Keep an active unit (and its /run/cdi spec, which still matches the
+      # loaded module) across the switch.
+      restartIfChanged = false;
+      # An inactive unit still gets started, because the switch re-starts every
+      # active target and multi-user.target wants it. Skip on a version mismatch
+      # instead of failing: a failed ExecCondition leaves the unit inactive, not
+      # failed, and doesn't fail docker's Requires=. A module that isn't loaded
+      # yet falls through to the generator as before.
+      serviceConfig.ExecCondition = pkgs.writeShellScript "nvidia-module-matches-driver" ''
+        loaded=$(cat /sys/module/nvidia/version 2>/dev/null) || exit 0
+        [ "$loaded" = "${config.hardware.nvidia.package.version}" ] && exit 0
+        echo "nvidia module $loaded is loaded but the driver is ${config.hardware.nvidia.package.version}; skipping until reboot"
+        exit 1
+      '';
+    };
 
     # Only pin cudaCapabilities when explicitly requested. Empty list
     # (the default) leaves the global config unset so each CUDA

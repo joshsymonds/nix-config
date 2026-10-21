@@ -183,8 +183,18 @@
         fi
         sleep 1
       done
-      ${pkgs.tailscale}/bin/tailscale serve reset
-      exec ${pkgs.tailscale}/bin/tailscale serve --bg --https=8443 8001
+      # When tailscaled restarts in the same switch it has no netmap for a
+      # few seconds and serve fails with "netMap is nil". Retry instead of
+      # leaving the unit failed and the 8443 mapping missing.
+      for i in $(seq 1 10); do
+        if ${pkgs.tailscale}/bin/tailscale serve reset \
+          && ${pkgs.tailscale}/bin/tailscale serve --bg --https=8443 8001; then
+          exit 0
+        fi
+        sleep 2
+      done
+      echo "shimmer-tailnet-serve: tailscale serve kept failing" >&2
+      exit 1
     '';
   };
 }

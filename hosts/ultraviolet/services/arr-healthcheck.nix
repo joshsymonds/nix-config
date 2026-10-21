@@ -17,12 +17,6 @@
       apiVersion = "v3";
     }
     {
-      name = "readarr";
-      port = 8787;
-      configXml = "/var/lib/readarr/.config/Readarr/config.xml";
-      apiVersion = "v1";
-    }
-    {
       name = "prowlarr";
       port = 9696;
       configXml = "/var/lib/prowlarr/config.xml";
@@ -132,7 +126,7 @@
   '';
 in {
   systemd.services.media-healthcheck = {
-    description = "Health check for media services (Sonarr, Radarr, Readarr, Prowlarr, Jellyfin, Jellyseerr)";
+    description = "Health check for media services (Sonarr, Radarr, Prowlarr, Jellyfin, Jellyseerr)";
     serviceConfig = {
       Type = "oneshot";
       ExecStart = healthCheckScript;

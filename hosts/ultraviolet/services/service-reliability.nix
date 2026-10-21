@@ -24,10 +24,6 @@ in {
       {serviceConfig = restartPolicy;}
       // startLimits;
 
-    readarr =
-      {serviceConfig = restartPolicy;}
-      // startLimits;
-
     prowlarr =
       {serviceConfig = restartPolicy;}
       // startLimits;

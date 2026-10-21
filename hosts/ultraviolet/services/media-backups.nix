@@ -72,7 +72,6 @@
     # *arr services - back up full config dirs (DB, config.xml, logs, etc.)
     backup_dir "sonarr" "/var/lib/sonarr/.config/NzbDrone"
     backup_dir "radarr" "/var/lib/radarr/.config/Radarr"
-    backup_dir "readarr" "/var/lib/readarr"
     # Prowlarr uses DynamicUser=true; real data is at /var/lib/private/prowlarr
     backup_dir "prowlarr" "/var/lib/private/prowlarr"
 

@@ -130,13 +130,47 @@
     if [ "$have_pm" = 0 ]; then
       echo "warning: pm not usable from this sandbox — can't detect drift."
       echo "Declared app set:"
-      "$JQ" -r '(.fdroid[], .obtainium[], .play[]) | "  \(.label) (\(.id))"' "$APPS"
+      "$JQ" -r '(.local[], .fdroid[], .obtainium[], .play[]) | "  \(.label) (\(.id))"' "$APPS"
       exit 0
     fi
 
     is_installed() {
       printf '%s\n' "$installed" | grep -qxF "$1"
     }
+
+    # Hands an APK to the system installer and waits for the user to
+    # confirm it, one prompt at a time (a second intent would replace the
+    # first).
+    prompt_install() {
+      local id="$1" apk="$2"
+      if command -v termux-open >/dev/null 2>&1; then
+        echo "  -> $id: confirm the install prompt"
+        termux-open --content-type application/vnd.android.package-archive "$apk"
+        read -r -p "     press enter once installed... " _ || true
+      else
+        dest="$HOME/storage/downloads/shrike-apps"
+        mkdir -p "$dest" && cp "$apk" "$dest/"
+        echo "  -> staged ''${dest}/$(basename "$apk") — tap it in the Files app"
+        echo "     (termux-open missing: run termux-setup-storage / re-switch first)"
+      fi
+    }
+
+    # Our own APKs: installed when missing, or when the APK differs from
+    # the last one an install was confirmed for (the marker is written only
+    # once the package shows up installed).
+    state="''${XDG_STATE_HOME:-$HOME/.local/state}/shrike-apps"
+    mkdir -p "$state"
+    while IFS="$(printf '\t')" read -r id label apk <&3; do
+      sum="$(sha256sum "$apk" | cut -d' ' -f1)"
+      if is_installed "$id" && [ "$(cat "$state/$id.sha256" 2>/dev/null)" = "$sum" ]; then
+        continue
+      fi
+      echo "==> $label: installing $(basename "$apk")"
+      prompt_install "$id" "$apk"
+      if /system/bin/pm list packages 2>/dev/null | sed 's/^package://' | grep -qxF "$id"; then
+        echo "$sum" > "$state/$id.sha256"
+      fi
+    done 3< <("$JQ" -r '.local[] | [.id, .label, .apk] | @tsv' "$APPS")
 
     fdroid_missing=()
     while IFS= read -r id; do
@@ -156,17 +190,7 @@
           echo "  ! downloaded but APK not found in fdroidcl cache for $id" >&2
           continue
         fi
-        if command -v termux-open >/dev/null 2>&1; then
-          echo "  -> $id: confirm the install prompt"
-          termux-open --content-type application/vnd.android.package-archive "$apk"
-          # One prompt at a time — a second intent would replace the first.
-          read -r -p "     press enter once installed... " _ || true
-        else
-          dest="$HOME/storage/downloads/shrike-apps"
-          mkdir -p "$dest" && cp "$apk" "$dest/"
-          echo "  -> staged ''${dest}/$(basename "$apk") — tap it in the Files app"
-          echo "     (termux-open missing: run termux-setup-storage / re-switch first)"
-        fi
+        prompt_install "$id" "$apk"
       done
     fi
 

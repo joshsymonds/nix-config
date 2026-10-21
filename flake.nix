@@ -632,14 +632,6 @@
         packages =
           (import ./pkgs {inherit pkgs inputs;})
           // {
-            # Regenerates the committed Shader Editor artifact:
-            #   nix build .#chrome-hexrain-shadereditor
-            #   cp -L result hosts/shrike/chrome-hexrain-shadereditor.glsl
-            # The committed copy exists so the phone can grab it via
-            # GitHub's copy-raw button; checks.chrome-hexrain-sync
-            # fails when it drifts from the generators.
-            chrome-hexrain-shadereditor =
-              (import ./modules/desktop/chrome-hexrain {inherit (pkgs) lib;}).androidSource pkgs;
             savecraft-egress = pkgs.callPackage ./pkgs/savecraft-egress {
               src = inputs.savecraft-egress;
             };
@@ -648,6 +640,12 @@
             };
           }
           // lib.optionalAttrs (system == "x86_64-linux") {
+            # shrike's hexrain wallpaper, unsigned; the APK shrike installs
+            # is hosts/shrike/hexrain-wallpaper.apk, signed from this by
+            # `nix run .#hexrain-wallpaper-release` (pkgs/hexrain-wallpaper).
+            hexrain-wallpaper-unsigned = pkgs.callPackage ./pkgs/hexrain-wallpaper {
+              inherit (inputs) dms;
+            };
             installerIso = self.nixosConfigurations.installer.config.system.build.isoImage;
             ultravioletInstallerIso = self.nixosConfigurations.ultraviolet-installer.config.system.build.isoImage;
 
@@ -715,15 +713,24 @@
             flakeSource = self.outPath;
           };
           substituters = import ./tests/substituters.nix {inherit pkgs;};
-          # The committed Shader Editor artifact must match what the
-          # generators produce — see packages.chrome-hexrain-shadereditor.
-          chrome-hexrain-sync = let
-            generated = (import ./modules/desktop/chrome-hexrain {inherit (checkPkgs) lib;}).androidSource checkPkgs;
+          # The signed APK shrike installs must hold exactly what the current
+          # build produces (DMS's shaders and scene, the app source), signed
+          # by the pinned key — see pkgs/hexrain-wallpaper.
+          hexrain-wallpaper-sync = let
+            unsigned = config.packages.hexrain-wallpaper-unsigned;
           in
-            checkPkgs.runCommand "chrome-hexrain-sync" {} ''
-              if ! diff -u ${./hosts/shrike/chrome-hexrain-shadereditor.glsl} ${generated}; then
-                echo "hosts/shrike/chrome-hexrain-shadereditor.glsl is stale." >&2
-                echo "Regenerate: nix build .#chrome-hexrain-shadereditor && cp -L result hosts/shrike/chrome-hexrain-shadereditor.glsl" >&2
+            checkPkgs.runCommand "hexrain-wallpaper-sync" {
+              nativeBuildInputs = [checkPkgs.python3 checkPkgs.jdk17_headless];
+            } ''
+              apk=${./hosts/shrike/hexrain-wallpaper.apk}
+              if ! python3 ${./pkgs/hexrain-wallpaper/same-content.py} ${unsigned} "$apk"; then
+                echo "hosts/shrike/hexrain-wallpaper.apk is stale: run nix run .#hexrain-wallpaper-release" >&2
+                exit 1
+              fi
+              signer="$(${unsigned.buildTools}/apksigner verify --print-certs "$apk" \
+                | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+              if [ "$signer" != "$(cat ${./pkgs/hexrain-wallpaper/signer.sha256})" ]; then
+                echo "hosts/shrike/hexrain-wallpaper.apk is signed by $signer, not the pinned signer" >&2
                 exit 1
               fi
               touch $out
@@ -741,6 +748,29 @@
         # every lock bump); the host that actually uses gcloud (vermissian)
         # installs it system-wide in hosts/vermissian/default.nix.
         devShells.default = import ./dev-shell.nix {inherit pkgs;};
+
+        # Signs shrike's hexrain wallpaper APK; see pkgs/hexrain-wallpaper/release.sh.
+        apps = lib.optionalAttrs (system == "x86_64-linux") {
+          hexrain-wallpaper-release = {
+            type = "app";
+            program = lib.getExe (pkgs.writeShellApplication {
+              name = "hexrain-wallpaper-release";
+              runtimeInputs = [
+                pkgs.age
+                pkgs.git
+                pkgs.jdk17_headless
+                (pkgs.writeShellScriptBin "same-content" ''
+                  exec ${pkgs.python3}/bin/python3 ${./pkgs/hexrain-wallpaper/same-content.py} "$@"
+                '')
+                # apksigner finds its jar beside itself, so exec it in place.
+                (pkgs.writeShellScriptBin "apksigner" ''
+                  exec ${config.packages.hexrain-wallpaper-unsigned.buildTools}/apksigner "$@"
+                '')
+              ];
+              text = builtins.readFile ./pkgs/hexrain-wallpaper/release.sh;
+            });
+          };
+        };
 
         treefmt = {
           projectRootFile = "flake.nix";

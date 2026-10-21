@@ -71,8 +71,8 @@
       -p ${dmsShell}/share/quickshell/dms
   '';
 
-  # Wallpaper uniforms — values live in chrome-hexrain/uniforms.nix
-  # (shared with shrike's Shader Editor export), synced from the user's
+  # Wallpaper uniforms — values live in chrome-hexrain/uniforms.nix,
+  # synced from the user's
   # live DMS chrome_hexrain scene at
   # ~/Personal/DankMaterialShell/quickshell/Shaders/scenes/wallpaper.json
   # (the canonical source-of-truth edited via DMS's scene editor) so

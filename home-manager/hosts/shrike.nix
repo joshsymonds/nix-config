@@ -105,12 +105,6 @@ in {
   # new control master"); plain connections work.
   programs.ssh.settings."*".ControlMaster = lib.mkForce "no";
 
-  # chrome_hexrain for Shader Editor is a COMMITTED artifact
-  # (hosts/shrike/chrome-hexrain-shadereditor.glsl, drift-guarded by
-  # checks.chrome-hexrain-sync) so the phone grabs it with GitHub's
-  # copy-raw button — no clipboard gymnastics. It's also in the phone's
-  # ~/nix-config checkout after `update`.
-
   # Inbound ssh: same fleet keys as every NixOS host authorizes
   # (hosts/common.nix imports the same list). nix-on-droid has no NixOS
   # user machinery, so the file is written directly.

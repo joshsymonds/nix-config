@@ -29,6 +29,12 @@ in {
   # patchbay's attain-bedrock Seat (home-manager/patchbay). The ARNs embed
   # the Attain AWS account id, which is why the map is not in the clear.
   "secrets/user/patchbay-bedrock-model-map.age".publicKeys = keys.joshsymonds;
+  # PKCS#12 keystore (store/key password "hexrain-wallpaper"; age is what
+  # protects it) signing shrike's hexrain wallpaper APK. Read only by
+  # `nix run .#hexrain-wallpaper-release`; never enters the Nix store. Its
+  # certificate is pinned in pkgs/hexrain-wallpaper/signer.sha256 — a new
+  # key can't update the installed app in place.
+  "secrets/user/hexrain-wallpaper-keystore.age".publicKeys = keys.joshsymonds;
 
   # Host-specific secrets
   "secrets/hosts/ultraviolet/cloudflare-api-token.age".publicKeys = keys.ultraviolet;

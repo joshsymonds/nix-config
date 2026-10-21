@@ -129,42 +129,28 @@ atuin daemon is disabled here (classic sqlite mode instead). The
 session that runs `sshd-start` won't close until `sshd-stop`; that's
 inherent, and fine for a debug session.
 
-## Wallpaper: chrome_hexrain on the phone
+## Wallpaper: hexrain
 
-The closure ships `~/wallpaper/chrome-hexrain-shadereditor.glsl` —
-gnomon's halmasuit shader assembled for the Shader Editor app from the
-SAME shared body + uniform values (modules/desktop/chrome-hexrain/), so
-edits there flow to both machines on their next rebuilds. The body is
-DMS's 3D hexrain wallpaper in a single pass: every pixel works out the
-sun field and its scales' poses itself, which costs about 1.2x the
-previous 2D shader.
+The wallpaper is our own app, **Hexrain** (`com.joshsymonds.hexrain`,
+source in `pkgs/hexrain-wallpaper`): DMS's hexrain wallpaper as an
+Android live wallpaper. It runs DMS's own three shaders through the same
+three passes as the desktop, with the scene baked in from DMS's
+`wallpaper.json` (scales sized in dp, perspective fitted to the screen),
+at 30 frames a second while visible and nothing while hidden.
 
-The Shader Editor variant is a COMMITTED artifact —
-`hosts/shrike/chrome-hexrain-shadereditor.glsl` — kept in sync with the
-generators by `checks.chrome-hexrain-sync` (regenerate with
-`nix build .#chrome-hexrain-shadereditor && cp -L result
-hosts/shrike/chrome-hexrain-shadereditor.glsl`).
+`update` installs it (one confirmation tap) when it's missing or when
+`hosts/shrike/hexrain-wallpaper.apk` changed since the last install it
+saw through. Then: system wallpaper picker → Live wallpapers → Hexrain →
+set for home + lock screen. Battery: Settings → Battery → Battery usage
+lists it as Hexrain.
 
-One-time setup: install **Shader Editor** from F-Droid, then in the
-phone's browser open the file on GitHub and tap the **copy raw
-contents** button — the whole shader lands on the clipboard in one tap.
-Paste into a new shader in the app. Then:
-system wallpaper picker → Live wallpapers → Shader Editor → set for
-home + lock screen.
-
-Shader Editor has no frame-rate cap: while visible, the wallpaper
-renders every frame at the display's refresh rate. Its cost shows in
-the editor: open the shader, hide the keyboard, unplug (the GPU
-throttles on battery) and read the FPS in the toolbar's quality
-spinner label. The counter tops out at the refresh rate; anything
-below it means the GPU is flat out rendering this shader. Lower the
-quality spinner (1/2 renders a quarter of the pixels) until it holds
-the refresh rate with room to spare. Battery: Settings → Battery →
-Battery usage lists the wallpaper under Shader Editor.
-
-After changing the shared shader/uniforms: `update` regenerates the
-file; re-paste into Shader Editor (its storage is app-internal — the
-last hop can't be declarative).
+The APK is committed signed. After a DMS bump (`nix flake update dms`)
+or an app change, `checks.hexrain-wallpaper-sync` fails until it's
+re-signed: on a machine holding the user age key,
+`nix run .#hexrain-wallpaper-release` rebuilds, bumps
+`pkgs/hexrain-wallpaper/version`, signs with the keystore from
+`secrets/user/hexrain-wallpaper-keystore.age` (in a temp dir, never the
+store) and stages both; commit them.
 
 ## Known unverified-on-device bits
 

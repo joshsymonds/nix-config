@@ -6,6 +6,9 @@
 # skipped), everything else is drift-reported with instructions.
 #
 # Categories:
+#   local     — built in this repo (signed APK committed beside this file).
+#               `update` installs it when missing or when the APK changed
+#               since the last install it saw through.
 #   fdroid    — installable by `update` via fdroidcl + termux-open.
 #               id = Android package id as F-Droid names it.
 #   obtainium — sourced from GitHub releases, tracked/updated by Obtainium
@@ -13,6 +16,16 @@
 #   play      — Play Store only; no programmatic path exists. `update`
 #               reports these missing. This list IS the rebuild checklist.
 {
+  local = [
+    # DMS's hexrain wallpaper as a live wallpaper (home + lock) — see
+    # pkgs/hexrain-wallpaper and hosts/shrike/README.md.
+    {
+      id = "com.joshsymonds.hexrain";
+      label = "Hexrain wallpaper";
+      apk = ./hexrain-wallpaper.apk;
+    }
+  ];
+
   fdroid = [
     # The store app itself is the one F-Droid app `update` can't install
     # (nothing exists to install it with); it's listed so drift-reporting
@@ -31,12 +44,6 @@
     {
       id = "com.termux.api";
       label = "Termux:API";
-    }
-    # Renders ~/wallpaper/chrome-hexrain-shadereditor.glsl as the live
-    # wallpaper (home + lock) — see hosts/shrike/README.md.
-    {
-      id = "de.markusfisch.android.shadereditor";
-      label = "Shader Editor";
     }
   ];
 

@@ -1,11 +1,11 @@
 // chrome_hexrain — single-pass body of DMS's hexrain wallpaper
 // (quickshell/Shaders/frag/chrome_hexrain*.frag in the DMS fork) for
 // renderers that run one fragment shader and nothing else: halmasuit's
-// wallpaper engine and the Shader Editor app. DMS computes the per-cell
+// wallpaper engine. DMS computes the per-cell
 // data (cell pass), the sun field (light pass) and the sun placements
 // (SunField.js) once per frame; here every fragment derives the ones it
-// needs. Valid GLSL ES 100 and 300 es; the targets declare the
-// parameters (uniforms.nix) and iTime / iResolution and call
+// needs. Valid GLSL ES 100 and 300 es; the host declares the
+// parameters (uniforms.nix) and iTime / iResolution and calls
 // mainImage(fragColor, fragCoord) with fragCoord in canvas pixels, y down.
 //
 // The field is a layer of thin hexagonal scales floating over a glowing
@@ -21,7 +21,7 @@
 // hex edges blends in by 1 - modeAmount.
 //
 // DMS's palette-flip wave (and so the scales' rims, which show only while
-// a scale turns over) is not carried: neither target has a palette change
+// a scale turns over) is not carried: the greeter has no palette change
 // to animate. Every rate is constant, so each clock DMS integrates is
 // rate × scene time, and scene time is iTime × timeScale.
 

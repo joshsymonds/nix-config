@@ -1,6 +1,5 @@
-# chrome_hexrain wallpaper parameters — the single source of values for
-# BOTH render targets (halmasuit on gnomon feeds these as runtime
-# uniforms; shrike's Shader Editor export bakes them as consts). Synced
+# chrome_hexrain wallpaper parameters for halmasuit (gnomon's greeter),
+# which feeds them to body.glsl as runtime uniforms. Synced
 # from the live DMS scene (quickshell/Shaders/scenes/wallpaper.json in
 # the DMS fork); floats only (GLSL ES uniform floats), vec4s as
 # 4-element lists. Scene keys body.glsl doesn't read are left out: the

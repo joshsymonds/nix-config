@@ -2,7 +2,7 @@
 #
 # Imports:
 #   - niri-flake's NixOS module (replaces nixpkgs' niri, adds typed settings)
-#   - DMS's two NixOS modules (the shell itself + DankGreeter login)
+#   - DMS's NixOS module (the shell itself) and dux-greeter's (DankGreeter login)
 #   - The thin compositor support layer in ./niri.nix (portals, audio, fonts, CLI)
 #
 # Hosts opt in with desktop.dms-niri.enable = true.
@@ -18,12 +18,13 @@ in {
   imports = [
     inputs.niri-flake.nixosModules.niri
     inputs.dms.nixosModules.dank-material-shell
-    # DMS's greeter NixOS module — the greetd-based DankGreeter login.
-    # Gated below by desktop.dms-niri.greeter.enable. (gnomon ran
-    # halmasuit as its display manager for a stretch; that lives in
+    # dux-greeter's NixOS module — the greetd-based DankGreeter login,
+    # split out of DMS in its 2.0 restructure. Gated below by
+    # desktop.dms-niri.greeter.enable. (gnomon ran halmasuit as its
+    # display manager for a stretch; that lives in
     # modules/desktop/halmasuit.nix and, when enabled, replaces this
     # greetd path. With halmasuit off, this is gnomon's login.)
-    inputs.dms.nixosModules.greeter
+    inputs.dank-greeter.nixosModules.default
     ./niri.nix
   ];
 
@@ -68,13 +69,6 @@ in {
       enableDynamicTheming = true;
       enableSystemMonitoring = true;
       enableVPN = true;
-      # nixpkgs' quickshell (0.3.2), not the DMS fork's pinned build: the
-      # fork's flake still pins quickshell 783c953 (2026-04, 0.2.1), which
-      # no longer compiles against nixpkgs' Qt 6.12 (QMetaType static
-      # asserts in the Hyprland IPC module). Upstream DMS made the same
-      # move in AvengeMedia/DankMaterialShell#2417 (2026-05-14) and
-      # recommends ≥0.3.0. Drop once the fork merges that change.
-      quickshell.package = pkgs.quickshell;
     };
 
     # niri-flake unconditionally ships a polkit-kde-agent unit
@@ -93,39 +87,9 @@ in {
 
     # DankGreeter — graphical login via greetd. Recovery escape hatch
     # is the tty (Ctrl+Alt+F2 → standard NixOS console login).
-    programs.dank-material-shell.greeter = lib.mkIf cfg.greeter.enable {
+    programs.dms-greeter = lib.mkIf cfg.greeter.enable {
       enable = true;
       compositor.name = "niri";
-      # Same quickshell as the shell above (see the note there).
-      quickshell.package = pkgs.quickshell;
-      # Without customConfig, the dms-greeter wrapper generates a niri
-      # config hardcoding `debug { keep-max-bpc-unchanged }` — a flag
-      # niri removed (upstream f9f43d82, in our fork since the 2026-06-10
-      # sync). New niri rejects the whole generated config, falls back to
-      # defaults, and never runs the spawn-at-startup that launches the
-      # greeter UI: black screen at login. This is the wrapper's base
-      # config verbatim minus the dead flag (the wrapper still appends
-      # the quickshell spawn line itself). Drop once the DMS fork's
-      # dms-greeter script no longer emits the flag.
-      compositor.customConfig = ''
-        hotkey-overlay {
-            skip-at-startup
-        }
-
-        environment {
-            DMS_RUN_GREETER "1"
-        }
-
-        gestures {
-           hot-corners {
-             off
-           }
-        }
-
-        layout {
-          background-color "#000000"
-        }
-      '';
       # DankGreeter gates its FIDO/U2F login flow behind the DMS setting
       # greeterEnableU2f, which defaults to false (GreetdSettings.qml).
       # With it false, maybeAutoStartExternalAuth() early-returns and the

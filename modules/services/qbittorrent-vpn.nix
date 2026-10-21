@@ -31,7 +31,7 @@ in {
 
     image = lib.mkOption {
       type = lib.types.str;
-      default = "lscr.io/linuxserver/qbittorrent:5.2.4";
+      default = "lscr.io/linuxserver/qbittorrent:5.3.0";
       description = "qBittorrent OCI image. linuxserver's image runs qbittorrent-nox and reads PUID/PGID.";
     };
 

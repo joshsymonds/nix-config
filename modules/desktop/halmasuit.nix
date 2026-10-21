@@ -43,8 +43,7 @@
   # for the post-login DMS experience). Reached directly rather than
   # through halmasuit's own dms input — both pin the same branch.
   dmsShell = inputs.dms.packages.${pkgs.stdenv.hostPlatform.system}.dms-shell;
-  # Quickshell is nixpkgs', matching the DMS shell (see
-  # modules/desktop/dms-niri.nix for why not the fork's pinned build).
+  # Quickshell is nixpkgs', the DMS module's default for the shell too.
   dmsQuickshell = pkgs.quickshell;
 
   # The greeter executable halmasuit forks at startup. Runs as the

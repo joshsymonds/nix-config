@@ -23,14 +23,14 @@
   # floating tag — so the deployed version changes exclusively via this line.
   # Upstream's release tags dropped the "v" prefix after v2.25.8 (releases
   # continue as e.g. 2.30.0 on both ghcr and Docker Hub). This digest is
-  # upstream main @ 6cdf759 (:latest, 2026-10-20), newer than the 2.30.0
+  # upstream main @ 452b876 (:latest, 2026-10-21), newer than the 2.30.0
   # release (still the newest tag).
   # Bump deliberately, preferring a release tag:
   #   skopeo inspect --format '{{.Digest}}' docker://ghcr.io/elie222/inbox-zero:2.30.0
   # (or :latest with the .revision label for a main snapshot), then update the
   # digest and version note here, rebuild, and restart
   # podman-inbox-zero-web + podman-inbox-zero-worker.
-  inboxZeroImage = "ghcr.io/elie222/inbox-zero@sha256:9c61d54b9c8c73b72e0c35ab339bae011329444abd8c5f2c62bb9fd65225ae5f";
+  inboxZeroImage = "ghcr.io/elie222/inbox-zero@sha256:25b39707a45fc3333ab8abfab5747ae518dcaa588b0401d193a6a6b6483577be";
 
   # Assembles /run/inbox-zero/runtime.env for the web and worker containers.
   # Referenced from the podman services' restartTriggers so env changes here

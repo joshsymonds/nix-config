@@ -22,13 +22,6 @@ in {
   programs.dank-material-shell = {
     enable = true;
     systemd.enable = true;
-    # nixpkgs' quickshell (0.3.2), not the DMS fork's pinned build: the
-    # fork's flake still pins quickshell 783c953 (2026-04, 0.2.1), which
-    # no longer compiles against nixpkgs' Qt 6.12 (QMetaType static
-    # asserts in the Hyprland IPC module). Upstream DMS made the same
-    # move in AvengeMedia/DankMaterialShell#2417 (2026-05-14) and
-    # recommends ≥0.3.0. Drop once the fork merges that change.
-    quickshell.package = pkgs.quickshell;
     enableAudioWavelength = true;
     enableCalendarEvents = true;
     enableClipboardPaste = true;

@@ -91,7 +91,7 @@
     # Ephemeral root + selective persistence (paired with disko).
     # PINNED to the post-bindfs-migration HEAD (real systemd bind mounts).
     # Explicit rev so the input can't silently float and re-regress.
-    impermanence.url = "github:nix-community/impermanence/7b1d382faf603b6d264f58627330f9faa5cba149";
+    impermanence.url = "github:nix-community/impermanence/936ced36ecd25fcbd9b4789184b88aa2e4c2a901";
 
     # Declarative Flatpak management. Adds `services.flatpak.packages` so the
     # system's Flatpak install set is reconciled on activation (install missing,
@@ -128,6 +128,16 @@
     dms = {
       url = "github:joshsymonds/DankMaterialShell/josh/integration";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # DankGreeter — DMS's greetd login. Upstream split it out of DMS into
+    # its own repo in the 2.0 restructure; DMS's own `nixosModules.greeter`
+    # is now a warn-only stub. Upstream directly (no fork patches), sharing
+    # DMS's dux-qml-common pin.
+    dank-greeter = {
+      url = "github:duxlabs-dev/dux-greeter";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.dank-qml-common.follows = "dms/dank-qml-common";
     };
 
     # niri-flake — declaratively-typed niri config + module that supersedes nixpkgs'

@@ -15,7 +15,7 @@ pkgs.buildNpmPackage {
       ./orchestrator-processes
     ];
   };
-  npmDepsHash = "sha256-aZELPAOI0AKzKthDx9ara8uhaCHa+akwE2q7wbnXGNQ=";
+  npmDepsHash = "sha256-ul1O11wEofoJOxWJ9bwtwlPy1hejmrk5CuYTAY85dIU=";
   # Pi's loader supplies SDK peers. Never install another harness, run package
   # lifecycle scripts, or download mutable dependencies at Pi startup.
   npmFlags = ["--legacy-peer-deps"];

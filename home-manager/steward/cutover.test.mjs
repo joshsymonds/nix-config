@@ -394,8 +394,11 @@ test("generated Codex activation preserves unrelated mutable configuration atomi
       input: JSON.stringify(current), encoding: "utf8",
     }));
     chmodSync(target, 0o600);
+    // HOME only, no PATH: the activation must run on its substituted store
+    // paths alone, so the shell itself is resolved here by absolute path.
     const env = { HOME: home };
-    const first = spawnSync("bash", ["-c", activation], { env, encoding: "utf8" });
+    const bash = join(commandRoot("bash"), "bin/bash");
+    const first = spawnSync(bash, ["-c", activation], { env, encoding: "utf8" });
     assert.equal(first.status, 0, first.stderr);
     const actual = JSON.parse(execFileSync(yq, ["-p=toml", "-o=json", ".", target], { encoding: "utf8" }));
     assert.deepEqual(actual.hooks, current.hooks);
@@ -410,7 +413,7 @@ test("generated Codex activation preserves unrelated mutable configuration atomi
     assert.equal(statSync(target).mode & 0o777, 0o600);
     const firstContents = readFileSync(target, "utf8");
     const firstInode = statSync(target).ino;
-    const second = spawnSync("bash", ["-c", activation], { env, encoding: "utf8" });
+    const second = spawnSync(bash, ["-c", activation], { env, encoding: "utf8" });
     assert.equal(second.status, 0, second.stderr);
     assert.equal(readFileSync(target, "utf8"), firstContents);
     assert.equal(statSync(target).ino, firstInode, "idempotent activation rewrote the target");
@@ -419,7 +422,7 @@ test("generated Codex activation preserves unrelated mutable configuration atomi
     writeFileSync(target, execFileSync(yq, ["-p=json", "-o=toml", "."], {
       input: JSON.stringify(current), encoding: "utf8",
     }));
-    const discarded = spawnSync("bash", ["-c", discardingActivation], { env, encoding: "utf8" });
+    const discarded = spawnSync(bash, ["-c", discardingActivation], { env, encoding: "utf8" });
     assert.equal(discarded.status, 0, discarded.stderr);
     const discardedJson = JSON.parse(execFileSync(yq, ["-p=toml", "-o=json", ".", target], { encoding: "utf8" }));
     assert.equal(discardedJson.hooks, undefined, "negative control must discard mutable hook state");
@@ -428,7 +431,7 @@ test("generated Codex activation preserves unrelated mutable configuration atomi
     writeFileSync(target, "invalid = [\n");
     chmodSync(target, 0o640);
     const before = readFileSync(target);
-    const failed = spawnSync("bash", ["-c", activation], { env, encoding: "utf8" });
+    const failed = spawnSync(bash, ["-c", activation], { env, encoding: "utf8" });
     assert.notEqual(failed.status, 0);
     assert.deepEqual(readFileSync(target), before);
     assert.equal(statSync(target).mode & 0o777, 0o640);

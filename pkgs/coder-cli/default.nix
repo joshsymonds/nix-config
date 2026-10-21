@@ -4,27 +4,27 @@
   fetchurl,
   unzip,
 }: let
-  version = "2.37.5";
+  version = "2.38.1";
 
   sources = {
     "x86_64-linux" = {
       url = "https://github.com/coder/coder/releases/download/v${version}/coder_${version}_linux_amd64.tar.gz";
-      hash = "sha256-iZ4wtKggew3xo+d6GSZW38Py+dRraIpSRNm0b9t+lZU=";
+      hash = "sha256-lYDsvX/TUARv9TGUVBmDdE//L7HI5JGpiSLde2yzT/Y=";
       unpackCmd = "tar -xzf \"$src\"";
     };
     "aarch64-linux" = {
       url = "https://github.com/coder/coder/releases/download/v${version}/coder_${version}_linux_arm64.tar.gz";
-      hash = "sha256-6grIE9+jQ8Bk+pbbY0toG/H+0H55mjj4QNKOg3WxHyM=";
+      hash = "sha256-+cj8sXrXahL5zp6m+US6B6ZGLKbQytUYcRt1/Ym/aAs=";
       unpackCmd = "tar -xzf \"$src\"";
     };
     "x86_64-darwin" = {
       url = "https://github.com/coder/coder/releases/download/v${version}/coder_${version}_darwin_amd64.zip";
-      hash = "sha256-WqE2tGD+rjAlk9mR7zkIqE+yiBZfclENu3ZAAbBtrDo=";
+      hash = "sha256-Ihh0jdyVs4yzrS6fbeeLpbBOa02qTgFr6WQN5SIlyko=";
       unpackCmd = "unzip -q \"$src\"";
     };
     "aarch64-darwin" = {
       url = "https://github.com/coder/coder/releases/download/v${version}/coder_${version}_darwin_arm64.zip";
-      hash = "sha256-LQwPDeABhtpevj44SYEPvErQS0k4iWQ2s9kWEFSQBA0=";
+      hash = "sha256-rFqq4454kaCWnUAPnfWBxynlCqYVTCoM3H24W+I1Bgk=";
       unpackCmd = "unzip -q \"$src\"";
     };
   };

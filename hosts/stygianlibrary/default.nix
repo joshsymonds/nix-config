@@ -361,12 +361,12 @@
   services.avahi = {
     enable = true;
     nssmdns4 = true;
-    publish = {
-      enable = true;
-      addresses = true;
-      domain = true;
-      hinfo = true;
-      workstation = true;
+    settings.publish = {
+      disable-publishing = false;
+      publish-addresses = true;
+      publish-domain = true;
+      publish-hinfo = true;
+      publish-workstation = true;
     };
     # mDNS uses UDP 5353; firewall already trusts tailscale0 and
     # allows TCP 22. Open 5353 explicitly on the LAN interface so

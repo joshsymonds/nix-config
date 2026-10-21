@@ -34,38 +34,40 @@ sub pad_comment {
 
 my @subs;
 
-# S1: enable the model-capabilities subsystem. As of 2.1.304 c8n gates the
-# startup models.list fetch (Ta, which now skips the fetch while the cache is
-# fresh), the storage-backed prime read, and the per-model lookup Yv() (exact
-# id match, then substring; also off in diskless launches). Flipping it also
-# lets the max_output_tokens resolver source max_tokens from the same cache
-# natively (it already calls Yv(e)?.max_tokens). 2.1.280's served-catalog path
+# S1: enable the model-capabilities subsystem. As of 2.1.305 Y9n gates the
+# startup models.list fetch (E6s, which skips the fetch while the cache is
+# fresh), the storage-backed prime read (v6s), and the per-model lookup tE()
+# (exact id match, then substring; also off in diskless launches). Flipping it
+# also lets the max_output_tokens resolver source max_tokens from the same
+# cache natively (it already calls tE(e)?.max_tokens). 2.1.280's served-catalog path
 # (servedCatalog / runtime.max_input_tokens) still only covers the Anthropic
 # org's Claude models, so this gate is still the only route to a per-model
-# window for foreign ids. (2.1.293's ohr, 2.1.284's R3n, 2.1.280's FOn,
+# window for foreign ids. (2.1.304's c8n, 2.1.293's ohr, 2.1.284's R3n, 2.1.280's FOn,
 # 2.1.269's Gtn, 2.1.257's K4t.)
 push @subs, {
-    name => 'S1_c8n',
-    find => 'function c8n(){return!1}',
-    repl => 'function c8n(){return!0}',
+    name => 'S1_Y9n',
+    find => 'function Y9n(){return!1}',
+    repl => 'function Y9n(){return!0}',
 };
 
-# S2: in i0 (window resolution), source the per-model input window from the
+# S2: in l0 (window resolution), source the per-model input window from the
 # capabilities cache for non-claude ids instead of the
 # CLAUDE_CODE_MAX_CONTEXT_TOKENS env var. Only the 32-byte env token becomes
-# the 23-byte cache lookup Yv(e)?.max_input_tokens; the 9-byte difference is
-# absorbed by a /* */ comment. The existing non-claude gate Jv(e) and the
-# `return EQe` (200k default) fallthrough are untouched, so claude ids and
-# cache misses (Yv(e) -> undefined) still fall through unchanged. The full
+# the 23-byte cache lookup tE(e)?.max_input_tokens; the 9-byte difference is
+# absorbed by a /* */ comment. The existing non-claude gate iE(e) and the
+# `return CTe` (200k default) fallthrough are untouched, so claude ids and
+# cache misses (tE(e) -> undefined) still fall through unchanged. 2.1.305
+# added a j_t(e) check just before the env clause; it is a Sonnet-4.6-only
+# flag override that returns null for every other id. The full
 # clause is used as the anchor because the bare token is not unique (also in
-# Qv, the DISABLE_COMPACT override, and the unknown-model notice).
-# (2.1.293's Iv / Rv / Pv / KVe; 2.1.284's Kh / Nh / Bh / zFe; 2.1.280's
+# sE, the DISABLE_COMPACT override, and the unknown-model notice).
+# (2.1.304's i0 / Yv / Jv / EQe; 2.1.293's Iv / Rv / Pv / KVe; 2.1.284's Kh / Nh / Bh / zFe; 2.1.280's
 # Ig / ag / Mg / CHe; 2.1.269's Sz / fz / hz / Obe; 2.1.257's PL / vL / kL /
 # Eme.)
 {
-    my $find      = 'let s=a.CLAUDE_CODE_MAX_CONTEXT_TOKENS;if(s!==void 0&&s>0&&Jv(e))return s;return EQe}';
+    my $find      = 'let h=a.CLAUDE_CODE_MAX_CONTEXT_TOKENS;if(h!==void 0&&h>0&&iE(e))return h;return CTe}';
     my $token_old = 'a.CLAUDE_CODE_MAX_CONTEXT_TOKENS';
-    my $token_new = 'Yv(e)?.max_input_tokens';
+    my $token_new = 'tE(e)?.max_input_tokens';
     my $pad       = pad_comment(length($token_old) - length($token_new));
     (my $repl = $find) =~ s/\Q$token_old\E/$token_new$pad/;
     push @subs, { name => 'S2_i0', find => $find, repl => $repl };
@@ -75,16 +77,16 @@ push @subs, {
 # becomes `return!1` followed by a /* */ comment padding it to the original
 # length; the original latch call is dropped entirely (no dead RHS to evaluate).
 # (2.1.257's eje accessor is 2.1.269's t4e, 2.1.280's Sst, 2.1.284's Oht,
-# 2.1.293's MIt, and 2.1.304's ZGt; its only window-path caller is
-# W$o(e,n){return ZGt()&&Qv()===void 0&&Zv(e,n)>x2}, which clamps the resolved
-# window to x2 = 200k.)
+# 2.1.293's MIt, 2.1.304's ZGt, and 2.1.305's hnt; its only window-path caller
+# is gBo(e,n){return hnt()&&sE()===void 0&&aE(e,n)>eK}, which clamps the
+# resolved window to eK = 200k.)
 {
-    my $find   = 'function ZGt(){return n().host.accountCreditLatches.longContext1mCreditsBlocked()}';
-    my $prefix = 'function ZGt(){return!1';
+    my $find   = 'function hnt(){return n().host.accountCreditLatches.longContext1mCreditsBlocked()}';
+    my $prefix = 'function hnt(){return!1';
     my $suffix = '}';
     my $padlen = length($find) - length($prefix) - length($suffix);
     my $repl   = $prefix . pad_comment($padlen) . $suffix;
-    push @subs, { name => 'S3_ZGt', find => $find, repl => $repl };
+    push @subs, { name => 'S3_hnt', find => $find, repl => $repl };
 }
 
 # Static invariant: every replacement is exactly as long as its find. A failure

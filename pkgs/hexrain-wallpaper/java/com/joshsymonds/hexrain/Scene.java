@@ -12,13 +12,19 @@ import java.util.Map;
  * dome) are taken as dp, so the scales come out the size they are on the
  * desktop rather than a few phone pixels; lengths that set the perspective
  * (camera and front-sun heights) scale with the canvas, so the field is
- * seen at the same angles. Everything else in the scene is relative to the
- * canvas or unitless already.
+ * seen at the same angles. The suns drift a fraction of the canvas per
+ * second, and a phone canvas spans far fewer of those desktop-sized scales,
+ * so their drift is sped up by the ratio to cross the scales at the
+ * desktop's pace (their lifetimes stay). Everything else in the scene is
+ * relative to the canvas or unitless already.
  */
 final class Scene {
     private static final float DESKTOP_CANVAS = 5120f;
     private static final String[] SCALE_LENGTHS = {"cellSize", "heightRange", "slabThickness", "domeHeight"};
     private static final String[] VIEW_LENGTHS = {"cameraDistance", "frontSunHeight"};
+    private static final String[] SUN_SPEEDS = {
+        "backSunSpeed", "backNegSunSpeed", "frontSunSpeed", "frontNegSunSpeed", "fastBackSunSpeed",
+    };
 
     private final Map<String, float[]> values;
     /** DMS's harness.speed: scene seconds per real second. */
@@ -52,6 +58,12 @@ final class Scene {
         float canvas = Math.max(width, height) / DESKTOP_CANVAS;
         for (String key : VIEW_LENGTHS) {
             out.put(key, new float[] {(float) get(key) * canvas});
+        }
+        // Desktop canvas over this one, both in dp: how many times fewer
+        // scales the suns have to cross here.
+        float sunPace = DESKTOP_CANVAS * density / Math.max(width, height);
+        for (String key : SUN_SPEEDS) {
+            out.put(key, new float[] {(float) get(key) * sunPace});
         }
         out.put("barZoneEnabled", new float[] {0f});
         out.put("iResolution", new float[] {width, height, 1f});

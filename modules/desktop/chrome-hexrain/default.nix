@@ -1,8 +1,9 @@
 # chrome_hexrain — one shader, two render targets.
 #
-# body.glsl is the shared 780-line shader body (mainImage + helpers),
-# originally ported from DMS's chrome_hexrain.frag. uniforms.nix is the
-# shared parameter set. This file assembles the two consumable variants:
+# body.glsl is the shared shader body (mainImage + helpers): DMS's
+# multi-pass chrome_hexrain wallpaper as a single pass. uniforms.nix is
+# the shared parameter set. This file assembles the two consumable
+# variants:
 #
 #   halmasuitSource — GLSL ES 100 fragment source for halmasuit's
 #     wallpaper engine (gnomon). Declares each parameter as a runtime
@@ -13,9 +14,11 @@
 #   androidSource — a self-contained `#version 300 es` shader for the
 #     Shader Editor app on shrike (de.markusfisch.android.shadereditor).
 #     Same body; parameters baked as consts (Shader Editor can't be fed
-#     uniforms externally), iTime/iResolution mapped from the app's
-#     time/resolution, windowGeom collapsed to the whole surface, bar
-#     zone off (no DMS bar on a phone), alpha forced opaque.
+#     uniforms externally), iTime from the app's `runtime` (highp, keeps
+#     counting across wallpaper pauses), iResolution from `resolution`,
+#     fragCoord flipped to the body's y-down canvas, windowGeom collapsed
+#     to the whole surface, bar zone off (no DMS bar on a phone), alpha
+#     forced opaque.
 #
 # Edit body.glsl or uniforms.nix and both targets pick it up on their
 # next rebuild (gnomon: `update`; shrike: `update`, then re-paste into
@@ -41,8 +44,9 @@
       // Assembled by modules/desktop/chrome-hexrain (halmasuit target).
       // halmasuit's shader compiler prepends its GLSL ES 100 preamble
       // declaring iTime/iResolution/iTimeDelta/iFrame/iMouse and wraps
-      // mainImage; uniform values arrive at runtime from
-      // services.halmasuit.wallpaper.uniforms.
+      // mainImage, passing gl_FragCoord.xy (y down: halmasuit renders
+      // into scanout buffers top row first); uniform values arrive at
+      // runtime from services.halmasuit.wallpaper.uniforms.
 
       precision highp float;
       precision highp int;
@@ -71,16 +75,17 @@
       // Editor app, then: system wallpaper picker -> Live wallpapers ->
       // Shader Editor -> apply to home + lock screen. Cap the frame
       // rate in the app's settings (~30fps reads identically, halves
-      // the battery cost).
+      // the battery cost) and, if it can't hold 30fps, lower the
+      // quality spinner (render resolution).
 
       precision highp float;
       precision highp int;
 
-      uniform float time;
+      uniform highp float runtime;
       uniform vec2 resolution;
       out vec4 outColor;
 
-      #define iTime time
+      #define iTime runtime
       #define iResolution vec3(resolution, 1.0)
       #define windowGeom vec4(0.0, 0.0, resolution)
 
@@ -93,7 +98,7 @@
 
       void main() {
           vec4 c;
-          mainImage(c, gl_FragCoord.xy);
+          mainImage(c, vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y));
           outColor = vec4(c.rgb, 1.0);
       }
     '';

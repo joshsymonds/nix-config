@@ -72,12 +72,11 @@
   '';
 
   # Wallpaper uniforms — values live in chrome-hexrain/uniforms.nix
-  # (shared with shrike's Shader Editor export), synced byte-equivalently
-  # from the user's live
-  # DMS chrome_hexrain scene at
+  # (shared with shrike's Shader Editor export), synced from the user's
+  # live DMS chrome_hexrain scene at
   # ~/Personal/DankMaterialShell/quickshell/Shaders/scenes/wallpaper.json
   # (the canonical source-of-truth edited via DMS's scene editor) so
-  # the Phase B greeter wallpaper matches the post-login DMS exactly.
+  # the Phase B greeter wallpaper matches the post-login DMS.
   #
   # Coercions applied:
   #   - DMS uses "#RRGGBB" hex; halmasuit takes [ r g b a ] floats.
@@ -85,16 +84,14 @@
   #   - DMS uses int for some uniforms (e.g. backSunCount = 4);
   #     halmasuit needs floats (the .frag declares `uniform float`).
   #     Integers are written as `4.0` etc.
-  #   - DMS sends `barZoneScreens: [ "DP-2" ]` as a per-output filter
-  #     consumed by Quickshell, not the shader. halmasuit's barZone is
-  #     global; this knob is intentionally absent.
-  #   - DMS sends `depthShading`, `flipSpecular`, `hexDepth` — these
-  #     are NEWER scene-editor uniforms not present in halmasuit's
-  #     current chrome_hexrain port (chrome-hexrain/body.glsl).
-  #     Intentionally absent until the shader is updated; sending them
-  #     to a shader without bindings would be a no-op anyway.
+  #   - DMS's harness.speed (the rate its clock feeds the shader) is
+  #     timeScale here: halmasuit feeds raw seconds.
+  #   - Scene keys the single-pass body doesn't read are absent: the
+  #     palette-flip set and rimGlow (see uniforms.nix), and
+  #     `barZoneScreens`, a per-output filter consumed by Quickshell
+  #     (halmasuit's barZone is global).
   #
-  # Last synced: 2026-05-29 against wallpaper.json in DMS fork.
+  # Last synced: 2026-10-21 against wallpaper.json in DMS fork.
   chromeHexrain = import ./chrome-hexrain {inherit lib;};
   wallpaperUniforms = chromeHexrain.uniforms;
 in {

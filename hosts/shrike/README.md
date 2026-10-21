@@ -134,7 +134,10 @@ inherent, and fine for a debug session.
 The closure ships `~/wallpaper/chrome-hexrain-shadereditor.glsl` —
 gnomon's halmasuit shader assembled for the Shader Editor app from the
 SAME shared body + uniform values (modules/desktop/chrome-hexrain/), so
-edits there flow to both machines on their next rebuilds.
+edits there flow to both machines on their next rebuilds. The body is
+DMS's 3D hexrain wallpaper in a single pass: every pixel works out the
+sun field and its scales' poses itself, which costs about 1.2x the
+previous 2D shader.
 
 The Shader Editor variant is a COMMITTED artifact —
 `hosts/shrike/chrome-hexrain-shadereditor.glsl` — kept in sync with the
@@ -148,7 +151,10 @@ contents** button — the whole shader lands on the clipboard in one tap.
 Paste into a new shader in the app. Then:
 system wallpaper picker → Live wallpapers → Shader Editor → set for
 home + lock screen. Cap the frame rate in the app's settings (~30fps
-reads identically, halves the battery cost).
+reads identically, halves the battery cost). If it can't hold 30fps
+(check with the keyboard hidden and the charger off — the GPU
+throttles on battery), lower the shader's quality spinner (1/2 renders
+a quarter of the pixels).
 
 After changing the shared shader/uniforms: `update` regenerates the
 file; re-paste into Shader Editor (its storage is app-internal — the

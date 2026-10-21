@@ -1,72 +1,93 @@
 # chrome_hexrain wallpaper parameters — the single source of values for
 # BOTH render targets (halmasuit on gnomon feeds these as runtime
 # uniforms; shrike's Shader Editor export bakes them as consts). Synced
-# byte-equivalently from the user's live DMS scene-editor state; floats
-# only (GLSL ES uniform floats), vec4s as 4-element lists.
+# from the live DMS scene (quickshell/Shaders/scenes/wallpaper.json in
+# the DMS fork); floats only (GLSL ES uniform floats), vec4s as
+# 4-element lists. Scene keys body.glsl doesn't read are left out: the
+# palette-flip set (flip*, color*Next) and rimGlow, which only show
+# while a scale turns over; barZoneScreens, a Quickshell-side filter.
 {
-  intensity = 0.66;
-  cellSize = 29.0;
+  # Scene clock rate: DMS's harness.speed, which scales the time it
+  # feeds the shader.
+  timeScale = 0.25;
 
-  colorPrimary = [0.345098 0.592157 0.886275 1.0]; # #5897e2
-  colorSecondary = [0.717647 0.066667 0.858824 1.0]; # #b711db
-  colorPrimaryContainer = [0.090196 0.082353 0.337255 1.0]; # #171556
-  colorTertiary = [0.223529 1.000000 0.600000 1.0]; # #39ff99
+  intensity = 0.76;
+  cellSize = 31.0;
 
-  colorPrimaryNext = [0.223529 1.000000 0.600000 1.0]; # #39ff99
-  colorSecondaryNext = [1.000000 0.466667 0.200000 1.0]; # #ff7733
-  colorPrimaryContainerNext = [0.337255 0.082353 0.082353 1.0]; # #561515
-  colorTertiaryNext = [1.000000 0.847059 0.290196 1.0]; # #ffd84a
-  flipOriginX = 200.0;
-  flipOriginY = 700.0;
-  flipStartTime = 1.0e9; # far future — flip wave inert
-  flipPropDelay = 0.12;
-  flipDuration = 1.6;
+  colorPrimary = [0.345098 0.592157 0.886275 1.000000]; # #5897e2
+  colorSecondary = [0.717647 0.066667 0.858824 1.000000]; # #b711db
+  colorPrimaryContainer = [0.090196 0.082353 0.337255 1.000000]; # #171556
+  colorTertiary = [0.223529 1.000000 0.600000 1.000000]; # #39ff99
 
-  modeAmount = 0.77;
-  domeStrength = 0.78;
-  seamGlow = 2.26;
-  sunDriftSpeed = 1.8;
-  heightAmount = 0.55;
-  matteness = 0.42;
-  bleedBack = 0.18;
-  hexBevel = 0.6;
-  heightDriftSpeed = 0.75;
+  # Field
+  modeAmount = 0.71;
+  domeStrength = 0.85;
+  seamGlow = 2.5;
+  seamBase = 0.3;
+  sunDriftSpeed = 1.85;
+  heightAmount = 0.63;
+  matteness = 0.58;
+  hexBevel = 0.38;
 
-  frontSunStrength = 0.62;
+  # Scales
+  heightRange = 10.75;
+  heightDriftSpeed = 1.6;
+  tiltMax = 0.12;
+  tiltDriftSpeed = 0.85;
+  slabThickness = 4.0;
+  domeHeight = 8.0;
+  cameraDistance = 6700.0;
+
+  # Material
+  grainScale = 0.3;
+  grainStrength = 0.0;
+  keyLight = 0.6;
+  scaleShadow = 0.7;
+  occlusion = 0.6;
+
+  # Front suns
+  frontSunStrength = 0.48;
   frontSunSize = 0.57;
   frontSunLifetime = 45.0;
   frontSunGap = 12.0;
-  frontSunSpeed = 0.02;
-  frontSunShadowLength = 2.5;
-  frontSunShadowDarkness = 2.3;
-  backSunSize = 0.32;
-  backSunStrength = 1.0;
-  backSunLifetime = 50.0;
-  backSunGap = 15.0;
-  backSunSpeed = 0.015;
-  backNegSunSize = 0.33;
-  backNegSunStrength = 0.43;
-  backNegSunLifetime = 35.0;
-  backNegSunGap = 18.0;
-  backNegSunSpeed = 0.02;
-  backSunPaletteSpeed = 0.84;
+  frontSunSpeed = 0.052;
+  frontSunCount = 3.0;
+  frontSunHeight = 500.0;
   frontSunPaletteSpeed = 0.5;
-  backSunCount = 4.0;
-  backNegSunCount = 4.0;
-  frontSunCount = 4.0;
-  frontNegSunCount = 4.0;
+
+  # Front-negative suns
   frontNegSunStrength = 0.3;
   frontNegSunSize = 0.43;
   frontNegSunLifetime = 30.0;
   frontNegSunGap = 15.0;
   frontNegSunSpeed = 0.025;
+  frontNegSunCount = 4.0;
+
+  # Back suns
+  backSunStrength = 1.0;
+  backSunSize = 0.32;
+  backSunLifetime = 50.0;
+  backSunGap = 15.0;
+  backSunSpeed = 0.015;
+  backSunCount = 4.0;
+  backSunPaletteSpeed = 0.84;
+
+  # Back-negative suns
+  backNegSunStrength = 0.43;
+  backNegSunSize = 0.33;
+  backNegSunLifetime = 35.0;
+  backNegSunGap = 18.0;
+  backNegSunSpeed = 0.02;
+  backNegSunCount = 4.0;
+
+  # Fast back sun
   fastBackSunStrength = 1.12;
   fastBackSunSize = 0.25;
   fastBackSunLifetime = 26.0;
   fastBackSunGap = 37.0;
   fastBackSunSpeed = 0.145;
 
-  # Single-monitor mode: windowGeom = (0, 0, width, height). The
+  # Single-surface mode: windowGeom = (0, 0, width, height). The
   # actual resolution is filled in at runtime by the wallpaper
   # engine — but we declare it here so the uniform exists.
   # gnomon's DP-2/DP-3 are both 2560x1440.

@@ -139,8 +139,8 @@ three passes as the desktop, with the scene baked in from DMS's
 at 30 frames a second while visible and nothing while hidden.
 
 `update` offers it whenever `hosts/shrike/hexrain-wallpaper.apk` changed
-since the last install it saw through: it opens the APK's GitHub raw URL
-at the checked-out commit in the browser; open the download and confirm
+since the last install it saw through: it opens the APK's
+raw.githubusercontent.com URL at the checked-out commit in the browser; open the download and confirm
 the install (the first time, allow the browser to install apps). Then: system wallpaper picker → Live wallpapers → Hexrain →
 set for home + lock screen. Battery: Settings → Battery → Battery usage
 lists it as Hexrain.

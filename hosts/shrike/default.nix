@@ -145,10 +145,11 @@
     # Our own APKs (committed in this repo): offered when the APK differs
     # from the last one an install was confirmed for, or the app is gone
     # (where pm can tell). The browser fetches it from GitHub at the
-    # checked-out commit; open the download to install. Without pm,
-    # confirming counts as installed; delete $state/<id>.sha256 to be
-    # offered it again.
-    REPO_URL=https://github.com/joshsymonds/nix-config
+    # checked-out commit (raw.githubusercontent.com: github.com links go
+    # to the GitHub app, which does nothing with a raw file); open the
+    # download to install. Without pm, confirming counts as installed;
+    # delete $state/<id>.sha256 to be offered it again.
+    RAW_URL=https://raw.githubusercontent.com/joshsymonds/nix-config
     rev="$("$GIT" -C "$FLAKE_DIR" rev-parse HEAD)"
     state="''${XDG_STATE_HOME:-$HOME/.local/state}/shrike-apps"
     mkdir -p "$state"
@@ -159,7 +160,7 @@
         continue
       fi
       echo "==> $label: download it in the browser, then open the download to install"
-      open_for_install "$REPO_URL/raw/$rev/$path"
+      open_for_install "$RAW_URL/$rev/$path"
       if [ "$have_pm" = 0 ] \
         || /system/bin/pm list packages 2>/dev/null | sed 's/^package://' | grep -qxF "$id"; then
         echo "$sum" > "$state/$id.sha256"

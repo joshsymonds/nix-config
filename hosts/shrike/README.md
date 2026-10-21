@@ -138,9 +138,10 @@ three passes as the desktop, with the scene baked in from DMS's
 `wallpaper.json` (scales sized in dp, perspective fitted to the screen),
 at 30 frames a second while visible and nothing while hidden.
 
-`update` installs it (one confirmation tap) when it's missing or when
-`hosts/shrike/hexrain-wallpaper.apk` changed since the last install it
-saw through. Then: system wallpaper picker → Live wallpapers → Hexrain →
+`update` offers it whenever `hosts/shrike/hexrain-wallpaper.apk` changed
+since the last install it saw through: it opens the APK's GitHub raw URL
+at the checked-out commit in the browser; open the download and confirm
+the install (the first time, allow the browser to install apps). Then: system wallpaper picker → Live wallpapers → Hexrain →
 set for home + lock screen. Battery: Settings → Battery → Battery usage
 lists it as Hexrain.
 
@@ -156,10 +157,9 @@ store) and stages both; commit them.
 
 Written before the phone existed; check on first run:
 
-- `pm list packages` visibility from inside the sandbox (Android 11+
-  package-visibility rules). If it fails, `update` degrades to printing
-  the declared checklist. If it half-works (hides installed apps), the
-  installer prompt will offer "update" instead of "install" — harmless.
-- `fdroidcl` cache path pattern used to locate downloaded APKs.
+- `pm list packages` is NOT usable from inside the sandbox (checked on
+  the device): `update` installs local APKs on the strength of the
+  confirmation and only prints the declared F-Droid / Obtainium / Play
+  checklist.
 - `system.stateVersion "24.05"` is the newest the docs list; bump when
   upstream adds newer.

@@ -1,15 +1,16 @@
 # shrike's declared Android app set. The nix-on-droid closure is the
 # deterministic half of the phone; this file is the declared-but-imperative
-# half. `update` on shrike reconciles against it: F-Droid apps are
-# downloaded and handed to the system installer (one confirmation tap
-# each — silent installs would need adb/Shizuku machinery we deliberately
-# skipped), everything else is drift-reported with instructions.
+# half. `update` on shrike reconciles against it: installs open in the
+# browser or the store for one confirmation each (silent installs would
+# need adb/Shizuku machinery we deliberately skipped), everything else is
+# drift-reported with instructions.
 #
 # Categories:
-#   local     — built in this repo (signed APK committed beside this file).
-#               `update` installs it when missing or when the APK changed
+#   local     — built in this repo (signed APK committed beside this file;
+#               path = its place in the repo, which the browser fetches
+#               from GitHub). `update` offers it when the APK changed
 #               since the last install it saw through.
-#   fdroid    — installable by `update` via fdroidcl + termux-open.
+#   fdroid    — `update` opens the F-Droid page of each missing one.
 #               id = Android package id as F-Droid names it.
 #   obtainium — sourced from GitHub releases, tracked/updated by Obtainium
 #               on-device. `update` only reports these missing.
@@ -23,6 +24,7 @@
       id = "com.joshsymonds.hexrain";
       label = "Hexrain wallpaper";
       apk = ./hexrain-wallpaper.apk;
+      path = "hosts/shrike/hexrain-wallpaper.apk";
     }
   ];
 

@@ -89,11 +89,10 @@
   '';
 
   # `update`, phone-shaped: switch the nix-on-droid closure, then converge
-  # the Android app layer. F-Droid installs go through the system installer
-  # prompt (one tap each) — deliberately no adb-loopback/Shizuku machinery.
-  # /system/bin/pm package visibility from inside the app sandbox is
-  # unverified until this runs on the device; every use degrades to a
-  # printed checklist instead of failing.
+  # the Android app layer. Installs open a URL for the user to finish
+  # (one confirmation each) — deliberately no adb-loopback/Shizuku
+  # machinery. /system/bin/pm isn't usable from the app sandbox on the
+  # device, so drift detection degrades to a printed checklist.
   updateScript = pkgs.writeShellScriptBin "update" ''
     set -euo pipefail
 
@@ -118,7 +117,7 @@
 
     echo "==> checking declared Android app set"
     JQ=${pkgs.jq}/bin/jq
-    FDROIDCL=${pkgs.fdroidcl}/bin/fdroidcl
+    GIT=${pkgs.git}/bin/git
     APPS=${appsJson}
 
     installed=""
@@ -131,48 +130,41 @@
       printf '%s\n' "$installed" | grep -qxF "$1"
     }
 
-    # Hands an APK to the system installer and waits for the user to
-    # confirm it, one prompt at a time (a second intent would replace the
-    # first). The installer reads the file from outside the proot, so it
-    # must live under $HOME (the same path on both sides), not /nix/store.
-    prompt_install() {
-      local id="$1" apk="$2"
-      if command -v termux-open >/dev/null 2>&1; then
-        echo "  -> $id: confirm the install prompt"
-        termux-open --content-type application/vnd.android.package-archive "$apk"
-        read -r -p "     press enter once installed... " _ || true
-      else
-        dest="$HOME/storage/downloads/shrike-apps"
-        mkdir -p "$dest" && cp "$apk" "$dest/"
-        echo "  -> staged ''${dest}/$(basename "$apk") — tap it in the Files app"
-        echo "     (termux-open missing: run termux-setup-storage / re-switch first)"
-      fi
+    # Android's installer can't read files out of this sandbox: the app's
+    # file provider only serves them with allow-external-apps on, which
+    # also lets any app granted RUN_COMMAND read this home (fleet ssh key
+    # included) and run commands here. So installs go through URLs:
+    # termux-open-url hands Android the link itself, and the user finishes
+    # the install there, one app at a time.
+    open_for_install() {
+      local url="$1"
+      termux-open-url "$url"
+      read -r -p "     press enter once installed... " _ || true
     }
 
-    # Our own APKs: installed when the APK differs from the last one an
-    # install went through for (or the app is gone, where pm can tell).
-    # Without pm, confirming the prompt counts as installed; delete
-    # $state/<id>.sha256 to be offered it again.
+    # Our own APKs (committed in this repo): offered when the APK differs
+    # from the last one an install was confirmed for, or the app is gone
+    # (where pm can tell). The browser fetches it from GitHub at the
+    # checked-out commit; open the download to install. Without pm,
+    # confirming counts as installed; delete $state/<id>.sha256 to be
+    # offered it again.
+    REPO_URL=https://github.com/joshsymonds/nix-config
+    rev="$("$GIT" -C "$FLAKE_DIR" rev-parse HEAD)"
     state="''${XDG_STATE_HOME:-$HOME/.local/state}/shrike-apps"
-    staging="''${XDG_CACHE_HOME:-$HOME/.cache}/shrike-apps"
-    mkdir -p "$state" "$staging"
-    while IFS="$(printf '\t')" read -r id label apk <&3; do
+    mkdir -p "$state"
+    while IFS="$(printf '\t')" read -r id label apk path <&3; do
       sum="$(sha256sum "$apk" | cut -d' ' -f1)"
       if [ "$(cat "$state/$id.sha256" 2>/dev/null)" = "$sum" ] \
         && { [ "$have_pm" = 0 ] || is_installed "$id"; }; then
         continue
       fi
-      echo "==> $label: installing"
-      copy="$staging/$id.apk"
-      rm -f "$copy"
-      cp "$apk" "$copy"
-      chmod 644 "$copy"
-      prompt_install "$id" "$copy"
+      echo "==> $label: download it in the browser, then open the download to install"
+      open_for_install "$REPO_URL/raw/$rev/$path"
       if [ "$have_pm" = 0 ] \
         || /system/bin/pm list packages 2>/dev/null | sed 's/^package://' | grep -qxF "$id"; then
         echo "$sum" > "$state/$id.sha256"
       fi
-    done 3< <("$JQ" -r '.local[] | [.id, .label, .apk] | @tsv' "$APPS")
+    done 3< <("$JQ" -r '.local[] | [.id, .label, .apk, .path] | @tsv' "$APPS")
 
     if [ "$have_pm" = 0 ]; then
       echo "warning: pm not usable from this sandbox — can't detect drift."
@@ -181,27 +173,13 @@
       exit 0
     fi
 
-    fdroid_missing=()
-    while IFS= read -r id; do
-      is_installed "$id" || fdroid_missing+=("$id")
-    done < <("$JQ" -r '.fdroid[].id' "$APPS")
-
-    if [ "''${#fdroid_missing[@]}" -gt 0 ]; then
-      echo "==> missing F-Droid apps: ''${fdroid_missing[*]}"
-      "$FDROIDCL" update
-      for id in "''${fdroid_missing[@]}"; do
-        if ! "$FDROIDCL" download "$id"; then
-          echo "  ! download failed for $id (bad id, or not in the main repo)" >&2
-          continue
-        fi
-        apk="$(find "''${XDG_CACHE_HOME:-$HOME/.cache}/fdroidcl" -name "''${id}_*.apk" -print -quit)"
-        if [ -z "$apk" ]; then
-          echo "  ! downloaded but APK not found in fdroidcl cache for $id" >&2
-          continue
-        fi
-        prompt_install "$id" "$apk"
-      done
-    fi
+    # Missing F-Droid apps: their store page (F-Droid answers market://
+    # links), install from there.
+    while IFS=$'\t' read -r id label <&3; do
+      is_installed "$id" && continue
+      echo "==> $label: install it from the store page that opens"
+      open_for_install "market://details?id=$id"
+    done 3< <("$JQ" -r '.fdroid[] | [.id, .label] | @tsv' "$APPS")
 
     "$JQ" -r '.obtainium[] | [.id, .label] | @tsv' "$APPS" | while IFS="$(printf '\t')" read -r id label; do
       is_installed "$id" || echo "  missing: $label ($id) — install via Obtainium / GitHub releases"
@@ -224,9 +202,9 @@ in {
   environment.motd = null;
 
   # Bridges into the Android side of the fence, provided by the app:
-  # termux-open is what lets `update` hand APKs to the system installer;
-  # the wake locks keep rebuilds alive; setup-storage grants /sdcard
-  # access (~/storage symlinks).
+  # termux-open-url is how `update` sends installs to the browser and the
+  # store; the wake locks keep rebuilds alive; setup-storage grants
+  # /sdcard access (~/storage symlinks).
   android-integration = {
     am.enable = true;
     termux-open.enable = true;

@@ -2,7 +2,7 @@
 # for shrike. Renders DMS's own three shaders (from the `dms` flake input,
 # compiled to GLSL ES 300 by qsb) through the same three passes as
 # quickshell/Widgets/HexrainEffect.qml, with the scene baked in from DMS's
-# wallpaper.json, at 30 fps while visible.
+# wallpaper.json, at 60 fps while visible.
 #
 # This builds the UNSIGNED, aligned APK, reproducibly and without Gradle:
 # aapt2 (resources + manifest), javac + d8 (code), zipalign. The signed APK

@@ -136,7 +136,7 @@ source in `pkgs/hexrain-wallpaper`): DMS's hexrain wallpaper as an
 Android live wallpaper. It runs DMS's own three shaders through the same
 three passes as the desktop, with the scene baked in from DMS's
 `wallpaper.json` (scales sized in dp, perspective fitted to the screen),
-at 30 frames a second while visible and nothing while hidden.
+at 60 frames a second while visible and nothing while hidden.
 
 `update` offers it whenever `hosts/shrike/hexrain-wallpaper.apk` changed
 since the last install it saw through: it opens the APK's

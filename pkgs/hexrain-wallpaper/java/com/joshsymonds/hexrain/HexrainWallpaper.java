@@ -65,13 +65,14 @@ public final class HexrainWallpaper extends WallpaperService {
 
     /**
      * One wallpaper instance (the home/lock screen, or the picker's preview).
-     * Renders on its own thread, 30 frames a second while visible: the field
-     * moves slowly, so a higher rate costs battery without showing.
+     * Renders on its own thread, 60 frames a second while visible (an even
+     * divisor of 120 Hz panels): at 30 the suns' light visibly steps as it
+     * crosses the scales. Nothing renders while hidden.
      */
     private final class HexrainEngine extends Engine implements Choreographer.FrameCallback {
-        private static final long FRAME_INTERVAL_NS = 1_000_000_000L / 30;
-        // A vsync landing a little early still counts as the next 30 Hz frame.
-        private static final long FRAME_SLACK_NS = 4_000_000L;
+        private static final long FRAME_INTERVAL_NS = 1_000_000_000L / 60;
+        // A vsync landing a little early still counts as the next 60 Hz frame.
+        private static final long FRAME_SLACK_NS = 2_000_000L;
 
         private final HandlerThread thread = new HandlerThread("hexrain");
         private Handler handler;

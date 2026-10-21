@@ -113,6 +113,14 @@
           echo "CRON_SECRET missing from inbox-zero-env" >&2
           exit 1
         fi
+        # A restarted web container accepts connections only after its startup
+        # placeholder rewrite (minutes after an image pull), and an activation
+        # starts these units the moment the container does. Wait for the
+        # listener rather than fail the activation.
+        for _ in $(${pkgs.coreutils}/bin/seq 60); do
+          ${pkgs.curl}/bin/curl --silent --output /dev/null --max-time 5 http://127.0.0.1:3000/ && break
+          sleep 5
+        done
         ${pkgs.curl}/bin/curl --fail --silent --show-error \
           --max-time 30 \
           -H "Authorization: Bearer $CRON_SECRET" \

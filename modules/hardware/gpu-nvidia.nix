@@ -5,6 +5,40 @@
   ...
 }: let
   cfg = config.hardware.gpu-nvidia;
+
+  # patchelf leaves nvidia-smi's writable .dynamic on a page that the next,
+  # read-only PT_LOAD remaps, so glibc 2.44's ld.so segfaults writing DT_DEBUG
+  # (segfault at 401568, error 7, measured on 615.78.08 2026-10-21). Marking
+  # every PT_LOAD that shares a page with PT_DYNAMIC writable lets that write
+  # land; a binary without the overlap passes through unchanged.
+  nvidia-smi-fixed =
+    pkgs.runCommand "nvidia-smi-fixed-${config.hardware.nvidia.package.version}" {
+      nativeBuildInputs = [pkgs.python3];
+    } ''
+      install -Dm755 ${config.hardware.nvidia.package.bin}/bin/nvidia-smi $out/bin/nvidia-smi
+      python3 - $out/bin/nvidia-smi <<'EOF'
+      import struct, sys
+      path = sys.argv[1]
+      with open(path, "r+b") as f:
+          data = bytearray(f.read())
+          assert data[:4] == b"\x7fELF" and data[4] == 2 and data[5] == 1
+          (phoff,) = struct.unpack_from("<Q", data, 0x20)
+          phentsize, phnum = struct.unpack_from("<HH", data, 0x36)
+          phdrs = []
+          for i in range(phnum):
+              off = phoff + i * phentsize
+              p_type, p_flags, _, vaddr, _, _, memsz, _ = struct.unpack_from("<IIQQQQQQ", data, off)
+              phdrs.append((off, p_type, p_flags, vaddr & ~0xFFF, (vaddr + memsz + 0xFFF) & ~0xFFF))
+          dyn = [p for p in phdrs if p[1] == 2]
+          assert len(dyn) == 1
+          d_lo, d_hi = dyn[0][3], dyn[0][4]
+          for off, p_type, p_flags, lo, hi in phdrs:
+              if p_type == 1 and lo < d_hi and d_lo < hi and not p_flags & 2:
+                  struct.pack_into("<I", data, off + 4, p_flags | 2)
+          f.seek(0)
+          f.write(data)
+      EOF
+    '';
 in {
   options.hardware.gpu-nvidia = {
     enable = lib.mkEnableOption "NVIDIA GPU (open driver, Blackwell-ready)";
@@ -76,6 +110,10 @@ in {
         else config.boot.kernelPackages.nvidiaPackages.production;
       modesetting.enable = true;
     };
+
+    # Shadows the driver's nvidia-smi in the system profile; the driver package
+    # itself is untouched, so the kernel module and libraries keep their paths.
+    environment.systemPackages = [(lib.hiPrio nvidia-smi-fixed)];
 
     hardware.nvidia-container-toolkit.enable = cfg.containerToolkit;
 

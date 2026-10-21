@@ -79,6 +79,14 @@ in {
 
     hardware.nvidia-container-toolkit.enable = cfg.containerToolkit;
 
+    # A driver bump swaps the userspace libs while the old kernel module stays
+    # loaded until reboot, so restarting the CDI generator mid-switch fails with
+    # NVML "Driver/library version mismatch" — and that failed unit makes
+    # switch-to-configuration exit 4, which leaves nh's boot profile on the old
+    # generation. Regenerate the spec on the next boot instead.
+    systemd.services.nvidia-container-toolkit-cdi-generator.restartIfChanged =
+      lib.mkIf cfg.containerToolkit false;
+
     # Only pin cudaCapabilities when explicitly requested. Empty list
     # (the default) leaves the global config unset so each CUDA
     # package uses its own upstream default — matching what

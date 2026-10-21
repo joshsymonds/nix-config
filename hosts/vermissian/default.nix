@@ -340,10 +340,10 @@ in
       # a browser on another machine, then paste the com.cloudflare.warp://
       # callback URL into `warp-cli registration token '<url>'`. Toggle with
       # `warp-cli connect` / `warp-cli disconnect`; disconnected, WARP touches
-      # neither traffic nor DNS. Tailscale coexistence is profile-side:
-      # 100.64.0.0/10 is split-tunnel excluded by default, and MagicDNS needs
-      # a Local Domain Fallback entry (tail82223.ts.net -> 100.100.100.100)
-      # while connected. Do not add ProtectSystem=strict hardening — gnomon
+      # neither traffic nor DNS. Tailscale traffic coexists profile-side
+      # (100.64.0.0/10 is split-tunnel excluded by default); MagicDNS names
+      # never reach WARP, since cloudflareWarpDns routes them to quad100
+      # through a resolved delegate. Do not add ProtectSystem=strict hardening — gnomon
       # hit EROFS applying DNS because the upstream unit only allow-lists
       # /etc/resolv.conf itself, not its parent directory.
       cloudflare-warp = {

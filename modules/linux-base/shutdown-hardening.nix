@@ -1,19 +1,18 @@
-# gnomon shutdown hardening + post-journald diagnostics.
+# Shutdown hardening + post-journald diagnostics. Imported by gnomon,
+# vermissian, and ultraviolet.
 #
-# Context: gnomon's final shutdown stage (the systemd-shutdown binary:
-# SIGTERM → SIGKILL → unmount → detach loop/DM → reboot) has hung
-# effectively forever on occasion. That phase runs *after*
+# The final shutdown stage (the systemd-shutdown binary: SIGTERM →
+# SIGKILL → unmount → detach loop/DM → reboot) runs *after*
 # systemd-journald has exited, so it is structurally absent from
 # `journalctl` — every boot's journal simply ends at "Journal stopped".
-# The trigger is the qbittorrent/gluetun podman stack: overlay mounts +
-# a network namespace + the podman0 bridge layered on a LUKS-backed
-# btrfs root, which systemd-shutdown cannot always tear down from the
-# still-live rootfs.
+# On gnomon it has hung effectively forever on occasion; the trigger was
+# the qbittorrent/gluetun podman stack (overlay mounts + a network
+# namespace + the podman0 bridge on a LUKS-backed btrfs root), fixed
+# primarily in modules/services/qbittorrent-vpn.nix. On vermissian
+# (2026-10-20) that phase took ~24s with nothing to show for it.
 #
-# The primary fix lives in modules/services/qbittorrent-vpn.nix (bounded
-# container stop-timeouts + per-service TimeoutStopSec). This module is
-# the host-wide *backstop* and the "so we can actually see it next time"
-# instrumentation.
+# This module is the host-wide *backstop* and the "so we can actually
+# see it next time" instrumentation.
 #
 # Note on what is deliberately NOT set here: NixOS already enables
 # `systemd.shutdownRamfs` (pivot to a tmpfs for the final unmount) and
@@ -23,8 +22,8 @@
 {...}: {
   # ── Backstop: bound the post-journald phase ───────────────────────────
   systemd.settings.Manager = {
-    # The hardware watchdog (SP5100 TCO) is armed by systemd-shutdown for
-    # the final phase. Default is 10min — i.e. a wedged teardown sits
+    # The hardware watchdog (SP5100 TCO on gnomon/vermissian, iTCO on
+    # ultraviolet) is armed by systemd-shutdown for the final phase. Default is 10min — i.e. a wedged teardown sits
     # dead for ten minutes before the board force-resets. systemd-shutdown
     # sync()s filesystems *before* the unmount loop that hangs, so a
     # watchdog-forced reset here lands after a global sync; on btrfs
@@ -35,8 +34,9 @@
 
     # Host-wide: don't let any unit burn the default 90s in the
     # journald-alive stop phase (where data is safest) and thereby feed
-    # the post-journald stall. 45s is ample for every service on this
-    # host; the podman units have their own tighter caps on top of this.
+    # the post-journald stall. 45s is ample for ordinary services; units
+    # that need longer set their own TimeoutStopSec (valheim's 120s, the
+    # podman stacks' tighter caps), which wins over this default.
     DefaultTimeoutStopSec = "45s";
   };
 

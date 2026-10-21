@@ -62,7 +62,12 @@ in
 
       # Headless-server hardening (BT module blacklist on top of fleet-wide)
       ../../modules/linux-base/server-hardening.nix
+      ../../modules/linux-base/shutdown-hardening.nix
     ];
+
+    # 1s, not 0: still a window to catch the menu for a rollback on this
+    # headless box, without spending 5s of every boot waiting on it.
+    boot.loader.timeout = 1;
 
     # Performance tuning
     performance.profile = "server";

@@ -13,9 +13,9 @@ in
     imports = [
       ./disko.nix
       ./qbittorrent-vpn.nix
-      ./shutdown-hardening.nix
       ../../modules/desktop/dms-niri.nix
       ../../modules/hardware/gpu-nvidia.nix
+      ../../modules/linux-base/shutdown-hardening.nix
       ../../modules/services/cloudflare-warp-dns.nix
       ../../modules/services/inference-stack.nix
       ../../modules/services/keyd.nix

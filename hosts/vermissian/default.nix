@@ -25,6 +25,7 @@ in
 
       # Headless-server hardening (BT module blacklist on top of fleet-wide)
       ../../modules/linux-base/server-hardening.nix
+      ../../modules/linux-base/shutdown-hardening.nix
     ];
 
     services.privateStore.enable = true;
@@ -173,7 +174,9 @@ in
     # of sight, so a touch-to-unlock token buys nothing over TPM2 + SB.
     boot.loader.systemd-boot.enable = lib.mkForce false;
     boot.loader.efi.canTouchEfiVariables = true;
-    boot.loader.timeout = 5;
+    # 1s, not 0: still a window to catch the menu for a rollback on this
+    # headless box, without spending 5s of every boot waiting on it.
+    boot.loader.timeout = 1;
     boot.lanzaboote = {
       enable = true;
       pkiBundle = "/var/lib/sbctl";

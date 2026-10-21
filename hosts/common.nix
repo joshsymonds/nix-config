@@ -293,6 +293,26 @@ in {
       })
     ];
 
+  # Stop the user manager before /mnt/claude unmounts. The agents in its tmux
+  # panes hold transcript files open on this hard-mounted share, and nothing
+  # orders user@ against it, so at shutdown the unmount failed "device is
+  # busy" while networkd and the firewall went down underneath still-exiting
+  # panes (vermissian, 2026-10-20: one pane took 21s to die). After= only: the
+  # mount is automount-backed and not in the boot transaction, so this doesn't
+  # delay the user manager at boot.
+  systemd.services."user@" = lib.mkIf (builtins.elem config.networking.hostName ["gnomon" "ultraviolet" "vermissian"]) {
+    after = ["mnt-claude.mount"];
+  };
+
+  # Stop nix-daemon before the network (and WARP, where it runs) goes away.
+  # determinate-nixd keeps HTTPS connections open to FlakeHub's CDN; with
+  # nothing ordering it against the network, shutdown tore down WARP and
+  # networkd first and the daemon took 15.7s to stop (vermissian, 2026-10-20)
+  # against 0.4s with the network up.
+  systemd.services.nix-daemon.after =
+    ["network.target"]
+    ++ lib.optional config.services.cloudflare-warp.enable "cloudflare-warp.service";
+
   services.openssh.settings.AcceptEnv = lib.mkBefore ["TERM" "COLORTERM" "TERM_PROGRAM" "TERM_PROGRAM_VERSION"];
 
   users.users.joshsymonds = {

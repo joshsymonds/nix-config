@@ -105,6 +105,24 @@
         sphinxBuilders = ["html man"];
       });
 
+      # nom 2.2.0 rejects activity/result types it doesn't know with a
+      # ParseNixJSONMessageError per message. Determinate Nix 3.23 emits
+      # activity type 10113 (actStringly) and result type 10111
+      # (resHttpStatus) all through eval, so every `nh os switch` floods the
+      # terminal (the build itself is fine). Upstream PR #321 maps unknown
+      # types to Unknown/OtherResult; merged 2026-10-19 but unreleased.
+      # Drop once nixpkgs ships a nom newer than 2.2.0.
+      nix-output-monitor = prev.nix-output-monitor.override {
+        extraComposeFunctions = [
+          (final.haskell.lib.compose.appendPatch (prev.fetchpatch {
+            name = "nom-unknown-activity-types.patch";
+            url = "https://github.com/maralorn/nix-output-monitor/commit/d48ff7935da72a5a5764ee8c5358d38417b0f337.diff";
+            relative = "nix-output-monitor";
+            hash = "sha256-vB/ThII0j99G6j6PKiAtf2bDAYGd6w7WGjcCvQiKOpc=";
+          }))
+        ];
+      };
+
       # redlib-veraticus needs flake inputs (crane, redlib-fork, rust-overlay)
       # so it isn't in pkgs/simple.nix's plain-callPackage set; pkgs/default.nix
       # (the `nix build .#redlib-veraticus` path) wires the same inputs

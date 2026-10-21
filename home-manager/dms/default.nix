@@ -24,7 +24,6 @@ in {
     systemd.enable = true;
     enableAudioWavelength = true;
     enableCalendarEvents = true;
-    enableClipboardPaste = true;
     enableDynamicTheming = true;
     enableSystemMonitoring = true;
     enableVPN = true;
@@ -50,27 +49,17 @@ in {
     # giving us restart-on-failure.
     niri.enableSpawn = false;
 
-    # The launcher button (Material `apps` 3×3 grid icon at the bar's left
-    # edge, opens the app drawer) is always rendered before `leftWidgets`
-    # regardless of bar config. We open the launcher with Mod+Space (DMS's
-    # spotlight bind) instead, so the button is dead weight.
-    settings.showLauncherButton = false;
-
-    # focusedWindow compact mode hides the app-id prefix and renders only
-    # the window title — without it, the bar reads "kitty · ~/proj" with
-    # the app-id prefix that's already obvious from the visible window.
-    settings.focusedWindowCompactMode = true;
-
     # Widget pill chrome uses the darkest matugen-derived surface tone
     # (surfaceContainerLowest) instead of the default surfaceContainerHigh,
     # so each pill reads as a near-black palette-coherent chip against
     # the wallpaper's raised hex platform. "scl" is a new switch entry
-    # added in Theme.qml on the chrome-shader fork — stock DMS only
-    # recognises "s" / "sc" / "sch" / "sth".
+    # added in Theme.qml on the chrome-shader fork. (Upstream 2.0's general
+    # colour keys spell surfaceContainerLow as "scl"; this widget switch
+    # keeps the fork's Lowest meaning.)
     settings.widgetBackgroundColor = "scl";
 
     # Wallpaper, set declaratively. DMS persists this in
-    # ~/.local/state/DankMaterialShell/session.json under wallpaperPath.
+    # ~/.local/state/dms/session.json under wallpaperPath.
     # `session` is serialized verbatim by the DMS HM module
     # (distro/nix/home.nix:104).
     session.wallpaperPath = "${wallpaper}";
@@ -134,11 +123,11 @@ in {
     settings.acSuspendTimeout = 0;
 
     # Bar layout. `programs.dank-material-shell.settings` is serialized
-    # verbatim to ~/.config/DankMaterialShell/settings.json; barConfigs is
+    # verbatim to ~/.config/dms/settings.json; barConfigs is
     # an array of full bar configurations (DMS supports multiple bars), so
     # we write the whole object — DMS replaces the default array if this
-    # key is present. leftWidgets is just focusedWindow because we don't
-    # use named workspaces — there's no workspace identity to label.
+    # key is present. widgets render only when listed here (2.0 removed
+    # the per-widget show* toggles, launcher button included).
     settings.barConfigs = [
       {
         id = "default";
@@ -160,7 +149,7 @@ in {
         spacing = 4;
         innerPadding = 0;
         bottomGap = 0;
-        # transparency = 0 makes the bar's painted Shape (BarCanvas's
+        # transparency = 0 makes the bar's painted Shape (DBar/BarSurface's
         # surfaceContainer-coloured rectangle) fully invisible. The
         # widgets still draw on top, floating directly on the
         # wallpaper, which provides the visual "platform" via the
@@ -179,9 +168,9 @@ in {
         # Force widget backgrounds to true pill (capsule) shape — radius
         # becomes min(width, height) / 2, so square widgets read as
         # circles and wider ones as stadiums. Custom barConfig key
-        # added in DMS BasePill.qml on the chrome-shader fork.
+        # added in DMS SurfaceWidgets/BarPill.qml on the chrome-shader fork.
         widgetPill = true;
-        # With josh/wider-pills pushing widgetThickness to 36 (in a 40px
+        # With josh/wider-pills pushing Theme.barWidgetThickness to 36 (in a 40px
         # bar), the default sizing is anemic against the chunkier pills.
         # Icons: maximizeWidgetIcons swaps the icon base from iconSize
         # (24) to iconSizeLarge (32), putting icons at ~22px.
@@ -234,7 +223,7 @@ in {
         #
         # SettingsStore.js loads barConfigs raw (no per-key spec
         # validation; only top-level unknowns are stripped at line 25).
-        # BarCanvas.qml reads `barConfig?.shader<X>Color` and falls back
+        # DBar/BarSurface.qml reads `barConfig?.shader<X>Color` and falls back
         # to Theme.<x> when absent.
         #
         # Triadic synthwave palette (cyan + magenta + neon-green) chosen
@@ -259,12 +248,12 @@ in {
     ];
 
     # DMS plugins. Each attrname becomes a directory under
-    # ~/.config/DankMaterialShell/plugins/<name>, populated from `src`.
+    # ~/.config/dms/plugins/<name>, populated from `src`.
     # The DMS plugin loader keys off plugin.json:id (not the dir name),
     # but matching the manifest id keeps things grep-friendly.
     #
     # `managePluginSettings = true` is required: it generates
-    # ~/.config/DankMaterialShell/plugin_settings.json with `{enabled: true}`
+    # ~/.config/dms/plugin_settings.json with `{enabled: true}`
     # per plugin. Without that file DMS treats the plugin as disabled even
     # though its source sits in plugins/. The HM module's default auto-flips
     # this only when at least one plugin has a non-empty `settings` attr,
@@ -276,7 +265,7 @@ in {
     # titeya/dms-claudecode. Picks up token burn from ~/.claude/projects
     # and rate-window state from the OAuth token in ~/.claude/.credentials.json.
     #
-    # settings.* land in ~/.config/DankMaterialShell/plugin_settings.json,
+    # settings.* land in ~/.config/dms/plugin_settings.json,
     # which under managePluginSettings = true is a read-only symlink to a
     # store path — toggles in the DMS plugin settings UI silently no-op,
     # so any non-default value MUST be declared here. The plugin's
@@ -386,7 +375,7 @@ in {
     # detect directory entry additions and auto-loads them.
     reloadChangedPlugins() {
       [[ -v oldGenPath ]] || return 0
-      local dir="home-files/.config/DankMaterialShell/plugins"
+      local dir="home-files/.config/dms/plugins"
       [ -d "$newGenPath/$dir" ] || return 0
 
       local instance
@@ -417,9 +406,9 @@ in {
       # both kinds of change land in the same generation, plugins get
       # reloaded twice — once via IPC, once via the restart that follows.
       # Harmless.)
-      if fileChanged ".config/DankMaterialShell/settings.json" \
-        || fileChanged ".config/DankMaterialShell/plugin_settings.json" \
-        || fileChanged ".local/state/DankMaterialShell/session.json"; then
+      if fileChanged ".config/dms/settings.json" \
+        || fileChanged ".config/dms/plugin_settings.json" \
+        || fileChanged ".local/state/dms/session.json"; then
         $SYSTEMCTL --user restart dms.service >/dev/null 2>&1 || true
       fi
     fi

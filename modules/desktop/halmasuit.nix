@@ -286,9 +286,9 @@ in {
         # unit's filesystem namespace.
         ProtectHome = true;
         BindReadOnlyPaths = [
-          "/home/joshsymonds/.config/DankMaterialShell"
-          "/home/joshsymonds/.local/state/DankMaterialShell"
-          "/home/joshsymonds/.cache/DankMaterialShell"
+          "/home/joshsymonds/.config/dms"
+          "/home/joshsymonds/.local/state/dms"
+          "/home/joshsymonds/.cache/dms"
         ];
         PrivateTmp = true;
         PrivateDevices = true;
@@ -319,9 +319,9 @@ in {
         # halmasuit-greeter system user.
         is_under_home() {
           case "$1" in
-            /home/joshsymonds/.config/DankMaterialShell/*) return 0 ;;
-            /home/joshsymonds/.local/state/DankMaterialShell/*) return 0 ;;
-            /home/joshsymonds/.cache/DankMaterialShell/*) return 0 ;;
+            /home/joshsymonds/.config/dms/*) return 0 ;;
+            /home/joshsymonds/.local/state/dms/*) return 0 ;;
+            /home/joshsymonds/.cache/dms/*) return 0 ;;
             *) return 1 ;;
           esac
         }
@@ -337,8 +337,8 @@ in {
         # fall back to Tux. The colors are now baked into nix-config as
         # `./dms-colors-baked.json` and copied below — no $HOME read,
         # no silent-fallback.
-        for f in /home/joshsymonds/.config/DankMaterialShell/settings.json \
-                 /home/joshsymonds/.local/state/DankMaterialShell/session.json ; do
+        for f in /home/joshsymonds/.config/dms/settings.json \
+                 /home/joshsymonds/.local/state/dms/session.json ; do
           if [ -f "$f" ]; then
             cp "$f" "./$(basename "$f")"
           fi
@@ -395,7 +395,7 @@ in {
         # Epic #42 R1: write the baked DMS colors snapshot.
         # DMS's Quickshell greeter reads `colors.json` from the cache
         # dir; baking the content removes the prior dependency on
-        # `~/.cache/DankMaterialShell/dms-colors.json` (which DMS only
+        # `~/.cache/dms/dms-colors.json` (which DMS only
         # writes at user-login time and was absent during the gen-404
         # cold boot). `set -eu` is in effect — a missing baked file
         # fails closed, surfacing the regression instead of silently
@@ -407,7 +407,7 @@ in {
         # wallpaper underneath; without this, DMS's SessionData
         # fallback paints opaque on top and the user's wallpaper is
         # hidden. The override applies ONLY to the greeter cache,
-        # never to the user's actual ~/.config/DankMaterialShell —
+        # never to the user's actual ~/.config/dms —
         # post-login DMS retains its own dim Rectangle (it's the
         # right look there).
         if [ -f settings.json ]; then

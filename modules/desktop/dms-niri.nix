@@ -65,7 +65,6 @@ in {
       systemd.enable = true;
       enableAudioWavelength = true;
       enableCalendarEvents = true;
-      enableClipboardPaste = true;
       enableDynamicTheming = true;
       enableSystemMonitoring = true;
       enableVPN = true;

@@ -127,20 +127,14 @@
       have_pm=1
     fi
 
-    if [ "$have_pm" = 0 ]; then
-      echo "warning: pm not usable from this sandbox — can't detect drift."
-      echo "Declared app set:"
-      "$JQ" -r '(.local[], .fdroid[], .obtainium[], .play[]) | "  \(.label) (\(.id))"' "$APPS"
-      exit 0
-    fi
-
     is_installed() {
       printf '%s\n' "$installed" | grep -qxF "$1"
     }
 
     # Hands an APK to the system installer and waits for the user to
     # confirm it, one prompt at a time (a second intent would replace the
-    # first).
+    # first). The installer reads the file from outside the proot, so it
+    # must live under $HOME (the same path on both sides), not /nix/store.
     prompt_install() {
       local id="$1" apk="$2"
       if command -v termux-open >/dev/null 2>&1; then
@@ -155,22 +149,37 @@
       fi
     }
 
-    # Our own APKs: installed when missing, or when the APK differs from
-    # the last one an install was confirmed for (the marker is written only
-    # once the package shows up installed).
+    # Our own APKs: installed when the APK differs from the last one an
+    # install went through for (or the app is gone, where pm can tell).
+    # Without pm, confirming the prompt counts as installed; delete
+    # $state/<id>.sha256 to be offered it again.
     state="''${XDG_STATE_HOME:-$HOME/.local/state}/shrike-apps"
-    mkdir -p "$state"
+    staging="''${XDG_CACHE_HOME:-$HOME/.cache}/shrike-apps"
+    mkdir -p "$state" "$staging"
     while IFS="$(printf '\t')" read -r id label apk <&3; do
       sum="$(sha256sum "$apk" | cut -d' ' -f1)"
-      if is_installed "$id" && [ "$(cat "$state/$id.sha256" 2>/dev/null)" = "$sum" ]; then
+      if [ "$(cat "$state/$id.sha256" 2>/dev/null)" = "$sum" ] \
+        && { [ "$have_pm" = 0 ] || is_installed "$id"; }; then
         continue
       fi
-      echo "==> $label: installing $(basename "$apk")"
-      prompt_install "$id" "$apk"
-      if /system/bin/pm list packages 2>/dev/null | sed 's/^package://' | grep -qxF "$id"; then
+      echo "==> $label: installing"
+      copy="$staging/$id.apk"
+      rm -f "$copy"
+      cp "$apk" "$copy"
+      chmod 644 "$copy"
+      prompt_install "$id" "$copy"
+      if [ "$have_pm" = 0 ] \
+        || /system/bin/pm list packages 2>/dev/null | sed 's/^package://' | grep -qxF "$id"; then
         echo "$sum" > "$state/$id.sha256"
       fi
     done 3< <("$JQ" -r '.local[] | [.id, .label, .apk] | @tsv' "$APPS")
+
+    if [ "$have_pm" = 0 ]; then
+      echo "warning: pm not usable from this sandbox — can't detect drift."
+      echo "Declared app set:"
+      "$JQ" -r '(.fdroid[], .obtainium[], .play[]) | "  \(.label) (\(.id))"' "$APPS"
+      exit 0
+    fi
 
     fdroid_missing=()
     while IFS= read -r id; do

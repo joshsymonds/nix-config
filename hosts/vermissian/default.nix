@@ -136,6 +136,13 @@ in
           443
           7080
         ];
+        # netconsole from gnomon only; the rule is removed when the firewall stops.
+        extraCommands = ''
+          iptables -A nixos-fw -p udp -s ${network.hosts.gnomon.ip} --dport 6666 -j nixos-fw-accept
+        '';
+        extraStopCommands = ''
+          iptables -D nixos-fw -p udp -s ${network.hosts.gnomon.ip} --dport 6666 -j nixos-fw-accept 2>/dev/null || true
+        '';
       };
     };
 

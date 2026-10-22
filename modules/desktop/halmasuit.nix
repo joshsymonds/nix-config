@@ -47,6 +47,15 @@
   # Quickshell is nixpkgs', the DMS module's default for the shell too.
   dmsQuickshell = pkgs.quickshell;
 
+  # XDG_DATA_DIRS for the greeter: each registered session package's
+  # share dir first (so DMS's greeter finds <dir>/wayland-sessions and
+  # offers those sessions at login), then the system profile's share
+  # dirs (icons, mime types, applications).
+  xdgDataDirs = lib.concatStringsSep ":" (
+    map (p: "${p}/share") config.services.displayManager.sessionPackages
+    ++ ["/run/current-system/sw/share" "/usr/share"]
+  );
+
   # The greeter executable halmasuit forks at startup. Runs as the
   # halmasuit-greeter system user; XDG_RUNTIME_DIR + WAYLAND_DISPLAY
   # point at halmasuit's own Wayland socket; HOME points at the
@@ -59,8 +68,9 @@
   greeterCmd = pkgs.writeShellScript "halmasuit-dankgreeter" ''
     export XDG_RUNTIME_DIR=/run/halmasuit-greeter
     export WAYLAND_DISPLAY=/run/halmasuit/wayland-0
-    # The system profile's share dirs (icons, mime types, applications).
-    export XDG_DATA_DIRS=/run/current-system/sw/share:/usr/share
+    # Registered session packages' share dirs first, then the system
+    # profile's share dirs (see xdgDataDirs above).
+    export XDG_DATA_DIRS=${xdgDataDirs}
     # halmasuit's spawn_greeter already exports GREETD_SOCK pointing
     # at the path it bound (see services.halmasuit.fromInitrd module
     # docs); do not override.

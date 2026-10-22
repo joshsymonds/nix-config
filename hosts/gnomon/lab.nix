@@ -25,8 +25,9 @@ in {
   };
 
   # The NIC driver must load in stage 1 so netconsole can send from the
-  # initramfs.
-  boot.initrd.availableKernelModules = ["r8169"];
+  # initramfs. r8169 refuses to probe without its PHY driver, which it names
+  # only as a softdep, and the initrd module closure does not follow softdeps.
+  boot.initrd.availableKernelModules = ["r8169" "realtek"];
 
   # The patch makes the CRC sampler's per-head scanout reads reflect a fully
   # scanned-out frame. Only the `open` derivation is overridden; the driver

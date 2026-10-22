@@ -70,12 +70,6 @@
     export XDG_CACHE_HOME=$HOME/.cache
     export DMS_RUN_GREETER=1
     mkdir -p "$XDG_CACHE_HOME/dms-greeter"
-    ${lib.optionalString cfg.greeterDiagnostics ''
-      export QT_LOGGING_RULES="qt.qpa.*=true;qt.scenegraph.general=true;qt.rhi.*=true"
-      export QSG_INFO=1
-      export WAYLAND_DEBUG=client
-      exec > >(${pkgs.systemd}/bin/systemd-cat -t halmasuit-greeter) 2>&1
-    ''}
     exec ${dmsQuickshell}/bin/quickshell \
       -p ${dmsShell}/share/quickshell/dms
   '';
@@ -119,11 +113,6 @@ in {
       manager + greetd-protocol host. Phase B fromInitrd
       deployment with NVIDIA rendering backend and the
       DankMaterialShell hexrain wallpaper.
-    '';
-    greeterDiagnostics = lib.mkEnableOption ''
-      greeter diagnostics: the greeter's stdout and stderr go to the
-      journal as halmasuit-greeter, with Qt platform, scene-graph and
-      RHI logging and the client side of its Wayland protocol
     '';
   };
 

@@ -786,6 +786,19 @@
 
         nixosConfigurations = lib.mapAttrs mkNixosHost nixosHostDefinitions;
 
+        # Halmasuit lab images: gnomon's own system plus halmasuit's gnomon-lab
+        # module and one experiment module, per attribute of halmasuit's
+        # lib.labExperiments. Flake outputs are lazy, so this is only
+        # evaluated when accessed.
+        labSystems.gnomon = lib.mapAttrs (_: experiment:
+          mkNixosHost "gnomon" (nixosHostDefinitions.gnomon
+            // {
+              modules =
+                nixosHostDefinitions.gnomon.modules
+                ++ [inputs.halmasuit.nixosModules.gnomon-lab experiment];
+            }))
+        inputs.halmasuit.lib.labExperiments;
+
         # One-command bootstrap seeding for shrike, run BEFORE the first
         # switch (phone-typeable, needs neither git nor a clone — github:
         # refs use the tarball fetcher):

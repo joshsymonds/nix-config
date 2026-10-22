@@ -1,5 +1,8 @@
 {lib, ...}: {
-  imports = [./hardening.nix];
+  imports = [
+    ./ca-trust.nix
+    ./hardening.nix
+  ];
 
   boot.loader = {
     systemd-boot = {

@@ -71,6 +71,7 @@ in {
   "secrets/hosts/ultraviolet/playroom-path.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/gnomon/mullvad-privatekey.age".publicKeys = keys.gnomon;
   "secrets/hosts/gnomon/mullvad-addresses.age".publicKeys = keys.gnomon;
+  "secrets/hosts/gnomon/joshsymonds-password-hash.age".publicKeys = keys.gnomon;
   "secrets/hosts/vermissian/mullvad-privatekey.age".publicKeys = keys.vermissian;
   "secrets/hosts/vermissian/mullvad-addresses.age".publicKeys = keys.vermissian;
   "secrets/hosts/vermissian/cloudflared-token.age".publicKeys = keys.vermissian;

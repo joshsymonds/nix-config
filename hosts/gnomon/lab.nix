@@ -5,6 +5,7 @@
   config,
   inputs,
   lib,
+  pkgs,
   ...
 }: let
   network = import ../../lib/network.nix;
@@ -13,7 +14,10 @@
 in {
   halmasuit.lab = {
     crcSampler.enable = true;
-    probe.enable = true;
+    probe = {
+      enable = true;
+      username = "joshsymonds";
+    };
     u2fOffServices = ["greetd" "login"];
     netconsole = {
       enable = true;
@@ -38,4 +42,15 @@ in {
         patches = (o.patches or []) ++ [labPatch];
       });
     });
+
+  # The greeter's state directory is recreated every boot, so it never
+  # remembers a user. With remembering on, gnomon's single user gets a
+  # click-only user picker that disables the text field; with it off the
+  # greeter opens on the username field, which the probe types into.
+  programs.dms-greeter.configFiles = lib.mkForce [
+    "${pkgs.writeTextDir "settings.json" (builtins.toJSON {
+      greeterEnableU2f = true;
+      greeterRememberLastUser = false;
+    })}/settings.json"
+  ];
 }

@@ -24,9 +24,14 @@
     # nvidia-drm.fbdev is 0 in the lab images; nixpkgs sets it to 1 under modesetting.
     hardware.nvidia.moduleParams.nvidia-drm.fbdev = lib.mkForce 0;
 
+    # No firmware framebuffer driver binds, so fbcon has nothing to take
+    # over before halmasuit's first modeset: the firmware logo stays up.
     boot.kernelParams = lib.mkForce (
-      lib.remove "fbcon=nodefer" baseKernelParams ++ ["quiet"]
+      lib.remove "fbcon=nodefer" baseKernelParams
+      ++ ["quiet" "initcall_blacklist=simpledrm_platform_driver_init,efifb_driver_init"]
     );
+
+    desktop.halmasuit.greeterDiagnostics = true;
   };
 in {
   halmasuit = {

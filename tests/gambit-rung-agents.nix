@@ -72,8 +72,10 @@ in
     # Gambit's loading session performs the effort itself.
     jq -e '
       (.roles | keys | sort)
-      == ["conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "orchestrator", "scout", "steelman", "task-reviewer", "test-runner"]
+      == ["asset-critic", "asset-implementer", "conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "orchestrator", "scout", "steelman", "task-reviewer", "test-runner"]
       and .roles.implementer == {"entry":"haiku-medium"}
+      and .roles."asset-implementer" == {"entry":"opus-xhigh"}
+      and .roles."asset-critic" == {"entry":"opus-high","readonly":true}
       and .roles."test-runner" == {"entry":"sonnet-low"}
       and .roles.scout == {"entry":"haiku-high","readonly":true}
       and .roles.steelman == {"entry":"fable-high","readonly":true}
@@ -87,8 +89,10 @@ in
     ' ${fullJson} >/dev/null
     jq -e '
       (.roles | keys | sort)
-      == ["conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "scout", "steelman", "task-reviewer", "test-runner"]
+      == ["asset-critic", "asset-implementer", "conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "scout", "steelman", "task-reviewer", "test-runner"]
       and .roles.implementer == {"entry":"opus"}
+      and .roles."asset-implementer" == {"entry":"opus"}
+      and .roles."asset-critic" == {"entry":"opus","readonly":true}
       and .roles."task-reviewer" == {"entry":"fable","readonly":true}
       and .roles."finding-verifier" == {"entry":"fable","readonly":true}
       and .roles."conformance-reviewer" == {"entry":"fable","readonly":true}
@@ -194,6 +198,7 @@ in
       and .["sonnet-high"] == {"claudeModel":"claude-sonnet-5-5","route":"chatgpt/luna","effort":"high"}
       and .["sonnet-low"] == {"claudeModel":"claude-sonnet-5-5","route":"chatgpt/luna","effort":"low"}
       and .["opus-high"] == {"claudeModel":"claude-opus-5-5","route":"chatgpt/sol","effort":"high"}
+      and .["opus-xhigh"] == {"claudeModel":"claude-opus-5-5","route":"chatgpt/sol","effort":"xhigh"}
       and .["fable-high"] == {"claudeModel":"claude-fable-5-1","route":"chatgpt/astra","effort":"high"}
     ' ${profilesJson} >/dev/null
 
@@ -270,7 +275,7 @@ in
       # dispatch and task-state tools. Keep the expected privileges independent
       # of the renderer, including the absence of task RPC dispatch.
       if [ "$profile" = opus-high ]; then
-        grep -qxF 'allowed_subagents: "fable-high-ro, haiku-high-ro, haiku-medium, opus-high-ro, sonnet-high-ro, sonnet-low"' "$pi_plain"
+        grep -qxF 'allowed_subagents: "fable-high-ro, haiku-high-ro, haiku-medium, opus-high-ro, opus-xhigh, sonnet-high-ro, sonnet-low"' "$pi_plain"
         grep -qxF 'extensions: ["pi-tasks", "${orchestratorProcessExtension}"]' "$pi_plain"
         grep -qE '^extensions: \["pi-tasks", "/nix/store/[^"/]+/orchestrator-processes/index.ts"\]$' "$pi_plain"
         test -f '${orchestratorProcessExtension}'

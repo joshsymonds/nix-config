@@ -80,6 +80,15 @@
       route = "chatgpt/sol";
       effort = "high";
     };
+    # Asset implementer profile: Opus 5.5 at xhigh effort on Claude Code, Sol
+    # at xhigh effort on Pi. Common Frame's bpy modelling is visual work where
+    # builders report Opus well ahead of Sonnet, and opus-high's writing agent
+    # is the Orchestrator variant, so a modelling leaf needs its own profile.
+    "opus-xhigh" = {
+      claudeModel = "claude-opus-5-5";
+      route = "chatgpt/sol";
+      effort = "xhigh";
+    };
     # Steelman profile: Fable 5.1 on Claude Code, Astra on Pi. Fable is
     # reserved for this role alone (its weekly sub-limit is small).
     "fable-high" = {
@@ -430,6 +439,14 @@
       };
       "test-runner".entry = "sonnet-low";
       orchestrator.entry = "opus-high";
+      # Epic-scoped roles: Common Frame's asset pipeline dispatches its bpy
+      # modelling tasks and its visual critic through these, so 3D work runs
+      # on Opus without moving every epic's implementer off Haiku.
+      "asset-implementer".entry = "opus-xhigh";
+      "asset-critic" = {
+        entry = "opus-high";
+        readonly = true;
+      };
     };
   };
 
@@ -469,6 +486,11 @@
         readonly = true;
       };
       "test-runner".entry = "sonnet";
+      "asset-implementer".entry = "opus";
+      "asset-critic" = {
+        entry = "opus";
+        readonly = true;
+      };
     };
   };
 }

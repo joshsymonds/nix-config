@@ -19,6 +19,8 @@
     halmasuit.lab = {
       enable = true;
       displayManagerUnit = "halmasuit.service";
+      probe.consumerUser = "halmasuit-greeter";
+      u2fOffServices = ["halmasuit"];
     };
 
     # nvidia-drm.fbdev is 0 in the lab images; nixpkgs sets it to 1 under modesetting.

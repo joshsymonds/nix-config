@@ -10,7 +10,7 @@
   lib,
   baseKernelParams,
 }: let
-  common = {
+  common = {config, ...}: {
     imports = [../../modules/desktop/halmasuit.nix];
 
     desktop.halmasuit.enable = true;
@@ -21,7 +21,9 @@
     halmasuit.lab = {
       enable = true;
       displayManagerUnit = "halmasuit.service";
-      probe.consumerUser = "halmasuit-greeter";
+      # halmasuit itself reads input (libinput) once it has dropped to its
+      # compositor user; the greeter is only a Wayland client of it.
+      probe.consumerUser = config.services.halmasuit.compositorUser;
       u2fOffServices = ["halmasuit"];
     };
 

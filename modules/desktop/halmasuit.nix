@@ -220,14 +220,6 @@ in {
         source = chromeHexrain.halmasuitSource pkgs;
         uniforms = wallpaperUniforms;
       };
-
-      # Epic #42 R4: ONE diagnostic boot — enables the env-gated
-      # broker wire-frame trace so the next boot captures the exact
-      # PAM conv byte sequence from the gen-404 signin failure.
-      # REMOVE this line (or set to false) on the very next nix-config
-      # change after analysis lands, per the epic's "one boot then
-      # off" workflow.
-      diagnostic.brokerTraceFrames = true;
     };
 
     # ── PAM service: /etc/pam.d/halmasuit ─────────────────────────

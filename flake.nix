@@ -788,20 +788,29 @@
 
         # Halmasuit lab images: gnomon's own system plus halmasuit's gnomon-lab
         # module and one experiment module, per attribute of halmasuit's
-        # lib.labExperiments. Flake outputs are lazy, so this is only
+        # lib.labExperiments, plus the halmasuit experiments from
+        # hosts/gnomon/lab-halmasuit.nix. Those start from the baseline lab
+        # image's kernel command line. Flake outputs are lazy, so this is only
         # evaluated when accessed.
-        labSystems.gnomon = lib.mapAttrs (_: experiment:
-          mkNixosHost "gnomon" (nixosHostDefinitions.gnomon
-            // {
-              modules =
-                nixosHostDefinitions.gnomon.modules
-                ++ [
-                  inputs.halmasuit.nixosModules.gnomon-lab
-                  experiment
-                  ./hosts/gnomon/lab.nix
-                ];
-            }))
-        inputs.halmasuit.lib.labExperiments;
+        labSystems.gnomon = let
+          labHost = experiment:
+            mkNixosHost "gnomon" (nixosHostDefinitions.gnomon
+              // {
+                modules =
+                  nixosHostDefinitions.gnomon.modules
+                  ++ [
+                    inputs.halmasuit.nixosModules.gnomon-lab
+                    experiment
+                    ./hosts/gnomon/lab.nix
+                  ];
+              });
+          labExperiments = inputs.halmasuit.lib.labExperiments;
+          halmasuitExperiments = import ./hosts/gnomon/lab-halmasuit.nix {
+            inherit inputs lib;
+            baseKernelParams = (labHost labExperiments.baseline).config.boot.kernelParams;
+          };
+        in
+          lib.mapAttrs (_: labHost) (labExperiments // halmasuitExperiments);
 
         # One-command bootstrap seeding for shrike, run BEFORE the first
         # switch (phone-typeable, needs neither git nor a clone — github:

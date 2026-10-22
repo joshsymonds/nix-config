@@ -795,7 +795,11 @@
             // {
               modules =
                 nixosHostDefinitions.gnomon.modules
-                ++ [inputs.halmasuit.nixosModules.gnomon-lab experiment];
+                ++ [
+                  inputs.halmasuit.nixosModules.gnomon-lab
+                  experiment
+                  ./hosts/gnomon/lab.nix
+                ];
             }))
         inputs.halmasuit.lib.labExperiments;
 

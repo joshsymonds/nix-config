@@ -14,6 +14,8 @@
     imports = [../../modules/desktop/halmasuit.nix];
 
     desktop.halmasuit.enable = true;
+    # The greeter opens on the username field, not DMS's click-only single-user picker.
+    desktop.halmasuit.greeter.rememberLastUser = false;
     desktop.dms-niri.greeter.enable = lib.mkForce false;
 
     halmasuit.lab = {

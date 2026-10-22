@@ -56,6 +56,15 @@
     ++ ["/run/current-system/sw/share" "/usr/share"]
   );
 
+  # DMS's greeter reads DMS_GREET_REMEMBER_LAST_USER as a boolean
+  # override of its own setting. Null exports nothing, so the wrapper
+  # text is unchanged and DMS's setting decides.
+  rememberLastUserExport = lib.optionalString (cfg.greeter.rememberLastUser != null) "export DMS_GREET_REMEMBER_LAST_USER=${
+    if cfg.greeter.rememberLastUser
+    then "1"
+    else "0"
+  }\n";
+
   # The greeter executable halmasuit forks at startup. Runs as the
   # halmasuit-greeter system user; XDG_RUNTIME_DIR + WAYLAND_DISPLAY
   # point at halmasuit's own Wayland socket; HOME points at the
@@ -79,7 +88,7 @@
     export HOME=${cacheDir}
     export XDG_CACHE_HOME=$HOME/.cache
     export DMS_RUN_GREETER=1
-    mkdir -p "$XDG_CACHE_HOME/dms-greeter"
+    ${rememberLastUserExport}mkdir -p "$XDG_CACHE_HOME/dms-greeter"
     exec ${dmsQuickshell}/bin/quickshell \
       -p ${dmsShell}/share/quickshell/dms
   '';
@@ -124,6 +133,17 @@ in {
       deployment with NVIDIA rendering backend and the
       DankMaterialShell hexrain wallpaper.
     '';
+
+    greeter.rememberLastUser = lib.mkOption {
+      type = lib.types.nullOr lib.types.bool;
+      default = null;
+      description = ''
+        Whether DankGreeter pre-fills the user who last signed in
+        (DMS_GREET_REMEMBER_LAST_USER). null exports nothing, so the
+        greeter wrapper is unchanged and DMS's own setting decides;
+        true and false export 1 and 0.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {

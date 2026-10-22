@@ -30,8 +30,6 @@
       lib.remove "fbcon=nodefer" baseKernelParams
       ++ ["quiet" "initcall_blacklist=simpledrm_platform_driver_init,efifb_driver_init"]
     );
-
-    desktop.halmasuit.greeterDiagnostics = true;
   };
 in {
   halmasuit = {

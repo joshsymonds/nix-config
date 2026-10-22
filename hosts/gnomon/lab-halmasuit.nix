@@ -24,6 +24,9 @@
       # halmasuit itself reads input (libinput) once it has dropped to its
       # compositor user; the greeter is only a Wayland client of it.
       probe.consumerUser = config.services.halmasuit.compositorUser;
+      # halmasuit opens input devices once, in stage 1; the probe keyboard
+      # has to exist before then.
+      probe.earlyKeyboard = true;
       u2fOffServices = ["halmasuit"];
     };
 

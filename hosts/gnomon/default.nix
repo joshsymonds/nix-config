@@ -448,6 +448,15 @@ in
     hardware.i2c.enable = true;
     users.users.joshsymonds.extraGroups = ["i2c"];
 
+    # gnomon's local login needs a password: the root filesystem is recreated
+    # every boot, so /etc/shadow is rebuilt from this hash at each activation.
+    # agenix decrypts it before the users activation step runs.
+    age.secrets."joshsymonds-password-hash".file = ../../secrets/hosts/gnomon/joshsymonds-password-hash.age;
+    users.users.joshsymonds = {
+      hashedPassword = null;
+      hashedPasswordFile = config.age.secrets."joshsymonds-password-hash".path;
+    };
+
     # ── Gaming ──────────────────────────────────────────────────────────
     # Steam compatibility: use the stock "Proton CachyOS x86_64-v3" tool
     # (AVX2/x86_64-v3 ISA build, Steam Linux Runtime sniper variant; prebuilt

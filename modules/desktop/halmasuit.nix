@@ -9,10 +9,11 @@
 # halmasuit-session broker as the authenticated user.
 #
 # Architectural anti-patterns followed (Epic anti-patterns):
-#   - greetd-the-daemon and DMS's greeter NixOS module are off; their
-#     responsibilities split between halmasuit (compositor + greetd
-#     protocol socket) and the local halmasuit-greeter-setup oneshot
-#     that reproduces DMS's small file-copy preStart logic.
+#   - greetd-the-daemon is off, and DMS's greeter NixOS module is on
+#     only for the fonts it installs. The greeter's work splits between
+#     halmasuit (compositor + greetd protocol socket) and the local
+#     halmasuit-greeter-setup oneshot that reproduces DMS's small
+#     file-copy preStart logic.
 #   - /etc/pam.d/halmasuit is the canonical PAM service (the previous
 #     /etc/pam.d/greetd is deleted along with greetd); yubikey-auth
 #     wires U2F to the new name.
@@ -58,6 +59,8 @@
   greeterCmd = pkgs.writeShellScript "halmasuit-dankgreeter" ''
     export XDG_RUNTIME_DIR=/run/halmasuit-greeter
     export WAYLAND_DISPLAY=/run/halmasuit/wayland-0
+    # The system profile's share dirs (icons, mime types, applications).
+    export XDG_DATA_DIRS=/run/current-system/sw/share:/usr/share
     # halmasuit's spawn_greeter already exports GREETD_SOCK pointing
     # at the path it bound (see services.halmasuit.fromInitrd module
     # docs); do not override.
@@ -207,6 +210,20 @@ in {
     # pam_limits, pam_motd, etc.) — same shape as NixOS's default
     # PAM stack but under the halmasuit name.
     security.pam.services.halmasuit = {};
+
+    # ── DankGreeter module settings ──────────────────────────────
+    # programs.dms-greeter installs the greeter's fonts (fira-code,
+    # inter, material-symbols); its greetd command and preStart do
+    # not run. The DMS module still reads default_session.user even
+    # with greetd off, so it names the greeter user. greetd stays
+    # off: halmasuit is the compositor and greeter host, and greetd's
+    # nested niri is not started.
+    programs.dms-greeter = {
+      enable = true;
+      compositor.name = "niri";
+    };
+    services.greetd.enable = lib.mkForce false;
+    services.greetd.settings.default_session.user = "halmasuit-greeter";
 
     # ── halmasuit-greeter-setup oneshot ──────────────────────────
     # Reproduces DMS's greeter.preStart file-copy logic locally so

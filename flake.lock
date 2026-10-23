@@ -3289,11 +3289,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1792459217,
-        "narHash": "sha256-a0zGq5ckYVN94Ft4+1A0ivYI0bSh6wanWbYZ3W18t5I=",
+        "lastModified": 1792826661,
+        "narHash": "sha256-0qkKcmMBCmmRrKI8eLov8O7+NO5694caMNIxQPmAIZ8=",
         "ref": "main",
-        "rev": "aa8df26c1d0df1d6ce65228484d8316f5cf9f9e0",
-        "revCount": 113,
+        "rev": "28d664e12ff6c31b1644bc086b40787c6a15753b",
+        "revCount": 144,
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/parlor.git"
       },

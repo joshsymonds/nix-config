@@ -189,7 +189,11 @@ in
       find "$out/lib/chatgpt" -type f -name '*.musl.node' -delete
 
       install -Dm644 usr/share/applications/chatgpt.desktop "$out/share/applications/chatgpt.desktop"
+      # Upstream's entry claims http/https, csv/tsv, and the Office formats,
+      # so file managers without an explicit default hand spreadsheets and
+      # documents to ChatGPT. Keep only the codex:// scheme the app owns.
       sed -i \
+        -e 's|^MimeType=.*|MimeType=x-scheme-handler/codex;|' \
         -e 's|^Exec=.*|Exec=chatgpt %U|' \
         -e 's|^Icon=.*|Icon=chatgpt|' \
         -e 's|^StartupWMClass=.*|StartupWMClass=Chatgpt|' \

@@ -65,6 +65,7 @@ in
       grep -Fx 'Exec=chatgpt %U' "$desktop"
       grep -Fx 'Icon=chatgpt' "$desktop"
       grep -Fx 'StartupWMClass=Chatgpt' "$desktop"
+      grep -Fx 'MimeType=x-scheme-handler/codex;' "$desktop"
 
       if grep -E -i 'chromium|chatgpt\.com|--app=|--user-data-dir|chrome-chatgpt' "$launcher" "$desktop"; then
         echo "ASSERT FAIL: native ChatGPT package contains Chromium app-mode/profile launcher behavior" >&2

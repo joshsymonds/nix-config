@@ -584,6 +584,11 @@
   # mimeapps.list drops video/* through to chromium, the same latent bug
   # images had. Firefox's scheme/html defaults are deliberately NOT pinned
   # here: the app owns them and codifying would just be drift-prone dupe.
+  #
+  # Office: with no explicit default, cosmic-files hands a type to any app
+  # whose .desktop claims it — upstream chatgpt.desktop claimed
+  # xlsx/xls/docx/pptx/csv/tsv and took spreadsheets from LibreOffice
+  # (pkgs/chatgpt-desktop now strips that). Pin them to LibreOffice.
   home.activation.mimeDefaults = lib.hm.dag.entryAfter ["writeBoundary"] ''
     run ${pkgs.xdg-utils}/bin/xdg-mime default us.zoom.Zoom.desktop x-scheme-handler/zoommtg
     run ${pkgs.xdg-utils}/bin/xdg-mime default us.zoom.Zoom.desktop x-scheme-handler/zoomus
@@ -591,6 +596,14 @@
       image/jpeg image/png image/gif image/bmp image/webp image/tiff
     run ${pkgs.xdg-utils}/bin/xdg-mime default mpv.desktop \
       video/mp4 video/x-matroska video/webm video/quicktime video/x-msvideo
+    run ${pkgs.xdg-utils}/bin/xdg-mime default calc.desktop \
+      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet \
+      application/vnd.ms-excel application/vnd.ms-excel.sheet.macroEnabled.12 \
+      text/csv text/tab-separated-values
+    run ${pkgs.xdg-utils}/bin/xdg-mime default writer.desktop \
+      application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    run ${pkgs.xdg-utils}/bin/xdg-mime default impress.desktop \
+      application/vnd.openxmlformats-officedocument.presentationml.presentation
   '';
 
   systemd.user.services.dms.Service.Environment = "QS_ICON_THEME=Papirus-Dark";

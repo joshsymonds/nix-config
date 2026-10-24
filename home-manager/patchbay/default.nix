@@ -212,6 +212,20 @@
     # The Bedrock map is keyed by the Seat's pinned model when it has one, so
     # this resolves through the claude-sonnet-5-5 entry like a caller's own.
     attain-bedrock-sonnet55 = attainBedrockSeat // {model = "claude-sonnet-5-5";};
+    # Opus subagents on the anthropic forward with the one-hour prompt-cache
+    # lifetime. Claude Code writes five-minute markers for every subagent (the
+    # main session already gets one-hour ones), and a Gambit orchestrator runs
+    # on Opus and idles on its children longer than five minutes, so each wake
+    # rewrote its whole context into the cache: in playroom, all 82 waits of
+    # 5–60 minutes did. Short-lived Opus subagents such as task reviewers pay
+    # the 2x write instead of 1.25x; the orchestrators' avoided rewrites
+    # outweigh it. Bedrock is not a path cache_ttl is admitted on, so attain
+    # keeps its Opus subagents on the context's own Claude Seat.
+    anthropic-opus-1h = {
+      upstream = "https://api.anthropic.com";
+      auth_mode = "forward";
+      cache_ttl = "1h";
+    };
   };
 
   # The Attain Bedrock Seat: Claude models signed with SigV4 from the `attain`
@@ -292,8 +306,9 @@
   # Marked subagent traffic (x-claude-code-agent-id) that no public selector
   # already claims rides the model it asked for on the context's Claude Seat,
   # so an agent naming a model patchbay has never heard of runs that model
-  # rather than a policy default. Two classes ride the small-model Seat
-  # (subagentSeats above) instead:
+  # rather than a policy default. claude-opus-5-5 rides the long-lived Seat
+  # (subagentSeats above), the same model with one-hour cache markers. Two
+  # classes ride the small-model Seat instead:
   #
   #   * The built-in Explore, by agent type (x-claude-code-agent-type, which
   #     Claude Code sends under CLAUDE_CODE_GATEWAY_HINT_HEADERS). It inherits
@@ -306,23 +321,25 @@
   # On Attain Bedrock the small-model Seat is Sonnet 5.5, so a Haiku dispatch
   # or an Explore there runs Sonnet.
   bindings = lib.mapAttrs (selector: _: seatID selector) subscriptionSeats;
-  mkContext = claudeSeat: smallSeat: {
+  mkContext = claudeSeat: smallSeat: opusSeat: {
     default_seat = claudeSeat;
     models = bindings;
     subagents = {
       default_seat = claudeSeat;
       agent_types.Explore = smallSeat;
-      models = lib.genAttrs [
-        "claude-haiku-5-5"
-        "claude-haiku-4-5"
-        "claude-haiku-4-5-20251001"
-      ] (_: smallSeat);
+      models =
+        lib.genAttrs [
+          "claude-haiku-5-5"
+          "claude-haiku-4-5"
+          "claude-haiku-4-5-20251001"
+        ] (_: smallSeat)
+        // {"claude-opus-5-5" = opusSeat;};
     };
   };
-  context = mkContext "anthropic" "anthropic-haiku55";
+  context = mkContext "anthropic" "anthropic-haiku55" "anthropic-opus-1h";
   attainContext =
     if cfg.attainBedrock.enable
-    then mkContext "attain-bedrock" "attain-bedrock-sonnet55"
+    then mkContext "attain-bedrock" "attain-bedrock-sonnet55" "attain-bedrock"
     else context;
 
   # The tiltyard Seats get their own ID space rather than the selector-derived

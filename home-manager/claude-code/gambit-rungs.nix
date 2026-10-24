@@ -408,9 +408,13 @@
         fable.model = "fable";
       };
     # Every role runs a Claude model on Claude Code, following the tier table
-    # in tiltyard ops/claude-tiers/README.md: Opus orchestrates and reviews
-    # tasks, Fable steelmans, Haiku 5.5 implements and scouts
-    # (ops/haiku55-screen), and Sonnet takes every other role.
+    # in tiltyard ops/claude-tiers/README.md: Opus orchestrates, Fable
+    # steelmans, Haiku 5.5 implements and scouts (ops/haiku55-screen), and
+    # Sonnet takes every other role. Task review moved from Opus to Sonnet on
+    # 2026-10-23: in playroom the Opus task reviewer cost more than every Haiku
+    # implementer combined and confirmed a finding in roughly 6-10 of 184 gate
+    # records, and Opus subagents now write one-hour cache markers (patchbay
+    # anthropic-opus-1h) that a reviewer's short run does not repay.
     roles = {
       implementer.entry = "haiku-medium";
       scout = {
@@ -422,7 +426,7 @@
         readonly = true;
       };
       "task-reviewer" = {
-        entry = "opus-high";
+        entry = "sonnet-high";
         readonly = true;
       };
       "finding-verifier" = {

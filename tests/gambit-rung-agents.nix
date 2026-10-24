@@ -79,7 +79,7 @@ in
       and .roles."test-runner" == {"entry":"sonnet-low"}
       and .roles.scout == {"entry":"haiku-high","readonly":true}
       and .roles.steelman == {"entry":"fable-high","readonly":true}
-      and .roles."task-reviewer" == {"entry":"opus-high","readonly":true}
+      and .roles."task-reviewer" == {"entry":"sonnet-high","readonly":true}
       and .roles."finding-verifier" == {"entry":"sonnet-high","readonly":true}
       and .roles."conformance-reviewer" == {"entry":"sonnet-high","readonly":true}
       and .roles."integration-reviewer" == {"entry":"sonnet-high","readonly":true}

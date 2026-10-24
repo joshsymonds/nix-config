@@ -217,9 +217,9 @@
     # main session already gets one-hour ones), and a Gambit orchestrator runs
     # on Opus and idles on its children longer than five minutes, so each wake
     # rewrote its whole context into the cache: in playroom, all 82 waits of
-    # 5–60 minutes did. Short-lived Opus subagents such as task reviewers pay
-    # the 2x write instead of 1.25x; the orchestrators' avoided rewrites
-    # outweigh it. Bedrock is not a path cache_ttl is admitted on, so attain
+    # 5–60 minutes did. Short-lived Opus subagents pay the 2x write instead of
+    # 1.25x; the orchestrators' avoided rewrites outweigh it. Bedrock is not a
+    # path cache_ttl is admitted on, so attain
     # keeps its Opus subagents on the context's own Claude Seat.
     anthropic-opus-1h = {
       upstream = "https://api.anthropic.com";

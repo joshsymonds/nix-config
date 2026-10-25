@@ -11,6 +11,8 @@
   autoPatchelfHook,
   wrapGAppsHook3,
   makeWrapper,
+  coreutils,
+  findutils,
   alsa-lib,
   at-spi2-atk,
   at-spi2-core,
@@ -204,12 +206,21 @@ in
       install -Dm644 usr/lib/chatgpt/resources/icon-chatgpt.png \
         "$out/share/icons/hicolor/256x256/apps/chatgpt.png"
 
+      substitute ${./bundled-plugins-resources.sh} "$out/lib/chatgpt/bundled-plugins-resources" \
+        --subst-var-by shell "${stdenv.shell}" \
+        --subst-var-by coreutils "${coreutils}" \
+        --subst-var-by findutils "${findutils}" \
+        --subst-var-by resources "$out/lib/chatgpt/resources" \
+        --subst-var out
+      chmod +x "$out/lib/chatgpt/bundled-plugins-resources"
+
       runHook postInstall
     '';
 
     postFixup = ''
       makeWrapper "$out/lib/chatgpt/codex-launcher" "$out/bin/chatgpt" \
         "''${gappsWrapperArgs[@]}" \
+        --run "export CODEX_ELECTRON_BUNDLED_PLUGINS_RESOURCES_PATH=\"\$($out/lib/chatgpt/bundled-plugins-resources)\"" \
         --add-flags "--disable-blink-features=ScrollAnchoring" \
         --add-flags "--ozone-platform-hint=auto" \
         --add-flags "--password-store=gnome-libsecret"

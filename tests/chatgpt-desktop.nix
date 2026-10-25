@@ -67,6 +67,26 @@ in
       grep -Fx 'StartupWMClass=Chatgpt' "$desktop"
       grep -Fx 'MimeType=x-scheme-handler/codex;' "$desktop"
 
+      # The bundled plugin marketplace must be materialized from a writable
+      # copy, or every attempt leaks a read-only staging directory under
+      # ~/.codex/.tmp/bundled-marketplaces. Guard the upstream knob too: if a
+      # bump renames it, the override silently stops applying.
+      grep -aqF CODEX_ELECTRON_BUNDLED_PLUGINS_RESOURCES_PATH "$unwrapped/lib/chatgpt/resources/app.asar"
+      grep -F CODEX_ELECTRON_BUNDLED_PLUGINS_RESOURCES_PATH "$unwrapped/bin/chatgpt"
+      helper="$unwrapped/lib/chatgpt/bundled-plugins-resources"
+      export XDG_STATE_HOME="$TMPDIR/state"
+      mkdir -p "$XDG_STATE_HOME/chatgpt-desktop/bundled-plugins-resources/old-version/plugins"
+      chmod a-w "$XDG_STATE_HOME/chatgpt-desktop/bundled-plugins-resources/old-version/plugins"
+      mirror=$("$helper")
+      test "$("$helper")" = "$mirror"
+      test "$(ls "$XDG_STATE_HOME/chatgpt-desktop/bundled-plugins-resources")" = "$(basename "$mirror")"
+      test -d "$mirror/plugins" && test ! -L "$mirror/plugins"
+      test -z "$(find "$mirror/plugins" ! -perm -u+w -print -quit)"
+      test -n "$(find "$mirror/plugins" -name plugin.json -path '*/.codex-plugin/*' -print -quit)"
+      test "$(readlink "$mirror/app.asar")" = "$unwrapped/lib/chatgpt/resources/app.asar"
+      test "$(find "$unwrapped/lib/chatgpt/resources/plugins" -type f -perm -u+x | wc -l)" = \
+        "$(find "$mirror/plugins" -type f -perm -u+x | wc -l)"
+
       if grep -E -i 'chromium|chatgpt\.com|--app=|--user-data-dir|chrome-chatgpt' "$launcher" "$desktop"; then
         echo "ASSERT FAIL: native ChatGPT package contains Chromium app-mode/profile launcher behavior" >&2
         exit 1

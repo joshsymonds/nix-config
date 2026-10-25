@@ -669,4 +669,31 @@
     };
     Install.WantedBy = ["timers.target"];
   };
+
+  # Rootless podman's store (~/.local/share/containers) is outside the
+  # system cleanup-services prune, which runs as root. Untagged rebuilds of
+  # an 18G CUDA base piled up to ~130G real (479 images, Oct 2026) with one
+  # container in use. Daily prune of everything no container references:
+  # images being iterated on are rebuilt on next use. Volumes are kept,
+  # since they hold data rather than rebuildable layers. The system podman
+  # binary keeps this on the same version and containers.conf as the CLI.
+  systemd.user.services.podman-prune = {
+    Unit.Description = "Prune unused rootless podman images, containers and build cache";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "/run/current-system/sw/bin/podman system prune --all --build --force";
+    };
+  };
+
+  # Same OnCalendar+Persistent reasoning as gtrash-prune above.
+  systemd.user.timers.podman-prune = {
+    Unit.Description = "Daily rootless podman prune";
+    Timer = {
+      OnCalendar = "daily";
+      Unit = "podman-prune.service";
+      Persistent = true;
+      RandomizedDelaySec = "1h";
+    };
+    Install.WantedBy = ["timers.target"];
+  };
 }

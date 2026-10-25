@@ -39,10 +39,11 @@
     server = "production";
   };
 
-  # Parlor serve daemon (CPU torch) on port 4110 and the parlor-score CLI,
+  # Parlor serve daemon (CPU torch) on port 4110, the parlor-score CLI and joshify,
   # with module defaults.
   services.parlor.enable = true;
   programs.parlor-score.enable = true;
+  programs.joshify.enable = true;
 
   home.packages = with pkgs; [
     # Gaming auxiliaries (Steam itself is system-level via programs.steam)

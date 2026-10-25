@@ -1,5 +1,5 @@
 # parlor — the `parlor serve` daemon and the `parlor-score` CLI, both from the
-# parlor flake.
+# parlor flake, and the `joshify` rewriter command.
 #
 # The daemon runs as a user service. Its model directory defaults to a path
 # under the user's home (parlor's own default), so weights never enter the
@@ -13,6 +13,7 @@
 }: let
   cfg = config.services.parlor;
   scoreCfg = config.programs.parlor-score;
+  joshifyCfg = config.programs.joshify;
   system = pkgs.stdenv.hostPlatform.system;
 in {
   options = {
@@ -42,6 +43,20 @@ in {
     programs.parlor-score = {
       enable = lib.mkEnableOption "the parlor-score CLI";
     };
+
+    programs.joshify = {
+      enable = lib.mkEnableOption "the joshify rewriter command";
+
+      host = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        example = "gnomon";
+        description = ''
+          Host that runs joshify over ssh. When null, joshify runs here, in
+          the CUDA shell of the parlor checkout at ~/Personal/parlor.
+        '';
+      };
+    };
   };
 
   config = lib.mkMerge [
@@ -62,6 +77,35 @@ in {
       # The voice pointer lives in the private parlor repo; only the import
       # wiring is public.
       programs.claudeCode.memoryImports."parlor.md" = inputs.parlor + "/voice/CLAUDE.md";
+    })
+
+    (lib.mkIf joshifyCfg.enable {
+      home.packages = [
+        (pkgs.writeShellScriptBin "joshify" (
+          if joshifyCfg.host == null
+          then ''
+            # The checkout's editable install resolves the package from $PWD,
+            # so this cds into it, after turning a relative --gguf into an
+            # absolute path. The rewriter GGUF and its log stay under
+            # ~/.local/share/parlor.
+            args=()
+            while [ $# -gt 0 ]; do
+              case $1 in
+                --gguf) args+=("$1" "$(realpath -m -- "$2")"); shift 2 ;;
+                --gguf=*) args+=("--gguf=$(realpath -m -- "''${1#--gguf=}")"); shift ;;
+                *) args+=("$1"); shift ;;
+              esac
+            done
+            cd "$HOME/Personal/parlor" || exit 1
+            exec nix develop .#cuda -c parlor joshify "''${args[@]}"
+          ''
+          else ''
+            # stdin and stderr pass through ssh. --rate finds no terminal there
+            # and logs without ratings.
+            exec ssh ${joshifyCfg.host} joshify ''${1+"$(printf '%q ' "$@")"}
+          ''
+        ))
+      ];
     })
   ];
 }

@@ -46,6 +46,10 @@
   programs.go.enable = true;
 
   programs.parlor-score.enable = true;
+  programs.joshify = {
+    enable = true;
+    host = "gnomon";
+  };
 
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
 

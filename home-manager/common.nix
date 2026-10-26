@@ -39,6 +39,7 @@ in {
       sessionVariables = {
         COLORTERM = lib.mkDefault "truecolor";
         NH_FLAKE = "${config.home.homeDirectory}/nix-config";
+        UNIFI_ENV_FILE = config.age.secrets."unifi".path;
       };
 
       packages = with pkgs; (
@@ -144,6 +145,10 @@ in {
 
     # Agenix identity for home-manager secret decryption
     age.identityPaths = ["${config.home.homeDirectory}/.config/agenix/keys.txt"];
+
+    # Read-only UniFi gateway login (env-style UNIFI_HOST/USERNAME/PASSWORD)
+    # for network observation from the CLI.
+    age.secrets."unifi".file = ../secrets/user/unifi.age;
 
     # Auto-derive agenix age key from SSH key so `agenix -e` works on all machines
     home.activation.deriveAgenixKey = lib.hm.dag.entryAfter ["writeBoundary"] ''

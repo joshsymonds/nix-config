@@ -35,6 +35,10 @@ in {
   # certificate is pinned in pkgs/hexrain-wallpaper/signer.sha256 — a new
   # key can't update the installed app in place.
   "secrets/user/hexrain-wallpaper-keystore.age".publicKeys = keys.joshsymonds;
+  # UniFi gateway (172.31.0.1) local View Only admin, env-style
+  # UNIFI_HOST/UNIFI_USERNAME/UNIFI_PASSWORD (+ optional UNIFI_API_KEY), for
+  # read-only network observation from the CLI.
+  "secrets/user/unifi.age".publicKeys = keys.joshsymonds;
 
   # Host-specific secrets
   "secrets/hosts/ultraviolet/cloudflare-api-token.age".publicKeys = keys.ultraviolet;

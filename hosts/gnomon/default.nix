@@ -446,7 +446,17 @@ in
     # /dev/i2c-* nodes exist but no monitor responds, so DMS shows the
     # brightness OSD but slider drags do nothing.
     hardware.i2c.enable = true;
-    users.users.joshsymonds.extraGroups = ["i2c"];
+    users.users.joshsymonds.extraGroups = ["i2c" "docker"];
+
+    # Docker for kind/ctlptl (marvin-blackbox runs here when vermissian is
+    # busy). Same shape as vermissian; podman keeps the oci-containers
+    # backend (modules/services/qbittorrent-vpn.nix), Docker is only for
+    # dev tooling. /var/lib/docker is persisted in ./disko.nix.
+    virtualisation.docker = {
+      enable = true;
+      enableOnBoot = true;
+      storageDriver = "overlay2";
+    };
 
     # gnomon's local login needs a password: the root filesystem is recreated
     # every boot, so /etc/shadow is rebuilt from this hash at each activation.

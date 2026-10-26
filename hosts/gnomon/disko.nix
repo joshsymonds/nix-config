@@ -53,6 +53,11 @@
       # Rootless podman (ComfyUI) keeps its store under ~/.local/share on
       # @home and needs nothing here.
       "/var/lib/containers"
+      # Docker (kind/ctlptl for marvin-blackbox): images, volumes and build
+      # cache the blackbox warm-cache design depends on. The persist backing
+      # was created with `chattr +C` so overlay2 layers are nodatacow, as on
+      # vermissian (hosts/vermissian/disko.nix).
+      "/var/lib/docker"
       # services.inference-stack — llama-swap GGUF store + Open-WebUI state.
       # GGUFs land under /var/lib/llama-models (fetch-llama-models.service
       # downloads them on activation; ~15-25 GB each). Open-WebUI persists

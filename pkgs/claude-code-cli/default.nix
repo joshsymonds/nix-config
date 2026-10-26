@@ -7,25 +7,25 @@
   perl,
   darwin,
 }: let
-  version = "2.1.305";
+  version = "2.1.310";
   gcsBase = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/${version}";
 
   sources = {
     "aarch64-darwin" = fetchurl {
       url = "${gcsBase}/darwin-arm64/claude";
-      hash = "sha256-6j6jwI0qljSkZR5of8+QDUEMSJvOKwDyK9c1K5G6cE8=";
+      hash = "sha256-/7ZDMbwO4bae+3wsQovTq1Frwxt1v2CIazVsl8HCX/0=";
     };
     "x86_64-darwin" = fetchurl {
       url = "${gcsBase}/darwin-x64/claude";
-      hash = "sha256-r3rY1tix5JBZmI9mV9kbuLn+rBJ7+L7ABcTCfQCT8VM=";
+      hash = "sha256-KP2+1ahO99QgW1dRx/Ah55FRxOMZxKQB5I/mquhruzk=";
     };
     "x86_64-linux" = fetchurl {
       url = "${gcsBase}/linux-x64/claude";
-      hash = "sha256-hstyKraDSId9unlx5NDGWZGeBeYijAXgBug9oyDmVu8=";
+      hash = "sha256-tzZ2QwrxL5cxanmLg3H4HWQPkKWL3LjzzlaoNbtH31Y=";
     };
     "aarch64-linux" = fetchurl {
       url = "${gcsBase}/linux-arm64/claude";
-      hash = "sha256-UmWmAhfmZ7deEm6Ie0msDxaK2LsTxgXD499ShRmHbcA=";
+      hash = "sha256-nGTZp0QkNrZfzXzALBqgBRu1pwQed4hXbtO18pxEfVQ=";
     };
   };
 in
@@ -86,6 +86,11 @@ in
         # model. Same warn-and-ship-stock drift model; a stock binary just
         # never sets `focused` and Steward falls back to the aggregate view.
         perl ${./patch-agent-focus.pl} "$out/bin/claude"
+
+        # Let bypassPermissions mode skip the dangerous-removal prompts
+        # ("rm -rf $VAR/..."), which stock marks bypass-immune with no off
+        # switch. Same warn-and-ship-stock drift model.
+        perl ${./patch-dangerous-rm.pl} "$out/bin/claude"
 
         # The patches above edit embedded JS source, but Bun runs a module's
         # precompiled bytecode whenever it has some, so the edits only take

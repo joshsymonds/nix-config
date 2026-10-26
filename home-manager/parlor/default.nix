@@ -52,8 +52,8 @@ in {
         default = null;
         example = "gnomon";
         description = ''
-          Host that runs joshify over ssh. When null, joshify runs here, in
-          the CUDA shell of the parlor checkout at ~/Personal/parlor.
+          Host that runs joshify over ssh. When null, joshify runs here, from
+          the parlor flake's joshify package.
         '';
       };
     };
@@ -80,31 +80,20 @@ in {
     })
 
     (lib.mkIf joshifyCfg.enable {
+      # The package carries numpy and the CUDA llama-server, no torch, and the
+      # profile keeps it from garbage collection. The rewriter GGUF and its log
+      # stay under ~/.local/share/parlor.
       home.packages = [
-        (pkgs.writeShellScriptBin "joshify" (
+        (
           if joshifyCfg.host == null
-          then ''
-            # The checkout's editable install resolves the package from $PWD,
-            # so this cds into it, after turning a relative --gguf into an
-            # absolute path. The rewriter GGUF and its log stay under
-            # ~/.local/share/parlor.
-            args=()
-            while [ $# -gt 0 ]; do
-              case $1 in
-                --gguf) args+=("$1" "$(realpath -m -- "$2")"); shift 2 ;;
-                --gguf=*) args+=("--gguf=$(realpath -m -- "''${1#--gguf=}")"); shift ;;
-                *) args+=("$1"); shift ;;
-              esac
-            done
-            cd "$HOME/Personal/parlor" || exit 1
-            exec nix develop .#cuda -c parlor joshify "''${args[@]}"
-          ''
-          else ''
-            # stdin and stderr pass through ssh. --rate finds no terminal there
-            # and logs without ratings.
-            exec ssh ${joshifyCfg.host} joshify ''${1+"$(printf '%q ' "$@")"}
-          ''
-        ))
+          then inputs.parlor.packages.${system}.joshify
+          else
+            pkgs.writeShellScriptBin "joshify" ''
+              # stdin and stderr pass through ssh. --rate finds no terminal there
+              # and logs without ratings.
+              exec ssh ${joshifyCfg.host} joshify ''${1+"$(printf '%q ' "$@")"}
+            ''
+        )
       ];
     })
   ];

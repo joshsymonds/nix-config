@@ -9,16 +9,6 @@ with lib; let
   defaultShell = "${zshPackage}/bin/zsh";
   tmuxDevspaceHelper =
     pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ./scripts/tmux-devspace.sh);
-  # Orphan reaper: systemd user timer (10 min). PASS A kills sessions whose
-  # session_activity > 48h. PASS B SIGKILLs processes that have TMUX= in env
-  # but whose session leader (pane_pid) is gone — catches SIGHUP/SIGTERM-
-  # ignoring children (wrangler, esbuild, …) that survived a closed pane.
-  # Linux-only.
-  tmuxOrphanReaper = pkgs.writeShellApplication {
-    name = "tmux-orphan-reaper";
-    runtimeInputs = with pkgs; [tmux psmisc procps systemd bash gnugrep coreutils iproute2 gawk];
-    text = builtins.readFile ./scripts/tmux-orphan-reaper.sh;
-  };
   # Combined system-monitor widget. Reads /proc directly (no iostat sample)
   # for cpu/ram/net/disk, plus systemctl for failed units, and emits the full
   # styled status-right string. Replaces five separate `#(...)` shell-outs.
@@ -190,32 +180,6 @@ in {
       };
       Install = {
         WantedBy = ["default.target"];
-      };
-    };
-
-    # Orphan reaper: kills stale sessions (>48h idle) and orphans inside live
-    # scopes. Two-pass design — see scripts/tmux-orphan-reaper.sh. Linux only.
-    systemd.user.services.tmux-orphan-reaper = mkIf pkgs.stdenv.hostPlatform.isLinux {
-      Unit = {
-        Description = "Reap orphans in tmux pane scopes; kill stale sessions";
-      };
-      Service = {
-        Type = "oneshot";
-        ExecStart = "${tmuxOrphanReaper}/bin/tmux-orphan-reaper";
-      };
-    };
-
-    systemd.user.timers.tmux-orphan-reaper = mkIf pkgs.stdenv.hostPlatform.isLinux {
-      Unit = {
-        Description = "Run tmux orphan reaper every 10 minutes";
-      };
-      Timer = {
-        OnBootSec = "5min";
-        OnUnitActiveSec = "10min";
-        Unit = "tmux-orphan-reaper.service";
-      };
-      Install = {
-        WantedBy = ["timers.target"];
       };
     };
   };

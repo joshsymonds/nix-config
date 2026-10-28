@@ -528,7 +528,17 @@
       # captures the cursor near floating Zoom helpers (annotate_toolbar etc.);
       # native Wayland sidesteps it. Screen-share still works via the Wayland
       # screencast portal (xdp + josh/zoom-screencast-fix's SHM fallback).
-      flatpak run \
+      #
+      # FLATPAK_GL_DRIVERS=default pins Zoom to Mesa (llvmpipe, CPU) even when
+      # the org.freedesktop.Platform.GL.nvidia-* extension is installed. On
+      # NVIDIA (Zoom 7.2.1, driver 615.78.08, tested 2026-10-27) Zoom's camera
+      # video draws black under native Wayland — with egl-wayland and
+      # egl-wayland2 alike, and with the in-app hardware-acceleration toggles off —
+      # while the rest of its UI renders fine; under XWayland it works but at
+      # slideshow framerates. Mesa is smooth and costs ~20% of one core with
+      # the camera preview up. flatpak reads this from the host env of
+      # `flatpak run`, so it must not go through --env=.
+      FLATPAK_GL_DRIVERS=default flatpak run \
         --env=QT_QPA_PLATFORM=wayland \
         --env=GDK_BACKEND=wayland \
         --branch=stable \

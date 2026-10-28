@@ -512,9 +512,23 @@ in
 
     # ── Flatpak (declarative via nix-flatpak) ───────────────────────────
     # `services.flatpak.packages` is reconciled on activation: missing apps
-    # are installed, declared apps are updated, and anything not on the list
-    # is uninstalled (uninstallUnmanaged = true). The Flathub remote is
-    # auto-added by nix-flatpak — no imperative `flatpak remote-add` needed.
+    # are installed and anything not on the list is uninstalled
+    # (uninstallUnmanaged = true). The Flathub remote is auto-added by
+    # nix-flatpak — no imperative `flatpak remote-add` needed.
+    #
+    # Updates: `update.auto` adds a weekly (Persistent) timer that re-runs the
+    # install with `--or-update`. Activation itself only installs — rebuilds
+    # stay fast and idempotent. Without the timer nix-flatpak never updates
+    # an installed app; Zoom sat on its April 2026 build for six months.
+    # Update by hand: `systemctl start flatpak-managed-install-timer.service`.
+    #
+    # Zoom renders on Mesa (llvmpipe, CPU), not NVIDIA: its launcher in
+    # home-manager/hosts/gnomon.nix sets FLATPAK_GL_DRIVERS=default. Do not
+    # declare the org.freedesktop.Platform.GL.nvidia-* extension for it —
+    # Zoom's camera video renders black on NVIDIA's GLES driver under native
+    # Wayland (and as a slideshow under XWayland); see the launcher comment.
+    # `flatpak update` may still auto-pull that extension for the active
+    # driver; the launcher's override makes it inert for Zoom.
     #
     # Why Zoom is here and not in nixpkgs: the official zoom-us client has
     # hard-coded /usr/share/xdg-desktop-portal/portals/ lookups for the
@@ -529,6 +543,7 @@ in
     services.flatpak = {
       enable = true;
       uninstallUnmanaged = true;
+      update.auto.enable = true;
       packages = ["us.zoom.Zoom"];
     };
 

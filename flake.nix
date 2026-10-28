@@ -715,6 +715,7 @@
           claude-session-start-hook = import ./tests/claude-session-start-hook.nix {
             pkgs = checkPkgs;
           };
+          transcript-sync = import ./tests/transcript-sync.nix {pkgs = checkPkgs;};
           claude-dispatch-guard-hook = import ./tests/claude-dispatch-guard-hook.nix {
             pkgs = checkPkgs;
             renderedSettings = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home.file.".claude/settings.base.json".source;

@@ -1,9 +1,15 @@
 # ec2: launch, list, and terminate fleet boxes in us-west-2.
-# AWS credentials come only from $EC2_FLEET_AWS_ENV_FILE and are never printed
-# or placed on a command line.
+# AWS credentials come only from $EC2_FLEET_AWS_ENV_FILE and the Tailscale OAuth
+# client only from $EC2_FLEET_TS_ENV_FILE. Neither is printed or placed on a
+# command line.
 
 region=us-west-2
 flake=${EC2_FLEET_FLAKE:-$HOME/nix-config}
+
+# launched is the instance cmd_up started and has not finished deploying;
+# userdata is the temp file holding the auth key until run-instances reads it.
+launched=""
+userdata=""
 
 die() {
   echo "ec2: $*" >&2
@@ -24,6 +30,25 @@ load_aws_env() {
     die "$EC2_FLEET_AWS_ENV_FILE lacks AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY"
   fi
   export AWS_ACCESS_KEY_ID=$access AWS_SECRET_ACCESS_KEY=$secret AWS_DEFAULT_REGION=$region
+}
+
+# load_ts_env: reads the Tailscale OAuth client into ts_client_id and
+# ts_client_secret.
+load_ts_env() {
+  local key value id="" secret=""
+  [ -n "${EC2_FLEET_TS_ENV_FILE:-}" ] || die "EC2_FLEET_TS_ENV_FILE is not set"
+  [ -r "$EC2_FLEET_TS_ENV_FILE" ] || die "cannot read $EC2_FLEET_TS_ENV_FILE"
+  while IFS='=' read -r key value || [ -n "$key" ]; do
+    case "$key" in
+      TS_API_CLIENT_ID) id=$value ;;
+      TS_API_CLIENT_SECRET) secret=$value ;;
+    esac
+  done <"$EC2_FLEET_TS_ENV_FILE"
+  if [ -z "$id" ] || [ -z "$secret" ]; then
+    die "$EC2_FLEET_TS_ENV_FILE lacks TS_API_CLIENT_ID or TS_API_CLIENT_SECRET"
+  fi
+  ts_client_id=$id
+  ts_client_secret=$secret
 }
 
 # age_of <launch time>: elapsed time since launch as <h>h<mm>m.
@@ -104,6 +129,167 @@ cmd_down() {
   echo "terminating $ids ($name)"
 }
 
+# on_exit: when the launcher exits nonzero after run-instances, terminates the
+# launched instance and removes the auth-key temp file.
+on_exit() {
+  local status=$?
+  if [ "$status" -ne 0 ] && [ -n "$launched" ]; then
+    echo "ec2: launch failed; terminating $launched" >&2
+    if ! aws ec2 terminate-instances --instance-ids "$launched" >/dev/null; then
+      echo "ec2: could not terminate $launched; terminate it by hand" >&2
+    fi
+  fi
+  if [ -n "$userdata" ]; then
+    rm -f -- "$userdata"
+  fi
+}
+
+# cmd_up <class> | --type <t> --disk <gb> [--spot]: launches a box, waits for
+# ssh on the tailnet, and for a class deploys its toplevel.
+cmd_up() {
+  local class="" type="" disk="" spot=no timeout
+  local classes row itype disk_gb spot_req max_hours fleet_class prefix
+  local known_dir deadline suffix name images ami sgs sg body token key id toplevel
+  local -a ssh_opts=() market=()
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --type)
+        [ $# -ge 2 ] || die "--type needs a value"
+        type=$2
+        shift 2
+        ;;
+      --disk)
+        [ $# -ge 2 ] || die "--disk needs a value"
+        disk=$2
+        shift 2
+        ;;
+      --spot)
+        spot=yes
+        shift
+        ;;
+      --*) die "unknown flag: $1 (see: ec2 help)" ;;
+      *)
+        [ -z "$class" ] || die "usage: ec2 up <class> | ec2 up --type <t> --disk <gb> [--spot]"
+        class=$1
+        shift
+        ;;
+    esac
+  done
+
+  if [ -n "$class" ]; then
+    if [ -n "$type$disk" ] || [ "$spot" = yes ]; then
+      die "a class takes no --type, --disk or --spot"
+    fi
+  else
+    if [ -z "$type" ] || [ -z "$disk" ]; then
+      die "usage: ec2 up --type <t> --disk <gb> [--spot]"
+    fi
+    [[ $disk =~ ^[1-9][0-9]*$ ]] || die "--disk must be a positive integer"
+  fi
+  timeout=${EC2_FLEET_READY_TIMEOUT:-600}
+  [[ $timeout =~ ^[0-9]+$ ]] || die "EC2_FLEET_READY_TIMEOUT must be whole seconds"
+
+  if [ -n "$class" ]; then
+    classes=$(nix eval --json "$flake#ec2Classes") || die "cannot evaluate ec2Classes in $flake"
+    row=$(jq -r --arg c "$class" '
+      if has($c) then .[$c] | [.instanceType, .diskGb, (if .spot then "yes" else "no" end), .maxHours] | @tsv
+      else empty end' <<<"$classes") || die "cannot read the class data"
+    [ -n "$row" ] || die "unknown class: $class (see: ec2 help)"
+    IFS=$'\t' read -r itype disk_gb spot_req max_hours <<<"$row"
+    fleet_class=$class
+    prefix=$class
+  else
+    itype=$type
+    disk_gb=$disk
+    spot_req=$spot
+    max_hours=24
+    fleet_class=adhoc
+    prefix=ec2
+  fi
+
+  load_aws_env
+  load_ts_env
+  known_dir=${XDG_STATE_HOME:-$HOME/.local/state}/ec2-fleet
+  mkdir -p "$known_dir" || die "cannot create $known_dir"
+  ssh_opts=(-o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known_dir/known_hosts")
+  export NIX_SSHOPTS="${ssh_opts[*]}"
+
+  if [ -n "$class" ]; then
+    toplevel=$(nix build --no-link --print-out-paths "$flake#nixosConfigurations.ec2-$class.config.system.build.toplevel") ||
+      die "nix build failed for ec2-$class"
+    [ -n "$toplevel" ] || die "nix build printed no toplevel for ec2-$class"
+  fi
+
+  suffix=$(shuf -r -n 3 -e {a..z} {0..9} | tr -d '\n') || die "cannot pick a random name"
+  name="$prefix-$suffix"
+
+  images=$(aws ec2 describe-images --owners self --output json \
+    --filters 'Name=tag:fleet,Values=ec2-base') || die "describe-images failed"
+  ami=$(jq -r '.Images | sort_by(.CreationDate) | last | .ImageId // empty' <<<"$images") ||
+    die "cannot read the base AMIs"
+  [ -n "$ami" ] || die "no ec2-base AMI in $region; build one before launching"
+
+  sgs=$(aws ec2 describe-security-groups --output json \
+    --filters 'Name=tag:fleet,Values=ec2-sg') || die "describe-security-groups failed"
+  sg=$(jq -r '.SecurityGroups[0].GroupId // empty' <<<"$sgs") || die "cannot read the security groups"
+  [ -n "$sg" ] || die "no ec2-sg security group in $region"
+
+  if [ "$spot_req" = yes ]; then
+    market=(--instance-market-options 'MarketType=spot,SpotOptions={SpotInstanceType=one-time,InstanceInterruptionBehavior=terminate}')
+  fi
+
+  body='{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:ec2"]}}},"expirySeconds":600}'
+  token=$(printf 'data-urlencode = "client_id=%s"\ndata-urlencode = "client_secret=%s"\n' \
+    "$ts_client_id" "$ts_client_secret" |
+    curl --config - -fsS https://api.tailscale.com/api/v2/oauth/token | jq -r '.access_token // empty') ||
+    die "Tailscale OAuth token request failed"
+  [ -n "$token" ] || die "Tailscale returned no access token"
+  key=$(printf 'header = "Authorization: Bearer %s"\n' "$token" |
+    curl --config - -fsS -H 'Content-Type: application/json' -d "$body" \
+      https://api.tailscale.com/api/v2/tailnet/-/keys | jq -r '.key // empty') ||
+    die "Tailscale auth key request failed"
+  [ -n "$key" ] || die "Tailscale returned no auth key"
+
+  userdata=$(mktemp) || die "cannot create a temp file"
+  printf 'EC2_FLEET_NAME=%s\nEC2_FLEET_TS_AUTHKEY=%s\n' "$name" "$key" >"$userdata" ||
+    die "cannot write the user-data file"
+
+  id=$(aws ec2 run-instances --output text --query 'Instances[0].InstanceId' \
+    --image-id "$ami" --instance-type "$itype" --count 1 \
+    --block-device-mappings "DeviceName=/dev/xvda,Ebs={VolumeSize=$disk_gb,VolumeType=gp3,DeleteOnTermination=true}" \
+    --network-interfaces "DeviceIndex=0,AssociatePublicIpAddress=true,Groups=$sg" \
+    --metadata-options 'HttpTokens=required,HttpPutResponseHopLimit=1,HttpEndpoint=enabled' \
+    --instance-initiated-shutdown-behavior terminate \
+    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=$fleet_class},{Key=fleet-max-hours,Value=$max_hours}]" \
+      "ResourceType=volume,Tags=[{Key=fleet,Value=ec2},{Key=Name,Value=$name}]" \
+    --user-data "file://$userdata" "${market[@]}") ||
+    die "run-instances failed; nothing was launched"
+  [ -n "$id" ] || die "run-instances returned no instance id; check for a new fleet=ec2 box"
+  launched=$id
+  rm -f -- "$userdata"
+  userdata=""
+
+  aws ec2 wait instance-running --instance-ids "$id" || die "$id did not reach running"
+
+  deadline=$(($(date +%s) + timeout))
+  until ssh "${ssh_opts[@]}" "joshsymonds@$name" true 2>/dev/null; do
+    [ "$(date +%s)" -lt "$deadline" ] || die "ssh to $name did not answer within ${timeout}s"
+    sleep 5
+  done
+
+  if [ -n "$class" ]; then
+    nix copy --substitute-on-destination --to "ssh-ng://joshsymonds@$name" "$toplevel" ||
+      die "nix copy to $name failed"
+    ssh "${ssh_opts[@]}" "joshsymonds@$name" sudo nix-env -p /nix/var/nix/profiles/system --set "$toplevel" ||
+      die "setting the system profile on $name failed"
+    ssh "${ssh_opts[@]}" "joshsymonds@$name" sudo "$toplevel/bin/switch-to-configuration" switch ||
+      die "switching $name to $toplevel failed"
+  fi
+
+  launched=""
+  echo "$name ready"
+}
+
 cmd_help() {
   local classes
   classes=$(nix eval --json "$flake#ec2Classes")
@@ -135,10 +321,12 @@ USAGE
   jq -r 'to_entries[] | "  \(.key)  \(.value.instanceType)  disk \(.value.diskGb) GB  spot \(if .value.spot then "yes" else "no" end)  idle \(.value.idleMinutes) min  max \(.value.maxHours) h"' <<<"$classes"
 }
 
+trap on_exit EXIT
+
 case "${1:-help}" in
   help) cmd_help ;;
   ls) cmd_ls ;;
   down) cmd_down "${@:2}" ;;
-  up) die "up is not implemented yet" ;;
+  up) cmd_up "${@:2}" ;;
   *) die "unknown command: $1 (see: ec2 help)" ;;
 esac

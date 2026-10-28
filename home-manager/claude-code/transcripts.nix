@@ -21,7 +21,7 @@
   # runs shellcheck at build time as a free extra check.
   claudeUsageSummary = pkgs.writeShellApplication {
     name = "claude-usage-summary";
-    runtimeInputs = with pkgs; [jq coreutils findutils gnused gawk];
+    runtimeInputs = with pkgs; [jq coreutils findutils gnused gawk util-linux];
     text = builtins.readFile "${inputs.dms-claudecode}/claude-usage-summary";
   };
   bucket = "/mnt/claude/${hostname}";

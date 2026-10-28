@@ -845,11 +845,11 @@
     "dms-claudecode": {
       "flake": false,
       "locked": {
-        "lastModified": 1780090399,
-        "narHash": "sha256-ufPVaz0pYKPDP8WrFn9ASCf8mfy0EPCZZZ9uM0t5duI=",
+        "lastModified": 1793153089,
+        "narHash": "sha256-fIDc7D52O+c36e+cm1U5clYWpISoycMznFwcjw3xjm8=",
         "owner": "joshsymonds",
         "repo": "dms-claudecode",
-        "rev": "261de94d50258758f62a13b4a5fa08385e863b1f",
+        "rev": "70199eea5ff2300e9a0b407fe9620a2caf867de6",
         "type": "github"
       },
       "original": {

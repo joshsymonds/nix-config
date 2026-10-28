@@ -109,7 +109,7 @@ data "aws_iam_policy_document" "launcher" {
     condition {
       test     = "StringEquals"
       variable = "ec2:CreateAction"
-      values   = ["RunInstances", "RegisterImage", "StartSnapshot"]
+      values   = ["RunInstances", "RegisterImage"]
     }
   }
 
@@ -124,6 +124,26 @@ data "aws_iam_policy_document" "launcher" {
       test     = "StringEquals"
       variable = "aws:RequestTag/fleet"
       values   = ["ec2-base"]
+    }
+  }
+
+  # StartSnapshot is the only action that can tag a snapshot on create.
+  statement {
+    sid       = "TagSnapshotOnStartBase"
+    effect    = "Allow"
+    actions   = ["ec2:CreateTags"]
+    resources = ["arn:aws:ec2:us-west-2::snapshot/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestTag/fleet"
+      values   = ["ec2-base"]
+    }
+
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "aws:TagKeys"
+      values   = ["fleet"]
     }
   }
 

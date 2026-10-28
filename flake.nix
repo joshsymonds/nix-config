@@ -453,6 +453,15 @@
           });
       };
 
+    # EC2 fleet boxes: x86_64 NixOS built from the fleet base module. Class
+    # hosts reuse this builder.
+    mkEc2Host = hostname:
+      mkNixosHost hostname {
+        system = "x86_64-linux";
+        modules = [./hosts/ec2/base.nix];
+        homeModule = ./home-manager/hosts/ec2.nix;
+      };
+
     nixosHostDefinitions = {
       ultraviolet = {
         system = "x86_64-linux";
@@ -649,6 +658,9 @@
             installerIso = self.nixosConfigurations.installer.config.system.build.isoImage;
             ultravioletInstallerIso = self.nixosConfigurations.ultraviolet-installer.config.system.build.isoImage;
 
+            # Raw AMI disk for the fleet base; the image holds ec2-base's toplevel.
+            ec2-base-image = self.nixosConfigurations.ec2-base.config.system.build.amazonImage;
+
             # End-to-end installer VM test. Boots a qemu VM, runs install.sh,
             # asserts post-install state. Slow (minutes) — exposed as a
             # package, NOT a check, so `nix flake check` stays fast. Run
@@ -784,7 +796,11 @@
           outputs = self.outputs;
         };
 
-        nixosConfigurations = lib.mapAttrs mkNixosHost nixosHostDefinitions;
+        nixosConfigurations =
+          lib.mapAttrs mkNixosHost nixosHostDefinitions
+          // {
+            ec2-base = mkEc2Host "ec2-base";
+          };
 
         # Halmasuit lab images: gnomon's own system plus halmasuit's gnomon-lab
         # module and one experiment module, per attribute of halmasuit's

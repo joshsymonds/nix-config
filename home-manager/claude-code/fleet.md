@@ -39,7 +39,8 @@ Ephemeral NixOS boxes in us-west-2 for work that outgrows the home hosts. The
 credentials.
 
 - `ec2 up <class>` starts a box of a class. `ec2 up --type <t> --disk <gb>
-  [--spot]` starts an ad-hoc box. `ec2 help` lists the classes.
+  [--spot]` starts an ad-hoc box; `--disk` is at most 512. `ec2 help` lists the
+  classes.
 - `ec2 ls` lists pending and running boxes. `ec2 down <name>` terminates one.
 - Names are `<class>-xxx`, or `ec2-xxx` for ad-hoc boxes. Connect with
   `ssh joshsymonds@<name>`.
@@ -47,7 +48,10 @@ credentials.
   of 1.0 or more, or busyCommand exiting 0. It also terminates at `maxHours`.
   Defaults are 60 minutes idle and 24 hours max.
 - The warden terminates the newest boxes while fleet boxes total more than 128
-  vCPU, and any box up past its `fleet-max-hours` tag (default 24).
+  vCPU, and any box up past its `fleet-max-hours` tag (default 24; a tag above
+  48 counts as 24). It also terminates a box whose volumes are not one gp3 root
+  volume of at most 512 GB, at 3000 IOPS and 125 MB/s, with DeleteOnTermination
+  true. It deletes unattached fleet volumes.
 - Budget is $200/month. At 100%, RunInstances and snapshot creation are denied.
 - Boxes carry tag:ec2 and cannot reach ultraviolet, the NAS, or the home LAN.
   They hold no agenix secrets and no IAM role. Keep it that way.

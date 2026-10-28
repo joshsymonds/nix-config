@@ -11,6 +11,7 @@
     ../calendar
     ../claude-code/transcripts.nix
     ../claude-code/aggregator.nix
+    ../ec2-fleet
     ../ntfy-notify
     ../savecraftd
     ../patchbay

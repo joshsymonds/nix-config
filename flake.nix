@@ -453,6 +453,26 @@
           });
       };
 
+    # EC2 fleet boxes: x86_64 NixOS built from the fleet base module plus
+    # extraModules. Class hosts reuse this builder.
+    mkEc2Host = hostname: extraModules:
+      mkNixosHost hostname {
+        system = "x86_64-linux";
+        modules = [./hosts/ec2/base.nix] ++ extraModules;
+        homeModule = ./home-manager/hosts/ec2.nix;
+      };
+
+    # Each class sets its lifetime on ec2Fleet and imports its module.
+    ec2ClassDefs = import ./hosts/ec2/classes.nix;
+    mkEc2Class = class: c:
+      mkEc2Host "ec2-${class}" [
+        c.module
+        {
+          ec2Fleet.idleMinutes = c.idleMinutes;
+          ec2Fleet.maxHours = c.maxHours;
+        }
+      ];
+
     nixosHostDefinitions = {
       ultraviolet = {
         system = "x86_64-linux";
@@ -649,6 +669,9 @@
             installerIso = self.nixosConfigurations.installer.config.system.build.isoImage;
             ultravioletInstallerIso = self.nixosConfigurations.ultraviolet-installer.config.system.build.isoImage;
 
+            # Raw AMI disk for the fleet base; the image holds ec2-base's toplevel.
+            ec2-base-image = self.nixosConfigurations.ec2-base.config.system.build.amazonImage;
+
             # End-to-end installer VM test. Boots a qemu VM, runs install.sh,
             # asserts post-install state. Slow (minutes) — exposed as a
             # package, NOT a check, so `nix flake check` stays fast. Run
@@ -700,6 +723,17 @@
             pkgs = checkPkgs;
             vermissian = self.nixosConfigurations.vermissian.config;
           };
+          ec2-idle = import ./tests/ec2-idle.nix {
+            pkgs = checkPkgs;
+            inherit inputs;
+            outputs = self.outputs;
+          };
+          ec2-identity = import ./tests/ec2-identity.nix {
+            pkgs = checkPkgs;
+            inherit inputs;
+            outputs = self.outputs;
+          };
+          ec2-launcher = config.packages.ec2.tests.stubbed;
           private-store-hook = import ./tests/private-store-hook.nix {
             pkgs = checkPkgs;
             renderedSettings = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home.file.".claude/settings.base.json".source;
@@ -784,7 +818,15 @@
           outputs = self.outputs;
         };
 
-        nixosConfigurations = lib.mapAttrs mkNixosHost nixosHostDefinitions;
+        nixosConfigurations =
+          lib.mapAttrs mkNixosHost nixosHostDefinitions
+          // {
+            ec2-base = mkEc2Host "ec2-base" [];
+          }
+          // lib.mapAttrs' (class: c: lib.nameValuePair "ec2-${class}" (mkEc2Class class c)) ec2ClassDefs;
+
+        # Plain JSON view of the fleet classes; module is a path and stays out.
+        ec2Classes = lib.mapAttrs (_: c: builtins.removeAttrs c ["module"]) ec2ClassDefs;
 
         # Halmasuit lab images: gnomon's own system plus halmasuit's gnomon-lab
         # module and one experiment module, per attribute of halmasuit's

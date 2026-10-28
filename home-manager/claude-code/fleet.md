@@ -8,6 +8,8 @@ when the current host genuinely cannot do the task (e.g. CUDA work off-gnomon).
 
 All hosts are reachable from each other by hostname (LAN DNS or tailscale
 MagicDNS). Use hostnames, not IPs. Ninuan is a laptop and does not accept SSH.
+EC2 fleet boxes join the tailnet too, but they are not home hosts; see
+Cloud workers (ec2) below.
 
 - **vermissian** — headless NixOS dev box. Ryzen 9 9955HX (16c/32t), 64 GB RAM,
   AMD iGPU. Highest-throughput compile target.
@@ -29,3 +31,29 @@ MagicDNS). Use hostnames, not IPs. Ninuan is a laptop and does not accept SSH.
 - **Home LAN**: 172.31.0.0/24 (vermissian, gnomon, ultraviolet, bluedesert, NAS).
 - **Tailnet**: every host above is on tailscale; ultraviolet and echelon offer
   exit-node service.
+
+## Cloud workers (ec2)
+
+Ephemeral NixOS boxes in us-west-2 for work that outgrows the home hosts. The
+`ec2` command runs on vermissian and gnomon, the only hosts with its AWS
+credentials.
+
+- `ec2 up <class>` starts a box of a class. `ec2 up --type <t> --disk <gb>
+  [--spot]` starts an ad-hoc box; `--disk` is at most 512. `ec2 help` lists the
+  classes.
+- `ec2 ls` lists pending and running boxes. `ec2 down <name>` terminates one.
+- Names are `<class>-xxx`, or `ec2-xxx` for ad-hoc boxes. Connect with
+  `ssh joshsymonds@<name>`.
+- A box powers off and terminates after `idleMinutes` with no ssh session, load
+  of 1.0 or more, or busyCommand exiting 0. It also terminates at `maxHours`.
+  Defaults are 60 minutes idle and 24 hours max.
+- The warden terminates the newest boxes while fleet boxes total more than 128
+  vCPU, and any box up past its `fleet-max-hours` tag (default 24; a tag above
+  48 counts as 24). It also terminates a box whose volumes are not one gp3 root
+  volume of at most 512 GB, at 3000 IOPS and 125 MB/s, with DeleteOnTermination
+  true. It deletes unattached fleet volumes.
+- Budget is $200/month. At 100%, RunInstances and snapshot creation are denied.
+- Boxes carry tag:ec2 and cannot reach ultraviolet, the NAS, or the home LAN.
+  They hold no agenix secrets and no IAM role. Keep it that way.
+- Classes are defined in `hosts/ec2/classes.nix`, with modules in
+  `hosts/ec2/classes/`.

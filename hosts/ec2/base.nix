@@ -19,6 +19,22 @@
   # the next pass instead of ending the guard.
   idleGuard = pkgs.writeShellScript "ec2-idle-guard" ''
     set -u
+    # An ssh connection carries a session when its logind scope (session-N.scope)
+    # holds a process besides sshd-session: a shell, a running command, or a
+    # background job left under it. A background job whose shell exited is
+    # reparented, so the scope is what links it to the session. An idle
+    # ControlPersist master has only its sshd-session process in the scope.
+    ssh_session_open() {
+      for pid in $(ss -Htnp state established '( sport = :22 )' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do
+        cg=$(awk -F: '{print $3}' "/proc/$pid/cgroup" 2>/dev/null)
+        case "$cg" in */session-*.scope) ;; *) continue ;; esac
+        for q in $(cat "/sys/fs/cgroup$cg/cgroup.procs" 2>/dev/null); do
+          comm=$(cat "/proc/$q/comm" 2>/dev/null) || continue
+          [ "$comm" = sshd-session ] || return 0
+        done
+      done
+      return 1
+    }
     last_busy=$(date +%s)
     while true; do
       sleep 30
@@ -30,7 +46,7 @@
         systemctl --no-block poweroff && exit 0
       fi
       busy=0
-      if ss -Htn state established '( sport = :22 )' | grep -q .; then busy=1; fi
+      if ssh_session_open; then busy=1; fi
       if awk '{exit !($1 >= 1.0)}' /proc/loadavg; then busy=1; fi
       ${busyCheck}
       if [ "$busy" -eq 1 ]; then

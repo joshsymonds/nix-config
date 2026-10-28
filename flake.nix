@@ -453,14 +453,25 @@
           });
       };
 
-    # EC2 fleet boxes: x86_64 NixOS built from the fleet base module. Class
-    # hosts reuse this builder.
-    mkEc2Host = hostname:
+    # EC2 fleet boxes: x86_64 NixOS built from the fleet base module plus
+    # extraModules. Class hosts reuse this builder.
+    mkEc2Host = hostname: extraModules:
       mkNixosHost hostname {
         system = "x86_64-linux";
-        modules = [./hosts/ec2/base.nix];
+        modules = [./hosts/ec2/base.nix] ++ extraModules;
         homeModule = ./home-manager/hosts/ec2.nix;
       };
+
+    # Each class sets its lifetime on ec2Fleet and imports its module.
+    ec2ClassDefs = import ./hosts/ec2/classes.nix;
+    mkEc2Class = class: c:
+      mkEc2Host "ec2-${class}" [
+        c.module
+        {
+          ec2Fleet.idleMinutes = c.idleMinutes;
+          ec2Fleet.maxHours = c.maxHours;
+        }
+      ];
 
     nixosHostDefinitions = {
       ultraviolet = {
@@ -804,8 +815,12 @@
         nixosConfigurations =
           lib.mapAttrs mkNixosHost nixosHostDefinitions
           // {
-            ec2-base = mkEc2Host "ec2-base";
-          };
+            ec2-base = mkEc2Host "ec2-base" [];
+          }
+          // lib.mapAttrs' (class: c: lib.nameValuePair "ec2-${class}" (mkEc2Class class c)) ec2ClassDefs;
+
+        # Plain JSON view of the fleet classes; module is a path and stays out.
+        ec2Classes = lib.mapAttrs (_: c: builtins.removeAttrs c ["module"]) ec2ClassDefs;
 
         # Halmasuit lab images: gnomon's own system plus halmasuit's gnomon-lab
         # module and one experiment module, per attribute of halmasuit's

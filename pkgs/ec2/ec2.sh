@@ -178,7 +178,14 @@ build_base_image() {
   fi
   [[ $reg == ami-* ]] || die "register-image printed no AMI id"
 
-  aws ec2 wait image-available --image-ids "$reg" || die "$reg did not become available"
+  if ! aws ec2 wait image-available --image-ids "$reg"; then
+    echo "ec2: $reg did not become available; deregistering it and deleting its snapshot $snap" >&2
+    aws ec2 deregister-image --image-id "$reg" >/dev/null ||
+      die "could not deregister $reg; deregister it and delete snapshot $snap by hand"
+    aws ec2 delete-snapshot --snapshot-id "$snap" >/dev/null ||
+      die "could not delete snapshot $snap of $reg; delete it by hand"
+    die "$reg did not become available"
+  fi
 
   described=$(aws ec2 describe-images --owners self --output json \
     --filters 'Name=tag:fleet,Values=ec2-base') || die "describe-images failed before pruning"
@@ -199,15 +206,16 @@ build_base_image() {
   base_ami=$reg
 }
 
-# ensure_base_ami <toplevel basename>: sets base_ami to the newest fleet=ec2-base
-# AMI when its fleet-toplevel tag names the toplevel. Otherwise it builds one.
+# ensure_base_ami <toplevel basename>: sets base_ami to the newest available
+# fleet=ec2-base AMI when its fleet-toplevel tag names the toplevel. Otherwise it
+# builds one.
 ensure_base_ami() {
   local want=$1 images row newest_ami newest_tl
   images=$(aws ec2 describe-images --owners self --output json \
     --filters 'Name=tag:fleet,Values=ec2-base') || die "describe-images failed"
   row=$(jq -r '
     def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
-    (.Images | sort_by(.CreationDate) | last // {})
+    (.Images | map(select(.State == "available")) | sort_by(.CreationDate) | last // {})
     | [(.ImageId // ""), tag("fleet-toplevel")]
     | @tsv' <<<"$images") || die "cannot read the base AMIs"
   IFS=$'\t' read -r newest_ami newest_tl <<<"$row"

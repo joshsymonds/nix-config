@@ -712,6 +712,11 @@
             pkgs = checkPkgs;
             vermissian = self.nixosConfigurations.vermissian.config;
           };
+          ec2-idle = import ./tests/ec2-idle.nix {
+            pkgs = checkPkgs;
+            inherit inputs;
+            outputs = self.outputs;
+          };
           private-store-hook = import ./tests/private-store-hook.nix {
             pkgs = checkPkgs;
             renderedSettings = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home.file.".claude/settings.base.json".source;

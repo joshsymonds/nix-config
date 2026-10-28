@@ -102,7 +102,7 @@ in {
           exit 1
         fi
 
-        hostnamectl set-hostname "$name"
+        hostnamectl set-hostname --transient "$name"
 
         install -d -m 0700 ${identityDir}
         (umask 077 && printf '%s' "$key" > ${identityDir}/ts-authkey)

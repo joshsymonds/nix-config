@@ -728,6 +728,7 @@
             inherit inputs;
             outputs = self.outputs;
           };
+          ec2-launcher = config.packages.ec2.tests.stubbed;
           private-store-hook = import ./tests/private-store-hook.nix {
             pkgs = checkPkgs;
             renderedSettings = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home.file.".claude/settings.base.json".source;

@@ -29,6 +29,7 @@ mkdir -p "$work/bin" "$STUB_FIXTURES" "$TMPDIR"
 
 failures=0
 STATUS=0
+probe_signal=
 expect_rebuild=no
 
 fail() {
@@ -186,13 +187,20 @@ esac
 CURLSTUB
 
 # ssh fails for the step named by fail-ssh-<step>: probe (the true readiness
-# check), nix-env, or switch.
+# check), nix-env, or switch. A hold-ssh-<step> fixture keeps the step running
+# until the release file exists, so a signal can arrive during it.
 write_stub ssh <<'SSHSTUB'
 case "$*" in
   *nix-env*) step=nix-env ;;
   *switch-to-configuration*) step=switch ;;
   *) step=probe ;;
 esac
+[ -e "$STUB_FIXTURES/hold-ssh-$step" ] && {
+  for _ in $(seq 1 100); do
+    [ -e "$STUB_FIXTURES/release" ] && break
+    sleep 0.1
+  done
+}
 [ -e "$STUB_FIXTURES/fail-ssh-$step" ] && {
   echo "ssh: injected failure ($step)" >&2
   exit 255
@@ -242,8 +250,8 @@ FIXTURE
 # run, and use_images sets both from the named fixtures.
 cat >"$STUB_FIXTURES/images-full.json" <<'FIXTURE'
 {"Images":[
-{"ImageId":"ami-older00000001","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-previous"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000001"}}]},
-{"ImageId":"ami-newest00000002","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000002"}}]}
+{"ImageId":"ami-older00000001","State":"available","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-previous"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000001"}}]},
+{"ImageId":"ami-newest00000002","State":"available","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000002"}}]}
 ]}
 FIXTURE
 echo '{"Images":[]}' >"$STUB_FIXTURES/images-none.json"
@@ -251,22 +259,38 @@ echo '{"Images":[]}' >"$STUB_FIXTURES/images-none.json"
 # the newest must not count.
 cat >"$STUB_FIXTURES/images-stale.json" <<'FIXTURE'
 {"Images":[
-{"ImageId":"ami-oldest000000001","CreationDate":"2026-08-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000011"}}]},
-{"ImageId":"ami-middle00000002","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-middle"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000012"}}]},
-{"ImageId":"ami-latest00000003","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-latest"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000013"}}]}
+{"ImageId":"ami-oldest000000001","State":"available","CreationDate":"2026-08-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000011"}}]},
+{"ImageId":"ami-middle00000002","State":"available","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-middle"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000012"}}]},
+{"ImageId":"ami-latest00000003","State":"available","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-latest"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000013"}}]}
 ]}
 FIXTURE
 cat >"$STUB_FIXTURES/images-registered.json" <<'FIXTURE'
 {"Images":[
-{"ImageId":"ami-oldest000000001","CreationDate":"2026-08-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000011"}}]},
-{"ImageId":"ami-middle00000002","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-middle"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000012"}}]},
-{"ImageId":"ami-latest00000003","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-latest"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000013"}}]},
-{"ImageId":"ami-registered0000004","CreationDate":"2026-10-27T09:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0feed00000000001"}}]}
+{"ImageId":"ami-oldest000000001","State":"available","CreationDate":"2026-08-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000011"}}]},
+{"ImageId":"ami-middle00000002","State":"available","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-middle"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000012"}}]},
+{"ImageId":"ami-latest00000003","State":"available","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-latest"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000013"}}]},
+{"ImageId":"ami-registered0000004","State":"available","CreationDate":"2026-10-27T09:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0feed00000000001"}}]}
 ]}
 FIXTURE
 cat >"$STUB_FIXTURES/images-registered-only.json" <<'FIXTURE'
 {"Images":[
-{"ImageId":"ami-registered0000004","CreationDate":"2026-10-27T09:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0feed00000000001"}}]}
+{"ImageId":"ami-registered0000004","State":"available","CreationDate":"2026-10-27T09:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0feed00000000001"}}]}
+]}
+FIXTURE
+# The newest AMI matches the base toplevel but is still pending, and the newest
+# available AMI carries another toplevel: the pending one must not be used.
+cat >"$STUB_FIXTURES/images-pending-newest.json" <<'FIXTURE'
+{"Images":[
+{"ImageId":"ami-available00000006","CreationDate":"2026-09-01T10:00:00.000Z","State":"available","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-previous"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000016"}}]},
+{"ImageId":"ami-pending000000005","CreationDate":"2026-10-20T10:00:00.000Z","State":"pending","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000015"}}]}
+]}
+FIXTURE
+# The newest AMI matches the base toplevel and is still pending, and an older
+# available AMI matches it too: the older available AMI is the one to use.
+cat >"$STUB_FIXTURES/images-pending-match.json" <<'FIXTURE'
+{"Images":[
+{"ImageId":"ami-available00000006","CreationDate":"2026-09-01T10:00:00.000Z","State":"available","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000016"}}]},
+{"ImageId":"ami-pending000000005","CreationDate":"2026-10-20T10:00:00.000Z","State":"pending","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000015"}}]}
 ]}
 FIXTURE
 # The image fixture: nixpkgs writes image-info.json with an absolute .file.
@@ -283,12 +307,41 @@ echo '{"SecurityGroups":[]}' >"$STUB_FIXTURES/security-groups-none.json"
 printf 'AWS_ACCESS_KEY_ID=AKIASTUBKEY0001\nAWS_SECRET_ACCESS_KEY=%s\n' "$SECRET" >"$ENV_FILE"
 printf 'TS_API_CLIENT_ID=TS-CLIENT-STUB\nTS_API_CLIENT_SECRET=%s\n' "$TS_SECRET" >"$TS_ENV_FILE"
 
+# launch_signalled <signal> <ec2 args...>: starts the launcher with job control on,
+# so SIGINT is not ignored on entry, holds its ssh readiness probe, sends the
+# signal to the launcher while the probe runs, then releases the probe. Sets STATUS.
+launch_signalled() {
+  local sig=$1 pid i
+  shift
+  : >"$STUB_FIXTURES/hold-ssh-probe"
+  set -m
+  "$EC2" "$@" >"$OUT" 2>"$ERR" &
+  pid=$!
+  set +m
+  for i in $(seq 1 100); do
+    grep -q '^ssh ' "$STUB_LOG" && break
+    sleep 0.1
+  done
+  grep -q '^ssh ' "$STUB_LOG" || fail "no ssh readiness probe ran before SIG$sig"
+  kill -s "$sig" "$pid" 2>/dev/null
+  : >"$STUB_FIXTURES/release"
+  if wait "$pid"; then
+    STATUS=0
+  else
+    STATUS=$?
+  fi
+  rm -f "$STUB_FIXTURES/hold-ssh-probe" "$STUB_FIXTURES/release"
+}
+
 # run <ec2 args...>: runs the launcher, sets STATUS/OUT/ERR, resets the call log.
+# With probe_signal set, the launcher gets that signal during its ssh probe.
 run() {
   : >"$STUB_LOG"
   rm -f "$STUB_FIXTURES/user-data.seen" "$STUB_FIXTURES/user-data.mode" "$STUB_FIXTURES/nix-sshopts.seen" \
     "$STUB_FIXTURES/registered"
-  if "$EC2" "$@" >"$OUT" 2>"$ERR"; then
+  if [ -n "$probe_signal" ]; then
+    launch_signalled "$probe_signal" "$@"
+  elif "$EC2" "$@" >"$OUT" 2>"$ERR"; then
     STATUS=0
   else
     STATUS=$?
@@ -579,10 +632,28 @@ expect_status 0 "ad-hoc up on a toplevel mismatch"
 expect_rebuilt "ad-hoc up on a toplevel mismatch" fixture-toplevel-base
 expect_no_fixed "nix copy" "ad-hoc up on a mismatch copies nothing"
 
+# A newest base AMI that is still pending is never launched. Here the newest
+# available AMI carries another toplevel, so the image is rebuilt instead.
+use_images images-pending-newest images-registered-only
+rebuild_run up commonframe-gate
+expect_status 0 "up with a pending newest base AMI"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up with a pending newest base AMI prints the ready line"
+expect_rebuilt "up with a pending newest base AMI" fixture-toplevel-base
+expect_no_fixed "--image-id ami-pending000000005" "up with a pending newest base AMI never launches it"
+
+# A newest base AMI that is still pending does not hide an older available AMI
+# that matches the toplevel: that older AMI is launched and nothing is rebuilt.
+use_images images-pending-match images-registered-only
+run up commonframe-gate
+expect_status 0 "up with a pending newest base AMI and an older matching one"
+expect_fixed "--image-id ami-available00000006" "up launches the older available base AMI"
+expect_no_fixed "--image-id ami-pending000000005" "up with a pending newest base AMI and an older matching one never launches the pending AMI"
+
 # A failure in the image build, upload, register or AMI wait stops before
 # Tailscale and run-instances, and exits nonzero. A failure in the prune also
 # stops the launch. A register failure deletes the snapshot it uploaded, since
-# no AMI uses it.
+# no AMI uses it. A failed AMI wait deregisters the AMI it registered and then
+# deletes its snapshot.
 use_images images-stale images-registered
 for fault in nix-image coldsnap ec2-register-image ec2-wait ec2-deregister-image ec2-delete-snapshot; do
   inject "$fault"
@@ -597,6 +668,12 @@ for fault in nix-image coldsnap ec2-register-image ec2-wait ec2-deregister-image
     coldsnap) expect_no_fixed "register-image" "up with coldsnap failing registers nothing" ;;
     ec2-register-image)
       expect_fixed "aws ec2 delete-snapshot --snapshot-id snap-0feed00000000001" "up with register-image failing deletes the unused snapshot"
+      ;;
+    ec2-wait)
+      expect_order "up with the image wait failing deregisters the new AMI, then deletes its snapshot" \
+        "aws ec2 wait image-available --image-ids ami-registered0000004" \
+        "aws ec2 deregister-image --image-id ami-registered0000004" \
+        "aws ec2 delete-snapshot --snapshot-id snap-0feed00000000001"
       ;;
   esac
   clear_faults
@@ -738,6 +815,17 @@ expect_nonzero "up with run-instances failing"
 expect_no_fixed "wait instance-running" "up with run-instances failing waits for nothing"
 expect_no_fixed "terminate-instances" "up with run-instances failing terminates nothing"
 clear_faults
+
+# An interrupt after run-instances, during the ssh readiness probe, terminates the
+# launched instance once and exits nonzero. The probe succeeds once released, so
+# a launcher that ignores the signal would finish the launch and exit 0.
+for sig in TERM INT HUP; do
+  probe_signal=$sig
+  run up commonframe-gate
+  probe_signal=
+  expect_nonzero "up commonframe-gate with SIG$sig during the ssh probe"
+  expect_terminated "up commonframe-gate with SIG$sig during the ssh probe"
+done
 
 if [ "$failures" -ne 0 ]; then
   echo "ec2 stubbed test: $failures check(s) failed" >&2

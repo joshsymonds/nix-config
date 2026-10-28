@@ -85,3 +85,18 @@ sudo age -d -i /etc/age/<host>.agekey secrets/hosts/<host>/<name>.age
 **New system**: Create `hosts/<name>/default.nix`, add to `flake.nix`
 
 **New package**: Create `pkgs/<name>/default.nix`, add to `pkgs/default.nix` and overlay
+
+## Adding an EC2 class
+
+Each class is an attribute in `hosts/ec2/classes.nix` with `instanceType`,
+`diskGb`, `spot`, `idleMinutes`, `maxHours`, and `module` (a path under
+`hosts/ec2/classes/`). The module holds the class's config;
+`commonframe-gate.nix` is an example.
+
+1. Add the entry to `hosts/ec2/classes.nix` and write its module in
+   `hosts/ec2/classes/<class>.nix`.
+2. `git add` the new files. Flakes only see tracked files.
+3. `nix flake check`
+4. `update`
+5. `ec2 up <class>` launches a box. The first launch after a base change
+   rebuilds the base AMI, which takes minutes.

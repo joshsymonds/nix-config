@@ -28,4 +28,5 @@ in {
   wyoming-onnx-asr = pkgs.callPackage ./wyoming-onnx-asr {};
   valheim-server = valheim;
   valheim-source-check = valheim.sourceCheck;
+  ec2 = pkgs.callPackage ./ec2 {};
 }

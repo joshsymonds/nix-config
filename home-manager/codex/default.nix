@@ -69,15 +69,12 @@ in {
     )
   '';
 
-  # Codex's rollout JSONL files are its transcripts. Mirror Claude's storage
-  # split: active and archived transcripts live in this host's NAS bucket,
-  # while SQLite databases, caches, logs, history, and shell snapshots remain
-  # local (SQLite and high-churn small files are poor NFS workloads).
-  #
-  # Migration is deliberately conservative: do nothing if the NAS is down;
-  # wait for active Codex processes before moving local data; refuse to merge
-  # two non-empty trees; and retain migrated local data as a timestamped
-  # backup instead of deleting it.
+  # Codex's rollout JSONL files are its transcripts. Each transcript directory
+  # (sessions, archived_sessions) links to ~/.codex-local/<d> on local disk;
+  # SQLite databases, caches, logs, history, and shell snapshots stay in
+  # ~/.codex as before. The nightly `transcript-sync` job copies the rollouts
+  # to the NAS. The one-time `transcript-sync localize` cutover moves the
+  # NAS-linked layout local.
   home.activation.codexTranscriptState = lib.hm.dag.entryAfter ["writeBoundary"] (let
     inScope = builtins.elem hostname ["gnomon" "ultraviolet" "vermissian"];
   in
@@ -93,79 +90,22 @@ in {
       (
       set -euo pipefail
 
-      BUCKET="/mnt/claude/${hostname}/codex"
+      ${pkgs.coreutils}/bin/mkdir -p "$HOME/.codex"
 
-      # Trigger the automount, then verify it before touching any local path.
-      # Not `mountpoint -q`: the systemd automount's autofs placeholder
-      # counts as a mountpoint even when the NFS behind it failed to mount,
-      # and the mkdir below would then die with "No such device" (seen at
-      # boot on vermissian). Ask for the NFS mount specifically.
-      ${pkgs.coreutils}/bin/ls /mnt/claude >/dev/null 2>&1 || true
-      if ! ${pkgs.util-linux}/bin/findmnt -n -t nfs,nfs4 /mnt/claude >/dev/null 2>&1; then
-        echo "codexTranscriptState: /mnt/claude not mounted (NAS down?). Refusing to touch ~/.codex transcript symlinks." >&2
-        exit 0
-      fi
-
-      for d in sessions archived_sessions; do
-        ${pkgs.coreutils}/bin/mkdir -p "$BUCKET/$d"
-      done
-
-      has_content() {
-        [ -d "$1" ] && [ -n "$(${pkgs.findutils}/bin/find "$1" -mindepth 1 -print -quit 2>/dev/null)" ]
-      }
-
-      needs_rescue=false
       for d in sessions archived_sessions; do
         target="$HOME/.codex/$d"
-        if [ -d "$target" ] && [ ! -L "$target" ] && has_content "$target"; then
-          needs_rescue=true
-          break
-        fi
-      done
+        twin="$HOME/.codex-local/$d"
+        ${pkgs.coreutils}/bin/mkdir -p "$twin"
 
-      if [ "$needs_rescue" = true ]; then
-        if ${pkgs.procps}/bin/pgrep -u "$USER" -fa 'codex' 2>/dev/null \
-            | ${pkgs.gnugrep}/bin/grep -qE '(^|/| )codex([^/ ]*|)( |$)'; then
-          echo "codexTranscriptState: local transcripts still need migration and an active Codex process was detected on ${hostname}." >&2
-          echo "codexTranscriptState: stop all Codex sessions, then re-run 'update'; no transcript paths were changed." >&2
-          exit 0
-        fi
-      fi
-
-      ensure_linked() {
-        local target="$1" want="$2"
-        if [ -L "$target" ]; then
-          current="$(${pkgs.coreutils}/bin/readlink "$target")"
-          if [ "$current" != "$want" ]; then
-            ${pkgs.coreutils}/bin/rm "$target"
-            ${pkgs.coreutils}/bin/ln -s "$want" "$target"
-          fi
-          return
-        fi
-
-        if [ -d "$target" ]; then
-          if has_content "$target"; then
-            if has_content "$want"; then
-              echo "codexTranscriptState: BOTH $target and $want have data; leaving the local directory in place. Resolve manually." >&2
-              return
-            fi
-            echo "codexTranscriptState: migrating $target -> $want" >&2
-            # The NAS export forbids chgrp/chown; -a would fail with exit 23.
-            ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$target/" "$want/"
-            backup="$target.bak-$(${pkgs.coreutils}/bin/date +%Y%m%d-%H%M%S)"
-            ${pkgs.coreutils}/bin/mv "$target" "$backup"
-            echo "codexTranscriptState: retained previous local data at $backup" >&2
+        # Test -L before -e: -e follows a symlink, and a link into the NAS
+        # automount would trigger it. Existing symlinks are left as they are.
+        if [ ! -L "$target" ]; then
+          if [ -e "$target" ]; then
+            echo "codexTranscriptState: $target is a real path; keeping it." >&2
           else
-            ${pkgs.coreutils}/bin/rmdir "$target"
+            ${pkgs.coreutils}/bin/ln -s "$twin" "$target"
           fi
         fi
-
-        ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$target")"
-        ${pkgs.coreutils}/bin/ln -s "$want" "$target"
-      }
-
-      for d in sessions archived_sessions; do
-        ensure_linked "$HOME/.codex/$d" "$BUCKET/$d"
       done
       ) || echo "codexTranscriptState: phase aborted (see above); the rest of the activation continues." >&2
     '');

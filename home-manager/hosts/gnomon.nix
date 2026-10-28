@@ -10,6 +10,7 @@
     ../spicetify
     ../calendar
     ../claude-code/transcripts.nix
+    ../claude-code/transcript-sync.nix
     ../claude-code/aggregator.nix
     ../ec2-fleet
     ../ntfy-notify

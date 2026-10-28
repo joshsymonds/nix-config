@@ -2,6 +2,7 @@
   imports = [
     ../headless-x86_64-linux.nix
     ../claude-code/transcripts.nix
+    ../claude-code/transcript-sync.nix
     ../patchbay
   ];
 

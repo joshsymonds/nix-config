@@ -761,21 +761,21 @@ in {
         }
       ];
 
-    # Unify stateful dirs across hosts. Transcripts (projects, sessions,
-    # todos, tasks) live on NFS at /mnt/claude/${HOSTNAME}/personal/, so
-    # each host owns its bucket and gnomon can read every host's transcripts
-    # for the DMS bar widget. High-churn small-file state (file-history,
-    # shell-snapshots) stays LOCAL at ~/.claude-local/ to spare the NAS
-    # btrfs metadata storm.
+    # Unify the stateful dirs under ~/.claude across hosts. Transcripts
+    # (projects, sessions, todos, tasks) live local at ~/.claude-local/, and
+    # transcript-sync copies them nightly to the NAS, append-only. High-churn
+    # small-file state (file-history, shell-snapshots) also stays local at
+    # ~/.claude-local/ to spare the NAS btrfs metadata storm. This activation
+    # never touches /mnt/claude.
+    #
+    # Only missing paths are linked. A symlink is kept as it is, including a
+    # dangling one into /mnt/claude from before the one-time
+    # `transcript-sync localize` cutover, since only localize moves those. A
+    # real file or directory is kept with a note.
     #
     # Scoped to the three hosts that actually run Claude Code (gnomon,
     # ultraviolet, vermissian). Out-of-scope hosts skip this activation
     # entirely and keep whatever layout they have.
-    #
-    # One-shot migration: if a pre-NFS ~/.claude-shared/ exists with real
-    # data and the per-host .migrated marker is absent, rsync into the
-    # bucket, then rename ~/.claude-shared/ to .bak-<date> (no destructive
-    # delete). Idempotent thereafter.
     activation.claudeUnifiedState = lib.hm.dag.entryBefore ["claudeDirectoryPermissions"] (let
       inScope = builtins.elem hostname ["gnomon" "ultraviolet" "vermissian"];
     in
@@ -792,92 +792,42 @@ in {
         (
         set -euo pipefail
 
-        BUCKET="/mnt/claude/${hostname}"
         LOCAL="$HOME/.claude-local"
-        SHARED="$HOME/.claude-shared"
-        MARKER="$BUCKET/personal/.migrated"
 
-        # Fast path: the layout is already in place and the NAS isn't
-        # mounted yet — the normal state at boot. Home Manager's activation
-        # runs before systemd-user-sessions (and so before the greeter), and
-        # triggering the /mnt/claude automount here blocks it on
-        # network-online (~3.5s of every boot) only to re-confirm symlinks
-        # that are purely local to read. A later activation with the mount
-        # already up still takes the full path below, which also recreates
-        # any missing bucket dirs.
-        layout_ok=true
-        for d in projects sessions todos tasks; do
-          [ "$(${pkgs.coreutils}/bin/readlink "$HOME/.claude/$d" 2>/dev/null)" = "$BUCKET/personal/$d" ] || layout_ok=false
-        done
-        for d in file-history shell-snapshots; do
-          { [ "$(${pkgs.coreutils}/bin/readlink "$HOME/.claude/$d" 2>/dev/null)" = "$LOCAL/$d" ] && [ -d "$LOCAL/$d" ]; } || layout_ok=false
-        done
-        if [ -d "$SHARED" ] && [ ! -L "$SHARED" ]; then
-          layout_ok=false
-        fi
-        if [ "$layout_ok" = true ] && ! ${pkgs.util-linux}/bin/findmnt -n -t nfs,nfs4 /mnt/claude >/dev/null 2>&1; then
-          exit 0
-        fi
-
-        # NAS reachability — try to trigger automount, then verify. Refuse
-        # to touch symlinks if the NAS is unreachable so we don't leave
-        # the user with dangling targets. `mountpoint -q` is the wrong test:
-        # the systemd automount leaves an autofs placeholder at /mnt/claude
-        # that counts as a mountpoint even when the NFS behind it failed
-        # (vermissian at boot: the mount raced network-online, the guard
-        # passed, and the next mkdir into the bucket died with "No such
-        # device"). Ask for the NFS mount specifically.
-        ${pkgs.coreutils}/bin/ls /mnt/claude >/dev/null 2>&1 || true
-        if ! ${pkgs.util-linux}/bin/findmnt -n -t nfs,nfs4 /mnt/claude >/dev/null 2>&1; then
-          echo "claudeUnifiedState: /mnt/claude not mounted (NAS down?). Refusing to touch ~/.claude symlinks." >&2
-          exit 1
-        fi
-
-        # Always ensure bucket and local-state directories exist (cheap,
+        # Twins for the transcript dirs and the local-state dirs (cheap,
         # idempotent).
-        for d in projects sessions todos tasks; do
-          ${pkgs.coreutils}/bin/mkdir -p "$BUCKET/personal/$d"
-        done
-        ${pkgs.coreutils}/bin/mkdir -p "$LOCAL/file-history" "$LOCAL/shell-snapshots"
+        ${pkgs.coreutils}/bin/mkdir -p "$HOME/.claude" "$LOCAL/projects" "$LOCAL/sessions" "$LOCAL/todos" "$LOCAL/tasks" "$LOCAL/file-history" "$LOCAL/shell-snapshots"
 
-        # One-shot migration: fold the retired /mnt/claude/<host>/work/
-        # bucket into personal/ so its sessions stay resumable. Copies,
-        # never deletes — the work/ tree stays behind for manual cleanup.
-        if [ -d "$BUCKET/work" ] && [ ! -f "$BUCKET/personal/.work-merged" ]; then
-          for d in projects sessions todos tasks; do
-            if [ -d "$BUCKET/work/$d" ]; then
-              ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$BUCKET/work/$d/" "$BUCKET/personal/$d/" || true
-            fi
-          done
-          ${pkgs.coreutils}/bin/touch "$BUCKET/personal/.work-merged"
-          echo "claudeUnifiedState: merged $BUCKET/work into $BUCKET/personal (originals left in place)" >&2
-        fi
+        # Transcript dirs: link each absent one to its local twin. Symlinks
+        # are never re-pointed, since a live session may hold files open
+        # through one. A real path is left in place with a note.
+        for d in projects sessions todos tasks; do
+          t="$HOME/.claude/$d"
+          if [ -L "$t" ]; then
+            continue
+          fi
+          if [ -e "$t" ]; then
+            echo "claudeUnifiedState: $t is a real path, not a symlink; leaving it in place." >&2
+          else
+            ${pkgs.coreutils}/bin/ln -s "$LOCAL/$d" "$t"
+          fi
+        done
 
         # Helper: report whether a path is a non-empty directory.
         has_content() {
           [ -d "$1" ] && [ -n "$(${pkgs.findutils}/bin/find "$1" -mindepth 1 -print -quit 2>/dev/null)" ]
         }
 
-        # Detect whether any pre-NFS data needs rescuing. Two sources:
-        #  (a) the old ~/.claude-shared/ unified dir (when it has real data
-        #      and the marker is absent — the original layout on gnomon), or
-        #  (b) any ~/.claude/{projects,sessions,todos,tasks} that is itself
-        #      a real directory with content (the layout on hosts that never
-        #      went through the .claude-shared intermediate step, e.g.
-        #      ultraviolet, vermissian).
+        # A real file-history or shell-snapshots directory with content must
+        # be rescued into ~/.claude-local before it is re-pointed.
         needs_rescue=false
-        if [ -d "$SHARED" ] && [ ! -L "$SHARED" ] && [ ! -f "$MARKER" ]; then
-          has_content "$SHARED" && needs_rescue=true || true
-        fi
-        if [ "$needs_rescue" = false ]; then
-          for d in projects sessions todos tasks file-history shell-snapshots; do
-            tgt="$HOME/.claude/$d"
-            if [ -d "$tgt" ] && [ ! -L "$tgt" ] && has_content "$tgt"; then
-              needs_rescue=true
-              break
-            fi
-          done
-        fi
+        for d in file-history shell-snapshots; do
+          tgt="$HOME/.claude/$d"
+          if [ -d "$tgt" ] && [ ! -L "$tgt" ] && has_content "$tgt"; then
+            needs_rescue=true
+            break
+          fi
+        done
 
         # If a rescue would run AND an active Claude Code process is holding
         # JSONL files open under the about-to-be-rewritten paths, abort
@@ -886,41 +836,20 @@ in {
         if [ "$needs_rescue" = true ]; then
           if ${pkgs.procps}/bin/pgrep -u "$USER" -fa 'claude' 2>/dev/null \
               | ${pkgs.gnugrep}/bin/grep -qE '(^| )claude( |$)|/claude( |$)'; then
-            echo "claudeUnifiedState: pre-NFS data still present and an active 'claude' process was detected on ${hostname}." >&2
-            echo "claudeUnifiedState: stop all Claude Code sessions, then re-run 'update' to complete the migration." >&2
-            echo "claudeUnifiedState: bucket dirs were created but no symlinks were touched (in-flight writes preserved)." >&2
+            echo "claudeUnifiedState: local file-history/shell-snapshots data still present and an active 'claude' process was detected on ${hostname}." >&2
+            echo "claudeUnifiedState: stop all Claude Code sessions, then re-run 'update' to finish linking them." >&2
+            echo "claudeUnifiedState: no file-history/shell-snapshots links were touched (in-flight writes preserved)." >&2
             exit 0
           fi
         fi
 
-        # Rescue the legacy ~/.claude-shared/ layout into the bucket + local.
-        if [ -d "$SHARED" ] && [ ! -L "$SHARED" ] && [ ! -f "$MARKER" ]; then
-          if has_content "$SHARED"; then
-            echo "claudeUnifiedState: migrating $SHARED -> $BUCKET" >&2
-            for d in projects sessions todos tasks; do
-              [ -d "$SHARED/$d" ] && ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$SHARED/$d/" "$BUCKET/personal/$d/" || true
-            done
-            for d in file-history shell-snapshots; do
-              [ -d "$SHARED/$d" ] && ${pkgs.rsync}/bin/rsync -a "$SHARED/$d/" "$LOCAL/$d/" || true
-            done
-            BAK="$HOME/.claude-shared.bak-$(${pkgs.coreutils}/bin/date +%Y%m%d-%H%M%S)"
-            ${pkgs.coreutils}/bin/mv "$SHARED" "$BAK" || true
-            echo "claudeUnifiedState: previous ~/.claude-shared moved to $BAK" >&2
-          else
-            ${pkgs.coreutils}/bin/rm -rf "$SHARED" || true
-          fi
-          ${pkgs.coreutils}/bin/touch "$MARKER"
-        fi
-
-        # Symlink + per-dir rescue. For each target:
-        #  - if it's already the right symlink, leave it alone;
-        #  - if it's a real dir with data, rsync into the destination
-        #    (bucket dirs refuse a merge when both sides have data; local
-        #    dirs always merge because file-history/shell-snapshots are
-        #    naturally union-by-session-id), then delete and symlink;
-        #  - if it's missing or an empty dir, just symlink.
+        # Symlink + rescue for file-history and shell-snapshots. If the
+        # target is already the right symlink, leave it alone. If it is a
+        # real dir with data, rsync into ~/.claude-local (a union by
+        # session id), then delete and symlink. If it is missing or an
+        # empty dir, just symlink.
         ensure_linked() {
-          local target="$1" want="$2" mode="$3"  # mode: bucket | local
+          local target="$1" want="$2"
           if [ -L "$target" ]; then
             cur="$(${pkgs.coreutils}/bin/readlink "$target")"
             if [ "$cur" != "$want" ]; then
@@ -931,10 +860,6 @@ in {
           fi
           if [ -d "$target" ]; then
             if has_content "$target"; then
-              if [ "$mode" = "bucket" ] && has_content "$want"; then
-                echo "claudeUnifiedState: BOTH $target and $want have data; leaving as-is. Resolve manually." >&2
-                return
-              fi
               echo "claudeUnifiedState: rescuing $target -> $want" >&2
               ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "$target/" "$want/" || true
             fi
@@ -944,12 +869,8 @@ in {
           ${pkgs.coreutils}/bin/ln -s "$want" "$target"
         }
 
-        ${pkgs.coreutils}/bin/mkdir -p "$HOME/.claude"
-        for d in projects sessions todos tasks; do
-          ensure_linked "$HOME/.claude/$d" "$BUCKET/personal/$d" bucket
-        done
-        ensure_linked "$HOME/.claude/file-history" "$LOCAL/file-history" local
-        ensure_linked "$HOME/.claude/shell-snapshots" "$LOCAL/shell-snapshots" local
+        ensure_linked "$HOME/.claude/file-history" "$LOCAL/file-history"
+        ensure_linked "$HOME/.claude/shell-snapshots" "$LOCAL/shell-snapshots"
         ) || echo "claudeUnifiedState: phase aborted (see above); the rest of the activation continues." >&2
       '');
 

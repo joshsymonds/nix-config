@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Stubbed test for the ec2 launcher. Usage: test.sh <path-to-ec2-binary>.
-# The launcher runs with stub aws, nix, curl and ssh on PATH; each stub appends
-# its argv to $STUB_LOG. coldsnap is a stub that must never run. No network
-# access is made.
+# The launcher runs with stub aws, nix, coldsnap, curl and ssh on PATH; each stub
+# appends its argv to $STUB_LOG. coldsnap runs only in a case where an image
+# rebuild is expected. No network access is made.
 set -uo pipefail
 
 EC2=$1
@@ -29,6 +29,7 @@ mkdir -p "$work/bin" "$STUB_FIXTURES" "$TMPDIR"
 
 failures=0
 STATUS=0
+expect_rebuild=no
 
 fail() {
   echo "FAIL: $*" >&2
@@ -81,7 +82,13 @@ case "$2" in
     done
     cat "$STUB_FIXTURES/spot-$itype.json"
     ;;
-  describe-images) cat "$STUB_FIXTURES/images.json" ;;
+  describe-images)
+    if [ -e "$STUB_FIXTURES/registered" ]; then
+      cat "$STUB_FIXTURES/images-after-register.json"
+    else
+      cat "$STUB_FIXTURES/images.json"
+    fi
+    ;;
   describe-security-groups) cat "$STUB_FIXTURES/security-groups.json" ;;
   run-instances)
     prev=
@@ -94,6 +101,11 @@ case "$2" in
     stat -c %a "$userdata" >"$STUB_FIXTURES/user-data.mode"
     echo i-0launched00000001
     ;;
+  register-image)
+    : >"$STUB_FIXTURES/registered"
+    echo ami-registered0000004
+    ;;
+  deregister-image | delete-snapshot) : ;;
   wait) : ;;
   terminate-instances) echo '{"TerminatingInstances":[]}' ;;
   *)
@@ -111,16 +123,27 @@ write_stub nix <<'NIXSTUB'
 case "$1" in
   eval) cat "$STUB_FIXTURES/classes.json" ;;
   build)
-    attr=
-    for a in "$@"; do
-      case "$a" in
-        *'#nixosConfigurations.ec2-'*)
-          attr=${a#*nixosConfigurations.ec2-}
-          attr=${attr%%.config*}
-          ;;
-      esac
-    done
-    echo "/nix/store/fixture-toplevel-$attr"
+    case "$*" in
+      *'#ec2-base-image'*)
+        [ -e "$STUB_FIXTURES/fail-nix-image" ] && {
+          echo "stub nix: injected failure for the image" >&2
+          exit 1
+        }
+        echo "$STUB_FIXTURES/image"
+        ;;
+      *)
+        attr=
+        for a in "$@"; do
+          case "$a" in
+            *'#nixosConfigurations.ec2-'*)
+              attr=${a#*nixosConfigurations.ec2-}
+              attr=${attr%%.config*}
+              ;;
+          esac
+        done
+        echo "/nix/store/fixture-toplevel-$attr"
+        ;;
+    esac
     ;;
   copy) printf '%s\n' "${NIX_SSHOPTS:-}" >"$STUB_FIXTURES/nix-sshopts.seen" ;;
   *)
@@ -178,8 +201,11 @@ exit 0
 SSHSTUB
 
 write_stub coldsnap <<'COLDSTUB'
-echo "unexpected call to a stub that must not run" >&2
-exit 99
+[ -e "$STUB_FIXTURES/fail-coldsnap" ] && {
+  echo "stub coldsnap: injected failure" >&2
+  exit 1
+}
+echo snap-0feed00000000001
 COLDSTUB
 
 cat >"$STUB_FIXTURES/classes.json" <<'FIXTURE'
@@ -211,11 +237,43 @@ cat >"$STUB_FIXTURES/spot-m8a.large.json" <<'FIXTURE'
 {"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.0450","AvailabilityZone":"us-west-2b"}]}
 FIXTURE
 
+# Base AMI lists. images.json is what describe-images returns before a rebuild;
+# images-after-register.json is what it returns once the stub register-image has
+# run, and use_images sets both from the named fixtures.
 cat >"$STUB_FIXTURES/images-full.json" <<'FIXTURE'
-{"Images":[{"ImageId":"ami-older00000001","CreationDate":"2026-09-01T10:00:00.000Z"},{"ImageId":"ami-newest00000002","CreationDate":"2026-10-20T10:00:00.000Z"}]}
+{"Images":[
+{"ImageId":"ami-older00000001","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-previous"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000001"}}]},
+{"ImageId":"ami-newest00000002","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000002"}}]}
+]}
 FIXTURE
-cp "$STUB_FIXTURES/images-full.json" "$STUB_FIXTURES/images.json"
 echo '{"Images":[]}' >"$STUB_FIXTURES/images-none.json"
+# The oldest AMI already carries the base toplevel, so a match on any AMI but
+# the newest must not count.
+cat >"$STUB_FIXTURES/images-stale.json" <<'FIXTURE'
+{"Images":[
+{"ImageId":"ami-oldest000000001","CreationDate":"2026-08-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000011"}}]},
+{"ImageId":"ami-middle00000002","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-middle"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000012"}}]},
+{"ImageId":"ami-latest00000003","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-latest"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000013"}}]}
+]}
+FIXTURE
+cat >"$STUB_FIXTURES/images-registered.json" <<'FIXTURE'
+{"Images":[
+{"ImageId":"ami-oldest000000001","CreationDate":"2026-08-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000011"}}]},
+{"ImageId":"ami-middle00000002","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-middle"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000012"}}]},
+{"ImageId":"ami-latest00000003","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-latest"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000013"}}]},
+{"ImageId":"ami-registered0000004","CreationDate":"2026-10-27T09:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0feed00000000001"}}]}
+]}
+FIXTURE
+cat >"$STUB_FIXTURES/images-registered-only.json" <<'FIXTURE'
+{"Images":[
+{"ImageId":"ami-registered0000004","CreationDate":"2026-10-27T09:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0feed00000000001"}}]}
+]}
+FIXTURE
+# The image fixture: nixpkgs writes image-info.json with an absolute .file.
+mkdir -p "$STUB_FIXTURES/image/nix-support"
+printf 'raw disk fixture\n' >"$STUB_FIXTURES/nixos.raw"
+printf '{"boot_mode":"legacy-bios","file":"%s"}\n' "$STUB_FIXTURES/nixos.raw" \
+  >"$STUB_FIXTURES/image/nix-support/image-info.json"
 cat >"$STUB_FIXTURES/security-groups-full.json" <<'FIXTURE'
 {"SecurityGroups":[{"GroupId":"sg-0fixture0000001","GroupName":"ec2-fleet"}]}
 FIXTURE
@@ -228,7 +286,8 @@ printf 'TS_API_CLIENT_ID=TS-CLIENT-STUB\nTS_API_CLIENT_SECRET=%s\n' "$TS_SECRET"
 # run <ec2 args...>: runs the launcher, sets STATUS/OUT/ERR, resets the call log.
 run() {
   : >"$STUB_LOG"
-  rm -f "$STUB_FIXTURES/user-data.seen" "$STUB_FIXTURES/user-data.mode" "$STUB_FIXTURES/nix-sshopts.seen"
+  rm -f "$STUB_FIXTURES/user-data.seen" "$STUB_FIXTURES/user-data.mode" "$STUB_FIXTURES/nix-sshopts.seen" \
+    "$STUB_FIXTURES/registered"
   if "$EC2" "$@" >"$OUT" 2>"$ERR"; then
     STATUS=0
   else
@@ -239,8 +298,9 @@ run() {
       fail "secret value appeared in launcher output or a stub's argv ($*)"
     fi
   done
-  if grep -E -q '^coldsnap ' "$STUB_LOG"; then
-    fail "launcher called coldsnap ($*)"
+  if [ "$expect_rebuild" != yes ] &&
+    grep -E -q '^coldsnap |^aws ec2 (register-image|deregister-image|delete-snapshot|wait image-available) |ec2-base-image' "$STUB_LOG"; then
+    fail "launcher built, uploaded, registered or pruned an image when none was expected ($*)"
   fi
   if [ "$1" != up ] && grep -E -q '^(curl|ssh) ' "$STUB_LOG"; then
     fail "launcher called a stub that must not run ($*)"
@@ -316,6 +376,46 @@ inject() {
 }
 clear_faults() {
   rm -f "$STUB_FIXTURES"/fail-*
+}
+# use_images <before> <after>: the describe-images lists from the named fixtures,
+# before a rebuild and after the new AMI is registered.
+use_images() {
+  cp "$STUB_FIXTURES/$1.json" "$STUB_FIXTURES/images.json" || exit 1
+  cp "$STUB_FIXTURES/$2.json" "$STUB_FIXTURES/images-after-register.json" || exit 1
+}
+# rebuild_run <ec2 args...>: runs the launcher in a case where an image rebuild
+# is expected, which alone allows coldsnap and the image calls.
+rebuild_run() {
+  expect_rebuild=yes
+  run "$@"
+  expect_rebuild=no
+}
+# expect_rebuilt <desc> <toplevel basename>: the rebuild built the image, uploaded
+# its file tagged fleet=ec2-base, registered it with the fleet tags and the
+# image settings, waited for it, and ran the launch from the new AMI, all before
+# any Tailscale call.
+expect_rebuilt() {
+  local desc=$1 tl=$2
+  expect_fixed "nix build --no-link --print-out-paths /fixture/flake#ec2-base-image" "$desc builds the base image"
+  expect_fixed "coldsnap --region us-west-2 upload --wait --no-progress --tag Key=fleet,Value=ec2-base $STUB_FIXTURES/nixos.raw" "$desc uploads the image file tagged fleet=ec2-base"
+  expect_fixed "aws ec2 register-image" "$desc registers the snapshot"
+  expect_fixed "--name ec2-base-$tl-" "$desc names the AMI from the toplevel"
+  expect_fixed "--architecture x86_64" "$desc registers x86_64"
+  expect_fixed "--virtualization-type hvm" "$desc registers hvm"
+  expect_fixed "--root-device-name /dev/xvda" "$desc sets the root device name"
+  expect_fixed "--ena-support" "$desc enables ENA"
+  expect_fixed "--boot-mode legacy-bios" "$desc registers legacy-bios"
+  expect_fixed "--block-device-mappings DeviceName=/dev/xvda,Ebs={SnapshotId=snap-0feed00000000001,VolumeType=gp3,DeleteOnTermination=true}" "$desc maps the uploaded snapshot to /dev/xvda"
+  expect_fixed "--tag-specifications ResourceType=image,Tags=[{Key=fleet,Value=ec2-base},{Key=fleet-toplevel,Value=$tl}]" "$desc tags the AMI with the toplevel"
+  expect_fixed "aws ec2 wait image-available --image-ids ami-registered0000004" "$desc waits for the new AMI"
+  expect_fixed "--image-id ami-registered0000004" "$desc launches the new AMI"
+  expect_order "$desc orders the image steps before the Tailscale call" \
+    "nix build --no-link --print-out-paths /fixture/flake#ec2-base-image" \
+    "coldsnap --region us-west-2 upload" \
+    "aws ec2 register-image" \
+    "aws ec2 wait image-available" \
+    "api/v2/oauth/token" \
+    "aws ec2 run-instances"
 }
 
 # help: needs no credentials, reads classes from the flake, lists rules.
@@ -433,14 +533,77 @@ expect_nonzero "up with a non-numeric EC2_FLEET_READY_TIMEOUT"
 expect_no_fixed 'run-instances' "up with a non-numeric EC2_FLEET_READY_TIMEOUT launches nothing"
 unset EC2_FLEET_READY_TIMEOUT
 
-# up: a missing base AMI, security group or AWS lookup stops before launch.
-cp "$STUB_FIXTURES/images-none.json" "$STUB_FIXTURES/images.json"
-run up commonframe-gate
-expect_nonzero "up with no base AMI"
-expect_err 'no ec2-base AMI' "up with no base AMI names the missing AMI"
-expect_no_fixed 'run-instances' "up with no base AMI launches nothing"
-expect_no_fixed 'api/v2' "up with no base AMI asks Tailscale nothing"
-cp "$STUB_FIXTURES/images-full.json" "$STUB_FIXTURES/images.json"
+# up with no base AMI: the image is built, registered and launched from, and
+# nothing is pruned because the new AMI is the only one.
+use_images images-none images-registered-only
+rebuild_run up commonframe-gate
+expect_status 0 "up with no base AMI"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up with no base AMI prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+expect_rebuilt "up with no base AMI" fixture-toplevel-base
+expect_userdata "up with no base AMI" "$name"
+expect_no_fixed "deregister-image" "up with no base AMI deregisters nothing"
+expect_no_fixed "delete-snapshot" "up with no base AMI deletes no snapshot"
+expect_no_fixed "terminate-instances" "up with no base AMI terminates nothing on success"
+
+# up on a toplevel mismatch: the newest AMI tags a different toplevel, so the
+# image is rebuilt. The two oldest base AMIs are deregistered and their
+# snapshots deleted; the newest AMI and the previous newest are kept.
+use_images images-stale images-registered
+rebuild_run up commonframe-gate
+expect_status 0 "up on a toplevel mismatch"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up on a toplevel mismatch prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+expect_rebuilt "up on a toplevel mismatch" fixture-toplevel-base
+expect_userdata "up on a toplevel mismatch" "$name"
+expect_fixed "aws ec2 deregister-image --image-id ami-middle00000002" "up on a mismatch deregisters the second-oldest base AMI"
+expect_fixed "aws ec2 deregister-image --image-id ami-oldest000000001" "up on a mismatch deregisters the oldest base AMI"
+expect_no_fixed "deregister-image --image-id ami-latest00000003" "up on a mismatch keeps the previous newest AMI"
+expect_no_fixed "deregister-image --image-id ami-registered0000004" "up on a mismatch keeps the new AMI"
+expect_fixed "aws ec2 delete-snapshot --snapshot-id snap-0a1d00000000012" "up on a mismatch deletes the snapshot of the second-oldest AMI"
+expect_fixed "aws ec2 delete-snapshot --snapshot-id snap-0a1d00000000011" "up on a mismatch deletes the snapshot of the oldest AMI"
+expect_no_fixed "delete-snapshot --snapshot-id snap-0a1d00000000013" "up on a mismatch keeps the snapshot of the previous newest AMI"
+expect_no_fixed "delete-snapshot --snapshot-id snap-0feed00000000001" "up on a mismatch keeps the snapshot of the new AMI"
+expect_order "up on a mismatch prunes after the new AMI is available and before launch" \
+  "aws ec2 wait image-available" \
+  "aws ec2 deregister-image --image-id ami-middle00000002" \
+  "aws ec2 delete-snapshot --snapshot-id snap-0a1d00000000012" \
+  "aws ec2 deregister-image --image-id ami-oldest000000001" \
+  "aws ec2 delete-snapshot --snapshot-id snap-0a1d00000000011" \
+  "aws ec2 run-instances"
+
+# ad-hoc up on a mismatch rebuilds the same way and launches the new AMI.
+use_images images-stale images-registered
+rebuild_run up --type m8a.large --disk 20
+expect_status 0 "ad-hoc up on a toplevel mismatch"
+expect_rebuilt "ad-hoc up on a toplevel mismatch" fixture-toplevel-base
+expect_no_fixed "nix copy" "ad-hoc up on a mismatch copies nothing"
+
+# A failure in the image build, upload, register or AMI wait stops before
+# Tailscale and run-instances, and exits nonzero. A failure in the prune also
+# stops the launch. A register failure deletes the snapshot it uploaded, since
+# no AMI uses it.
+use_images images-stale images-registered
+for fault in nix-image coldsnap ec2-register-image ec2-wait ec2-deregister-image ec2-delete-snapshot; do
+  inject "$fault"
+  rebuild_run up commonframe-gate
+  expect_nonzero "up on a mismatch with $fault failing"
+  expect_no_fixed "run-instances" "up on a mismatch with $fault failing launches nothing"
+  expect_no_fixed "api/v2" "up on a mismatch with $fault failing asks Tailscale nothing"
+  expect_no_fixed "wait instance-running" "up on a mismatch with $fault failing waits for no instance"
+  expect_no_fixed "terminate-instances" "up on a mismatch with $fault failing terminates nothing"
+  case "$fault" in
+    nix-image) expect_no_fixed "coldsnap" "up with nix-image failing uploads nothing" ;;
+    coldsnap) expect_no_fixed "register-image" "up with coldsnap failing registers nothing" ;;
+    ec2-register-image)
+      expect_fixed "aws ec2 delete-snapshot --snapshot-id snap-0feed00000000001" "up with register-image failing deletes the unused snapshot"
+      ;;
+  esac
+  clear_faults
+done
+
+# up: a missing security group or AWS lookup stops before launch.
+use_images images-full images-registered-only
 
 cp "$STUB_FIXTURES/security-groups-none.json" "$STUB_FIXTURES/security-groups.json"
 run up commonframe-gate
@@ -463,6 +626,7 @@ expect_no_fixed 'api/v2' "up with nix build failing asks Tailscale nothing"
 clear_faults
 
 # up commonframe-gate: spot class, newest AMI, tailnet key, deploy and switch.
+use_images images-full images-registered-only
 run up commonframe-gate
 expect_status 0 "up commonframe-gate"
 expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up commonframe-gate prints the ready line"
@@ -470,6 +634,9 @@ name=$(sed -n 's/ ready$//p' "$OUT")
 TL=/nix/store/fixture-toplevel-commonframe-gate
 
 expect_fixed "nix build --no-link --print-out-paths /fixture/flake#nixosConfigurations.ec2-commonframe-gate.config.system.build.toplevel" "up builds the class toplevel"
+expect_fixed "nix build --no-link --print-out-paths /fixture/flake#nixosConfigurations.ec2-base.config.system.build.toplevel" "up builds the base toplevel to compare"
+expect_no_fixed "ec2-base-image" "up on a matching AMI builds no base image"
+expect_no_fixed "aws ec2 register-image" "up on a matching AMI registers nothing"
 expect_fixed "curl --config - -fsS https://api.tailscale.com/api/v2/oauth/token" "up asks Tailscale for an OAuth token"
 expect_fixed "-d $BODY https://api.tailscale.com/api/v2/tailnet/-/keys" "up asks for a key with the exact body"
 expect_fixed "aws ec2 run-instances" "up calls run-instances"
@@ -511,7 +678,8 @@ expect_fixed "--block-device-mappings DeviceName=/dev/xvda,Ebs={VolumeSize=40,Vo
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=adhoc},{Key=fleet-max-hours,Value=24}]" "ad-hoc up tags an adhoc instance with 24 max hours"
 expect_fixed "--instance-market-options MarketType=spot,SpotOptions={SpotInstanceType=one-time,InstanceInterruptionBehavior=terminate}" "ad-hoc --spot requests spot"
 expect_fixed "joshsymonds@$name true" "ad-hoc up waits for ssh"
-expect_no_fixed "nix build" "ad-hoc up builds nothing"
+expect_fixed "nix build --no-link --print-out-paths /fixture/flake#nixosConfigurations.ec2-base.config.system.build.toplevel" "ad-hoc up builds the base toplevel to compare"
+[ "$(grep -c '^nix build' "$STUB_LOG")" -eq 1 ] || fail "ad-hoc up builds more than the base toplevel"
 expect_no_fixed "nix copy" "ad-hoc up copies nothing"
 expect_no_fixed "nix-env" "ad-hoc up sets no profile"
 expect_no_fixed "switch-to-configuration" "ad-hoc up switches nothing"

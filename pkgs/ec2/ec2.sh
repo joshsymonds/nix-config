@@ -10,6 +10,8 @@ flake=${EC2_FLEET_FLAKE:-$HOME/nix-config}
 # userdata is the temp file holding the auth key until run-instances reads it.
 launched=""
 userdata=""
+# base_ami is the AMI cmd_up launches from; ensure_base_ami sets it.
+base_ami=""
 
 die() {
   echo "ec2: $*" >&2
@@ -144,12 +146,84 @@ on_exit() {
   fi
 }
 
+# build_base_image <toplevel basename>: builds the raw base image, uploads it as
+# a fleet=ec2-base snapshot, registers an AMI tagged with the toplevel, waits for
+# it, and prunes all but the newest two base AMIs and their snapshots. Sets
+# base_ami to the new AMI.
+build_base_image() {
+  local tl=$1 image_out image_file snap stamp reg described prune_rows
+  local -a fields
+  local old_snap
+  image_out=$(nix build --no-link --print-out-paths "$flake#ec2-base-image") ||
+    die "nix build failed for ec2-base-image"
+  [ -n "$image_out" ] || die "nix build printed no output for ec2-base-image"
+  image_file=$(jq -r '.file // empty' "$image_out/nix-support/image-info.json") ||
+    die "cannot read the image-info of $image_out"
+  [ -f "$image_file" ] || die "image-info of $image_out names no readable file"
+
+  snap=$(coldsnap --region "$region" upload --wait --no-progress \
+    --tag Key=fleet,Value=ec2-base "$image_file") || die "coldsnap upload of $image_file failed"
+  [[ $snap =~ ^snap-[0-9a-f]+$ ]] || die "coldsnap printed no snapshot id"
+
+  stamp=$(date -u +%Y%m%d%H%M%S) || die "cannot read the clock"
+  if ! reg=$(aws ec2 register-image --output text --query ImageId \
+    --name "ec2-base-$tl-$stamp" --architecture x86_64 --virtualization-type hvm \
+    --root-device-name /dev/xvda --ena-support --boot-mode legacy-bios \
+    --block-device-mappings "DeviceName=/dev/xvda,Ebs={SnapshotId=$snap,VolumeType=gp3,DeleteOnTermination=true}" \
+    --tag-specifications "ResourceType=image,Tags=[{Key=fleet,Value=ec2-base},{Key=fleet-toplevel,Value=$tl}]"); then
+    echo "ec2: register-image failed; deleting the unused snapshot $snap" >&2
+    aws ec2 delete-snapshot --snapshot-id "$snap" >/dev/null ||
+      die "could not delete unused snapshot $snap; delete it by hand"
+    die "register-image failed"
+  fi
+  [[ $reg == ami-* ]] || die "register-image printed no AMI id"
+
+  aws ec2 wait image-available --image-ids "$reg" || die "$reg did not become available"
+
+  described=$(aws ec2 describe-images --owners self --output json \
+    --filters 'Name=tag:fleet,Values=ec2-base') || die "describe-images failed before pruning"
+  prune_rows=$(jq -r '
+    .Images | sort_by(.CreationDate) | reverse | .[2:][]
+    | [.ImageId] + [.BlockDeviceMappings[]?.Ebs.SnapshotId // empty]
+    | @tsv' <<<"$described") || die "cannot read the base AMIs to prune"
+  if [ -n "$prune_rows" ]; then
+    while IFS=$'\t' read -r -a fields; do
+      aws ec2 deregister-image --image-id "${fields[0]}" >/dev/null ||
+        die "could not deregister ${fields[0]}"
+      for old_snap in "${fields[@]:1}"; do
+        aws ec2 delete-snapshot --snapshot-id "$old_snap" >/dev/null ||
+          die "could not delete snapshot $old_snap of ${fields[0]}"
+      done
+    done <<<"$prune_rows"
+  fi
+  base_ami=$reg
+}
+
+# ensure_base_ami <toplevel basename>: sets base_ami to the newest fleet=ec2-base
+# AMI when its fleet-toplevel tag names the toplevel. Otherwise it builds one.
+ensure_base_ami() {
+  local want=$1 images row newest_ami newest_tl
+  images=$(aws ec2 describe-images --owners self --output json \
+    --filters 'Name=tag:fleet,Values=ec2-base') || die "describe-images failed"
+  row=$(jq -r '
+    def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
+    (.Images | sort_by(.CreationDate) | last // {})
+    | [(.ImageId // ""), tag("fleet-toplevel")]
+    | @tsv' <<<"$images") || die "cannot read the base AMIs"
+  IFS=$'\t' read -r newest_ami newest_tl <<<"$row"
+  if [ -n "$newest_ami" ] && [ "$newest_tl" = "$want" ]; then
+    base_ami=$newest_ami
+    return 0
+  fi
+  build_base_image "$want"
+}
+
 # cmd_up <class> | --type <t> --disk <gb> [--spot]: launches a box, waits for
 # ssh on the tailnet, and for a class deploys its toplevel.
 cmd_up() {
   local class="" type="" disk="" spot=no timeout
   local classes row itype disk_gb spot_req max_hours fleet_class prefix
-  local known_dir deadline suffix name images ami sgs sg body token key id toplevel
+  local known_dir deadline suffix name sgs sg body token key id toplevel base_path
   local -a ssh_opts=() market=()
   while [ $# -gt 0 ]; do
     case "$1" in
@@ -220,14 +294,14 @@ cmd_up() {
     [ -n "$toplevel" ] || die "nix build printed no toplevel for ec2-$class"
   fi
 
+  base_path=$(nix build --no-link --print-out-paths "$flake#nixosConfigurations.ec2-base.config.system.build.toplevel") ||
+    die "nix build failed for ec2-base"
+  [ -n "$base_path" ] || die "nix build printed no toplevel for ec2-base"
+
   suffix=$(shuf -r -n 3 -e {a..z} {0..9} | tr -d '\n') || die "cannot pick a random name"
   name="$prefix-$suffix"
 
-  images=$(aws ec2 describe-images --owners self --output json \
-    --filters 'Name=tag:fleet,Values=ec2-base') || die "describe-images failed"
-  ami=$(jq -r '.Images | sort_by(.CreationDate) | last | .ImageId // empty' <<<"$images") ||
-    die "cannot read the base AMIs"
-  [ -n "$ami" ] || die "no ec2-base AMI in $region; build one before launching"
+  ensure_base_ami "${base_path##*/}"
 
   sgs=$(aws ec2 describe-security-groups --output json \
     --filters 'Name=tag:fleet,Values=ec2-sg') || die "describe-security-groups failed"
@@ -255,7 +329,7 @@ cmd_up() {
     die "cannot write the user-data file"
 
   id=$(aws ec2 run-instances --output text --query 'Instances[0].InstanceId' \
-    --image-id "$ami" --instance-type "$itype" --count 1 \
+    --image-id "$base_ami" --instance-type "$itype" --count 1 \
     --block-device-mappings "DeviceName=/dev/xvda,Ebs={VolumeSize=$disk_gb,VolumeType=gp3,DeleteOnTermination=true}" \
     --network-interfaces "DeviceIndex=0,AssociatePublicIpAddress=true,Groups=$sg" \
     --metadata-options 'HttpTokens=required,HttpPutResponseHopLimit=1,HttpEndpoint=enabled' \

@@ -360,7 +360,7 @@ cmd_up() {
   done
 
   if [ -n "$class" ]; then
-    nix copy --substitute-on-destination --to "ssh-ng://joshsymonds@$name" "$toplevel" ||
+    nix copy --no-check-sigs --substitute-on-destination --to "ssh-ng://joshsymonds@$name" "$toplevel" ||
       die "nix copy to $name failed"
     ssh "${ssh_opts[@]}" "joshsymonds@$name" sudo nix-env -p /nix/var/nix/profiles/system --set "$toplevel" ||
       die "setting the system profile on $name failed"

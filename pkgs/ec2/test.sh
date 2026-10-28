@@ -737,7 +737,7 @@ expect_order "up orders the launch and deploy steps" \
   "aws ec2 run-instances" \
   "aws ec2 wait instance-running" \
   "joshsymonds@$name true" \
-  "nix copy --substitute-on-destination --to ssh-ng://joshsymonds@$name $TL" \
+  "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name $TL" \
   "joshsymonds@$name sudo nix-env -p /nix/var/nix/profiles/system --set $TL" \
   "joshsymonds@$name sudo $TL/bin/switch-to-configuration switch"
 expect_fixed "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$XDG_STATE_HOME/ec2-fleet/known_hosts" "up sets the ssh host-key options"
@@ -781,7 +781,7 @@ expect_fixed "--instance-type m8a.2xlarge" "up muniment-runner sets its instance
 expect_fixed "Ebs={VolumeSize=200,VolumeType=gp3,DeleteOnTermination=true}" "up muniment-runner sizes its root volume"
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=muniment-runner},{Key=fleet-max-hours,Value=12}]" "up muniment-runner tags its max hours"
 expect_no_fixed "--instance-market-options" "up muniment-runner requests no spot"
-expect_fixed "nix copy --substitute-on-destination --to ssh-ng://joshsymonds@$name /nix/store/fixture-toplevel-muniment-runner" "up muniment-runner copies its own toplevel"
+expect_fixed "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name /nix/store/fixture-toplevel-muniment-runner" "up muniment-runner copies its own toplevel"
 expect_fixed "joshsymonds@$name sudo /nix/store/fixture-toplevel-muniment-runner/bin/switch-to-configuration switch" "up muniment-runner switches its own toplevel"
 
 # A failure after run-instances terminates the launched instance and exits nonzero.

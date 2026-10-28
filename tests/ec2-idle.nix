@@ -46,6 +46,15 @@ in
         ec2Fleet.busyCommand = "test -e /run/ec2-busy";
         systemd.services.ec2-idle-guard.environment.IDLE_SECONDS = lib.mkForce "120";
       };
+
+      # A client VM reaches the box over the test network. Only this test node
+      # opens port 22 there; the real box keeps sshd on tailscale0.
+      muxBox = fleetBox ((idleSeconds 120)
+        // {
+          networking.firewall.allowedTCPPorts = [22];
+        });
+
+      muxClient = {};
     };
 
     testScript = ''
@@ -56,6 +65,7 @@ in
       sshSession.wait_for_unit("ec2-idle-guard.service")
       sshSession.wait_for_unit("sshd.service")
       busyGate.wait_for_unit("ec2-idle-guard.service")
+      muxBox.wait_for_unit("ec2-idle-guard.service")
 
       # The ssh session and the busy file go up before the idle threshold can
       # expire, so each one is what holds its box up.
@@ -63,6 +73,20 @@ in
       sshSession.succeed("ssh -n -i /run/idle-key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null joshsymonds@localhost 'sleep 600' >/dev/null 2>&1 & echo $! > /run/idle-ssh.pid")
       sshSession.wait_until_succeeds("ss -Htn state established '( sport = :22 )' | grep -q .", timeout=60)
       busyGate.succeed("touch /run/ec2-busy")
+
+      # A ControlPersist master left open after a command holds an established
+      # :22 connection but no session. The box must still power off once idle
+      # expires. The client connects right after boot, inside the idle window.
+      import datetime
+      muxBox.wait_for_unit("sshd.service")
+      # Every node is named ec2-idle, so the test network cannot resolve the
+      # box by name; address it by its test-network IP.
+      mux_ip = muxBox.succeed("ip -4 -brief addr show dev eth1 | awk '{print $3}' | cut -d/ -f1").strip()
+      muxClient.succeed("install -m 0600 ${keys.snakeOilEd25519PrivateKey} /run/mux-key")
+      muxClient.succeed(f"ssh -n -i /run/mux-key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlMaster=auto -o ControlPath=/run/mux-ctl -o ControlPersist=2h joshsymonds@{mux_ip} true >/dev/null 2>&1")
+      muxClient.succeed(f"ssh -O check -o ControlPath=/run/mux-ctl joshsymonds@{mux_ip}")
+      muxBox.wait_until_succeeds("ss -Htn state established '( sport = :22 )' | grep -q .", timeout=60)
+      muxBox.wait_for_shutdown(timeout=datetime.timedelta(seconds=300))
 
       # Uptime past the lifetime threshold powers off. Idle stays at its
       # 60-minute default, so only the lifetime check can fire here.

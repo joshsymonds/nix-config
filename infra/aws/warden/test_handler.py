@@ -111,6 +111,26 @@ def test_fleet_max_hours_tag_overrides_default():
     assert handler.sweep(client, NOW) == ["short-expired"]
 
 
+def test_max_hours_tag_at_ceiling_is_honored():
+    client = StubEC2([
+        box("ceiling-kept", 47, max_hours="48"),
+    ])
+
+    assert handler.sweep(client, NOW) == []
+    assert client.terminate_calls == []
+
+
+@pytest.mark.parametrize("raw", ["49", "5000000"])
+def test_max_hours_tag_above_ceiling_falls_back_to_default(raw):
+    client = StubEC2([
+        box("expired", 25, max_hours=raw),
+        box("fresh", 23, max_hours=raw),
+    ])
+
+    assert handler.sweep(client, NOW) == ["expired"]
+    assert client.terminate_calls == [{"InstanceIds": ["expired"]}]
+
+
 @pytest.mark.parametrize("raw", ["", "0", "-3", "abc", "1.5"])
 def test_invalid_max_hours_tag_falls_back_to_default(raw):
     client = StubEC2([
@@ -123,7 +143,7 @@ def test_invalid_max_hours_tag_falls_back_to_default(raw):
 
 @pytest.mark.parametrize("raw", ["100000000", "99999999999999"])
 def test_unrepresentable_max_hours_tag_falls_back_to_default(raw):
-    # The poisoned box is 30h old and 8 vCPU. Its tag overflows the deadline, so it
+    # The poisoned box is 30h old and 8 vCPU. Its tag is above the 48h ceiling, so it
     # must be judged at the 24h default and expire. The three 64-vCPU boxes put the
     # fleet at 200 vCPU, so the newest of them is cut after the poisoned box.
     client = StubEC2([

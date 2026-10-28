@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 
 CAP_VCPU = 128
 DEFAULT_MAX_HOURS = 24
+MAX_HOURS_CEILING = 48
 LIVE_STATES = ["pending", "running", "shutting-down", "stopping", "stopped"]
 FLEET_FILTERS = [
     {"Name": "tag:fleet", "Values": ["ec2"]},
@@ -52,10 +53,7 @@ def _fleet_instances(ec2) -> list[dict]:
 
 
 def _deadline(instance) -> datetime:
-    try:
-        return instance["LaunchTime"] + timedelta(hours=_max_hours(instance))
-    except OverflowError:
-        return instance["LaunchTime"] + timedelta(hours=DEFAULT_MAX_HOURS)
+    return instance["LaunchTime"] + timedelta(hours=_max_hours(instance))
 
 
 def _max_hours(instance) -> int:
@@ -65,7 +63,7 @@ def _max_hours(instance) -> int:
                 hours = int(tag["Value"])
             except ValueError:
                 return DEFAULT_MAX_HOURS
-            return hours if hours > 0 else DEFAULT_MAX_HOURS
+            return hours if 0 < hours <= MAX_HOURS_CEILING else DEFAULT_MAX_HOURS
     return DEFAULT_MAX_HOURS
 
 

@@ -534,6 +534,7 @@
     lib.genAttrs [
       "claude-fable-5"
       "claude-fable-5-1"
+      "claude-haiku-5-5"
       "claude-opus-4-7"
       "claude-opus-4-8"
       "claude-opus-5"

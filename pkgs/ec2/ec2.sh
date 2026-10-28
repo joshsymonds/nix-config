@@ -293,7 +293,7 @@ cmd_up() {
   load_ts_env
   known_dir=${XDG_STATE_HOME:-$HOME/.local/state}/ec2-fleet
   mkdir -p "$known_dir" || die "cannot create $known_dir"
-  ssh_opts=(-o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known_dir/known_hosts")
+  ssh_opts=(-o ControlMaster=no -o ControlPath=none -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known_dir/known_hosts")
   export NIX_SSHOPTS="${ssh_opts[*]}"
 
   if [ -n "$class" ]; then

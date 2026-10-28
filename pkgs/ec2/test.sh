@@ -743,6 +743,16 @@ expect_order "up orders the launch and deploy steps" \
 expect_fixed "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$XDG_STATE_HOME/ec2-fleet/known_hosts" "up sets the ssh host-key options"
 [ -d "$XDG_STATE_HOME/ec2-fleet" ] || fail "up did not create the ec2-fleet state directory"
 grep -F -q "UserKnownHostsFile=$XDG_STATE_HOME/ec2-fleet/known_hosts" "$STUB_FIXTURES/nix-sshopts.seen" || fail "up did not pass the host-key options to nix copy"
+# Every launcher ssh call and the nix copy disable mux, so the launcher never
+# leaves a ControlMaster connected to a box.
+grep -F -q -- "-o ControlMaster=no" "$STUB_FIXTURES/nix-sshopts.seen" || fail "up did not pass ControlMaster=no to nix copy"
+grep -F -q -- "-o ControlPath=none" "$STUB_FIXTURES/nix-sshopts.seen" || fail "up did not pass ControlPath=none to nix copy"
+mux_calls=$(grep -E '^ssh ' "$STUB_LOG" | grep -F -- "joshsymonds@$name")
+[ "$(printf '%s\n' "$mux_calls" | grep -c .)" -eq 3 ] || fail "up made an unexpected number of ssh calls to $name"
+while IFS= read -r call; do
+  case $call in *"-o ControlMaster=no"*) ;; *) fail "ssh call without ControlMaster=no: $call" ;; esac
+  case $call in *"-o ControlPath=none"*) ;; *) fail "ssh call without ControlPath=none: $call" ;; esac
+done <<<"$mux_calls"
 expect_no_fixed "terminate-instances" "up commonframe-gate terminates nothing on success"
 
 # up --type --disk --spot: ad-hoc spot box, no deploy.

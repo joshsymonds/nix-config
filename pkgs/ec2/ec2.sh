@@ -395,6 +395,10 @@ USAGE
   jq -r 'to_entries[] | "  \(.key)  \(.value.instanceType)  disk \(.value.diskGb) GB  spot \(if .value.spot then "yes" else "no" end)  idle \(.value.idleMinutes) min  max \(.value.maxHours) h"' <<<"$classes"
 }
 
+# An interrupt exits nonzero, so on_exit terminates a launched instance.
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 trap on_exit EXIT
 
 case "${1:-help}" in

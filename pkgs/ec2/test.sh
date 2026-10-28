@@ -29,6 +29,7 @@ mkdir -p "$work/bin" "$STUB_FIXTURES" "$TMPDIR"
 
 failures=0
 STATUS=0
+probe_signal=
 expect_rebuild=no
 
 fail() {
@@ -186,13 +187,20 @@ esac
 CURLSTUB
 
 # ssh fails for the step named by fail-ssh-<step>: probe (the true readiness
-# check), nix-env, or switch.
+# check), nix-env, or switch. A hold-ssh-<step> fixture keeps the step running
+# until the release file exists, so a signal can arrive during it.
 write_stub ssh <<'SSHSTUB'
 case "$*" in
   *nix-env*) step=nix-env ;;
   *switch-to-configuration*) step=switch ;;
   *) step=probe ;;
 esac
+[ -e "$STUB_FIXTURES/hold-ssh-$step" ] && {
+  for _ in $(seq 1 100); do
+    [ -e "$STUB_FIXTURES/release" ] && break
+    sleep 0.1
+  done
+}
 [ -e "$STUB_FIXTURES/fail-ssh-$step" ] && {
   echo "ssh: injected failure ($step)" >&2
   exit 255
@@ -283,12 +291,41 @@ echo '{"SecurityGroups":[]}' >"$STUB_FIXTURES/security-groups-none.json"
 printf 'AWS_ACCESS_KEY_ID=AKIASTUBKEY0001\nAWS_SECRET_ACCESS_KEY=%s\n' "$SECRET" >"$ENV_FILE"
 printf 'TS_API_CLIENT_ID=TS-CLIENT-STUB\nTS_API_CLIENT_SECRET=%s\n' "$TS_SECRET" >"$TS_ENV_FILE"
 
+# launch_signalled <signal> <ec2 args...>: starts the launcher with job control on,
+# so SIGINT is not ignored on entry, holds its ssh readiness probe, sends the
+# signal to the launcher while the probe runs, then releases the probe. Sets STATUS.
+launch_signalled() {
+  local sig=$1 pid i
+  shift
+  : >"$STUB_FIXTURES/hold-ssh-probe"
+  set -m
+  "$EC2" "$@" >"$OUT" 2>"$ERR" &
+  pid=$!
+  set +m
+  for i in $(seq 1 100); do
+    grep -q '^ssh ' "$STUB_LOG" && break
+    sleep 0.1
+  done
+  grep -q '^ssh ' "$STUB_LOG" || fail "no ssh readiness probe ran before SIG$sig"
+  kill -s "$sig" "$pid" 2>/dev/null
+  : >"$STUB_FIXTURES/release"
+  if wait "$pid"; then
+    STATUS=0
+  else
+    STATUS=$?
+  fi
+  rm -f "$STUB_FIXTURES/hold-ssh-probe" "$STUB_FIXTURES/release"
+}
+
 # run <ec2 args...>: runs the launcher, sets STATUS/OUT/ERR, resets the call log.
+# With probe_signal set, the launcher gets that signal during its ssh probe.
 run() {
   : >"$STUB_LOG"
   rm -f "$STUB_FIXTURES/user-data.seen" "$STUB_FIXTURES/user-data.mode" "$STUB_FIXTURES/nix-sshopts.seen" \
     "$STUB_FIXTURES/registered"
-  if "$EC2" "$@" >"$OUT" 2>"$ERR"; then
+  if [ -n "$probe_signal" ]; then
+    launch_signalled "$probe_signal" "$@"
+  elif "$EC2" "$@" >"$OUT" 2>"$ERR"; then
     STATUS=0
   else
     STATUS=$?
@@ -738,6 +775,17 @@ expect_nonzero "up with run-instances failing"
 expect_no_fixed "wait instance-running" "up with run-instances failing waits for nothing"
 expect_no_fixed "terminate-instances" "up with run-instances failing terminates nothing"
 clear_faults
+
+# An interrupt after run-instances, during the ssh readiness probe, terminates the
+# launched instance once and exits nonzero. The probe succeeds once released, so
+# a launcher that ignores the signal would finish the launch and exit 0.
+for sig in TERM INT HUP; do
+  probe_signal=$sig
+  run up commonframe-gate
+  probe_signal=
+  expect_nonzero "up commonframe-gate with SIG$sig during the ssh probe"
+  expect_terminated "up commonframe-gate with SIG$sig during the ssh probe"
+done
 
 if [ "$failures" -ne 0 ]; then
   echo "ec2 stubbed test: $failures check(s) failed" >&2

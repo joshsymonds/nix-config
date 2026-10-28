@@ -35,11 +35,15 @@ def box(
 class StubEC2:
     """Hand-written EC2 client. Applies the Filters it receives and pages results."""
 
-    def __init__(self, instances, page_size=1000):
+    def __init__(self, instances, page_size=1000, volumes=(), failing_volumes=()):
         self._instances = instances
+        self._volumes = list(volumes)
         self._page_size = page_size
+        self._failing_volumes = set(failing_volumes)
         self.describe_calls = []
         self.terminate_calls = []
+        self.volume_describe_calls = []
+        self.delete_calls = []
 
     def describe_instances(self, Filters=None, NextToken=None):
         self.describe_calls.append({"Filters": Filters, "NextToken": NextToken})
@@ -56,6 +60,46 @@ class StubEC2:
     def terminate_instances(self, InstanceIds):
         self.terminate_calls.append({"InstanceIds": list(InstanceIds)})
         return {"TerminatingInstances": []}
+
+    def describe_volumes(self, Filters=None, NextToken=None):
+        self.volume_describe_calls.append({"Filters": Filters, "NextToken": NextToken})
+        matched = [v for v in self._volumes if _matches_volume(v, Filters or [])]
+        start = int(NextToken) if NextToken else 0
+        end = start + self._page_size
+        response = {"Volumes": matched[start:end]}
+        if end < len(matched):
+            response["NextToken"] = str(end)
+        return response
+
+    def delete_volume(self, VolumeId):
+        self.delete_calls.append(VolumeId)
+        if VolumeId in self._failing_volumes:
+            raise RuntimeError(f"UnauthorizedOperation deleting {VolumeId}")
+
+
+def volume(volume_id, minutes_old, *, state="available", fleet=True):
+    tags = [{"Key": "fleet", "Value": "ec2"}] if fleet else []
+    return {
+        "VolumeId": volume_id,
+        "CreateTime": NOW - timedelta(minutes=minutes_old),
+        "State": state,
+        "Tags": tags,
+    }
+
+
+def _matches_volume(volume, filters):
+    tags = {t["Key"]: t["Value"] for t in volume["Tags"]}
+    for f in filters:
+        name, values = f["Name"], f["Values"]
+        if name == "status":
+            ok = volume["State"] in values
+        elif name.startswith("tag:"):
+            ok = tags.get(name[len("tag:"):]) in values
+        else:
+            raise ValueError(f"stub does not support volume filter {name!r}")
+        if not ok:
+            return False
+    return True
 
 
 def _matches(instance, filters):
@@ -273,3 +317,48 @@ def test_handler_builds_ec2_client_and_returns_terminated_ids(monkeypatch):
     assert handler.handler({}, None) == ["expired"]
     assert FakeBoto3.requested == ["ec2"]
     assert client.terminate_calls == [{"InstanceIds": ["expired"]}]
+
+
+def test_available_fleet_volume_older_than_15_minutes_is_deleted():
+    client = StubEC2([], volumes=[
+        volume("vol-orphan", 20),
+        volume("vol-young", 5),
+        volume("vol-in-use", 60, state="in-use"),
+        volume("vol-untagged", 60, fleet=False),
+    ])
+
+    assert handler.sweep(client, NOW) == []
+    assert client.delete_calls == ["vol-orphan"]
+
+
+def test_volume_describe_filters_fleet_tag_and_available_status_across_pages():
+    client = StubEC2(
+        [],
+        volumes=[volume(f"vol-{n}", 30) for n in range(5)],
+        page_size=2,
+    )
+
+    handler.sweep(client, NOW)
+
+    assert [c["Filters"] for c in client.volume_describe_calls] == [
+        [
+            {"Name": "tag:fleet", "Values": ["ec2"]},
+            {"Name": "status", "Values": ["available"]},
+        ],
+    ] * 3
+    assert [c["NextToken"] for c in client.volume_describe_calls] == [None, "2", "4"]
+    assert client.delete_calls == [f"vol-{n}" for n in range(5)]
+
+
+def test_orphan_deletes_run_after_terminations_and_survive_one_failure():
+    client = StubEC2(
+        [box("expired", 25)],
+        volumes=[volume("vol-bad", 30), volume("vol-good", 30)],
+        failing_volumes=["vol-bad"],
+    )
+
+    with pytest.raises(RuntimeError, match="vol-bad"):
+        handler.sweep(client, NOW)
+
+    assert client.terminate_calls == [{"InstanceIds": ["expired"]}]
+    assert client.delete_calls == ["vol-bad", "vol-good"]

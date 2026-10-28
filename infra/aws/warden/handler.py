@@ -8,6 +8,11 @@ FLEET_FILTERS = [
     {"Name": "tag:fleet", "Values": ["ec2"]},
     {"Name": "instance-state-name", "Values": LIVE_STATES},
 ]
+ORPHAN_AGE = timedelta(minutes=15)
+VOLUME_FILTERS = [
+    {"Name": "tag:fleet", "Values": ["ec2"]},
+    {"Name": "status", "Values": ["available"]},
+]
 
 
 def handler(event, context):
@@ -36,7 +41,34 @@ def sweep(ec2, now: datetime) -> list[str]:
 
     if doomed:
         ec2.terminate_instances(InstanceIds=doomed)
+    _delete_orphan_volumes(ec2, now)
     return doomed
+
+
+def _delete_orphan_volumes(ec2, now: datetime) -> None:
+    cutoff = now - ORPHAN_AGE
+    failed = []
+    for volume in _fleet_volumes(ec2):
+        if volume["CreateTime"] >= cutoff:
+            continue
+        try:
+            ec2.delete_volume(VolumeId=volume["VolumeId"])
+        except Exception as error:
+            failed.append(f"{volume['VolumeId']} ({error})")
+    if failed:
+        raise RuntimeError(f"failed to delete orphaned fleet volumes: {', '.join(failed)}")
+
+
+def _fleet_volumes(ec2) -> list[dict]:
+    found = []
+    request = {"Filters": VOLUME_FILTERS}
+    while True:
+        page = ec2.describe_volumes(**request)
+        found.extend(page["Volumes"])
+        token = page.get("NextToken")
+        if not token:
+            return found
+        request = {"Filters": VOLUME_FILTERS, "NextToken": token}
 
 
 def _fleet_instances(ec2) -> list[dict]:

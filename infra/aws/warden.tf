@@ -47,6 +47,19 @@ resource "aws_iam_role_policy" "warden" {
           StringEquals = { "ec2:ResourceTag/fleet" = "ec2" }
         }
       },
+      {
+        Effect   = "Allow"
+        Action   = "ec2:DescribeVolumes"
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = "ec2:DeleteVolume"
+        Resource = "arn:aws:ec2:us-west-2:${data.aws_caller_identity.current.account_id}:volume/*"
+        Condition = {
+          StringEquals = { "ec2:ResourceTag/fleet" = "ec2" }
+        }
+      },
     ]
   })
 }

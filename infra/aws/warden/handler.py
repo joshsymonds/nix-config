@@ -13,6 +13,13 @@ VOLUME_FILTERS = [
     {"Name": "tag:fleet", "Values": ["ec2"]},
     {"Name": "status", "Values": ["available"]},
 ]
+IN_USE_VOLUME_FILTERS = [
+    {"Name": "tag:fleet", "Values": ["ec2"]},
+    {"Name": "status", "Values": ["in-use"]},
+]
+MAX_VOLUME_GIB = 512
+MAX_IOPS = 3000
+MAX_THROUGHPUT = 125
 
 
 def handler(event, context):
@@ -23,15 +30,19 @@ def handler(event, context):
 
 
 def sweep(ec2, now: datetime) -> list[str]:
-    expired = []
+    # Instances are read before volumes: a box launched between the two reads is then
+    # never judged against a volume list older than the box itself.
+    instances = _fleet_instances(ec2)
+    attached = _attachments_by_instance(_in_use_fleet_volumes(ec2))
+
+    doomed = []
     live = []
-    for instance in _fleet_instances(ec2):
-        if _deadline(instance) < now:
-            expired.append(instance)
+    for instance in instances:
+        if _deadline(instance) < now or _off_shape(attached.get(instance["InstanceId"], [])):
+            doomed.append(instance["InstanceId"])
         else:
             live.append(instance)
 
-    doomed = [i["InstanceId"] for i in expired]
     remaining_vcpu = sum(_vcpus(i) for i in live)
     for instance in sorted(live, key=lambda i: i["LaunchTime"], reverse=True):
         if remaining_vcpu <= CAP_VCPU:
@@ -69,6 +80,42 @@ def _fleet_volumes(ec2) -> list[dict]:
         if not token:
             return found
         request = {"Filters": VOLUME_FILTERS, "NextToken": token}
+
+
+def _in_use_fleet_volumes(ec2) -> list[dict]:
+    found = []
+    request = {"Filters": IN_USE_VOLUME_FILTERS}
+    while True:
+        page = ec2.describe_volumes(**request)
+        found.extend(page["Volumes"])
+        token = page.get("NextToken")
+        if not token:
+            return found
+        request = {"Filters": IN_USE_VOLUME_FILTERS, "NextToken": token}
+
+
+def _attachments_by_instance(volumes) -> dict[str, list[tuple[dict, dict]]]:
+    by_instance = {}
+    for volume in volumes:
+        for attachment in volume["Attachments"]:
+            by_instance.setdefault(attachment["InstanceId"], []).append((volume, attachment))
+    return by_instance
+
+
+def _off_shape(attachments) -> bool:
+    # A pending box's root volume may not be attached yet, so no volume is not a violation.
+    if not attachments:
+        return False
+    if len(attachments) > 1:
+        return True
+    volume, attachment = attachments[0]
+    return (
+        volume["VolumeType"] != "gp3"
+        or volume["Size"] > MAX_VOLUME_GIB
+        or volume["Iops"] > MAX_IOPS
+        or volume["Throughput"] > MAX_THROUGHPUT
+        or not attachment["DeleteOnTermination"]
+    )
 
 
 def _fleet_instances(ec2) -> list[dict]:

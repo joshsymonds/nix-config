@@ -35,8 +35,14 @@ def box(
 class StubEC2:
     """Hand-written EC2 client. Applies the Filters it receives and pages results."""
 
-    def __init__(self, instances, page_size=1000, volumes=(), failing_volumes=()):
+    def __init__(self, instances, page_size=1000, volumes=None, failing_volumes=()):
+        # Without an explicit volume list, every instance gets one compliant root volume.
         self._instances = instances
+        if volumes is None:
+            volumes = [
+                in_use_volume(f"vol-root-{i['InstanceId']}", i["InstanceId"], size=64)
+                for i in instances
+            ]
         self._volumes = list(volumes)
         self._page_size = page_size
         self._failing_volumes = set(failing_volumes)
@@ -84,6 +90,35 @@ def volume(volume_id, minutes_old, *, state="available", fleet=True):
         "CreateTime": NOW - timedelta(minutes=minutes_old),
         "State": state,
         "Tags": tags,
+        "Attachments": [],
+    }
+
+
+def in_use_volume(
+    volume_id,
+    instance_id,
+    *,
+    volume_type="gp3",
+    size=512,
+    iops=3000,
+    throughput=125,
+    delete_on_termination=True,
+):
+    return {
+        "VolumeId": volume_id,
+        "CreateTime": NOW - timedelta(hours=1),
+        "State": "in-use",
+        "Tags": [{"Key": "fleet", "Value": "ec2"}],
+        "Attachments": [{
+            "InstanceId": instance_id,
+            "DeleteOnTermination": delete_on_termination,
+            "State": "attached",
+            "Device": "/dev/xvda",
+        }],
+        "VolumeType": volume_type,
+        "Size": size,
+        "Iops": iops,
+        "Throughput": throughput,
     }
 
 
@@ -340,13 +375,17 @@ def test_volume_describe_filters_fleet_tag_and_available_status_across_pages():
 
     handler.sweep(client, NOW)
 
-    assert [c["Filters"] for c in client.volume_describe_calls] == [
+    available_calls = [
+        c for c in client.volume_describe_calls
+        if {"Name": "status", "Values": ["available"]} in c["Filters"]
+    ]
+    assert [c["Filters"] for c in available_calls] == [
         [
             {"Name": "tag:fleet", "Values": ["ec2"]},
             {"Name": "status", "Values": ["available"]},
         ],
     ] * 3
-    assert [c["NextToken"] for c in client.volume_describe_calls] == [None, "2", "4"]
+    assert [c["NextToken"] for c in available_calls] == [None, "2", "4"]
     assert client.delete_calls == [f"vol-{n}" for n in range(5)]
 
 
@@ -362,3 +401,101 @@ def test_orphan_deletes_run_after_terminations_and_survive_one_failure():
 
     assert client.terminate_calls == [{"InstanceIds": ["expired"]}]
     assert client.delete_calls == ["vol-bad", "vol-good"]
+
+
+def test_compliant_volume_at_every_limit_is_kept():
+    client = StubEC2(
+        [box("ok", 1, cores=32)],
+        volumes=[in_use_volume("vol-ok", "ok", size=512, iops=3000, throughput=125)],
+    )
+
+    assert handler.sweep(client, NOW) == []
+    assert client.terminate_calls == []
+
+
+@pytest.mark.parametrize("override", [
+    {"volume_type": "io2"},
+    {"size": 513},
+    {"iops": 3001},
+    {"throughput": 126},
+    {"delete_on_termination": False},
+])
+def test_volume_off_launcher_shape_terminates_box(override):
+    client = StubEC2(
+        [box("bad", 1, cores=32)],
+        volumes=[in_use_volume("vol-bad", "bad", **override)],
+    )
+
+    assert handler.sweep(client, NOW) == ["bad"]
+    assert client.terminate_calls == [{"InstanceIds": ["bad"]}]
+
+
+def test_box_with_two_fleet_volumes_terminates():
+    client = StubEC2(
+        [box("bad", 1, cores=32)],
+        volumes=[
+            in_use_volume("vol-root", "bad"),
+            in_use_volume("vol-extra", "bad"),
+        ],
+    )
+
+    assert handler.sweep(client, NOW) == ["bad"]
+    assert client.terminate_calls == [{"InstanceIds": ["bad"]}]
+
+
+def test_box_whose_root_volume_is_not_attached_yet_is_kept():
+    client = StubEC2([box("launching", 0, cores=32, state="pending")], volumes=[])
+
+    assert handler.sweep(client, NOW) == []
+    assert client.terminate_calls == []
+
+
+def test_shape_violator_does_not_count_toward_vcpu_cap():
+    # The oldest box is the violator, 64 vCPU. If it counted, the 192 vCPU fleet would
+    # cut the newer compliant box. Excluded, only the violator goes and 128 vCPU remain.
+    client = StubEC2(
+        [
+            box("violator", 3, cores=32),
+            box("compliant-old", 2, cores=32),
+            box("compliant-new", 1, cores=32),
+        ],
+        volumes=[
+            in_use_volume("vol-violator", "violator", volume_type="io2"),
+            in_use_volume("vol-old", "compliant-old"),
+            in_use_volume("vol-new", "compliant-new"),
+        ],
+    )
+
+    assert handler.sweep(client, NOW) == ["violator"]
+    assert client.terminate_calls == [{"InstanceIds": ["violator"]}]
+
+
+def test_expired_and_violator_are_terminated_in_one_call():
+    client = StubEC2(
+        [box("expired", 25), box("bad", 1, cores=32)],
+        volumes=[
+            in_use_volume("vol-expired", "expired"),
+            in_use_volume("vol-bad", "bad", iops=3001),
+        ],
+    )
+
+    assert handler.sweep(client, NOW) == ["expired", "bad"]
+    assert client.terminate_calls == [{"InstanceIds": ["expired", "bad"]}]
+
+
+def test_in_use_volume_describe_filters_fleet_tag_and_in_use_status_across_pages():
+    client = StubEC2([box(f"i{n}", 1, cores=1, threads=1) for n in range(5)], page_size=2)
+
+    assert handler.sweep(client, NOW) == []
+
+    in_use_calls = [
+        c for c in client.volume_describe_calls
+        if {"Name": "status", "Values": ["in-use"]} in c["Filters"]
+    ]
+    assert [c["Filters"] for c in in_use_calls] == [
+        [
+            {"Name": "tag:fleet", "Values": ["ec2"]},
+            {"Name": "status", "Values": ["in-use"]},
+        ],
+    ] * 3
+    assert [c["NextToken"] for c in in_use_calls] == [None, "2", "4"]

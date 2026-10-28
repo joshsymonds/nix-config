@@ -43,6 +43,11 @@ in {
   # only), env-style TS_API_CLIENT_ID/TS_API_CLIENT_SECRET. The ec2 fleet
   # launcher mints one single-use ephemeral tag:ec2 key per launch with it.
   "secrets/user/tailscale-fleet-oauth.age".publicKeys = keys.joshsymonds;
+  # IAM user ec2-fleet-launcher (created by OpenTofu in infra/aws), env-style
+  # AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, read by the `ec2` launcher.
+  "secrets/user/ec2-fleet-aws.age".publicKeys = keys.joshsymonds;
+  # OpenTofu state/plan encryption passphrase for infra/aws.
+  "secrets/user/ec2-fleet-tofu-passphrase.age".publicKeys = keys.joshsymonds;
 
   # Host-specific secrets
   "secrets/hosts/ultraviolet/cloudflare-api-token.age".publicKeys = keys.ultraviolet;

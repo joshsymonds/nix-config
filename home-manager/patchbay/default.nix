@@ -594,12 +594,17 @@
   # home-manager/claude-code/default.nix): the NAS export all_squashes to
   # 1024:100, so plain `rsync -a` fails its chgrp and exits 23 — measured, not
   # theoretical, which would have failed this unit every 10 minutes.
+  #
+  # --append: patchbay only ever appends to a ledger file (O_APPEND, never
+  # truncated or renamed), so each run writes just the new tail in place.
+  # Without it rsync rewrote the whole day's file (up to ~18 MB) through a
+  # temp file and rename every 10 minutes, a write burst on the NAS disks.
   ledgerSync = pkgs.writeShellScript "patchbay-ledger-sync" ''
     set -eu
     ${pkgs.coreutils}/bin/ls /mnt/claude >/dev/null 2>&1 || true
     ${pkgs.util-linux}/bin/findmnt -n -t nfs,nfs4 /mnt/claude >/dev/null 2>&1 || exit 0
     ${pkgs.coreutils}/bin/mkdir -p /mnt/claude/${hostname}/patchbay
-    ${pkgs.rsync}/bin/rsync -a --no-owner --no-group "${ledgerDir}/" /mnt/claude/${hostname}/patchbay/
+    ${pkgs.rsync}/bin/rsync -a --append --no-owner --no-group "${ledgerDir}/" /mnt/claude/${hostname}/patchbay/
   '';
 
   usageSnapshotSync = pkgs.writeShellScript "patchbay-usage-snapshot-sync" ''

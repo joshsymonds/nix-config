@@ -68,9 +68,11 @@ localize_prepare() {
 }
 
 # localize_record <link> <twin> <index>: the second copy pass, run once every
-# first pass is done, so a file written during the first is caught. The NAS sizes
-# are recorded for localize_swap. A dir whose copy or listing fails is not marked
-# ready and is not swapped.
+# first pass is done, so a file written during the first is caught. The sizes the
+# twin holds after that pass are recorded for localize_swap, not the NAS sizes: a
+# NAS file that grows after the pass is then appended in the swap rather than
+# recorded as copied. A dir whose copy or listing fails is not marked ready and
+# is not swapped.
 localize_record() {
   local src=$1 twin=$2 index=$3 real
   if [ -z "${localize_copied[index]:-}" ]; then
@@ -82,8 +84,8 @@ localize_record() {
     failed=1
     return 0
   fi
-  if ! find "$real" -type f -printf '%s %P\0' >"$state/localize-recorded.$index"; then
-    echo "transcript-sync: cannot list $real" >&2
+  if ! find "$twin" -type f -printf '%s %P\0' >"$state/localize-recorded.$index"; then
+    echo "transcript-sync: cannot list $twin" >&2
     failed=1
     return 0
   fi

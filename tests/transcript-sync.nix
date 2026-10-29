@@ -318,6 +318,30 @@ in
     sync_run
     expect "$nas/personal/todos/x.json" 'CDEFGHIJ'
 
+    CASE=localize-grows-before-record
+    setup localize-grows-before-record
+    localize_fixture
+    nas=$TRANSCRIPT_SYNC_BUCKET
+    printf 'a1\n' > "$nas/personal/projects/s.jsonl"
+    # The NAS gains a line after the second copy pass and before the size record.
+    # That record is the first find of the run. The function is exported into the
+    # packaged script's bash, and removed after the run.
+    find() {
+      if [ ! -e "$PWD/grown" ]; then
+        touch "$PWD/grown"
+        printf 'a2\n' >> "$TRANSCRIPT_SYNC_BUCKET/personal/projects/s.jsonl"
+      fi
+      command find "$@"
+    }
+    export -f find
+    localize_run
+    unset -f find
+    [ -e "$PWD/grown" ] || fail "the NAS was not changed before the size record"
+    grep -qxF 'missing: 0' "$PWD/stdout.txt" || fail "stdout does not report missing: 0"
+    grep -q '^window:' "$PWD/stdout.txt" && fail "a grown file was listed as a window file instead of appended"
+    cmp -s "$nas/personal/projects/s.jsonl" "$HOME/.claude-local/projects/s.jsonl" \
+      || fail "the local copy is not byte-identical to the NAS file"
+
     CASE=usage
     setup usage
     rc=0

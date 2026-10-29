@@ -28,8 +28,10 @@
       # 1.0's incremental save skips chunks only clients changed, so player
       # edits there revert on restart (worse with SpreadTheLoad, which routes
       # more changes through clients). AllPeersPerRound stays off because
-      # SpreadTheLoad already replaces SendZDOToPeers2. KnownGoodBuilds
-      # matches the list ValheimTune 0.7.10 ships (1.0.20 included).
+      # SpreadTheLoad already replaces SendZDOToPeers2. KnownGoodBuilds is
+      # the list ValheimTune 0.7.10 ships plus 1.0.21, added per its README
+      # for an unlisted build; Harmony refuses any patch whose target
+      # signature changed and logs it.
       configFiles."akoozie.valheimtune.cfg" = ''
         [Fixes]
         SaveDirtyFix = true
@@ -61,7 +63,7 @@
         FloatingDropsDelete = false
 
         [Compat]
-        KnownGoodBuilds = 1.0.7, 1.0.12, 1.0.14, 1.0.15, 1.0.16, 1.0.17, 1.0.20
+        KnownGoodBuilds = 1.0.7, 1.0.12, 1.0.14, 1.0.15, 1.0.16, 1.0.17, 1.0.20, 1.0.21
         DisableOnUnknownBuild = true
 
         [Measure]

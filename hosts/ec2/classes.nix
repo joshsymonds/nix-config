@@ -3,7 +3,7 @@
 # module on top of the base. The remaining fields are for the launcher.
 {
   commonframe-gate = {
-    instanceType = "c8a.12xlarge";
+    instanceType = "c8a.16xlarge";
     diskGb = 200;
     spot = true;
     idleMinutes = 30;

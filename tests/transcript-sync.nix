@@ -42,6 +42,38 @@ in
       printf "$@" | cmp -s - "$path" || fail "$path does not hold the expected bytes"
     }
 
+    # localize_run: one localize run that must exit 0. Its output is kept in
+    # stdout.txt and stderr.txt.
+    localize_run() {
+      if ! "$bin" localize >"$PWD/stdout.txt" 2>"$PWD/stderr.txt"; then
+        cat "$PWD/stderr.txt" >&2
+        fail "localize exited nonzero"
+      fi
+    }
+
+    # localize_fixture: all six bucket dirs hold a file, and HOME links to them.
+    localize_fixture() {
+      local nas=$TRANSCRIPT_SYNC_BUCKET d
+      for d in personal/projects personal/sessions personal/todos personal/tasks codex/sessions codex/archived_sessions; do
+        mkdir -p "$nas/$d"
+        printf 'keep\n' > "$nas/$d/kept.jsonl"
+      done
+      mkdir -p "$nas/personal/projects/nested/deeper"
+      printf 'deep\n' > "$nas/personal/projects/nested/deeper/d.jsonl"
+      mkdir -p "$HOME/.claude" "$HOME/.codex"
+      for d in projects sessions todos tasks; do
+        ln -s "$nas/personal/$d" "$HOME/.claude/$d"
+      done
+      for d in sessions archived_sessions; do
+        ln -s "$nas/codex/$d" "$HOME/.codex/$d"
+      done
+    }
+
+    # nas_snapshot <file>: the bucket's names, sizes and mtimes.
+    nas_snapshot() {
+      find "$TRANSCRIPT_SYNC_BUCKET" -printf '%P %s %T@\n' | sort >"$1"
+    }
+
     CASE=timer
     jq -e '.OnCalendar == "*-*-* 03:45:00" and .Persistent == true and .Unit == "transcript-sync.service"' ${timerJson} >/dev/null \
       || fail "timer is not 03:45 Persistent for transcript-sync.service"
@@ -160,12 +192,94 @@ in
     cmp -s "$PWD/all-linked.before" "$PWD/all-linked.after" || fail "NAS changed although every dir is linked"
     [ "$(grep -c skipping "$PWD/stderr.txt")" -eq 6 ] || fail "not all six linked dirs were skipped"
 
+    CASE=localize-copies
+    setup localize-copies
+    localize_fixture
+    nas=$TRANSCRIPT_SYNC_BUCKET
+    nas_snapshot "$PWD/before.txt"
+    localize_run
+    nas_snapshot "$PWD/after.txt"
+    cmp -s "$PWD/before.txt" "$PWD/after.txt" || fail "NAS changed"
+    grep -qx 'missing: 0' "$PWD/stdout.txt" || fail "stdout does not report missing: 0"
+    [ -e "$TRANSCRIPT_SYNC_STATE/last-success" ] || fail "last-success was not written"
+    for d in projects sessions todos tasks; do
+      [ "$(readlink -f "$HOME/.claude/$d")" = "$(readlink -f "$HOME/.claude-local/$d")" ] \
+        || fail "~/.claude/$d does not resolve to ~/.claude-local/$d"
+    done
+    for d in sessions archived_sessions; do
+      [ "$(readlink -f "$HOME/.codex/$d")" = "$(readlink -f "$HOME/.codex-local/$d")" ] \
+        || fail "~/.codex/$d does not resolve to ~/.codex-local/$d"
+    done
+    for d in personal/projects personal/sessions personal/todos personal/tasks codex/sessions codex/archived_sessions; do
+      case "$d" in
+      personal/*) twin="$HOME/.claude-local/''${d#personal/}" ;;
+      *) twin="$HOME/.codex-local/''${d#codex/}" ;;
+      esac
+      find "$nas/$d" -type f >"$PWD/files.txt"
+      while IFS= read -r f; do
+        cmp -s "$f" "$twin/''${f#"$nas/$d/"}" || fail "$f has no identical local copy"
+      done <"$PWD/files.txt"
+    done
+
+    CASE=localize-copy-failure
+    setup localize-copy-failure
+    localize_fixture
+    nas=$TRANSCRIPT_SYNC_BUCKET
+    mkdir -p "$HOME/.codex-local"
+    printf 'blocker' > "$HOME/.codex-local/sessions"
+    nas_snapshot "$PWD/before.txt"
+    rc=0
+    "$bin" localize >"$PWD/stdout.txt" 2>"$PWD/stderr.txt" || rc=$?
+    [ "$rc" -ne 0 ] || fail "run with a failed copy exited 0"
+    [ "$(readlink -f "$HOME/.codex/sessions")" = "$(readlink -f "$nas/codex/sessions")" ] \
+      || fail "the link whose copy failed was swapped"
+    nas_snapshot "$PWD/after.txt"
+    cmp -s "$PWD/before.txt" "$PWD/after.txt" || fail "NAS changed"
+
+    CASE=localize-idempotent
+    setup localize-idempotent
+    localize_fixture
+    nas=$TRANSCRIPT_SYNC_BUCKET
+    printf 'old\n' > "$nas/personal/projects/s.jsonl"
+    touch -d '2001-01-01' "$nas/personal/projects/s.jsonl"
+    mkdir -p "$HOME/.claude-local/projects" "$HOME/.claude-local/todos"
+    printf 'newer-local-line\n' > "$HOME/.claude-local/projects/s.jsonl"
+    printf 'local\n' > "$HOME/.claude-local/todos/t.json"
+    ln -sfn "$HOME/.claude-local/todos" "$HOME/.claude/todos"
+    nas_snapshot "$PWD/before.txt"
+    localize_run
+    expect "$HOME/.claude-local/projects/s.jsonl" 'newer-local-line\n'
+    expect "$HOME/.claude-local/todos/t.json" 'local\n'
+    [ "$(readlink "$HOME/.claude/todos")" = "$HOME/.claude-local/todos" ] || fail "already-local dir was relinked"
+    grep -q skipping "$PWD/stderr.txt" || fail "already-local dir was not skipped with a message"
+    localize_run
+    nas_snapshot "$PWD/after.txt"
+    cmp -s "$PWD/before.txt" "$PWD/after.txt" || fail "NAS changed"
+
+    CASE=localize-rewrites-links
+    setup localize-rewrites-links
+    localize_fixture
+    nas=$TRANSCRIPT_SYNC_BUCKET
+    ln -s "$nas/personal/projects/nested/deeper/d.jsonl" "$nas/personal/projects/alias.jsonl"
+    ln -s "$nas/personal/projects/nested" "$nas/personal/projects/nested-link"
+    nas_snapshot "$PWD/before.txt"
+    localize_run
+    nas_snapshot "$PWD/after.txt"
+    cmp -s "$PWD/before.txt" "$PWD/after.txt" || fail "NAS changed"
+    [ "$(readlink "$HOME/.claude-local/projects/alias.jsonl")" = "$HOME/.claude-local/projects/nested/deeper/d.jsonl" ] \
+      || fail "file link in projects does not point into the twin"
+    [ "$(readlink "$HOME/.claude-local/projects/nested-link")" = "$HOME/.claude-local/projects/nested" ] \
+      || fail "dir link in projects does not point into the twin"
+    [ -z "$(find "$HOME/.claude-local" "$HOME/.codex-local" -lname "$nas/*")" ] \
+      || fail "a local twin link still targets the bucket"
+
     CASE=usage
     setup usage
     rc=0
     "$bin" bogus 2>"$PWD/usage.txt" || rc=$?
     [ "$rc" -eq 2 ] || fail "unknown subcommand exited $rc, want 2"
     grep -q usage "$PWD/usage.txt" || fail "unknown subcommand printed no usage on stderr"
+    grep -qF 'usage: transcript-sync sync|localize' "$PWD/usage.txt" || fail "usage line does not name sync and localize"
     rc=0
     "$bin" 2>/dev/null || rc=$?
     [ "$rc" -eq 2 ] || fail "no subcommand exited $rc, want 2"

@@ -829,10 +829,11 @@ in {
           fi
         done
 
-        # If a rescue would run AND an active Claude Code process is holding
-        # JSONL files open under the about-to-be-rewritten paths, abort
-        # quietly: don't fail the rebuild, just no-op so the existing
-        # layout stays valid until the user stops claude.
+        # If a rescue would run AND an active Claude Code process may still
+        # be writing file-history or shell-snapshots under the paths about
+        # to be re-pointed, abort quietly: don't fail the rebuild, just
+        # no-op so the existing layout stays valid until the user stops
+        # claude.
         if [ "$needs_rescue" = true ]; then
           if ${pkgs.procps}/bin/pgrep -u "$USER" -fa 'claude' 2>/dev/null \
               | ${pkgs.gnugrep}/bin/grep -qE '(^| )claude( |$)|/claude( |$)'; then
@@ -940,10 +941,10 @@ in {
     activation.claudeDirectoryPermissions = lib.hm.dag.entryAfter ["writeBoundary" "claudeUnifiedState"] ''
       set -euo pipefail
       for dir in ".claude" ".claude/bin" ".claude/commands" ".claude/hooks" ".claude/projects" ".claude/statsig" ".claude/todos"; do
-        # Skip symlinks: post-NFS rollout, projects/todos point at the
-        # NFS bucket which is owned by anonuid=1024 (all_squash). User
-        # can't chmod those, and the share permissions are governed
-        # Synology-side anyway.
+        # Skip symlinks: projects/todos are links to their ~/.claude-local
+        # twins, or, on a host not yet through `transcript-sync localize`,
+        # into the NAS bucket, owned by anonuid=1024 (all_squash), which
+        # the user can't chmod.
         if [ -d "$HOME/$dir" ] && [ ! -L "$HOME/$dir" ]; then
           chmod 755 "$HOME/$dir"
         fi

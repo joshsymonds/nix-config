@@ -92,6 +92,41 @@ localize_record() {
   localize_ready[index]=1
 }
 
+# localize_mark <link>: a dir that already resolves outside the bucket can hold
+# local files that sync has not sent. The stamp is taken before this runs, so
+# last-success moves past them. A chmod to each file's own mode moves its ctime
+# past the stamp and leaves its bytes, mtime and mode alone, so the next sync
+# selects it. A file that vanished needs no mark. If any other file cannot be
+# marked, the run swaps nothing, so last-success stays where it is.
+localize_mark() {
+  local src=$1 real f
+  local listing="$state/localize-listing"
+  local -a since=()
+  if [ ! -e "$src" ]; then
+    return 0
+  fi
+  real=$(readlink -f "$src")
+  case "$real/" in
+  "$bucket/"*) return 0 ;;
+  esac
+  if [ -e "$last" ]; then
+    since=(-cnewer "$last")
+  fi
+  if ! find "$real" -type f "${since[@]}" -print0 >"$listing"; then
+    echo "transcript-sync: cannot list $real" >&2
+    failed=1
+    localize_unmarked=1
+    return 0
+  fi
+  while IFS= read -r -d '' f; do
+    if ! chmod --reference="$f" -- "$f" && [ -e "$f" ]; then
+      echo "transcript-sync: cannot mark $f" >&2
+      failed=1
+      localize_unmarked=1
+    fi
+  done <"$listing"
+}
+
 # localize_swap <link> <twin> <index>: swaps the link to the twin for a dir that
 # localize_record marked ready. NAS files that grew since the copy are appended
 # to the twin when the twin still holds exactly the recorded bytes, and listed as
@@ -108,16 +143,6 @@ localize_swap() {
   while IFS= read -r -d '' rec; do
     recorded["${rec#* }"]=${rec%% *}
   done <"$state/localize-recorded.$index"
-  # The stamp is taken before the first swap of the run, and only then. Every
-  # copy and size record has run by now, so none of them is newer than the stamp.
-  if [ "$localize_stamped" -eq 0 ]; then
-    if ! touch "$localize_stamp"; then
-      echo "transcript-sync: cannot write $localize_stamp" >&2
-      failed=1
-      return 0
-    fi
-    localize_stamped=1
-  fi
   tmp="$(dirname -- "$src")/.$(basename -- "$src").localize"
   if ! ln -s "$twin" "$tmp" || ! mv -T "$tmp" "$src"; then
     echo "transcript-sync: cannot swap $src to $twin" >&2
@@ -167,8 +192,8 @@ localize_swap() {
 
 if [ "$1" = localize ]; then
   localize_stamp="$state/localize-stamp"
-  localize_stamped=0
   localize_swapped=0
+  localize_unmarked=0
   localize_missing=0
   localize_copied=()
   localize_ready=()
@@ -184,12 +209,27 @@ if [ "$1" = localize ]; then
   localize_record "$HOME/.claude/tasks" "$HOME/.claude-local/tasks" 4
   localize_record "$HOME/.codex/sessions" "$HOME/.codex-local/sessions" 5
   localize_record "$HOME/.codex/archived_sessions" "$HOME/.codex-local/archived_sessions" 6
-  localize_swap "$HOME/.claude/projects" "$HOME/.claude-local/projects" 1
-  localize_swap "$HOME/.claude/sessions" "$HOME/.claude-local/sessions" 2
-  localize_swap "$HOME/.claude/todos" "$HOME/.claude-local/todos" 3
-  localize_swap "$HOME/.claude/tasks" "$HOME/.claude-local/tasks" 4
-  localize_swap "$HOME/.codex/sessions" "$HOME/.codex-local/sessions" 5
-  localize_swap "$HOME/.codex/archived_sessions" "$HOME/.codex-local/archived_sessions" 6
+  # Taken after every copy and size record, so no copy is newer than the stamp.
+  # The marks run after it, and the swaps only once every mark has succeeded.
+  if ! touch "$localize_stamp"; then
+    echo "transcript-sync: cannot write $localize_stamp" >&2
+    failed=1
+  else
+    localize_mark "$HOME/.claude/projects"
+    localize_mark "$HOME/.claude/sessions"
+    localize_mark "$HOME/.claude/todos"
+    localize_mark "$HOME/.claude/tasks"
+    localize_mark "$HOME/.codex/sessions"
+    localize_mark "$HOME/.codex/archived_sessions"
+    if [ "$localize_unmarked" -eq 0 ]; then
+      localize_swap "$HOME/.claude/projects" "$HOME/.claude-local/projects" 1
+      localize_swap "$HOME/.claude/sessions" "$HOME/.claude-local/sessions" 2
+      localize_swap "$HOME/.claude/todos" "$HOME/.claude-local/todos" 3
+      localize_swap "$HOME/.claude/tasks" "$HOME/.claude-local/tasks" 4
+      localize_swap "$HOME/.codex/sessions" "$HOME/.codex-local/sessions" 5
+      localize_swap "$HOME/.codex/archived_sessions" "$HOME/.codex-local/archived_sessions" 6
+    fi
+  fi
   echo "missing: $localize_missing"
   # A run that swapped no link leaves last-success alone.
   if [ "$localize_swapped" -eq 1 ]; then

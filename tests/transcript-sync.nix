@@ -342,6 +342,28 @@ in
     cmp -s "$nas/personal/projects/s.jsonl" "$HOME/.claude-local/projects/s.jsonl" \
       || fail "the local copy is not byte-identical to the NAS file"
 
+    CASE=localize-rerun-keeps-unsent
+    setup localize-rerun-keeps-unsent
+    localize_fixture
+    nas=$TRANSCRIPT_SYNC_BUCKET
+    printf 'note\n' > "$nas/codex/sessions/note.json"
+    mkdir -p "$HOME/.codex-local"
+    printf 'blocker' > "$HOME/.codex-local/sessions"
+    find "$nas/codex/sessions" -type f -printf '%P %i\n' | sort >"$PWD/inodes-before.txt"
+    rc=0
+    "$bin" localize >"$PWD/stdout.txt" 2>"$PWD/stderr.txt" || rc=$?
+    [ "$rc" -ne 0 ] || fail "run 1 with a blocked copy exited 0"
+    printf 'A\n' > "$HOME/.claude/todos/a.json"
+    sync_run
+    printf 'B\n' > "$HOME/.claude/todos/b.json"
+    rm "$HOME/.codex-local/sessions"
+    localize_run
+    sync_run
+    find "$nas/codex/sessions" -type f -printf '%P %i\n' | sort >"$PWD/inodes-after.txt"
+    cmp -s "$PWD/inodes-before.txt" "$PWD/inodes-after.txt" || fail "sync rewrote a bucket file that localize only copied"
+    expect "$nas/personal/todos/a.json" 'A\n'
+    expect "$nas/personal/todos/b.json" 'B\n'
+
     CASE=usage
     setup usage
     rc=0

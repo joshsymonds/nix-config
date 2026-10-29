@@ -74,7 +74,7 @@ in
       (.roles | keys | sort)
       == ["asset-critic", "asset-implementer", "conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "orchestrator", "scout", "steelman", "task-reviewer", "test-runner"]
       and .roles.implementer == {"entry":"haiku-medium"}
-      and .roles."asset-implementer" == {"entry":"opus-xhigh"}
+      and .roles."asset-implementer" == {"entry":"opus-high"}
       and .roles."asset-critic" == {"entry":"opus-high","readonly":true}
       and .roles."test-runner" == {"entry":"sonnet-low"}
       and .roles.scout == {"entry":"haiku-high","readonly":true}
@@ -275,7 +275,7 @@ in
       # dispatch and task-state tools. Keep the expected privileges independent
       # of the renderer, including the absence of task RPC dispatch.
       if [ "$profile" = opus-high ]; then
-        grep -qxF 'allowed_subagents: "fable-high-ro, haiku-high-ro, haiku-medium, opus-high-ro, opus-xhigh, sonnet-high-ro, sonnet-low"' "$pi_plain"
+        grep -qxF 'allowed_subagents: "fable-high-ro, haiku-high-ro, haiku-medium, opus-high, opus-high-ro, sonnet-high-ro, sonnet-low"' "$pi_plain"
         grep -qxF 'extensions: ["pi-tasks", "${orchestratorProcessExtension}"]' "$pi_plain"
         grep -qE '^extensions: \["pi-tasks", "/nix/store/[^"/]+/orchestrator-processes/index.ts"\]$' "$pi_plain"
         test -f '${orchestratorProcessExtension}'

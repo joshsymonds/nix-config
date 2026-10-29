@@ -446,7 +446,7 @@
       # Epic-scoped roles: Common Frame's asset pipeline dispatches its bpy
       # modelling tasks and its visual critic through these, so 3D work runs
       # on Opus without moving every epic's implementer off Haiku.
-      "asset-implementer".entry = "opus-xhigh";
+      "asset-implementer".entry = "opus-high";
       "asset-critic" = {
         entry = "opus-high";
         readonly = true;

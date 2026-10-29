@@ -92,9 +92,9 @@ localize_record() {
 
 # localize_swap <link> <twin> <index>: swaps the link to the twin for a dir that
 # localize_record marked ready. NAS files that grew since the copy are appended
-# to the twin when the twin still has the recorded size, and listed as window
-# files otherwise. Finally, symlinks in the twin that point into the NAS dir are
-# retargeted to the twin.
+# to the twin when the twin still holds exactly the recorded bytes, and listed as
+# window files otherwise. Finally, symlinks in the twin that point into the NAS
+# dir are retargeted to the twin.
 localize_swap() {
   local src=$1 twin=$2 index=$3 real rec nas_size rec_size rel local_path local_size tmp target link
   local listing="$state/localize-listing"
@@ -134,7 +134,7 @@ localize_swap() {
     rec_size=${recorded["$rel"]:-0}
     local_path="$twin/$rel"
     if [ "$nas_size" -gt "$rec_size" ]; then
-      if [ -f "$local_path" ] && [ "$(stat -c %s -- "$local_path")" -eq "$rec_size" ]; then
+      if [ -f "$local_path" ] && [ "$(stat -c %s -- "$local_path")" -eq "$rec_size" ] && cmp -s -n "$rec_size" "$local_path" "$real/$rel"; then
         if ! dd if="$real/$rel" iflag=skip_bytes,count_bytes skip="$rec_size" count="$((nas_size - rec_size))" status=none >>"$local_path"; then
           echo "transcript-sync: cannot append to $local_path" >&2
           failed=1

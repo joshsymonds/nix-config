@@ -289,6 +289,35 @@ in
       expect "$nas/$d/note.json" 'bytes %s\n' "$d"
     done
 
+    CASE=localize-window-rewrite
+    setup localize-window-rewrite
+    localize_fixture
+    nas=$TRANSCRIPT_SYNC_BUCKET
+    printf 'a1\n' > "$nas/personal/projects/s.jsonl"
+    printf 'AAAA' > "$nas/personal/todos/x.json"
+    # The NAS changes after the size record and before the post-swap listing. That
+    # listing is the first find run once localize-stamp exists. The function is
+    # exported into the packaged script's bash, and removed after the run.
+    find() {
+      if [ -e "$TRANSCRIPT_SYNC_STATE/localize-stamp" ] && [ ! -e "$PWD/nas-changed" ]; then
+        touch "$PWD/nas-changed"
+        printf 'a1\na2\n' > "$TRANSCRIPT_SYNC_BUCKET/personal/projects/s.jsonl"
+        printf 'CDEFGHIJ' > "$TRANSCRIPT_SYNC_BUCKET/personal/todos/x.json"
+      fi
+      command find "$@"
+    }
+    export -f find
+    localize_run
+    unset -f find
+    [ -e "$PWD/nas-changed" ] || fail "the NAS was not changed between the size record and the listing"
+    nas_real=$(readlink -f "$nas")
+    expect "$HOME/.claude-local/projects/s.jsonl" 'a1\na2\n'
+    expect "$HOME/.claude-local/todos/x.json" 'AAAA'
+    grep -qxF "window: $nas_real/personal/todos/x.json" "$PWD/stdout.txt" \
+      || fail "stdout does not list the rewritten file as a window file"
+    sync_run
+    expect "$nas/personal/todos/x.json" 'CDEFGHIJ'
+
     CASE=usage
     setup usage
     rc=0

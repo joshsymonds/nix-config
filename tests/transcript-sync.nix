@@ -273,6 +273,22 @@ in
     [ -z "$(find "$HOME/.claude-local" "$HOME/.codex-local" -lname "$nas/*")" ] \
       || fail "a local twin link still targets the bucket"
 
+    CASE=localize-then-sync-quiet
+    setup localize-then-sync-quiet
+    localize_fixture
+    nas=$TRANSCRIPT_SYNC_BUCKET
+    for d in personal/projects personal/sessions personal/todos personal/tasks codex/sessions codex/archived_sessions; do
+      printf 'bytes %s\n' "$d" > "$nas/$d/note.json"
+    done
+    find "$nas" -type f -printf '%P %i\n' | sort >"$PWD/inodes-before.txt"
+    localize_run
+    sync_run
+    find "$nas" -type f -printf '%P %i\n' | sort >"$PWD/inodes-after.txt"
+    cmp -s "$PWD/inodes-before.txt" "$PWD/inodes-after.txt" || fail "sync rewrote a bucket file that localize only copied"
+    for d in personal/projects personal/sessions personal/todos personal/tasks codex/sessions codex/archived_sessions; do
+      expect "$nas/$d/note.json" 'bytes %s\n' "$d"
+    done
+
     CASE=usage
     setup usage
     rc=0

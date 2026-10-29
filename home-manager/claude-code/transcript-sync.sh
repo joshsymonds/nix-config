@@ -42,16 +42,11 @@ localize_copy() {
   rsync -a --update --no-owner --no-group --chmod=Du=rwx,Dgo=,Fu=rw,Fgo= "$1/" "$2/"
 }
 
-# localize_dir <link> <twin>: moves the dir that <link> resolves into the bucket
-# onto <twin>. Two copy passes run first, so a file written during the first is
-# caught. Then the link is swapped to the twin. NAS files that grew since the
-# copy are appended to the twin when the twin still has the recorded size, and
-# listed as window files otherwise. Finally, symlinks in the twin that point into
-# the NAS dir are retargeted to the twin.
-localize_dir() {
-  local src=$1 twin=$2 real rec nas_size rec_size rel local_path local_size tmp target link
-  local listing="$state/localize-listing"
-  local -A recorded=()
+# localize_prepare <link> <twin> <index>: the first copy pass of the NAS dir that
+# <link> resolves into the bucket onto <twin>. A dir that is skipped, or whose
+# copy fails, is not marked copied and is not swapped.
+localize_prepare() {
+  local src=$1 twin=$2 index=$3 real
   if [ ! -e "$src" ]; then
     echo "transcript-sync: skipping $src (missing)" >&2
     return 0
@@ -64,20 +59,55 @@ localize_dir() {
     return 0
     ;;
   esac
-  if ! mkdir -p "$twin" || ! localize_copy "$real" "$twin" || ! localize_copy "$real" "$twin"; then
+  if ! mkdir -p "$twin" || ! localize_copy "$real" "$twin"; then
     echo "transcript-sync: copy of $real to $twin failed; $src left as it is" >&2
     failed=1
     return 0
   fi
-  if ! find "$real" -type f -printf '%s %P\0' >"$listing"; then
+  localize_copied[index]=1
+}
+
+# localize_record <link> <twin> <index>: the second copy pass, run once every
+# first pass is done, so a file written during the first is caught. The NAS sizes
+# are recorded for localize_swap. A dir whose copy or listing fails is not marked
+# ready and is not swapped.
+localize_record() {
+  local src=$1 twin=$2 index=$3 real
+  if [ -z "${localize_copied[index]:-}" ]; then
+    return 0
+  fi
+  real=$(readlink -f "$src")
+  if ! localize_copy "$real" "$twin"; then
+    echo "transcript-sync: copy of $real to $twin failed; $src left as it is" >&2
+    failed=1
+    return 0
+  fi
+  if ! find "$real" -type f -printf '%s %P\0' >"$state/localize-recorded.$index"; then
     echo "transcript-sync: cannot list $real" >&2
     failed=1
     return 0
   fi
+  localize_ready[index]=1
+}
+
+# localize_swap <link> <twin> <index>: swaps the link to the twin for a dir that
+# localize_record marked ready. NAS files that grew since the copy are appended
+# to the twin when the twin still has the recorded size, and listed as window
+# files otherwise. Finally, symlinks in the twin that point into the NAS dir are
+# retargeted to the twin.
+localize_swap() {
+  local src=$1 twin=$2 index=$3 real rec nas_size rec_size rel local_path local_size tmp target link
+  local listing="$state/localize-listing"
+  local -A recorded=()
+  if [ -z "${localize_ready[index]:-}" ]; then
+    return 0
+  fi
+  real=$(readlink -f "$src")
   while IFS= read -r -d '' rec; do
     recorded["${rec#* }"]=${rec%% *}
-  done <"$listing"
-  # The stamp is taken before the first swap of the run, and only then.
+  done <"$state/localize-recorded.$index"
+  # The stamp is taken before the first swap of the run, and only then. Every
+  # copy and size record has run by now, so none of them is newer than the stamp.
   if [ "$localize_stamped" -eq 0 ]; then
     if ! touch "$localize_stamp"; then
       echo "transcript-sync: cannot write $localize_stamp" >&2
@@ -138,12 +168,26 @@ if [ "$1" = localize ]; then
   localize_stamped=0
   localize_swapped=0
   localize_missing=0
-  localize_dir "$HOME/.claude/projects" "$HOME/.claude-local/projects"
-  localize_dir "$HOME/.claude/sessions" "$HOME/.claude-local/sessions"
-  localize_dir "$HOME/.claude/todos" "$HOME/.claude-local/todos"
-  localize_dir "$HOME/.claude/tasks" "$HOME/.claude-local/tasks"
-  localize_dir "$HOME/.codex/sessions" "$HOME/.codex-local/sessions"
-  localize_dir "$HOME/.codex/archived_sessions" "$HOME/.codex-local/archived_sessions"
+  localize_copied=()
+  localize_ready=()
+  localize_prepare "$HOME/.claude/projects" "$HOME/.claude-local/projects" 1
+  localize_prepare "$HOME/.claude/sessions" "$HOME/.claude-local/sessions" 2
+  localize_prepare "$HOME/.claude/todos" "$HOME/.claude-local/todos" 3
+  localize_prepare "$HOME/.claude/tasks" "$HOME/.claude-local/tasks" 4
+  localize_prepare "$HOME/.codex/sessions" "$HOME/.codex-local/sessions" 5
+  localize_prepare "$HOME/.codex/archived_sessions" "$HOME/.codex-local/archived_sessions" 6
+  localize_record "$HOME/.claude/projects" "$HOME/.claude-local/projects" 1
+  localize_record "$HOME/.claude/sessions" "$HOME/.claude-local/sessions" 2
+  localize_record "$HOME/.claude/todos" "$HOME/.claude-local/todos" 3
+  localize_record "$HOME/.claude/tasks" "$HOME/.claude-local/tasks" 4
+  localize_record "$HOME/.codex/sessions" "$HOME/.codex-local/sessions" 5
+  localize_record "$HOME/.codex/archived_sessions" "$HOME/.codex-local/archived_sessions" 6
+  localize_swap "$HOME/.claude/projects" "$HOME/.claude-local/projects" 1
+  localize_swap "$HOME/.claude/sessions" "$HOME/.claude-local/sessions" 2
+  localize_swap "$HOME/.claude/todos" "$HOME/.claude-local/todos" 3
+  localize_swap "$HOME/.claude/tasks" "$HOME/.claude-local/tasks" 4
+  localize_swap "$HOME/.codex/sessions" "$HOME/.codex-local/sessions" 5
+  localize_swap "$HOME/.codex/archived_sessions" "$HOME/.codex-local/archived_sessions" 6
   echo "missing: $localize_missing"
   # A run that swapped no link leaves last-success alone.
   if [ "$localize_swapped" -eq 1 ]; then

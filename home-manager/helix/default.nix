@@ -5,10 +5,6 @@
   hostname,
   ...
 }: let
-  # nixd option completion evaluates the real per-host option sets through
-  # the flake, lazily — the first option query pays an eval, then nixd
-  # caches. The flake path must match NH_FLAKE (home-manager/common.nix).
-  flakeRef = ''builtins.getFlake "${config.home.homeDirectory}/nix-config"'';
   lspPackages = [
     pkgs.lua-language-server
     pkgs.gopls
@@ -209,17 +205,10 @@ in {
         };
         nixd = {
           command = "${pkgs.nixd}/bin/nixd";
-          config.nixd = {
-            nixpkgs.expr = "import (${flakeRef}).inputs.nixpkgs { }";
-            options =
-              {
-                home-manager.expr = ''(${flakeRef}).homeConfigurations."joshsymonds@${hostname}".options'';
-              }
-              // (
-                if pkgs.stdenv.hostPlatform.isDarwin
-                then {nix-darwin.expr = "(${flakeRef}).darwinConfigurations.${hostname}.options";}
-                else {nixos.expr = "(${flakeRef}).nixosConfigurations.${hostname}.options";}
-              );
+          config.nixd = import ../nixd-settings.nix {
+            inherit (config.home) homeDirectory;
+            inherit hostname;
+            inherit (pkgs.stdenv.hostPlatform) isDarwin;
           };
         };
         "typescript-language-server" = {

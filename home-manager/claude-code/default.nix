@@ -13,6 +13,60 @@
   gambitSrc = inputs.gambit.packages.${pkgs.stdenv.hostPlatform.system}.default;
   gambitRev = inputs.gambit.rev or "unknown";
 
+  # nixd for Claude Code's LSP tool, packaged as a one-plugin directory
+  # marketplace like gambit. Claude Code answers nixd's
+  # workspace/configuration requests from the server's `settings`, so the
+  # shared nixd settings go there.
+  nixdLspPlugin = let
+    plugin = {
+      name = "nixd-lsp";
+      description = "Nix language server (nixd) with this flake's nixpkgs and option sets";
+      inherit (pkgs.nixd) version;
+      author.name = "Josh Symonds";
+    };
+    pluginJson =
+      plugin
+      // {
+        lspServers.nixd = {
+          command = "${pkgs.nixd}/bin/nixd";
+          extensionToLanguage.".nix" = "nix";
+          settings.nixd = import ../nixd-settings.nix {
+            inherit (config.home) homeDirectory;
+            inherit hostname;
+            inherit (pkgs.stdenv.hostPlatform) isDarwin;
+          };
+        };
+      };
+    marketplaceJson = {
+      inherit (plugin) name description;
+      owner = plugin.author;
+      plugins = [(plugin // {source = "./";})];
+    };
+  in
+    pkgs.runCommand "claude-plugin-nixd-lsp" {} ''
+      mkdir -p $out/.claude-plugin
+      cp ${pkgs.writeText "plugin.json" (builtins.toJSON pluginJson)} $out/.claude-plugin/plugin.json
+      cp ${pkgs.writeText "marketplace.json" (builtins.toJSON marketplaceJson)} $out/.claude-plugin/marketplace.json
+    '';
+
+  # Plugins installed from directory marketplaces in the Nix store. Each
+  # marketplace holds one plugin of the same name, so each installs as
+  # <name>@<name>. settings.json's extraKnownMarketplaces and the runtime
+  # plugin state written by activation.claudePluginInstall both come from
+  # this list; enablement stays in settings.json's enabledPlugins.
+  localMarketplaces = [
+    {
+      name = "gambit";
+      src = gambitSrc;
+      rev = gambitRev;
+    }
+    {
+      name = "nixd-lsp";
+      src = nixdLspPlugin;
+      rev = null;
+    }
+  ];
+
   # Whether this host runs the ChatGPT/Codex upstream, and therefore whether
   # patchbay publishes the chatgpt/* routes Gambit model-profile agents use.
   # `or false` keeps hosts that never import home-manager/patchbay — darwin
@@ -25,30 +79,30 @@
   # modelRegistry, or in settings.json has exactly one place it can be spelled.
   chatgptModels = import ../patchbay/chatgpt-models.nix;
 
-  # Generate settings.json with gambit's marketplace entry injected at build
-  # time, pointing at the Nix store path. Keeps a single source of truth
-  # between settings.json's extraKnownMarketplaces and the runtime
+  # Generate settings.json with the local marketplaces' entries injected at
+  # build time, pointing at their Nix store paths. Keeps a single source of
+  # truth between settings.json's extraKnownMarketplaces and the runtime
   # known_marketplaces.json populated by activation.
   settingsJsonBase = builtins.fromJSON (builtins.readFile ./settings.json);
 
-  settingsJsonWithGambit =
+  settingsJsonWithMarketplaces =
     settingsJsonBase
     // {
       extraKnownMarketplaces =
         (settingsJsonBase.extraKnownMarketplaces or {})
-        // {
-          gambit = {
+        // lib.listToAttrs (map (m:
+          lib.nameValuePair m.name {
             source = {
               source = "directory";
-              path = toString gambitSrc;
+              path = toString m.src;
             };
-          };
-        };
+          })
+        localMarketplaces);
     };
 
   mkSettingsJson = name: overlay:
     pkgs.writeText "claude-settings-${name}.json" (builtins.toJSON (
-      lib.recursiveUpdate settingsJsonWithGambit overlay
+      lib.recursiveUpdate settingsJsonWithMarketplaces overlay
     ));
 
   # `or false` keeps hosts that never import home-manager/patchbay — darwin
@@ -1061,69 +1115,75 @@ in {
       fi
     '';
 
-    # Declaratively install gambit. Rather than shell out to
-    # `claude plugin install` (which wants to modify settings.json — futile
-    # when ccrender re-renders it from the Nix base at every activation), we
-    # populate the runtime state by hand:
-    #   - known_marketplaces.json: gambit → directory source at ${gambitSrc}
-    #   - plugins/cache/gambit/gambit/<version>: symlink to ${gambitSrc}
-    #   - installed_plugins.json: gambit@gambit entry pointing at the cache
-    # Claude reads these on session start and sees gambit as an installed,
-    # enabled plugin (enablement is declared in settings.json). Idempotent:
+    # Declaratively install the localMarketplaces plugins. Rather than shell
+    # out to `claude plugin install` (which wants to modify settings.json —
+    # futile when ccrender re-renders it from the Nix base at every
+    # activation), we populate the runtime state by hand, per marketplace:
+    #   - known_marketplaces.json: <name> → directory source at its store path
+    #   - plugins/cache/<name>/<name>/<version>: symlink to the store path
+    #   - installed_plugins.json: <name>@<name> entry pointing at the cache
+    # Claude reads these on session start and sees each plugin as installed
+    # and enabled (enablement is declared in settings.json). Idempotent:
     # re-running activation after a flake update rewrites the marketplace
     # path and the cache symlink to the new store path.
-    activation.claudePluginInstall = lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
-      set -euo pipefail
+    activation.claudePluginInstall = lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] (''
+        set -euo pipefail
 
-      GAMBIT_SRC="${gambitSrc}"
-      GAMBIT_REV="${gambitRev}"
-      GAMBIT_VERSION=$(${pkgs.jq}/bin/jq -r .version "$GAMBIT_SRC/.claude-plugin/plugin.json")
-      NOW="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+        NOW="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+        mkdir -p "$HOME/.claude/plugins"
+        KM="$HOME/.claude/plugins/known_marketplaces.json"
+        INSTALLED="$HOME/.claude/plugins/installed_plugins.json"
+        [ -f "$KM" ] || echo '{}' > "$KM"
+        [ -f "$INSTALLED" ] || echo '{"version":2,"plugins":{}}' > "$INSTALLED"
+      ''
+      + lib.concatMapStrings (m: ''
 
-      mkdir -p "$HOME/.claude/plugins"
-      KM="$HOME/.claude/plugins/known_marketplaces.json"
-      INSTALLED="$HOME/.claude/plugins/installed_plugins.json"
-      CACHE_PARENT="$HOME/.claude/plugins/cache/gambit/gambit"
-      CACHE_DIR="$CACHE_PARENT/$GAMBIT_VERSION"
+        NAME="${m.name}"
+        SRC="${m.src}"
+        VERSION=$(${pkgs.jq}/bin/jq -r .version "$SRC/.claude-plugin/plugin.json")
+        CACHE_PARENT="$HOME/.claude/plugins/cache/$NAME/$NAME"
+        CACHE_DIR="$CACHE_PARENT/$VERSION"
 
-      # 1. known_marketplaces.json
-      [ -f "$KM" ] || echo '{}' > "$KM"
-      ${pkgs.jq}/bin/jq \
-        --arg path "$GAMBIT_SRC" \
-        --arg now "$NOW" \
-        '.gambit = {
-          source: {source: "directory", path: $path},
-          installLocation: $path,
-          lastUpdated: $now
-        }' "$KM" > "$KM.tmp" && mv "$KM.tmp" "$KM"
+        # 1. known_marketplaces.json
+        ${pkgs.jq}/bin/jq \
+          --arg name "$NAME" \
+          --arg path "$SRC" \
+          --arg now "$NOW" \
+          '.[$name] = {
+            source: {source: "directory", path: $path},
+            installLocation: $path,
+            lastUpdated: $now
+          }' "$KM" > "$KM.tmp" && mv "$KM.tmp" "$KM"
 
-      # 2. plugin cache — symlink to the Nix store path. Replace any
-      # existing dir or mismatched symlink so the cache always reflects
-      # the current flake pin.
-      mkdir -p "$CACHE_PARENT"
-      if [ -L "$CACHE_DIR" ] || [ -e "$CACHE_DIR" ]; then
-        rm -rf "$CACHE_DIR"
-      fi
-      ln -s "$GAMBIT_SRC" "$CACHE_DIR"
+        # 2. plugin cache — symlink to the Nix store path. Replace any
+        # existing dir or mismatched symlink so the cache always reflects
+        # the current flake pin.
+        mkdir -p "$CACHE_PARENT"
+        if [ -L "$CACHE_DIR" ] || [ -e "$CACHE_DIR" ]; then
+          rm -rf "$CACHE_DIR"
+        fi
+        ln -s "$SRC" "$CACHE_DIR"
 
-      # 3. installed_plugins.json — record gambit@gambit pointing at the
-      # cache symlink. Preserve installedAt if a prior entry exists;
-      # always refresh lastUpdated and gitCommitSha.
-      [ -f "$INSTALLED" ] || echo '{"version":2,"plugins":{}}' > "$INSTALLED"
-      ${pkgs.jq}/bin/jq \
-        --arg version "$GAMBIT_VERSION" \
-        --arg installPath "$CACHE_DIR" \
-        --arg rev "$GAMBIT_REV" \
-        --arg now "$NOW" \
-        '.plugins["gambit@gambit"] = [{
-          scope: "user",
-          installPath: $installPath,
-          version: $version,
-          installedAt: (.plugins["gambit@gambit"][0].installedAt // $now),
-          lastUpdated: $now,
-          gitCommitSha: $rev
-        }]' "$INSTALLED" > "$INSTALLED.tmp" && mv "$INSTALLED.tmp" "$INSTALLED"
-    '';
+        # 3. installed_plugins.json — record <name>@<name> pointing at the
+        # cache symlink. Preserve installedAt if a prior entry exists;
+        # always refresh lastUpdated, and gitCommitSha when the
+        # marketplace comes from a git input.
+        ${pkgs.jq}/bin/jq \
+          --arg id "$NAME@$NAME" \
+          --arg version "$VERSION" \
+          --arg installPath "$CACHE_DIR" \
+          --arg now "$NOW" \
+          --argjson rev ${lib.escapeShellArg (builtins.toJSON m.rev)} \
+          '.plugins[$id] = [{
+            scope: "user",
+            installPath: $installPath,
+            version: $version,
+            installedAt: (.plugins[$id][0].installedAt // $now),
+            lastUpdated: $now
+          } + (if $rev == null then {} else {gitCommitSha: $rev} end)]' \
+          "$INSTALLED" > "$INSTALLED.tmp" && mv "$INSTALLED.tmp" "$INSTALLED"
+      '')
+      localMarketplaces);
 
     # Place a wrapper script at ~/.local/bin/claude that execs the Nix-patched binary.
     # This satisfies Claude's native installMethod check (file exists at expected path)

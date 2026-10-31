@@ -52,6 +52,7 @@
   libxscrnsaver,
   libxshmfence,
   libxtst,
+  nodejs_24,
   nspr,
   nss,
   openssl,
@@ -189,6 +190,21 @@ in
         find "$prebuilds" -mindepth 1 -maxdepth 1 -type d ! -name "${hostPayload}" -exec rm -rf {} +
       done
       find "$out/lib/chatgpt" -type f -name '*.musl.node' -delete
+
+      # The computer-use plugins (cua-repl, code-review, codex_app) run on
+      # the bundled cua_node/bin/node, an upstream node-v24 linux-x64
+      # build. autoPatchelf corrupts it: the PHDR segment it prepends at
+      # 0x3ff000 overlaps the original text LOAD, and ld.so SIGSEGVs in
+      # dl_main before node starts. Swap in nixpkgs' node of the same
+      # major, and fail the build when an upstream bump moves
+      # manifest.json's node_binary_version to a different major.
+      cua_node_version="$(sed -n 's/.*"node_binary_version": *"\([^"]*\)".*/\1/p' \
+        "$out/lib/chatgpt/resources/cua_node/manifest.json")"
+      if [[ "''${cua_node_version%%.*}" != "${lib.versions.major nodejs_24.version}" ]]; then
+        echo "chatgpt-desktop: cua_node ships node $cua_node_version; swap nodejs_24 for its major" >&2
+        exit 1
+      fi
+      ln -sf ${lib.getExe nodejs_24} "$out/lib/chatgpt/resources/cua_node/bin/node"
 
       install -Dm644 usr/share/applications/chatgpt.desktop "$out/share/applications/chatgpt.desktop"
       # Upstream's entry claims http/https, csv/tsv, and the Office formats,

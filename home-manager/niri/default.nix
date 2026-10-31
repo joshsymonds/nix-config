@@ -46,57 +46,124 @@
   # whatever the user had on the clipboard. The same is true of every other
   # screenshot path on this system (Print binds, satty pipeline), so the
   # cost is consistent rather than surprising.
-  # Launcher hotkeys: focus a window matching --app-id if one exists,
-  # otherwise spawn the command. With multiple matches, cycles to the next
-  # window after the currently-focused one (or the first match if focus is
-  # elsewhere). app_id matching is case-insensitive exact — covers the
-  # capitalisation drift between apps (e.g. Slack reports "Slack", spotify
-  # reports "spotify") without a per-bind regex.
+  # Launcher hotkeys: focus the app's window if one exists, otherwise launch
+  # it. With multiple matches, cycles to the next window after the
+  # currently-focused one (or the first match if focus is elsewhere).
+  #
+  # The app is named by its desktop-file id, and both the window match and
+  # the launch come from that .desktop file: the app_id is its
+  # StartupWMClass (the file id when absent), the launch is its Exec via
+  # `gio launch`. Binds therefore never restate an app_id — Electron apps
+  # rename their window class across versions (claude-desktop →
+  # com.anthropic.Claude, obsidian → md.obsidian.Obsidian, 1Password →
+  # com.onepassword.OnePassword), and a stale hand-written id silently turns
+  # every press into a second launch. The package that renames the window
+  # ships the matching .desktop in the same derivation. Lookup follows the
+  # XDG precedence (XDG_DATA_HOME first), so a user-level override like
+  # us.zoom.Zoom.desktop wins over the package's entry. app_id matching is
+  # case-insensitive exact: Slack declares "Slack" but reports "slack".
+  #
+  # --tray-comm covers apps that keep running as a tray icon after their
+  # last window closes and ignore a relaunch (ChatGPT: the second instance
+  # hands off to the background one, which never reopens its window). With
+  # no matching window, the tray item owned by a process with that comm is
+  # Activate()d — what clicking the icon does — before falling back to spawn.
   focus-or-spawn = pkgs.writeShellApplication {
     name = "focus-or-spawn";
-    runtimeInputs = with pkgs; [jq];
+    runtimeInputs = with pkgs; [jq systemd libnotify];
     text = ''
       set -euo pipefail
 
       usage() {
         cat <<'EOF'
-      Usage: focus-or-spawn --app-id <id> [--title-regex <re>] -- <command> [args...]
+      Usage: focus-or-spawn --desktop <id> [--title-regex <re>] [--tray-comm <comm>] [-- <command> [args...]]
 
-        --app-id <id>       Case-insensitive exact match on the window's app_id.
+        --desktop <id>      Desktop-file id (e.g. md.obsidian.Obsidian). Windows
+                            match its StartupWMClass (or the id itself),
+                            case-insensitively; launching runs its Exec.
         --title-regex <re>  Optional regex (case-insensitive) further narrowing
                             matches by title.
-        <command>           Argv to spawn through niri if no window matches.
+        --tray-comm <comm>  With no matching window, activate the tray icon
+                            owned by a process with this comm, if one exists.
+        <command>           Argv to spawn through niri instead of the desktop
+                            file's Exec (e.g. a fallback focus-or-spawn tier).
 
       With one match, focuses it. With multiple matches, focuses the next one
       after the currently-focused window (cycle), or the first match if focus
-      is elsewhere. With zero matches, spawns the command via niri.
+      is elsewhere. With zero matches, activates the --tray-comm tray icon if
+      there is one, else launches via niri.
       EOF
       }
 
-      app_id=""
+      # First <id>.desktop in XDG precedence order. niri's environment
+      # carries XDG_DATA_DIRS but not XDG_DATA_HOME, so default it per spec.
+      find_desktop_file() {
+        local dir dirs
+        IFS=: read -ra dirs <<<"''${XDG_DATA_HOME:-$HOME/.local/share}:''${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+        for dir in "''${dirs[@]}"; do
+          if [[ -n "$dir" && -f "$dir/applications/$1.desktop" ]]; then
+            printf '%s\n' "$dir/applications/$1.desktop"
+            return 0
+          fi
+        done
+        return 1
+      }
+
+      # Activate the StatusNotifierItem whose D-Bus owner has /proc comm
+      # $1. Watcher entries are "<bus-name><object-path>", or a bare bus
+      # name meaning the default /StatusNotifierItem path.
+      activate_tray() {
+        local items item service obj pid
+        items="$(busctl --user --json=short get-property org.kde.StatusNotifierWatcher \
+          /StatusNotifierWatcher org.kde.StatusNotifierWatcher RegisteredStatusNotifierItems \
+          2>/dev/null | jq -r '.data[]')" || return 1
+        while IFS= read -r item; do
+          [[ -n "$item" ]] || continue
+          service="''${item%%/*}"
+          if [[ "$item" == */* ]]; then obj="/''${item#*/}"; else obj=/StatusNotifierItem; fi
+          pid="$(busctl --user --json=short call org.freedesktop.DBus /org/freedesktop/DBus \
+            org.freedesktop.DBus GetConnectionUnixProcessID s "$service" 2>/dev/null \
+            | jq -r '.data[0]')" || continue
+          [[ "$(cat "/proc/$pid/comm" 2>/dev/null)" == "$1" ]] || continue
+          busctl --user call "$service" "$obj" org.kde.StatusNotifierItem Activate ii 0 0 && return 0
+        done <<<"$items"
+        return 1
+      }
+
+      desktop_id=""
       title_re=""
+      tray_comm=""
       while (( $# )); do
         case "$1" in
           -h|--help) usage; exit 0 ;;
-          --app-id)
-            [[ $# -ge 2 ]] || { printf 'focus-or-spawn: --app-id needs a value\n' >&2; exit 2; }
-            app_id="$2"; shift 2 ;;
+          --desktop)
+            [[ $# -ge 2 ]] || { printf 'focus-or-spawn: --desktop needs a value\n' >&2; exit 2; }
+            desktop_id="$2"; shift 2 ;;
           --title-regex)
             [[ $# -ge 2 ]] || { printf 'focus-or-spawn: --title-regex needs a value\n' >&2; exit 2; }
             title_re="$2"; shift 2 ;;
+          --tray-comm)
+            [[ $# -ge 2 ]] || { printf 'focus-or-spawn: --tray-comm needs a value\n' >&2; exit 2; }
+            tray_comm="$2"; shift 2 ;;
           --) shift; break ;;
           *) printf 'focus-or-spawn: unknown flag: %s\n' "$1" >&2; usage >&2; exit 2 ;;
         esac
       done
 
-      if [[ -z "$app_id" ]]; then
-        printf 'focus-or-spawn: --app-id required\n' >&2
+      if [[ -z "$desktop_id" ]]; then
+        printf 'focus-or-spawn: --desktop required\n' >&2
         exit 2
       fi
-      if (( $# == 0 )); then
-        printf 'focus-or-spawn: spawn command required after --\n' >&2
-        exit 2
+      if ! desktop_file="$(find_desktop_file "$desktop_id")"; then
+        printf 'focus-or-spawn: no %s.desktop in XDG_DATA_HOME or XDG_DATA_DIRS\n' "$desktop_id" >&2
+        notify-send -a focus-or-spawn "Launcher bind broken" "No $desktop_id.desktop found" 2>/dev/null || true
+        exit 1
       fi
+      app_id="$(awk -F= '
+        /^\[/ { in_entry = ($0 == "[Desktop Entry]"); next }
+        in_entry && $1 == "StartupWMClass" { print substr($0, index($0, "=") + 1); exit }
+      ' "$desktop_file")"
+      app_id="''${app_id:-$desktop_id}"
 
       windows="$(niri msg --json windows)"
 
@@ -110,7 +177,13 @@
       count="$(jq 'length' <<<"$matches")"
 
       if (( count == 0 )); then
-        exec niri msg action spawn -- "$@"
+        if [[ -n "$tray_comm" ]] && activate_tray "$tray_comm"; then
+          exit 0
+        fi
+        if (( $# )); then
+          exec niri msg action spawn -- "$@"
+        fi
+        exec niri msg action spawn -- ${pkgs.glib.bin}/bin/gio launch "$desktop_file"
       fi
 
       # Cycle order is by window id (stable, monotonic at creation time).
@@ -437,70 +510,65 @@ in {
     };
 
     # ── App launchers (focus-or-spawn) ────────────────────────────
-    # Each bind hits the named app's window if one exists (cycling
-    # between matches if multiple), else spawns it via niri so the
-    # window lands through the same code path as action.spawn. app_id
-    # match is case-insensitive exact — covers the Slack/spotify
-    # capitalisation drift without per-bind regex.
-    #
-    # If a launcher fails to find an existing window after launch,
-    # check `niri msg --json windows | jq '.[].app_id'` against the
-    # --app-id below — Electron apps occasionally drift their app_id
-    # across versions and the bind needs a one-letter update.
+    # Each bind names the app by desktop-file id; focus-or-spawn reads
+    # the window class and launch command from that .desktop file, so
+    # nothing here restates an app_id that can drift (see the
+    # focus-or-spawn comment at the top of this file).
     "${mod}+M" = {
       hotkey-overlay.title = "Focus or Launch Spotify";
-      action.spawn = ["focus-or-spawn" "--app-id" "spotify" "--" "spotify"];
+      action.spawn = ["focus-or-spawn" "--desktop" "spotify"];
     };
+    # ChatGPT keeps running as a tray icon after its window closes and
+    # ignores a relaunch, so reopen it through the tray instead.
     "${mod}+G" = {
       hotkey-overlay.title = "Focus or Launch ChatGPT";
-      action.spawn = ["focus-or-spawn" "--app-id" "chatgpt" "--" "chatgpt"];
+      action.spawn = ["focus-or-spawn" "--desktop" "chatgpt" "--tray-comm" "ChatGPT"];
     };
     "${mod}+O" = {
       hotkey-overlay.title = "Focus or Launch Claude";
-      action.spawn = ["focus-or-spawn" "--app-id" "claude-desktop" "--" "claude-desktop"];
+      action.spawn = ["focus-or-spawn" "--desktop" "com.anthropic.Claude"];
     };
     "${mod}+W" = {
       hotkey-overlay.title = "Focus or Launch Firefox";
-      action.spawn = ["focus-or-spawn" "--app-id" "firefox" "--" "firefox"];
+      action.spawn = ["focus-or-spawn" "--desktop" "firefox"];
     };
     "${mod}+T" = {
       hotkey-overlay.title = "Focus or Launch Kitty";
-      action.spawn = ["focus-or-spawn" "--app-id" "kitty" "--" "kitty"];
+      action.spawn = ["focus-or-spawn" "--desktop" "kitty"];
     };
     "${mod}+S" = {
       hotkey-overlay.title = "Focus or Launch Slack";
-      action.spawn = ["focus-or-spawn" "--app-id" "slack" "--" "slack"];
+      action.spawn = ["focus-or-spawn" "--desktop" "slack"];
     };
     "${mod}+C" = {
       hotkey-overlay.title = "Focus or Launch Signal";
-      action.spawn = ["focus-or-spawn" "--app-id" "signal" "--" "signal-desktop"];
+      action.spawn = ["focus-or-spawn" "--desktop" "signal"];
     };
     "${mod}+D" = {
       hotkey-overlay.title = "Focus or Launch Vesktop";
-      action.spawn = ["focus-or-spawn" "--app-id" "vesktop" "--" "vesktop"];
+      action.spawn = ["focus-or-spawn" "--desktop" "vesktop"];
     };
     "${mod}+I" = {
       hotkey-overlay.title = "Focus or Launch Morgen";
-      action.spawn = ["focus-or-spawn" "--app-id" "Morgen" "--" "morgen"];
+      action.spawn = ["focus-or-spawn" "--desktop" "morgen"];
     };
     "${mod}+N" = {
       hotkey-overlay.title = "Focus or Launch Obsidian";
-      action.spawn = ["focus-or-spawn" "--app-id" "obsidian" "--" "obsidian"];
+      action.spawn = ["focus-or-spawn" "--desktop" "md.obsidian.Obsidian"];
     };
     # E = filEs/Explorer (Alt+F is Fullscreen). cosmic-files takes no
     # path arg — its Exec is `cosmic-files %U`, so bare launch opens the
-    # last/home dir. app_id is the libcosmic default; if a launch ever
-    # fails to refocus, check `niri msg --json windows | jq '.[].app_id'`.
+    # last/home dir.
     "${mod}+E" = {
       hotkey-overlay.title = "Focus or Launch Files";
-      action.spawn = ["focus-or-spawn" "--app-id" "com.system76.CosmicFiles" "--" "cosmic-files"];
+      action.spawn = ["focus-or-spawn" "--desktop" "com.system76.CosmicFiles"];
     };
     # Alt+1 → 1Password. The leading "1" of the app name is the mnemonic;
     # nothing else here binds a digit, and niri's default workspace
     # switching lives on Mod+1..9, so this doesn't shadow anything.
     "${mod}+1" = {
       hotkey-overlay.title = "Focus or Launch 1Password";
-      action.spawn = ["focus-or-spawn" "--app-id" "1Password" "--" "1password"];
+      action.spawn = ["focus-or-spawn" "--desktop" "com.onepassword.OnePassword"];
     };
     # Zoom is special-cased because its app_id "Zoom" covers many
     # top-levels (hub "Zoom Workplace …", chat, settings, annotate
@@ -509,28 +577,27 @@ in {
     #      target during a call.
     #   2. Hub ("Zoom Workplace …") — has the Join/Start/Schedule UI,
     #      so focusing it is what we want when no meeting is live.
-    #   3. Nothing open → gtk-launch the desktop entry. This MUST go
-    #      through us.zoom.Zoom.desktop (hosts/gnomon nix.xdg.dataFile)
-    #      so the zoom-bypass-zoomlauncher wrapper and any OBS/exec
-    #      shimming in that .desktop apply. Direct `flatpak run` would
-    #      bypass the wrapper and SIGILL on NVIDIA.
+    #   3. Nothing open → launch the desktop entry. This MUST be
+    #      us.zoom.Zoom.desktop from XDG_DATA_HOME (home-manager/hosts/
+    #      gnomon.nix xdg.dataFile), which focus-or-spawn's XDG lookup
+    #      prefers over the flatpak export, so the
+    #      zoom-bypass-zoomlauncher wrapper and any OBS/exec shimming in
+    #      that .desktop apply. Direct `flatpak run` would bypass the
+    #      wrapper and SIGILL on NVIDIA.
     "${mod}+Z" = {
       hotkey-overlay.title = "Focus or Launch Zoom";
       action.spawn = [
         "focus-or-spawn"
-        "--app-id"
-        "Zoom"
+        "--desktop"
+        "us.zoom.Zoom"
         "--title-regex"
         "^Meeting$"
         "--"
         "focus-or-spawn"
-        "--app-id"
-        "Zoom"
+        "--desktop"
+        "us.zoom.Zoom"
         "--title-regex"
         "^Zoom Workplace"
-        "--"
-        "${pkgs.gtk3}/bin/gtk-launch"
-        "us.zoom.Zoom"
       ];
     };
 

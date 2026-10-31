@@ -26,7 +26,7 @@ let
     assert !(builtins.elem name ["pi-tasks-0.9.1" "pi-goal-0.54.13" "pi-lsp-0.49.10"])
     || lib.hasInfix "@STEWARD_NODE_MODULES@/typebox" script;
       fake "/nix/store/fixture-${name}" {inherit script;};
-  pkgs = rec {
+  pkgs = {
     inherit lib;
     stdenv.hostPlatform = {
       inherit system;
@@ -138,7 +138,7 @@ let
     hostname = "fixture";
     inherit inputs lib pkgs;
   };
-  managedCodex = import ../codex/managed-config.nix {inherit lib pkgs;};
+  managedCodex = import ../codex/managed-config.nix {inherit pkgs;};
   common = import ../common.nix {
     config = baseConfig;
     inherit inputs lib pkgs;

@@ -3,7 +3,7 @@
   stdenv,
   fetchurl,
 }:
-stdenv.mkDerivation rec {
+stdenv.mkDerivation {
   pname = "invidious-companion";
   version = "oauth-fix";
 

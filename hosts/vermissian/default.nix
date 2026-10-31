@@ -220,77 +220,73 @@ in
 
     users.users.joshsymonds.extraGroups = ["podman" "docker"];
 
-    # Directories and system services
-    systemd = {
-      tmpfiles.rules = [];
-
-      services = {
-        "agenix-import-ssh-${user}" = let
-          homeDir = "/home/${user}";
-          sshKey = "${homeDir}/.ssh/github";
-          sshPubKey = "${sshKey}.pub";
-          ageDir = "${homeDir}/.config/agenix";
-          privateOut = "${ageDir}/keys.txt";
-          publicOut = "${ageDir}/keys.pub";
-          defaultSshKey = "${homeDir}/.ssh/id_ed25519";
-          defaultSshPub = "${defaultSshKey}.pub";
-        in {
-          description = "Convert ${user}'s SSH key to an Age identity";
-          wantedBy = ["multi-user.target"];
-          unitConfig = {
-            ConditionPathExists = [
-              sshKey
-              sshPubKey
-            ];
-            StartLimitIntervalSec = 0;
-          };
-          serviceConfig = {
-            Type = "oneshot";
-            User = user;
-            UMask = "0077";
-            ExecStart = pkgs.writeShellScript "agenix-import-ssh-${user}" ''
-              set -euo pipefail
-
-              key="${sshKey}"
-              pub="${sshPubKey}"
-              age_dir="${ageDir}"
-              private_out="${privateOut}"
-              public_out="${publicOut}"
-
-              mkdir -p "$age_dir"
-
-              tmp_private="$(${pkgs.coreutils}/bin/mktemp "$age_dir/keys.txt.XXXXXX")"
-              ${pkgs.ssh-to-age}/bin/ssh-to-age --private-key < "$key" > "$tmp_private"
-              mv "$tmp_private" "$private_out"
-              chmod 600 "$private_out"
-
-              ${pkgs.ssh-to-age}/bin/ssh-to-age < "$pub" > "$public_out"
-              chmod 600 "$public_out"
-
-              if [ ! -e "${defaultSshKey}" ]; then
-                ln -sf "$key" "${defaultSshKey}"
-                ln -sf "$pub" "${defaultSshPub}"
-              fi
-
-              echo "Age identity written to $private_out"
-              echo "Age public key:"
-              cat "$public_out"
-            '';
-          };
-        };
-
-        remote-mounts = {
-          description = "Check if remote mounts are available";
-          after = [
-            "network.target"
-            "remote-fs.target"
+    # System services
+    systemd.services = {
+      "agenix-import-ssh-${user}" = let
+        homeDir = "/home/${user}";
+        sshKey = "${homeDir}/.ssh/github";
+        sshPubKey = "${sshKey}.pub";
+        ageDir = "${homeDir}/.config/agenix";
+        privateOut = "${ageDir}/keys.txt";
+        publicOut = "${ageDir}/keys.pub";
+        defaultSshKey = "${homeDir}/.ssh/id_ed25519";
+        defaultSshPub = "${defaultSshKey}.pub";
+      in {
+        description = "Convert ${user}'s SSH key to an Age identity";
+        wantedBy = ["multi-user.target"];
+        unitConfig = {
+          ConditionPathExists = [
+            sshKey
+            sshPubKey
           ];
-          wantedBy = ["multi-user.target"];
-          serviceConfig = {
-            Type = "oneshot";
-            RemainAfterExit = true;
-            ExecStart = "${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/test -d /mnt/video'";
-          };
+          StartLimitIntervalSec = 0;
+        };
+        serviceConfig = {
+          Type = "oneshot";
+          User = user;
+          UMask = "0077";
+          ExecStart = pkgs.writeShellScript "agenix-import-ssh-${user}" ''
+            set -euo pipefail
+
+            key="${sshKey}"
+            pub="${sshPubKey}"
+            age_dir="${ageDir}"
+            private_out="${privateOut}"
+            public_out="${publicOut}"
+
+            mkdir -p "$age_dir"
+
+            tmp_private="$(${pkgs.coreutils}/bin/mktemp "$age_dir/keys.txt.XXXXXX")"
+            ${pkgs.ssh-to-age}/bin/ssh-to-age --private-key < "$key" > "$tmp_private"
+            mv "$tmp_private" "$private_out"
+            chmod 600 "$private_out"
+
+            ${pkgs.ssh-to-age}/bin/ssh-to-age < "$pub" > "$public_out"
+            chmod 600 "$public_out"
+
+            if [ ! -e "${defaultSshKey}" ]; then
+              ln -sf "$key" "${defaultSshKey}"
+              ln -sf "$pub" "${defaultSshPub}"
+            fi
+
+            echo "Age identity written to $private_out"
+            echo "Age public key:"
+            cat "$public_out"
+          '';
+        };
+      };
+
+      remote-mounts = {
+        description = "Check if remote mounts are available";
+        after = [
+          "network.target"
+          "remote-fs.target"
+        ];
+        wantedBy = ["multi-user.target"];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          ExecStart = "${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/test -d /mnt/video'";
         };
       };
     };

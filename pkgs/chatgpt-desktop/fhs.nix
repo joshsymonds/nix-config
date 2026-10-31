@@ -4,7 +4,6 @@
 # to ordinary host tools. Keep those subprocesses in the same Debian-shaped
 # environment OpenAI tests against.
 {
-  lib,
   buildFHSEnv,
   callPackage,
   chatgpt-desktop-unwrapped ? callPackage ./default.nix {},

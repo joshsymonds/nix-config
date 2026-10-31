@@ -5,11 +5,7 @@
 # to NAS, determinate-nix, production user keys), does NOT use lanzaboote
 # (separate test concern). The two markers (bad-key in authorized_keys and
 # /etc/test-marker) are the assertions the future VM test will check.
-{
-  lib,
-  pkgs,
-  ...
-}: {
+{pkgs, ...}: {
   imports = [
     ./disko.nix
     ../../modules/linux-base

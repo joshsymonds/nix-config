@@ -704,7 +704,6 @@
             pkgs = checkPkgs;
             codexConfig = import ./home-manager/codex/managed-config.nix {
               pkgs = checkPkgs;
-              lib = checkPkgs.lib;
             };
           };
           chatgpt-desktop = import ./tests/chatgpt-desktop.nix {
@@ -827,7 +826,7 @@
           // lib.mapAttrs' (class: c: lib.nameValuePair "ec2-${class}" (mkEc2Class class c)) ec2ClassDefs;
 
         # Plain JSON view of the fleet classes; module is a path and stays out.
-        ec2Classes = lib.mapAttrs (_: c: builtins.removeAttrs c ["module"]) ec2ClassDefs;
+        ec2Classes = lib.mapAttrs (_: c: removeAttrs c ["module"]) ec2ClassDefs;
 
         # Halmasuit lab images: gnomon's own system plus halmasuit's gnomon-lab
         # module and one experiment module, per attribute of halmasuit's

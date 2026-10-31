@@ -27,7 +27,7 @@ buildGoModule rec {
     description = "Reports unused declarations in Go packages";
     homepage = "https://pkg.go.dev/golang.org/x/tools/cmd/deadcode";
     license = lib.licenses.bsd3;
-    maintainers = with lib.maintainers; [];
+    maintainers = [];
     mainProgram = "deadcode";
   };
 }

@@ -5,7 +5,7 @@
   pkgs,
   ...
 }: let
-  codexConfig = import ./managed-config.nix {inherit lib pkgs;};
+  codexConfig = import ./managed-config.nix {inherit pkgs;};
   subagentIsolation = import ./subagent-isolation.nix;
   codexAgentRoles = import ./agent-roles.nix;
   # Codex 0.144.4 discovers standalone custom agent roles under

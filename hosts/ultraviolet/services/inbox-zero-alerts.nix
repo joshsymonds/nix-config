@@ -7,11 +7,7 @@
 # (~/.config/home-assistant/token, mode 0600) — root reads it at run time, so
 # no agenix secret is needed. If that file is rotated, both this watcher and
 # hass-cli pick up the new value with no further changes.
-{
-  pkgs,
-  config,
-  ...
-}: let
+{pkgs, ...}: let
   haTokenPath = "/home/joshsymonds/.config/home-assistant/token";
   stateDir = "/var/lib/inbox-zero-alerts";
   realertAfterSeconds = 24 * 3600;

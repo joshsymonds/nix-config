@@ -1,7 +1,4 @@
-{
-  lib,
-  pkgs,
-}: let
+{pkgs}: let
   # Codex 0.163.0's default guidance names the default collaboration
   # namespace. Keep its complete role-specific semantics while pointing the
   # tool example at the non-reserved namespace configured below.

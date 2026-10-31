@@ -11,11 +11,7 @@
 #   constrained - Low-resource hosts (powersave, high swappiness, no MGLRU)
 #   router      - Network-optimized (schedutil, BBR, minimal memory tuning)
 #   none        - No tuning applied (default)
-{
-  config,
-  lib,
-  ...
-}: {
+{lib, ...}: {
   imports = [
     ./memory.nix
     ./network.nix

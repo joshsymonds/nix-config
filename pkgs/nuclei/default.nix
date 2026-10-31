@@ -33,7 +33,7 @@ buildGoModule rec {
     description = "Fast and customizable vulnerability scanner based on simple YAML based DSL";
     homepage = "https://nuclei.projectdiscovery.io/";
     license = licenses.mit;
-    maintainers = with maintainers; [];
+    maintainers = [];
     mainProgram = "nuclei";
   };
 }

@@ -58,7 +58,7 @@ in
       description = "Fast linters runner for Go (binary release)";
       homepage = "https://github.com/golangci/golangci-lint";
       license = lib.licenses.gpl3Plus;
-      maintainers = with lib.maintainers; [];
+      maintainers = [];
       platforms = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
     };
   }

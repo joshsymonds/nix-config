@@ -3,7 +3,7 @@
   buildGoModule,
   fetchFromGitHub,
 }:
-buildGoModule rec {
+buildGoModule {
   pname = "starlark-lsp";
   version = "0.0.0-20240730211532";
 
@@ -25,6 +25,6 @@ buildGoModule rec {
     description = "Starlark Language Server Protocol implementation";
     homepage = "https://github.com/tilt-dev/starlark-lsp";
     license = licenses.asl20;
-    maintainers = with maintainers; [];
+    maintainers = [];
   };
 }

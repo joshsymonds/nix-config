@@ -1,12 +1,7 @@
 # Headless Obsidian with Sync support
 # Access via VNC for initial login: ssh -L 5900:localhost:5900 ultraviolet
 # Then connect VNC client to localhost:5900
-{
-  config,
-  pkgs,
-  lib,
-  ...
-}: let
+{pkgs, ...}: let
   # Virtual display configuration
   display = ":99";
   resolution = "1920x1080x24";

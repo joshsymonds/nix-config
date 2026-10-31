@@ -10,7 +10,6 @@
 #
 # This is the package hosts actually install (overlay attr `claude-desktop`).
 {
-  lib,
   buildFHSEnv,
   callPackage,
   claude-desktop-unwrapped ? callPackage ./default.nix {},

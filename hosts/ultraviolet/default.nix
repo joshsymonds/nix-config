@@ -5,7 +5,6 @@ let
 in
   {
     inputs,
-    lib,
     config,
     pkgs,
     ...

@@ -3,7 +3,6 @@
   stdenv,
   fetchurl,
   patchelf,
-  glibc,
   perl,
   darwin,
 }: let
@@ -138,7 +137,7 @@ in
       description = "Anthropic Claude Code CLI - native binary";
       homepage = "https://github.com/anthropics/claude-code";
       license = lib.licenses.unfree;
-      maintainers = with lib.maintainers; [];
+      maintainers = [];
       platforms = ["aarch64-darwin" "x86_64-darwin" "x86_64-linux" "aarch64-linux"];
       mainProgram = "claude";
     };

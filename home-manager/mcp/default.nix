@@ -6,7 +6,7 @@
   targetprocess-mcp = inputs.targetprocess-mcp.packages.${pkgs.stdenv.hostPlatform.system}.default;
   inherit (pkgs) mcp-atlassian;
 in {
-  home.packages = with pkgs; [
+  home.packages = [
     targetprocess-mcp
     mcp-atlassian
   ];

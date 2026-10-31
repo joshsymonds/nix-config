@@ -1,6 +1,6 @@
 {
   pkgs,
-  vermissian ? (builtins.getFlake (toString ../.)).nixosConfigurations.vermissian.config,
+  vermissian,
 }: let
   privateStoreModule = ../modules/services/private-store.nix;
   hostIntegration = assert vermissian.services.privateStore.enable;

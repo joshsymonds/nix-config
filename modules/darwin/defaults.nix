@@ -1,8 +1,4 @@
-{
-  config,
-  lib,
-  ...
-}: {
+{...}: {
   # Settings not yet in nix-darwin's system.defaults
   system.activationScripts.extraDefaults.text = ''
     defaults write NSGlobalDomain AppleReduceDesktopTinting -bool true

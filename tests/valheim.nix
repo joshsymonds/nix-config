@@ -1,5 +1,4 @@
 {pkgs}: let
-  inherit (pkgs) lib;
   module = ../modules/services/valheim.nix;
   fakePackage = pkgs.writeShellScriptBin "valheim-server" "exit 0";
   evaluate = extraModules:

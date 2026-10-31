@@ -33,7 +33,6 @@
 #   - Same kernel cmdline (quiet, video=2560x1440, etc.).
 {
   inputs,
-  lib,
   pkgs,
   config,
   ...

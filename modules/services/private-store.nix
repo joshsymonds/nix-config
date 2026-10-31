@@ -5,8 +5,8 @@
   ...
 }: let
   cfg = config.services.privateStore;
-  imageDirectory = builtins.dirOf cfg.imagePath;
-  stagingDirectory = builtins.dirOf imageDirectory;
+  imageDirectory = dirOf cfg.imagePath;
+  stagingDirectory = dirOf imageDirectory;
   mapper = "/dev/mapper/strongbox";
   lockFile = "/run/lock/strongbox.lock";
   backupMount = "/mnt/backup";

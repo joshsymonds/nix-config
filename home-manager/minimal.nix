@@ -1,10 +1,6 @@
 # Minimal configuration for resource-constrained bridge devices
 # Only includes essentials for remote management and basic operations
-{
-  config,
-  pkgs,
-  ...
-}: {
+{pkgs, ...}: {
   imports = [
     ./git
     ./ssh-config # SSH configuration

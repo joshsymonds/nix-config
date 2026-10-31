@@ -12,7 +12,6 @@
 # home-manager. Breaking this fails the phone's `update` with a fetch
 # error.
 {
-  config,
   inputs,
   lib,
   pkgs,

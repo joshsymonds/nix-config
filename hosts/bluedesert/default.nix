@@ -3,12 +3,7 @@ let
   self = network.hosts.bluedesert;
   subnet = network.subnets.${self.subnet};
 in
-  {
-    inputs,
-    lib,
-    pkgs,
-    ...
-  }: {
+  {...}: {
     # You can import other NixOS modules here
     imports = [
       ./home-automation.nix
@@ -75,7 +70,7 @@ in
 
     # Environment
     environment = {
-      systemPackages = with pkgs; [
+      systemPackages = [
       ];
     };
 

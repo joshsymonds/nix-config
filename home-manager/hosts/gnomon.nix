@@ -58,6 +58,7 @@
 
     # Communication / media
     slack
+    teams-for-linux # Microsoft dropped its Linux Teams client; this Electron wrapper is the standard replacement
     # Zoom is installed via nix-flatpak (us.zoom.Zoom) at the system level —
     # see hosts/gnomon/default.nix. The nixpkgs zoom-us build couldn't keep
     # up with portal/screencast quirks on niri. The flatpak's ZoomLauncher

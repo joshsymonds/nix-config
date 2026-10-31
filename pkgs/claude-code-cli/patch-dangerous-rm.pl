@@ -12,7 +12,9 @@
 # dangerousRemoval. bypassImmune is what bypass mode consults; autoModeDeny
 # routes bypass-mode removals into the 120s timeout dialog; classifierRouted
 # only matters in auto mode and goes with them so the breaker is inert
-# everywhere. Default/acceptEdits modes still prompt: the safetyCheck ask
+# everywhere. 2.1.314 added waivableInBypass (true here); it is only read on
+# the permission-check error fallback, together with bypassImmune, so it is
+# left as is. Default/acceptEdits modes still prompt: the safetyCheck ask
 # itself is untouched.
 #
 # Safety model (identical to patch-context-window.pl): the anchor is verified
@@ -29,8 +31,8 @@ my $data = <$fh>;
 close($fh);
 my $orig_len = length($data);
 
-my $find = 'dangerousRemoval:{bypassImmune:!0,classifierRouted:!0,autoModeDeny:!0,';
-my $repl = 'dangerousRemoval:{bypassImmune:!1,classifierRouted:!1,autoModeDeny:!1,';
+my $find = 'dangerousRemoval:{bypassImmune:!0,waivableInBypass:!0,classifierRouted:!0,autoModeDeny:!0,';
+my $repl = 'dangerousRemoval:{bypassImmune:!1,waivableInBypass:!0,classifierRouted:!1,autoModeDeny:!1,';
 
 if (length($find) != length($repl)) {
     warn "[cc-rm] BUG: repl len " . length($repl) . " != find len "

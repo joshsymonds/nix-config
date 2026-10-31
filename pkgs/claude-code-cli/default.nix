@@ -7,25 +7,25 @@
   perl,
   darwin,
 }: let
-  version = "2.1.310";
+  version = "2.1.314";
   gcsBase = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/${version}";
 
   sources = {
     "aarch64-darwin" = fetchurl {
       url = "${gcsBase}/darwin-arm64/claude";
-      hash = "sha256-/7ZDMbwO4bae+3wsQovTq1Frwxt1v2CIazVsl8HCX/0=";
+      hash = "sha256-Idbnuabwe0z8t98Tdgs7cqol4IThOlNUQTOCmHuoMu0=";
     };
     "x86_64-darwin" = fetchurl {
       url = "${gcsBase}/darwin-x64/claude";
-      hash = "sha256-KP2+1ahO99QgW1dRx/Ah55FRxOMZxKQB5I/mquhruzk=";
+      hash = "sha256-QEd5owijWOzsiyXIvM8M55qUzyYdEst0BlUY0YnBdPg=";
     };
     "x86_64-linux" = fetchurl {
       url = "${gcsBase}/linux-x64/claude";
-      hash = "sha256-tzZ2QwrxL5cxanmLg3H4HWQPkKWL3LjzzlaoNbtH31Y=";
+      hash = "sha256-RIcEK0xPXYjUVo9orpiq4LH/rliGTPV/uGhkG8X4RZQ=";
     };
     "aarch64-linux" = fetchurl {
       url = "${gcsBase}/linux-arm64/claude";
-      hash = "sha256-nGTZp0QkNrZfzXzALBqgBRu1pwQed4hXbtO18pxEfVQ=";
+      hash = "sha256-pmwKj10Mh6Q5lT15eYUZK7y677zi4Ney6qjfMO8PPvI=";
     };
   };
 in
@@ -71,6 +71,19 @@ in
           echo "warning: tengu_fleet_past_sessions gate not found; upstream may have renamed it" >&2
         fi
         perl -pi -e 's/tengu_fleet_past_sessions/tengu_fleet_past_sessionz/g' "$out/bin/claude"
+
+        # Zero out tengu_heron_brook: a server-served string that the
+        # system-prompt builder appends as its "heron_brook" section. It is read
+        # from bootstrap client_data first (cached in ~/.claude.json, so
+        # CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC only freezes it), then from
+        # the GrowthBook flag of the same name. Renaming the key, same length,
+        # makes both lookups miss, so the section falls back to its built-in
+        # behaviour. \b keeps the tengu_heron_brook_applied telemetry event intact.
+        heronCount=$(grep -aPc 'tengu_heron_brook\b' "$out/bin/claude" || true)
+        if [ "$heronCount" -eq 0 ]; then
+          echo "warning: tengu_heron_brook key not found; upstream may have renamed it" >&2
+        fi
+        perl -pi -e 's/tengu_heron_brook\b/tengu_heron_brooz/g' "$out/bin/claude"
 
         # Teach Claude Code the true per-model context window for non-Claude
         # ("foreign") models via three length-preserving substitutions in the

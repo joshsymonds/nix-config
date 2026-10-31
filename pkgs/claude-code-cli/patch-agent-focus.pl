@@ -41,44 +41,45 @@ sub pad_comment {
 
 my @subs;
 
-# F1: at the tick's call site, pass the app-state snapshot `dt` (already bound
-# at the top of the tick as `let dt=h.getState()`) instead of the token-samples
+# F1: at the tick's call site, pass the app-state snapshot `At` (already bound
+# at the top of the tick as `let At=h.getState()`) instead of the token-samples
 # Map. Argument-position whitespace pads the call to identical length. The
-# samples Map keeps being maintained by the tick (`i2e(Be.current, ...)`) —
+# samples Map keeps being maintained by the tick (`fXe(We.current, ...)`) —
 # only the builder stops receiving it. 2.1.304 started passing
-# viewingAgentTaskId to the task filter (bfe in 2.1.305, sge in 2.1.310) so the viewed agent
-# stays listed, but the payload itself still carries no focus field. (2.1.305's
+# viewingAgentTaskId to the task filter (bfe in 2.1.305, sge in 2.1.310, _he in 2.1.314) so the viewed agent
+# stays listed, but the payload itself still carries no focus field. (2.1.310's
+# fYe(...,He.current) / dt; 2.1.305's
 # a2e(...,Be.current) / Rt; 2.1.304's
 # Zze(...,He.current) / lt; 2.1.293's
 # aqe(...,Ne.current) / ct; 2.1.284's YLe(...,De.current) / Ze; 2.1.280's
 # WDe(...,Pe.current) / Je; 2.1.269's lSt(...,Pe.current) / it; 2.1.257's
 # int(...,Te.current) / Le.)
 push @subs, {
-    name => 'F1_fYe_callsite',
-    find => 'fYe(yt,Math.max(0,Se-dy()-gT),Ct,He.current).then',
-    repl => 'fYe(yt,Math.max(0,Se-dy()-gT),Ct,dt        ).then',
+    name => 'F1_gXe_callsite',
+    find => 'gXe(Mt,Math.max(0,Ce-Qy()-HT),Ot,We.current).then',
+    repl => 'gXe(Mt,Math.max(0,Ce-Qy()-HT),Ot,At        ).then',
 };
 
 # F2: in the builder's per-task map, drop the two fields Steward ignores
 # (startTime, tokenSamples — the latter being the only use of the old 4th
-# parameter) and spend their bytes on `focused:Ct.id===H.viewingAgentTaskId`
-# plus a pad comment. With F1 applied, `H` is the app state; on a task list
+# parameter) and spend their bytes on `focused:Ot.id===L.viewingAgentTaskId`
+# plus a pad comment. With F1 applied, `L` is the app state; on a task list
 # where no agent view is open, viewingAgentTaskId is undefined and every
-# task's focused is false. (2.1.305's Rt / H / Tm / $p / ne; 2.1.304's At / H / bm / Of / te; 2.1.293's yt / H / Kf / Hf / he; 2.1.284's pt / G /
+# task's focused is false. (2.1.310's Ct / H / Km / dm / Z; 2.1.305's Rt / H / Tm / $p / ne; 2.1.304's At / H / bm / Of / te; 2.1.293's yt / H / Kf / Hf / he; 2.1.284's pt / G /
 # qg / km / Se; 2.1.280's ut / Q / Af / mf; 2.1.269's dt / se / vp / Pp;
 # 2.1.257's tt / z / Nf / Jf / ue.)
 {
-    my $find = 'startTime:Ct.startTime,model:Ct.model,effort:Ct.effort,'
-        . 'contextWindowSize:Ct.model?Km(Ct.model,dm()):void 0,'
-        . 'tokenCount:Ct.progress?.tokenCount??0,tokenSamples:H.get(Ct.id)??[],'
-        . 'cwd:Ct.cwd??Z}';
-    my $core = 'model:Ct.model,effort:Ct.effort,'
-        . 'contextWindowSize:Ct.model?Km(Ct.model,dm()):void 0,'
-        . 'tokenCount:Ct.progress?.tokenCount??0,focused:Ct.id===H.viewingAgentTaskId,';
-    my $tail   = 'cwd:Ct.cwd??Z}';
+    my $find = 'startTime:Ot.startTime,model:Ot.model,effort:Ot.effort,'
+        . 'contextWindowSize:Ot.model?_g(Ot.model,op()):void 0,'
+        . 'tokenCount:Ot.progress?.tokenCount??0,tokenSamples:L.get(Ot.id)??[],'
+        . 'cwd:Ot.cwd??ke}';
+    my $core = 'model:Ot.model,effort:Ot.effort,'
+        . 'contextWindowSize:Ot.model?_g(Ot.model,op()):void 0,'
+        . 'tokenCount:Ot.progress?.tokenCount??0,focused:Ot.id===L.viewingAgentTaskId,';
+    my $tail   = 'cwd:Ot.cwd??ke}';
     my $padlen = length($find) - length($core) - length($tail);
     push @subs, {
-        name => 'F2_a2e_tasks',
+        name => 'F2_gXe_tasks',
         find => $find,
         repl => $core . pad_comment($padlen) . $tail,
     };

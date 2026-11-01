@@ -35,6 +35,7 @@ in
       ./services/arr-extras.nix
       ./services/jellyseerr.nix
       ./services/bazarr.nix
+      ./services/questarr.nix
       ./services/arr-healthcheck.nix
       ./services/service-reliability.nix
       ./services/media-backups.nix

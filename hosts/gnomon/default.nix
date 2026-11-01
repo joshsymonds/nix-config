@@ -495,8 +495,14 @@ in
     # gnomon's impermanence wiping DankGreeter's memory.json every boot,
     # the greeter's no-saved-session fallback is a nondeterministic race
     # for session index 0, so an enabled Steam session randomly hijacks login.
+    #
+    # `-pipewire` makes Steam capture the desktop for Remote Play (Steam Deck
+    # streaming) through PipeWire, the only capture path that works on a
+    # Wayland compositor. The FHS wrapper's runScript appends extraArgs to
+    # every launch, desktop entry included.
     programs.steam = {
       enable = true;
+      package = pkgs.steam.override {extraArgs = "-pipewire";};
       remotePlay.openFirewall = true;
       dedicatedServer.openFirewall = false;
       extraCompatPackages = with pkgs; [

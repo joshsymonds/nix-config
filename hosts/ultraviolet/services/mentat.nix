@@ -107,6 +107,10 @@
     };
     reminder.enable = true; # 09:00 daily
 
+    # Text/delegation sessions (the claude child on the OAuth token). Pinned
+    # id rather than an alias so a CC alias move doesn't change it.
+    model = "claude-opus-5-5";
+
     # Voice turns ride Opus 5.5 at standard speed through this host's patchbay
     # (picked over Sol fast and Sonnet 5.5 in the cascade-voice bake-off). The
     # caller key arrives as a systemd credential below; %d is the unit's

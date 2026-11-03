@@ -83,6 +83,15 @@ in {
     # niri's session-bus name registration.
     systemd.user.services.xdg-desktop-portal-gnome.unitConfig.After = ["niri.service"];
 
+    # The xdg-desktop-portal frontend caches the GNOME backend's ScreenCast
+    # properties. When a rebuild restarts xdg-desktop-portal-gnome alone,
+    # the frontend keeps reporting AvailableCursorModes=0 and
+    # AvailableSourceTypes=0, and rejects every screencast request with
+    # "Unavailable cursor mode" until it restarts too (seen 2026-11-01:
+    # Steam Remote Play's picker stopped appearing). PartOf propagates the
+    # backend's restarts to the frontend.
+    systemd.user.services.xdg-desktop-portal.unitConfig.PartOf = ["xdg-desktop-portal-gnome.service"];
+
     services.pipewire = {
       enable = true;
       alsa.enable = true;

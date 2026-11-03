@@ -338,6 +338,147 @@
     Install.WantedBy = ["default.target"];
   };
 
+  # Steam Remote Play (steam -pipewire, hosts/gnomon/default.nix) captures
+  # through the ScreenCast portal, which only offers a fixed monitor or
+  # window, picked once and persisted as Steam's DesktopCaptureRestoreToken.
+  # Steam requests monitors only; the xdg-desktop-portal-gnome overlay patch
+  # adds windows to every monitor picker. Pick "niri Dynamic Cast Target" (Window
+  # tab) instead and this follower
+  # keeps that target on the game: the most recently focused steam_app_*
+  # window, else Big Picture, else the gaming monitor. Dynamic casts start
+  # out empty and fall back to empty when their window closes, so the
+  # target is re-applied whenever a dynamic cast reports Nothing.
+  #
+  # Re-pick the source: quit Steam, delete the token's PermissionStore
+  # entry (busctl --user call org.freedesktop.impl.portal.PermissionStore
+  # /org/freedesktop/impl/portal/PermissionStore
+  # org.freedesktop.impl.portal.PermissionStore Delete ss screencast
+  # <token>), start Steam, and choose again.
+  systemd.user.services.steam-cast-follow = let
+    follower = pkgs.writers.writePython3 "steam-cast-follow" {} ''
+      import json
+      import subprocess
+      import sys
+
+      NIRI, FALLBACK_OUTPUT = sys.argv[1:3]
+
+      windows = {}
+      games = []
+      dynamic_casts = {}
+      applied = None
+
+
+      def is_game(window):
+          return (window.get("app_id") or "").startswith("steam_app_")
+
+
+      def is_big_picture(window):
+          return (window.get("app_id") == "steam"
+                  and "Big Picture" in (window.get("title") or ""))
+
+
+      def desired():
+          if games:
+              return ("window", games[-1])
+          for wid, window in windows.items():
+              if is_big_picture(window):
+                  return ("window", wid)
+          return ("output", FALLBACK_OUTPUT)
+
+
+      def apply(force=False):
+          global applied
+          if not dynamic_casts:
+              applied = None
+              return
+          target = desired()
+          if target == applied and not force:
+              return
+          kind, value = target
+          if kind == "window":
+              args = ["set-dynamic-cast-window", "--id", str(value)]
+          else:
+              args = ["set-dynamic-cast-monitor", value]
+          subprocess.run([NIRI, "msg", "action", *args], check=False)
+          print(f"dynamic cast -> {kind} {value}", flush=True)
+          applied = target
+
+
+      def track_window(window):
+          wid = window["id"]
+          windows[wid] = window
+          if is_game(window):
+              if wid not in games:
+                  games.append(wid)
+              elif window.get("is_focused") and games[-1] != wid:
+                  games.remove(wid)
+                  games.append(wid)
+
+
+      def forget_window(wid):
+          windows.pop(wid, None)
+          if wid in games:
+              games.remove(wid)
+
+
+      def track_cast(cast):
+          if cast.get("is_dynamic_target"):
+              dynamic_casts[cast["stream_id"]] = cast
+
+
+      def any_empty():
+          return any("Nothing" in c["target"] for c in dynamic_casts.values())
+
+
+      stream = subprocess.Popen(
+          [NIRI, "msg", "--json", "event-stream"],
+          stdout=subprocess.PIPE,
+          text=True,
+      )
+      for line in stream.stdout:
+          event = json.loads(line)
+          if "WindowsChanged" in event:
+              windows.clear()
+              games.clear()
+              for window in event["WindowsChanged"]["windows"]:
+                  track_window(window)
+          elif "WindowOpenedOrChanged" in event:
+              track_window(event["WindowOpenedOrChanged"]["window"])
+          elif "WindowClosed" in event:
+              forget_window(event["WindowClosed"]["id"])
+          elif "WindowFocusChanged" in event:
+              wid = event["WindowFocusChanged"]["id"]
+              if wid in games and games[-1] != wid:
+                  games.remove(wid)
+                  games.append(wid)
+          elif "CastsChanged" in event:
+              dynamic_casts.clear()
+              for cast in event["CastsChanged"]["casts"]:
+                  track_cast(cast)
+          elif "CastStartedOrChanged" in event:
+              track_cast(event["CastStartedOrChanged"]["cast"])
+          elif "CastStopped" in event:
+              dynamic_casts.pop(event["CastStopped"]["stream_id"], None)
+          else:
+              continue
+          apply(force=any_empty())
+
+      sys.exit(stream.wait() or 1)
+    '';
+  in {
+    Unit = {
+      Description = "Point niri's dynamic screencast at the running Steam game";
+      PartOf = ["graphical-session.target"];
+      After = ["graphical-session.target"];
+    };
+    Service = {
+      ExecStart = "${follower} ${lib.getExe pkgs.niri-unstable} 'Dell Inc. DELL U2724D CDL25Z3'";
+      Restart = "always";
+      RestartSec = 3;
+    };
+    Install.WantedBy = ["graphical-session.target"];
+  };
+
   # Hide the SB Katana V2X's "capture" source from PipeWire. The Katana
   # V2X is a USB soundbar — its capture endpoint is a loopback of the
   # internal mix, not a real microphone. WirePlumber was picking it as

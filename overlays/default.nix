@@ -186,6 +186,15 @@
           '';
         });
 
+      # xdg-desktop-portal-gnome: let monitor-only screencast requests
+      # (Steam Remote Play's among them) also pick windows, which is where
+      # niri lists its "Dynamic Cast Target". gnomon's steam-cast-follow
+      # service (home-manager/hosts/gnomon.nix) keeps that target on the
+      # running game, so Remote Play streams the game, not a fixed monitor.
+      xdg-desktop-portal-gnome = prev.xdg-desktop-portal-gnome.overrideAttrs (old: {
+        patches = (old.patches or []) ++ [../pkgs/xdg-desktop-portal-gnome/window-sources.patch];
+      });
+
       # XIVLauncher customizations
       xivlauncher =
         prev.xivlauncher.override {

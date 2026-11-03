@@ -1,0 +1,24 @@
+Offer window sources to every monitor screencast request.
+
+Some apps call SelectSources with types=MONITOR only; Steam Remote
+Play's PipeWire capture (steam -pipewire) does, so its picker shows
+only monitors. On niri, the switchable "niri Dynamic Cast Target" is
+exposed as a window, so such apps could never select it. Whenever
+monitors are requested, also allow windows. The widened types are
+stored on the session, so restoring a saved window selection passes
+validation too.
+
+--- a/src/screencast.c
++++ b/src/screencast.c
+@@ -732,6 +732,11 @@
+   if (!g_variant_lookup (arg_options, "types", "u", &types))
+     types = SCREEN_CAST_SOURCE_TYPE_MONITOR;
+ 
++  /* Offer windows to every monitor request, so the picker always lists
++   * niri's "Dynamic Cast Target" pseudo-window. */
++  if (types & SCREEN_CAST_SOURCE_TYPE_MONITOR)
++    types |= SCREEN_CAST_SOURCE_TYPE_WINDOW;
++
+   if (!(types & (SCREEN_CAST_SOURCE_TYPE_MONITOR |
+                  SCREEN_CAST_SOURCE_TYPE_WINDOW |
+                  SCREEN_CAST_SOURCE_TYPE_VIRTUAL)))

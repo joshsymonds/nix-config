@@ -855,6 +855,18 @@ in {
         open-floating = false;
         open-fullscreen = true;
       }
+      # FINAL FANTASY RESONANCE (3259780) is launched over ssh by
+      # ffr-unstraightened's `ffrd shot` to screenshot dialogue while
+      # the desk is in use. Open it as an unfocused full-width column
+      # beside the focused one, off-screen, so a run never takes the
+      # screen or the cursor (block-focus-cursor-warp is in extras.kdl).
+      # Alt+F still fullscreens it when playing here.
+      {
+        matches = [{app-id = "^steam_app_3259780$";}];
+        open-fullscreen = false;
+        open-focused = false;
+        default-column-width.proportion = 1.0;
+      }
       # Zoom annotation toolbar: a 112×112 floating xdg_toplevel Zoom
       # spawns alongside the Meeting window when annotation is available
       # (so participant pens can draw on a screen share, even when WE
@@ -1064,6 +1076,14 @@ in {
       window-rule {
           match app-id="^Zoom$" title="^annotate_toolbar$"
           block-pointer-constraints true
+          block-focus-cursor-warp true
+      }
+
+      // FINAL FANTASY RESONANCE opened over ssh for screenshots: never
+      // warp the cursor to it (paired with the open-focused=false rule
+      // in the typed config).
+      window-rule {
+          match app-id="^steam_app_3259780$"
           block-focus-cursor-warp true
       }
 

@@ -41,9 +41,18 @@ credentials.
 - `ec2 up <class>` starts a box of a class. `ec2 up --type <t> --disk <gb>
   [--spot]` starts an ad-hoc box; `--disk` is at most 512. `ec2 help` lists the
   classes.
+- `ec2 up <class> [--override-input <input> <flake-url>]...` builds the class
+  toplevel with those flake input overrides. The flag repeats and works only
+  for class launches.
+- A class with `reboot = true` deploys with switch-to-configuration boot,
+  reboots, and waits for a new boot id before the ready line. `<name> ready`
+  stays the last stdout line.
+- Spot launches try every us-west-2 zone offering the type, then on-demand.
+  The launch prints `market spot <zone>` or `market on-demand` before the ready
+  line.
 - `ec2 ls` lists pending and running boxes. `ec2 down <name>` terminates one.
 - Names are `<class>-xxx`, or `ec2-xxx` for ad-hoc boxes. Connect with
-  `ssh joshsymonds@<name>`.
+  `ssh joshsymonds@<name>`. A box keeps its name on the tailnet across reboots.
 - A box powers off and terminates after `idleMinutes` with no ssh session, load
   of 1.0 or more, or busyCommand exiting 0. It also terminates at `maxHours`.
   Defaults are 60 minutes idle and 24 hours max.

@@ -215,12 +215,19 @@ esac
 CURLSTUB
 
 # ssh fails for the step named by fail-ssh-<step>: probe (the true readiness
-# check), nix-env, or switch. A hold-ssh-<step> fixture keeps the step running
-# until the release file exists, so a signal can arrive during it.
+# check), nix-env, switch, switch-boot (switch-to-configuration boot), boot-id
+# (a read of the boot id) or reboot (the reboot request). A hold-ssh-<step>
+# fixture keeps the step running until the release file exists, so a signal can
+# arrive during it. The boot-id read answers boot-id-before until the reboot
+# request has run, and boot-id-after from then on, except that the first
+# boot-id-lag reads after the reboot request answer boot-id-before.
 write_stub ssh <<'SSHSTUB'
 case "$*" in
   *nix-env*) step=nix-env ;;
+  *'switch-to-configuration boot'*) step=switch-boot ;;
   *switch-to-configuration*) step=switch ;;
+  *'systemctl reboot'*) step=reboot ;;
+  *boot_id*) step=boot-id ;;
   *) step=probe ;;
 esac
 [ -e "$STUB_FIXTURES/hold-ssh-$step" ] && {
@@ -229,9 +236,23 @@ esac
     sleep 0.1
   done
 }
+[ "$step" = reboot ] && : >"$STUB_FIXTURES/rebooted"
 [ -e "$STUB_FIXTURES/fail-ssh-$step" ] && {
   echo "ssh: injected failure ($step)" >&2
   exit 255
+}
+[ "$step" = boot-id ] && {
+  if [ -e "$STUB_FIXTURES/rebooted" ]; then
+    lag=$(cat "$STUB_FIXTURES/boot-id-lag" 2>/dev/null || echo 0)
+    if [ "$lag" -gt 0 ]; then
+      echo $((lag - 1)) >"$STUB_FIXTURES/boot-id-lag"
+      cat "$STUB_FIXTURES/boot-id-before"
+    else
+      cat "$STUB_FIXTURES/boot-id-after"
+    fi
+  else
+    cat "$STUB_FIXTURES/boot-id-before"
+  fi
 }
 exit 0
 SSHSTUB
@@ -245,8 +266,14 @@ echo snap-0feed00000000001
 COLDSTUB
 
 cat >"$STUB_FIXTURES/classes.json" <<'FIXTURE'
-{"commonframe-gate":{"instanceType":"c8a.4xlarge","diskGb":80,"spot":true,"idleMinutes":60,"maxHours":24},"muniment-runner":{"instanceType":"m8a.2xlarge","diskGb":200,"spot":false,"idleMinutes":30,"maxHours":12}}
+{"commonframe-gate":{"instanceType":"c8a.4xlarge","diskGb":80,"spot":true,"idleMinutes":60,"maxHours":24},"muniment-runner":{"instanceType":"m8a.2xlarge","diskGb":200,"spot":false,"idleMinutes":30,"maxHours":12},"reboot-probe":{"instanceType":"c8a.large","diskGb":40,"spot":false,"idleMinutes":30,"maxHours":12,"reboot":true}}
 FIXTURE
+
+# The boot ids a box reports before and after its reboot.
+BOOT_BEFORE="0b5e1c2a-7d3f-4e8a-9c61-2f4a8d7e1b03"
+BOOT_AFTER="e9a4f607-1c2b-4d5e-8f70-3a6b9c8d2e14"
+printf '%s\n' "$BOOT_BEFORE" >"$STUB_FIXTURES/boot-id-before"
+printf '%s\n' "$BOOT_AFTER" >"$STUB_FIXTURES/boot-id-after"
 
 t_running=$(date -u -d '210 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
 t_pending=$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
@@ -382,7 +409,7 @@ launch_signalled() {
 run() {
   : >"$STUB_LOG"
   rm -f "$STUB_FIXTURES/user-data.seen" "$STUB_FIXTURES/user-data.mode" "$STUB_FIXTURES/nix-sshopts.seen" \
-    "$STUB_FIXTURES/registered"
+    "$STUB_FIXTURES/registered" "$STUB_FIXTURES/rebooted"
   if [ -n "$probe_signal" ]; then
     launch_signalled "$probe_signal" "$@"
   elif "$EC2" "$@" >"$OUT" 2>"$ERR"; then
@@ -809,6 +836,8 @@ expect_order "up orders the launch and deploy steps" \
   "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name $TL" \
   "joshsymonds@$name sudo nix-env -p /nix/var/nix/profiles/system --set $TL" \
   "joshsymonds@$name sudo $TL/bin/switch-to-configuration switch"
+expect_no_fixed "switch-to-configuration boot" "up commonframe-gate boots nothing"
+expect_no_fixed "systemctl reboot" "up commonframe-gate reboots nothing"
 expect_fixed "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$XDG_STATE_HOME/ec2-fleet/known_hosts" "up sets the ssh host-key options"
 [ -d "$XDG_STATE_HOME/ec2-fleet" ] || fail "up did not create the ec2-fleet state directory"
 grep -F -q "UserKnownHostsFile=$XDG_STATE_HOME/ec2-fleet/known_hosts" "$STUB_FIXTURES/nix-sshopts.seen" || fail "up did not pass the host-key options to nix copy"
@@ -973,6 +1002,117 @@ expect_out '^market on-demand$' "up muniment-runner prints the on-demand market 
 expect_run_count "up muniment-runner" 1
 expect_fixed "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name /nix/store/fixture-toplevel-muniment-runner" "up muniment-runner copies its own toplevel"
 expect_fixed "joshsymonds@$name sudo /nix/store/fixture-toplevel-muniment-runner/bin/switch-to-configuration switch" "up muniment-runner switches its own toplevel"
+
+# up reboot-probe: a class with reboot = true deploys with switch-to-configuration
+# boot, reboots the box and waits for a new boot id, and prints the ready line last.
+TL_REBOOT=/nix/store/fixture-toplevel-reboot-probe
+run up reboot-probe
+expect_status 0 "up reboot-probe"
+expect_out '^reboot-probe-[a-z0-9]{3} ready$' "up reboot-probe prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up reboot-probe: the ready line is not the last stdout line"
+expect_fixed "nix build --no-link --print-out-paths /fixture/flake#nixosConfigurations.ec2-reboot-probe.config.system.build.toplevel" "up reboot-probe builds its class toplevel"
+expect_userdata "up reboot-probe" "$name"
+expect_no_fixed "switch-to-configuration switch" "up reboot-probe switches nothing in place"
+expect_order "up reboot-probe orders copy, profile, boot id read, boot switch, reboot" \
+  "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name $TL_REBOOT" \
+  "joshsymonds@$name sudo nix-env -p /nix/var/nix/profiles/system --set $TL_REBOOT" \
+  "joshsymonds@$name cat /proc/sys/kernel/random/boot_id" \
+  "joshsymonds@$name sudo $TL_REBOOT/bin/switch-to-configuration boot" \
+  "joshsymonds@$name sudo systemctl reboot"
+reboot_line=$(grep -F -n -- "joshsymonds@$name sudo systemctl reboot" "$STUB_LOG" | cut -d: -f1)
+boot_reads=$(grep -F -c -- "joshsymonds@$name cat /proc/sys/kernel/random/boot_id" "$STUB_LOG")
+last_boot_line=$(grep -F -n -- "joshsymonds@$name cat /proc/sys/kernel/random/boot_id" "$STUB_LOG" | tail -n 1 | cut -d: -f1)
+if [ "$boot_reads" -ne 2 ] || [ -z "$reboot_line" ] || [ "$last_boot_line" -le "$reboot_line" ]; then
+  fail "up reboot-probe: want two boot id reads, the second after the reboot request"
+fi
+mux_calls=$(grep -E '^ssh ' "$STUB_LOG" | grep -F -- "joshsymonds@$name")
+[ "$(printf '%s\n' "$mux_calls" | grep -c .)" -eq 6 ] || fail "up reboot-probe made an unexpected number of ssh calls to $name"
+while IFS= read -r call; do
+  case $call in *"-o ControlMaster=no"*) ;; *) fail "up reboot-probe: ssh call without ControlMaster=no: $call" ;; esac
+  case $call in *"-o ControlPath=none"*) ;; *) fail "up reboot-probe: ssh call without ControlPath=none: $call" ;; esac
+done <<<"$mux_calls"
+# Every call on the reboot path is bounded on the client side, so a connection
+# that never answers or goes silent ends the call.
+bounded_calls=$(printf '%s\n' "$mux_calls" | grep -E 'boot_id|switch-to-configuration boot|systemctl reboot')
+[ "$(printf '%s\n' "$bounded_calls" | grep -c .)" -eq 4 ] || fail "up reboot-probe: want four reboot-path ssh calls to $name"
+while IFS= read -r call; do
+  for opt in ConnectTimeout= ServerAliveInterval= ServerAliveCountMax=; do
+    case $call in *"-o $opt"*) ;; *) fail "up reboot-probe: reboot-path ssh call without -o $opt: $call" ;; esac
+  done
+done <<<"$bounded_calls"
+expect_no_fixed "terminate-instances" "up reboot-probe terminates nothing on success"
+
+# The reboot request's ssh exit status does not fail the launch: the new boot id
+# is the evidence.
+inject ssh-reboot
+run up reboot-probe
+expect_status 0 "up reboot-probe with the reboot request failing"
+expect_out '^reboot-probe-[a-z0-9]{3} ready$' "up reboot-probe with the reboot request failing prints the ready line"
+expect_no_fixed "terminate-instances" "up reboot-probe with the reboot request failing terminates nothing"
+clear_faults
+
+# A box that answers the old boot id to its first two polls after the reboot is
+# polled again until a new one answers. Three reads after the reboot request
+# prove the wait loops rather than reading once; the launch ends ready. The
+# launcher's 5 s poll interval makes this case take about 10 s.
+printf '2\n' >"$STUB_FIXTURES/boot-id-lag"
+export EC2_FLEET_READY_TIMEOUT=60
+run up reboot-probe
+expect_status 0 "up reboot-probe with two stale boot id polls"
+expect_out '^reboot-probe-[a-z0-9]{3} ready$' "up reboot-probe with two stale boot id polls prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up reboot-probe with two stale boot id polls: the ready line is not the last stdout line"
+reboot_line=$(grep -F -n -- "joshsymonds@$name sudo systemctl reboot" "$STUB_LOG" | cut -d: -f1)
+polls=$(tail -n +"$((reboot_line + 1))" "$STUB_LOG" | grep -F -c -- "joshsymonds@$name cat /proc/sys/kernel/random/boot_id")
+[ "$polls" -eq 3 ] || fail "up reboot-probe with two stale boot id polls: want three polls after the reboot request, got $polls"
+expect_no_fixed "terminate-instances" "up reboot-probe with two stale boot id polls terminates nothing"
+unset EC2_FLEET_READY_TIMEOUT
+rm -f "$STUB_FIXTURES/boot-id-lag"
+
+# A reboot class whose box never reports a new boot id fails within the timeout,
+# after the reboot request, and terminates the box.
+export EC2_FLEET_READY_TIMEOUT=0
+printf '%s\n' "$BOOT_BEFORE" >"$STUB_FIXTURES/boot-id-after"
+run up reboot-probe
+expect_nonzero "up reboot-probe whose boot id never changes"
+expect_terminated "up reboot-probe whose boot id never changes"
+expect_no_out ' ready$' "up reboot-probe whose boot id never changes prints no ready line"
+expect_fixed "sudo systemctl reboot" "up reboot-probe whose boot id never changes requests the reboot"
+printf '%s\n' "$BOOT_AFTER" >"$STUB_FIXTURES/boot-id-after"
+
+# An empty boot id after the reboot is not evidence of a new boot.
+: >"$STUB_FIXTURES/boot-id-after"
+run up reboot-probe
+expect_nonzero "up reboot-probe with an empty boot id after the reboot"
+expect_terminated "up reboot-probe with an empty boot id after the reboot"
+expect_no_out ' ready$' "up reboot-probe with an empty boot id after the reboot prints no ready line"
+printf '%s\n' "$BOOT_AFTER" >"$STUB_FIXTURES/boot-id-after"
+unset EC2_FLEET_READY_TIMEOUT
+
+# A failed or empty boot id read before the reboot stops before the switch.
+inject ssh-boot-id
+run up reboot-probe
+expect_nonzero "up reboot-probe with the boot id read failing"
+expect_terminated "up reboot-probe with the boot id read failing"
+expect_no_fixed "switch-to-configuration" "up reboot-probe with the boot id read failing switches nothing"
+expect_no_fixed "systemctl reboot" "up reboot-probe with the boot id read failing reboots nothing"
+clear_faults
+: >"$STUB_FIXTURES/boot-id-before"
+run up reboot-probe
+expect_nonzero "up reboot-probe with an empty boot id before the reboot"
+expect_terminated "up reboot-probe with an empty boot id before the reboot"
+expect_no_fixed "switch-to-configuration" "up reboot-probe with an empty boot id before the reboot switches nothing"
+printf '%s\n' "$BOOT_BEFORE" >"$STUB_FIXTURES/boot-id-before"
+
+# A failed boot switch stops before the reboot request and terminates the box.
+inject ssh-switch-boot
+run up reboot-probe
+expect_nonzero "up reboot-probe with the boot switch failing"
+expect_terminated "up reboot-probe with the boot switch failing"
+expect_no_fixed "systemctl reboot" "up reboot-probe with the boot switch failing reboots nothing"
+expect_no_fixed "switch-to-configuration switch" "up reboot-probe with the boot switch failing switches in place"
+clear_faults
 
 # A failure after run-instances terminates the launched instance and exits nonzero.
 export EC2_FLEET_READY_TIMEOUT=0

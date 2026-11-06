@@ -240,8 +240,8 @@ cmd_up() {
   local classes row itype disk_gb spot_req max_hours reboot_req fleet_class prefix
   local known_dir deadline suffix name sgs sg body token key id toplevel base_path
   local boot_before boot_after
-  local zone_list zone reply market_line
-  local -a ssh_opts=() reboot_opts=() zones=() place=() market=() overrides=()
+  local zone_list zone kind attempt reply market_line
+  local -a ssh_opts=() reboot_opts=() zones=() attempts=() place=() market=() overrides=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --type)
@@ -335,8 +335,9 @@ cmd_up() {
   sg=$(jq -r '.SecurityGroups[0].GroupId // empty' <<<"$sgs") || die "cannot read the security groups"
   [ -n "$sg" ] || die "no ec2-sg security group in $region"
 
-  # A spot launch tries each zone offering the type, in sorted order. The last
-  # attempt is on-demand, with no placement, so it runs after every zone.
+  # A spot launch tries each zone offering the type, in sorted order, as spot.
+  # It then tries the same zones as on-demand, placed, and last one on-demand
+  # with no placement, so that attempt runs after every zone.
   if [ "$spot_req" = yes ]; then
     zone_list=$(aws ec2 describe-instance-type-offerings --output json --location-type availability-zone \
       --filters "Name=instance-type,Values=$itype" |
@@ -346,7 +347,10 @@ cmd_up() {
       readarray -t zones <<<"$zone_list"
     fi
   fi
-  zones+=("")
+  attempts=()
+  for zone in "${zones[@]}"; do attempts+=("spot $zone"); done
+  for zone in "${zones[@]}"; do attempts+=("on-demand $zone"); done
+  attempts+=("on-demand")
 
   body='{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:ec2"]}}},"expirySeconds":600}'
   token=$(printf 'data-urlencode = "client_id=%s"\ndata-urlencode = "client_secret=%s"\n' \
@@ -365,11 +369,14 @@ cmd_up() {
     die "cannot write the user-data file"
 
   runerr=$(mktemp) || die "cannot create a temp file"
-  for zone in "${zones[@]}"; do
+  for attempt in "${attempts[@]}"; do
+    read -r kind zone <<<"$attempt"
     place=()
     market=()
     if [ -n "$zone" ]; then
       place=(--placement "AvailabilityZone=$zone")
+    fi
+    if [ "$kind" = spot ]; then
       market=(--instance-market-options 'MarketType=spot,SpotOptions={SpotInstanceType=one-time,InstanceInterruptionBehavior=terminate}')
       market_line="market spot $zone"
     else
@@ -390,7 +397,13 @@ cmd_up() {
       break
     fi
     if [ -n "$zone" ] && grep -q InsufficientInstanceCapacity "$runerr"; then
-      echo "ec2: no spot capacity for $itype in $zone" >&2
+      echo "ec2: no $kind capacity for $itype in $zone" >&2
+      continue
+    fi
+    # A RequestLimitExceeded that names an availability zone is throttling of
+    # that zone; one that names none is account-level and stops the launch.
+    if [ -n "$zone" ] && grep -E -q 'RequestLimitExceeded.*availability zone [a-z0-9-]+' "$runerr"; then
+      echo "ec2: $kind launch throttled in $zone" >&2
       continue
     fi
     cat -- "$runerr" >&2

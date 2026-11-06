@@ -13,6 +13,7 @@
 
   cls = (import ../hosts/ec2/classes.nix).halmasuit-lab;
   renderNode = "pci:0000:00:1e.0";
+  recordDir = "/run/halmasuit-lab/frames";
   halmasuitHosts = inputs.halmasuit.packages.x86_64-linux;
   nvidiaNew = inputs.nix-cachyos-kernel.legacyPackages.x86_64-linux.linuxPackages-cachyos-latest.nvidiaPackages.new_feature;
 
@@ -45,6 +46,10 @@ in
   assert check lab.hardware.nvidia.open "hardware.nvidia.open must be true";
   assert check lab.hardware.nvidia.modesetting.enable "hardware.nvidia.modesetting.enable must be true";
   assert check (lab.hardware.nvidia.package.outPath == nvidiaNew.outPath) "hardware.nvidia.package must be kernelPackages.nvidiaPackages.new_feature";
+  assert check (lab.hardware.nvidia.nvidiaSettings == false) "hardware.nvidia.nvidiaSettings must be false (classes/nvidia.nix)";
+  assert check (lab.hardware.nvidia.powerManagement.enable == false) "hardware.nvidia.powerManagement.enable must be false (classes/nvidia.nix)";
+  assert check lab.hardware.nvidia.nvidiaPersistenced "hardware.nvidia.nvidiaPersistenced must be true (classes/nvidia.nix)";
+  assert check (lib.any (p: lib.getName p == "vulkan-tools") lab.environment.systemPackages) "environment.systemPackages must include vulkan-tools (classes/nvidia.nix)";
   # 3. initrd modules
   assert check (has lab.boot.initrd.kernelModules "nvidia") "boot.initrd.kernelModules must include nvidia";
   assert check (has lab.boot.initrd.kernelModules "nvidia_modeset") "boot.initrd.kernelModules must include nvidia_modeset";
@@ -69,6 +74,9 @@ in
   assert check (lab.services.halmasuit.rendering.primaryOutput == null) "services.halmasuit.rendering.primaryOutput must be null";
   assert check ((initrdEnv.HALMASUIT_RENDER_NODE or null) == renderNode) "boot.initrd.systemd.services.halmasuit.environment must set HALMASUIT_RENDER_NODE";
   assert check (!(initrdEnv ? HALMASUIT_DRM_DEVICE)) "boot.initrd.systemd.services.halmasuit.environment must not set HALMASUIT_DRM_DEVICE";
+  # 5b. frame recorder (R2): the lab image records from stage 1 to a path that survives switch-root
+  assert check (lab.services.halmasuit.diagnostic.recordFrames == recordDir) "services.halmasuit.diagnostic.recordFrames must be ${recordDir}";
+  assert check ((initrdEnv.HALMASUIT_RECORD_FRAMES or null) == recordDir) "boot.initrd.systemd.services.halmasuit.environment must set HALMASUIT_RECORD_FRAMES to ${recordDir}";
   # 7. lab options and their units
   assert check (lab.halmasuit.lab.displayManagerUnit == "halmasuit.service") "halmasuit.lab.displayManagerUnit must be halmasuit.service";
   assert check lab.halmasuit.lab.vkmsCrc.enable "halmasuit.lab.vkmsCrc.enable must be true";

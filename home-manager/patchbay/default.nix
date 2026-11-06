@@ -387,10 +387,8 @@
       )
       tiltyardOwnSeats;
     contexts = {
-      # ~/.claude, and everything outside a work checkout.
+      # ~/.claude, and everything outside an Attain checkout.
       personal = context;
-      # ~/Work/savecraft.
-      savecraft = context;
       # ~/Work/attain: the employer's Bedrock account when attainBedrock is
       # on, the personal subscription otherwise.
       attain = attainContext;

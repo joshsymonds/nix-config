@@ -148,6 +148,18 @@
     effortLevel = attainModel.defaultEffort;
   };
 
+  # Bedrock has no Message Threads, and patchbay's strip_betas drops only the
+  # header, not the body's `thread` field, so attain opts back out while its
+  # context rides the Bedrock Seat. The stamp only ever merges keys in, so it
+  # writes the value both ways: a stale "0" would outlive turning Bedrock off.
+  attainEnv = {
+    ANTHROPIC_BASE_URL = "${patchbayBaseUrl}/ctx/attain";
+    CLAUDE_CODE_TETHER_LIVE =
+      if (config.services.patchbay.attainBedrock.enable or false)
+      then "0"
+      else "1";
+  };
+
   settingsJson = assert chatgptDefaultKnown;
     mkSettingsJson "base" (
       # One env attrset: the overlays below are joined with `//`, which is a
@@ -167,6 +179,13 @@
             # built-in Explore inherits its session's model, so the model alone
             # cannot send it to the small-model Seat.
             CLAUDE_CODE_GATEWAY_HINT_HEADERS = "1";
+            # Message Threads (beta message-threads-2026-08-12): send only the
+            # new messages each turn against a server-held thread, for TTFT on
+            # long contexts. Claude Code gates it off behind any base URL that
+            # is not api.anthropic.com before consulting its rollout flag
+            # (verified 2026-11-06, CC 2.1.314); this forces it on. The
+            # anthropic forward Seat relays the body and header unchanged.
+            CLAUDE_CODE_TETHER_LIVE = "1";
           };
       }
       // lib.optionalAttrs (defaultModelIsChatgpt && !codexUpstream) {
@@ -967,7 +986,7 @@ in {
     activation.claudeAttainContext = lib.hm.dag.entryAfter ["writeBoundary"] (
       lib.optionalString (patchbayBaseUrl != null) ''
         attain_root="$HOME/Work/attain"
-        attain_stamp=${lib.escapeShellArg (builtins.toJSON (attainSettings // {env.ANTHROPIC_BASE_URL = "${patchbayBaseUrl}/ctx/attain";}))}
+        attain_stamp=${lib.escapeShellArg (builtins.toJSON (attainSettings // {env = attainEnv;}))}
         if [ -d "$attain_root" ]; then
           for project in "$attain_root" "$attain_root"/*/; do
             project="''${project%/}"

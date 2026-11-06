@@ -20,6 +20,8 @@ _: {
       "/var/lib/questarr:/app/data"
       # Same path SABnzbd reports for completed downloads, so no path mapping.
       "/mnt/video/:/mnt/video"
+      # Library root for imports (NAS games share).
+      "/mnt/games:/mnt/games"
     ];
     extraOptions = [
       "--network=host"
@@ -31,6 +33,7 @@ _: {
   systemd.services.podman-questarr = {
     after = ["remote-mounts.service"];
     requires = ["remote-mounts.service"];
+    unitConfig.RequiresMountsFor = "/mnt/games";
   };
 
   services.caddy.virtualHosts."questarr.home.husbuddies.gay".extraConfig = ''

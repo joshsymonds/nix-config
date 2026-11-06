@@ -268,6 +268,10 @@ in {
       (lib.mkIf (!builtins.elem config.networking.hostName ["bluedesert" "echelon"]) {
         "/mnt/creative" = nfs "${nas.ip}:${nas.shares.creative}";
       })
+      # Game library: Questarr imports on ultraviolet, gnomon plays from it.
+      (lib.mkIf (builtins.elem config.networking.hostName ["gnomon" "ultraviolet"]) {
+        "/mnt/games" = nfs "${nas.ip}:${nas.shares.games}";
+      })
       # Claude Code and Codex transcripts. Only the three hosts I actually run
       # these agents on mount this; the share isn't exported to the others
       # either.

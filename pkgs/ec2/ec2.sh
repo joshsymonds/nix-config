@@ -232,14 +232,15 @@ ensure_base_ami() {
   build_base_image "$want"
 }
 
-# cmd_up <class> | --type <t> --disk <gb> [--spot]: launches a box, waits for
-# ssh on the tailnet, and for a class deploys its toplevel.
+# cmd_up <class> [--override-input <input> <flake-url>]... | --type <t> --disk <gb>
+# [--spot]: launches a box, waits for ssh on the tailnet, and for a class deploys
+# its toplevel built with each input override.
 cmd_up() {
   local class="" type="" disk="" spot=no timeout
   local classes row itype disk_gb spot_req max_hours fleet_class prefix
   local known_dir deadline suffix name sgs sg body token key id toplevel base_path
   local zone_list zone reply market_line
-  local -a ssh_opts=() zones=() place=() market=()
+  local -a ssh_opts=() zones=() place=() market=() overrides=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --type)
@@ -256,6 +257,12 @@ cmd_up() {
         spot=yes
         shift
         ;;
+      --override-input)
+        [ $# -ge 3 ] && [ -n "$2" ] && [ -n "$3" ] ||
+          die "--override-input needs an input and a flake URL"
+        overrides+=(--override-input "$2" "$3")
+        shift 3
+        ;;
       --*) die "unknown flag: $1 (see: ec2 help)" ;;
       *)
         [ -z "$class" ] || die "usage: ec2 up <class> | ec2 up --type <t> --disk <gb> [--spot]"
@@ -270,6 +277,9 @@ cmd_up() {
       die "a class takes no --type, --disk or --spot"
     fi
   else
+    if [ ${#overrides[@]} -gt 0 ]; then
+      die "--override-input needs a class"
+    fi
     if [ -z "$type" ] || [ -z "$disk" ]; then
       die "usage: ec2 up --type <t> --disk <gb> [--spot]"
     fi
@@ -304,7 +314,7 @@ cmd_up() {
   export NIX_SSHOPTS="${ssh_opts[*]}"
 
   if [ -n "$class" ]; then
-    toplevel=$(nix build --no-link --print-out-paths "$flake#nixosConfigurations.ec2-$class.config.system.build.toplevel") ||
+    toplevel=$(nix build --no-link --print-out-paths "${overrides[@]}" "$flake#nixosConfigurations.ec2-$class.config.system.build.toplevel") ||
       die "nix build failed for ec2-$class"
     [ -n "$toplevel" ] || die "nix build printed no toplevel for ec2-$class"
   fi
@@ -429,6 +439,9 @@ Flags:
   --type <t>    EC2 instance type for an ad-hoc box
   --disk <gb>   root volume size in GB for an ad-hoc box
   --spot        request spot capacity for an ad-hoc box
+  --override-input <input> <flake-url>
+                build a class box's toplevel with a flake input overridden;
+                repeat the flag for each input (classes only)
 
 Self-termination: a box powers off and terminates when it has been idle past
 its idleMinutes (default 60) or up past its maxHours (default 24). A box counts

@@ -103,10 +103,15 @@ case "$2" in
   run-instances)
     # no-capacity-<zone> refuses a placed launch in that zone with the capacity
     # error; other-error-<zone> refuses it with an error that is not a capacity one.
+    # throttle-<spot|on-demand>-<zone> refuses a placed launch of that market in
+    # that zone with a zone-scoped throttle; account-throttle refuses every launch
+    # with an account-level throttle that names no zone.
     zone=
+    market=on-demand
     for a in "$@"; do
       case "$a" in
         AvailabilityZone=*) zone=${a#AvailabilityZone=} ;;
+        --instance-market-options) market=spot ;;
       esac
     done
     if [ -n "$zone" ] && [ -e "$STUB_FIXTURES/no-capacity-$zone" ]; then
@@ -115,6 +120,14 @@ case "$2" in
     fi
     if [ -n "$zone" ] && [ -e "$STUB_FIXTURES/other-error-$zone" ]; then
       echo "An error occurred (UnsupportedOperation) when calling the RunInstances operation: injected failure in $zone." >&2
+      exit 1
+    fi
+    if [ -n "$zone" ] && [ -e "$STUB_FIXTURES/throttle-$market-$zone" ]; then
+      echo "An error occurred (RequestLimitExceeded) when calling the RunInstances operation (reached max retries: 2): Request limit exceeded. Your ec2:RunInstances request has been throttled due to an operational issue in availability zone usw2-az1. Throttling will be removed once the issue is resolved." >&2
+      exit 1
+    fi
+    if [ -e "$STUB_FIXTURES/account-throttle" ]; then
+      echo "An error occurred (RequestLimitExceeded) when calling the RunInstances operation (reached max retries: 2): Request limit exceeded." >&2
       exit 1
     fi
     # warn-run-instances makes a successful launch also write a warning to stderr.
@@ -500,6 +513,7 @@ inject() {
 }
 clear_faults() {
   rm -f "$STUB_FIXTURES"/fail-* "$STUB_FIXTURES"/no-capacity-* "$STUB_FIXTURES"/other-error-* \
+    "$STUB_FIXTURES"/throttle-* "$STUB_FIXTURES"/account-throttle \
     "$STUB_FIXTURES"/warn-run-instances
 }
 # expect_run_count <desc> <n>: run-instances was called exactly n times.
@@ -507,6 +521,21 @@ expect_run_count() {
   local count
   count=$(grep -c '^aws ec2 run-instances ' "$STUB_LOG")
   [ "$count" -eq "$2" ] || fail "$1: want $2 run-instances call(s), got $count"
+}
+# run_placements: one line per run-instances call, in call order: "zone <name>"
+# for a placed call, " spot" appended to a spot call, "unplaced" for no placement.
+run_placements() {
+  grep '^aws ec2 run-instances ' "$STUB_LOG" |
+    sed -E -e 's/^.*--user-data file:[^ ]+//' -e 's/ --instance-market-options .*$/ spot/' \
+      -e 's/^ --placement AvailabilityZone=/zone /' -e 's/^$/unplaced/'
+}
+# expect_placements <desc> <placement>...: the run-instances calls placed as listed.
+expect_placements() {
+  local desc=$1 want got
+  shift
+  want=$(printf '%s\n' "$@")
+  got=$(run_placements)
+  [ "$got" = "$want" ] || fail "$desc: run-instances placements are [${got//$'\n'/; }], want [${want//$'\n'/; }]"
 }
 # use_images <before> <after>: the describe-images lists from the named fixtures,
 # before a rebuild and after the new AMI is registered.
@@ -897,8 +926,9 @@ expect_userdata "up with us-west-2a out of capacity" "$name"
 expect_no_fixed "terminate-instances" "up with us-west-2a out of capacity terminates nothing on success"
 clear_faults
 
-# Every zone out of capacity: one on-demand launch with no placement and no
-# market options, after the zones in sorted order.
+# Every zone out of capacity: the spot zones in sorted order, then the on-demand
+# zones in sorted order, then one on-demand launch with no placement and no
+# market options.
 : >"$STUB_FIXTURES/no-capacity-us-west-2a"
 : >"$STUB_FIXTURES/no-capacity-us-west-2b"
 : >"$STUB_FIXTURES/no-capacity-us-west-2c"
@@ -907,18 +937,11 @@ expect_status 0 "up commonframe-gate with every zone out of capacity"
 expect_out '^market on-demand$' "up with every zone out of capacity prints the on-demand market line"
 expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up with every zone out of capacity prints the ready line"
 name=$(sed -n 's/ ready$//p' "$OUT")
-expect_order "up with every zone out of capacity tries the zones in sorted order, then on-demand" \
-  "--placement AvailabilityZone=us-west-2a" \
-  "--placement AvailabilityZone=us-west-2b" \
-  "--placement AvailabilityZone=us-west-2c"
-expect_run_count "up with every zone out of capacity" 4
-last_run=$(grep '^aws ec2 run-instances ' "$STUB_LOG" | tail -n 1)
-case $last_run in
-  *--placement*) fail "up with every zone out of capacity: the on-demand launch has a placement" ;;
-esac
-case $last_run in
-  *--instance-market-options*) fail "up with every zone out of capacity: the on-demand launch has market options" ;;
-esac
+expect_placements "up with every zone out of capacity" \
+  "zone us-west-2a spot" "zone us-west-2b spot" "zone us-west-2c spot" \
+  "zone us-west-2a" "zone us-west-2b" "zone us-west-2c" "unplaced"
+expect_run_count "up with every zone out of capacity" 7
+expect_err 'no on-demand capacity for c8a\.4xlarge in us-west-2c$' "up with every zone out of capacity names the on-demand zone skipped"
 expect_userdata "up with every zone out of capacity" "$name"
 expect_no_fixed "terminate-instances" "up with every zone out of capacity terminates nothing on success"
 clear_faults
@@ -935,6 +958,57 @@ expect_no_fixed "--placement AvailabilityZone=us-west-2c" "up with a non-capacit
 expect_no_out '^market ' "up with a non-capacity error prints no market line"
 expect_no_fixed "wait instance-running" "up with a non-capacity error waits for no instance"
 expect_no_fixed "terminate-instances" "up with a non-capacity error terminates nothing"
+clear_faults
+
+# A zone-scoped throttle on a spot launch skips that zone, like a capacity
+# error: the launcher names the zone and the throttle, then launches in the next
+# zone. The ready line stays last.
+: >"$STUB_FIXTURES/throttle-spot-us-west-2a"
+run up commonframe-gate
+expect_status 0 "up commonframe-gate with us-west-2a throttled"
+expect_out '^market spot us-west-2b$' "up with us-west-2a throttled prints the market line of us-west-2b"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up with us-west-2a throttled prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up with us-west-2a throttled: the ready line is not last"
+expect_err 'spot launch throttled in us-west-2a$' "up with us-west-2a throttled names the zone and the throttle"
+expect_placements "up with us-west-2a throttled" "zone us-west-2a spot" "zone us-west-2b spot"
+expect_run_count "up with us-west-2a throttled" 2
+expect_userdata "up with us-west-2a throttled" "$name"
+expect_no_fixed "terminate-instances" "up with us-west-2a throttled terminates nothing on success"
+clear_faults
+
+# Spot throttled in every zone, and on-demand throttled in us-west-2a only: the
+# on-demand walk skips us-west-2a and launches in us-west-2b with no market
+# options.
+: >"$STUB_FIXTURES/throttle-spot-us-west-2a"
+: >"$STUB_FIXTURES/throttle-spot-us-west-2b"
+: >"$STUB_FIXTURES/throttle-spot-us-west-2c"
+: >"$STUB_FIXTURES/throttle-on-demand-us-west-2a"
+run up commonframe-gate
+expect_status 0 "up commonframe-gate with every spot zone throttled and on-demand us-west-2a throttled"
+expect_out '^market on-demand$' "up with every spot zone throttled prints the on-demand market line"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up with every spot zone throttled prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up with every spot zone throttled: the ready line is not last"
+expect_placements "up with every spot zone throttled" \
+  "zone us-west-2a spot" "zone us-west-2b spot" "zone us-west-2c spot" \
+  "zone us-west-2a" "zone us-west-2b"
+expect_run_count "up with every spot zone throttled" 5
+expect_err 'on-demand launch throttled in us-west-2a$' "up with on-demand us-west-2a throttled names the zone and the throttle"
+expect_userdata "up with every spot zone throttled" "$name"
+expect_no_fixed "terminate-instances" "up with every spot zone throttled terminates nothing on success"
+clear_faults
+
+# An account-level throttle names no zone: it is not zone-scoped, so the launch
+# stops at the first attempt with the error, launching nothing.
+: >"$STUB_FIXTURES/account-throttle"
+run up commonframe-gate
+expect_nonzero "up commonframe-gate with an account-level throttle"
+expect_err 'RequestLimitExceeded' "up with an account-level throttle prints the error"
+expect_run_count "up with an account-level throttle" 1
+expect_no_out '^market ' "up with an account-level throttle prints no market line"
+expect_no_fixed "wait instance-running" "up with an account-level throttle waits for no instance"
+expect_no_fixed "terminate-instances" "up with an account-level throttle terminates nothing"
 clear_faults
 
 # up --type --disk --spot: ad-hoc spot box, no deploy.

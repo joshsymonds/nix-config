@@ -83,6 +83,15 @@ case "$2" in
     done
     cat "$STUB_FIXTURES/spot-$itype.json"
     ;;
+  describe-instance-type-offerings)
+    itype=
+    for a in "$@"; do
+      case "$a" in
+        Name=instance-type,Values=*) itype=${a##*Values=} ;;
+      esac
+    done
+    cat "$STUB_FIXTURES/offerings-$itype.json"
+    ;;
   describe-images)
     if [ -e "$STUB_FIXTURES/registered" ]; then
       cat "$STUB_FIXTURES/images-after-register.json"
@@ -92,6 +101,24 @@ case "$2" in
     ;;
   describe-security-groups) cat "$STUB_FIXTURES/security-groups.json" ;;
   run-instances)
+    # no-capacity-<zone> refuses a placed launch in that zone with the capacity
+    # error; other-error-<zone> refuses it with an error that is not a capacity one.
+    zone=
+    for a in "$@"; do
+      case "$a" in
+        AvailabilityZone=*) zone=${a#AvailabilityZone=} ;;
+      esac
+    done
+    if [ -n "$zone" ] && [ -e "$STUB_FIXTURES/no-capacity-$zone" ]; then
+      echo "An error occurred (InsufficientInstanceCapacity) when calling the RunInstances operation: We currently do not have sufficient capacity in the Availability Zone you requested ($zone)." >&2
+      exit 1
+    fi
+    if [ -n "$zone" ] && [ -e "$STUB_FIXTURES/other-error-$zone" ]; then
+      echo "An error occurred (UnsupportedOperation) when calling the RunInstances operation: injected failure in $zone." >&2
+      exit 1
+    fi
+    # warn-run-instances makes a successful launch also write a warning to stderr.
+    [ -e "$STUB_FIXTURES/warn-run-instances" ] && echo "stub aws: a warning from run-instances" >&2
     prev=
     userdata=
     for a in "$@"; do
@@ -243,6 +270,22 @@ cat >"$STUB_FIXTURES/spot-c8a.4xlarge.json" <<'FIXTURE'
 FIXTURE
 cat >"$STUB_FIXTURES/spot-m8a.large.json" <<'FIXTURE'
 {"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.0450","AvailabilityZone":"us-west-2b"}]}
+FIXTURE
+
+# Zones offering each spot type. c8a.4xlarge lists its zones unsorted, so the
+# launcher must sort them.
+cat >"$STUB_FIXTURES/offerings-c8a.4xlarge.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"c8a.4xlarge","Location":"us-west-2c","LocationType":"availability-zone"},
+{"InstanceType":"c8a.4xlarge","Location":"us-west-2a","LocationType":"availability-zone"},
+{"InstanceType":"c8a.4xlarge","Location":"us-west-2b","LocationType":"availability-zone"}
+]}
+FIXTURE
+cat >"$STUB_FIXTURES/offerings-c8a.large.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"c8a.large","Location":"us-west-2b","LocationType":"availability-zone"},
+{"InstanceType":"c8a.large","Location":"us-west-2a","LocationType":"availability-zone"}
+]}
 FIXTURE
 
 # Base AMI lists. images.json is what describe-images returns before a rebuild;
@@ -428,7 +471,14 @@ inject() {
   : >"$STUB_FIXTURES/fail-$1"
 }
 clear_faults() {
-  rm -f "$STUB_FIXTURES"/fail-*
+  rm -f "$STUB_FIXTURES"/fail-* "$STUB_FIXTURES"/no-capacity-* "$STUB_FIXTURES"/other-error-* \
+    "$STUB_FIXTURES"/warn-run-instances
+}
+# expect_run_count <desc> <n>: run-instances was called exactly n times.
+expect_run_count() {
+  local count
+  count=$(grep -c '^aws ec2 run-instances ' "$STUB_LOG")
+  [ "$count" -eq "$2" ] || fail "$1: want $2 run-instances call(s), got $count"
 }
 # use_images <before> <after>: the describe-images lists from the named fixtures,
 # before a rebuild and after the new AMI is registered.
@@ -695,6 +745,13 @@ expect_nonzero "up with describe-images failing"
 expect_no_fixed 'run-instances' "up with describe-images failing launches nothing"
 clear_faults
 
+inject ec2-describe-instance-type-offerings
+run up commonframe-gate
+expect_nonzero "up with the zone listing failing"
+expect_no_fixed 'run-instances' "up with the zone listing failing launches nothing"
+expect_no_fixed 'api/v2' "up with the zone listing failing asks Tailscale nothing"
+clear_faults
+
 inject nix-build
 run up commonframe-gate
 expect_nonzero "up with nix build failing"
@@ -727,6 +784,10 @@ expect_fixed "--instance-initiated-shutdown-behavior terminate" "up terminates o
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=commonframe-gate},{Key=fleet-max-hours,Value=24}]" "up tags the instance"
 expect_fixed "ResourceType=volume,Tags=[{Key=fleet,Value=ec2},{Key=Name,Value=$name}]" "up tags the volume"
 expect_fixed "--instance-market-options MarketType=spot,SpotOptions={SpotInstanceType=one-time,InstanceInterruptionBehavior=terminate}" "up requests one-time spot with terminate on interruption"
+expect_fixed "aws ec2 describe-instance-type-offerings --output json --location-type availability-zone" "up lists the zones offering the type"
+expect_fixed "--placement AvailabilityZone=us-west-2a" "up places the spot request in the first sorted zone"
+expect_out '^market spot us-west-2a$' "up prints the spot market line"
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up commonframe-gate: the ready line is not the last stdout line"
 expect_fixed "--user-data file://" "up passes user-data as a file"
 expect_no_fixed "--key-name" "up launches with no key pair"
 expect_no_fixed "--iam-instance-profile" "up launches with no instance profile"
@@ -755,11 +816,70 @@ while IFS= read -r call; do
 done <<<"$mux_calls"
 expect_no_fixed "terminate-instances" "up commonframe-gate terminates nothing on success"
 
+# A spot class tries each zone that offers its type in sorted order, moving on
+# only past InsufficientInstanceCapacity. It stops at the first launch.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+run up commonframe-gate
+expect_status 0 "up commonframe-gate with us-west-2a out of capacity"
+expect_out '^market spot us-west-2b$' "up with us-west-2a out of capacity prints the market line of us-west-2b"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up with us-west-2a out of capacity prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+expect_order "up with us-west-2a out of capacity tries us-west-2a, then us-west-2b" \
+  "--placement AvailabilityZone=us-west-2a" \
+  "--placement AvailabilityZone=us-west-2b"
+expect_no_fixed "--placement AvailabilityZone=us-west-2c" "up with us-west-2a out of capacity does not try us-west-2c"
+expect_run_count "up with us-west-2a out of capacity" 2
+expect_userdata "up with us-west-2a out of capacity" "$name"
+expect_no_fixed "terminate-instances" "up with us-west-2a out of capacity terminates nothing on success"
+clear_faults
+
+# Every zone out of capacity: one on-demand launch with no placement and no
+# market options, after the zones in sorted order.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+: >"$STUB_FIXTURES/no-capacity-us-west-2c"
+run up commonframe-gate
+expect_status 0 "up commonframe-gate with every zone out of capacity"
+expect_out '^market on-demand$' "up with every zone out of capacity prints the on-demand market line"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up with every zone out of capacity prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+expect_order "up with every zone out of capacity tries the zones in sorted order, then on-demand" \
+  "--placement AvailabilityZone=us-west-2a" \
+  "--placement AvailabilityZone=us-west-2b" \
+  "--placement AvailabilityZone=us-west-2c"
+expect_run_count "up with every zone out of capacity" 4
+last_run=$(grep '^aws ec2 run-instances ' "$STUB_LOG" | tail -n 1)
+case $last_run in
+  *--placement*) fail "up with every zone out of capacity: the on-demand launch has a placement" ;;
+esac
+case $last_run in
+  *--instance-market-options*) fail "up with every zone out of capacity: the on-demand launch has market options" ;;
+esac
+expect_userdata "up with every zone out of capacity" "$name"
+expect_no_fixed "terminate-instances" "up with every zone out of capacity terminates nothing on success"
+clear_faults
+
+# A non-capacity error in a zone stops the launch: no further zone, no
+# on-demand launch, nothing launched, nothing terminated.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/other-error-us-west-2b"
+run up commonframe-gate
+expect_nonzero "up commonframe-gate with a non-capacity error in us-west-2b"
+expect_err 'UnsupportedOperation' "up with a non-capacity error prints the error"
+expect_run_count "up with a non-capacity error in us-west-2b" 2
+expect_no_fixed "--placement AvailabilityZone=us-west-2c" "up with a non-capacity error in us-west-2b does not try us-west-2c"
+expect_no_out '^market ' "up with a non-capacity error prints no market line"
+expect_no_fixed "wait instance-running" "up with a non-capacity error waits for no instance"
+expect_no_fixed "terminate-instances" "up with a non-capacity error terminates nothing"
+clear_faults
+
 # up --type --disk --spot: ad-hoc spot box, no deploy.
 run up --type c8a.large --disk 40 --spot
 expect_status 0 "ad-hoc spot up"
 expect_out '^ec2-[a-z0-9]{3} ready$' "ad-hoc spot up prints the ready line"
+expect_out '^market spot us-west-2a$' "ad-hoc spot up prints the spot market line"
 name=$(sed -n 's/ ready$//p' "$OUT")
+expect_fixed "--placement AvailabilityZone=us-west-2a" "ad-hoc spot up places the request in the first sorted zone"
 expect_fixed "--instance-type c8a.large" "ad-hoc up sets the instance type"
 expect_fixed "--block-device-mappings DeviceName=/dev/xvda,Ebs={VolumeSize=40,VolumeType=gp3,DeleteOnTermination=true}" "ad-hoc up sizes the root volume from --disk"
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=adhoc},{Key=fleet-max-hours,Value=24}]" "ad-hoc up tags an adhoc instance with 24 max hours"
@@ -781,6 +901,27 @@ expect_out '^ec2-[a-z0-9]{3} ready$' "ad-hoc on-demand up prints the ready line"
 name=$(sed -n 's/ ready$//p' "$OUT")
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=adhoc},{Key=fleet-max-hours,Value=24}]" "ad-hoc on-demand up tags the instance"
 expect_no_fixed "--instance-market-options" "ad-hoc on-demand up requests no spot"
+expect_no_fixed "--placement" "ad-hoc on-demand up sets no placement"
+expect_no_log 'describe-instance-type-offerings' "ad-hoc on-demand up lists no zones"
+expect_out '^market on-demand$' "ad-hoc on-demand up prints the on-demand market line"
+expect_run_count "ad-hoc on-demand up" 1
+
+# A warning on stderr from a successful run-instances is shown, and is not part
+# of the instance id: the launched instance is the one waited on and kept.
+: >"$STUB_FIXTURES/warn-run-instances"
+run up --type m8a.large --disk 20
+expect_status 0 "ad-hoc up with a warning from run-instances"
+expect_err 'stub aws: a warning from run-instances' "ad-hoc up with a warning from run-instances shows the warning"
+expect_fixed "aws ec2 wait instance-running --instance-ids i-0launched00000001" "ad-hoc up with a warning from run-instances waits for the launched instance"
+expect_no_fixed "terminate-instances" "ad-hoc up with a warning from run-instances terminates nothing"
+
+# With the launcher's stderr closed, relaying that warning fails after the
+# launch, and the launched instance is still terminated.
+: >"$STUB_LOG"
+if "$EC2" up --type m8a.large --disk 20 >"$OUT" 2>&-; then STATUS=0; else STATUS=$?; fi
+expect_nonzero "ad-hoc up with a warning from run-instances and stderr closed"
+expect_terminated "ad-hoc up with a warning from run-instances and stderr closed"
+clear_faults
 
 # up muniment-runner: on-demand class with its own disk and max hours.
 run up muniment-runner
@@ -791,6 +932,10 @@ expect_fixed "--instance-type m8a.2xlarge" "up muniment-runner sets its instance
 expect_fixed "Ebs={VolumeSize=200,VolumeType=gp3,DeleteOnTermination=true}" "up muniment-runner sizes its root volume"
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=muniment-runner},{Key=fleet-max-hours,Value=12}]" "up muniment-runner tags its max hours"
 expect_no_fixed "--instance-market-options" "up muniment-runner requests no spot"
+expect_no_fixed "--placement" "up muniment-runner sets no placement"
+expect_no_log 'describe-instance-type-offerings' "up muniment-runner lists no zones"
+expect_out '^market on-demand$' "up muniment-runner prints the on-demand market line"
+expect_run_count "up muniment-runner" 1
 expect_fixed "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name /nix/store/fixture-toplevel-muniment-runner" "up muniment-runner copies its own toplevel"
 expect_fixed "joshsymonds@$name sudo /nix/store/fixture-toplevel-muniment-runner/bin/switch-to-configuration switch" "up muniment-runner switches its own toplevel"
 

@@ -47,6 +47,27 @@
   # Quickshell is nixpkgs', the DMS module's default for the shell too.
   dmsQuickshell = pkgs.quickshell;
 
+  # XDG_DATA_DIRS for the greeter: halmasuit's nested niri session's
+  # share dir first (DMS's greeter finds <dir>/wayland-sessions and
+  # offers that session, "Niri", at login), then the system profile's
+  # share dirs (icons, mime types, applications). niri's own
+  # niri.desktop is left out: `niri --session` starts on the TTY, whose
+  # DRM device halmasuit holds, so it cannot run under halmasuit.
+  xdgDataDirs = lib.concatStringsSep ":" [
+    "${config.services.halmasuit.niriSession.sessionPackage}/share"
+    "/run/current-system/sw/share"
+    "/usr/share"
+  ];
+
+  # DMS's greeter reads DMS_GREET_REMEMBER_LAST_USER as a boolean
+  # override of its own setting. Null exports nothing, so the wrapper
+  # text is unchanged and DMS's setting decides.
+  rememberLastUserExport = lib.optionalString (cfg.greeter.rememberLastUser != null) "export DMS_GREET_REMEMBER_LAST_USER=${
+    if cfg.greeter.rememberLastUser
+    then "1"
+    else "0"
+  }\n";
+
   # The greeter executable halmasuit forks at startup. Runs as the
   # halmasuit-greeter system user; XDG_RUNTIME_DIR + WAYLAND_DISPLAY
   # point at halmasuit's own Wayland socket; HOME points at the
@@ -59,8 +80,9 @@
   greeterCmd = pkgs.writeShellScript "halmasuit-dankgreeter" ''
     export XDG_RUNTIME_DIR=/run/halmasuit-greeter
     export WAYLAND_DISPLAY=/run/halmasuit/wayland-0
-    # The system profile's share dirs (icons, mime types, applications).
-    export XDG_DATA_DIRS=/run/current-system/sw/share:/usr/share
+    # Registered session packages' share dirs first, then the system
+    # profile's share dirs (see xdgDataDirs above).
+    export XDG_DATA_DIRS=${xdgDataDirs}
     # halmasuit's spawn_greeter already exports GREETD_SOCK pointing
     # at the path it bound (see services.halmasuit.fromInitrd module
     # docs); do not override.
@@ -69,7 +91,7 @@
     export HOME=${cacheDir}
     export XDG_CACHE_HOME=$HOME/.cache
     export DMS_RUN_GREETER=1
-    mkdir -p "$XDG_CACHE_HOME/dms-greeter"
+    ${rememberLastUserExport}mkdir -p "$XDG_CACHE_HOME/dms-greeter"
     exec ${dmsQuickshell}/bin/quickshell \
       -p ${dmsShell}/share/quickshell/dms
   '';
@@ -114,6 +136,17 @@ in {
       deployment with NVIDIA rendering backend and the
       DankMaterialShell hexrain wallpaper.
     '';
+
+    greeter.rememberLastUser = lib.mkOption {
+      type = lib.types.nullOr lib.types.bool;
+      default = null;
+      description = ''
+        Whether DankGreeter pre-fills the user who last signed in
+        (DMS_GREET_REMEMBER_LAST_USER). null exports nothing, so the
+        greeter wrapper is unchanged and DMS's own setting decides;
+        true and false export 1 and 0.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -130,6 +163,13 @@ in {
       # the module's default.
       pamService = "halmasuit";
       installPamConfig = false;
+
+      # The user's session: niri nested in halmasuit, started as the
+      # halmasuit-niri user unit; xdgDataDirs offers it to the greeter.
+      niriSession = {
+        enable = true;
+        package = config.programs.niri.package;
+      };
 
       # H2: NVIDIA rendering backend. The module's nvidiaPackage
       # default is config.hardware.nvidia.package, which gnomon
@@ -190,14 +230,6 @@ in {
         source = chromeHexrain.halmasuitSource pkgs;
         uniforms = wallpaperUniforms;
       };
-
-      # Epic #42 R4: ONE diagnostic boot — enables the env-gated
-      # broker wire-frame trace so the next boot captures the exact
-      # PAM conv byte sequence from the gen-404 signin failure.
-      # REMOVE this line (or set to false) on the very next nix-config
-      # change after analysis lands, per the epic's "one boot then
-      # off" workflow.
-      diagnostic.brokerTraceFrames = true;
     };
 
     # ── PAM service: /etc/pam.d/halmasuit ─────────────────────────
@@ -208,8 +240,17 @@ in {
     #
     # This is the unixAuth-backed stack (pam_unix, pam_env,
     # pam_limits, pam_motd, etc.) — same shape as NixOS's default
-    # PAM stack but under the halmasuit name.
-    security.pam.services.halmasuit = {};
+    # PAM stack but under the halmasuit name. startSession adds
+    # pam_systemd: the session becomes a logind session on seat0 and
+    # gets XDG_RUNTIME_DIR and the user's systemd manager, which
+    # niri-session starts niri under.
+    security.pam.services.halmasuit.startSession = true;
+
+    # The session (niri, nested in halmasuit) connects to halmasuit's
+    # 0660 Wayland socket through the greeter group. halmasuit's
+    # SO_PEERCRED gate still admits only the greeter uid before
+    # authentication and the PAM-resolved session uid after it.
+    users.users.joshsymonds.extraGroups = [config.services.halmasuit.greeterGroup];
 
     # ── DankGreeter module settings ──────────────────────────────
     # programs.dms-greeter installs the greeter's fonts (fira-code,

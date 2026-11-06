@@ -10,15 +10,24 @@
   lib,
   baseKernelParams,
 }: let
-  common = {
+  common = {config, ...}: {
     imports = [../../modules/desktop/halmasuit.nix];
 
     desktop.halmasuit.enable = true;
+    # The greeter opens on the username field, not DMS's click-only single-user picker.
+    desktop.halmasuit.greeter.rememberLastUser = false;
     desktop.dms-niri.greeter.enable = lib.mkForce false;
 
     halmasuit.lab = {
       enable = true;
       displayManagerUnit = "halmasuit.service";
+      # halmasuit itself reads input (libinput) once it has dropped to its
+      # compositor user; the greeter is only a Wayland client of it.
+      probe.consumerUser = config.services.halmasuit.compositorUser;
+      # halmasuit opens input devices once, in stage 1; the probe keyboard
+      # has to exist before then.
+      probe.earlyKeyboard = true;
+      u2fOffServices = ["halmasuit"];
     };
 
     # nvidia-drm.fbdev is 0 in the lab images; nixpkgs sets it to 1 under modesetting.

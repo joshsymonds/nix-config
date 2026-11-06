@@ -19,6 +19,8 @@ in
 
       # SABnzbd with Mullvad VPN (migrated from bluedesert)
       ./sabnzbd-vpn.nix
+      # qBittorrent in the same gluetun netns
+      ./qbittorrent.nix
 
       # Home Assistant for home automation
       ./home-assistant.nix

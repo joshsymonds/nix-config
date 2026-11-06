@@ -23,6 +23,10 @@ in {
       For agenix users that's `config.age.secrets.<name>.path`; nothing
       in this module is provider-specific.
 
+      Set `gluetunContainer` to join a gluetun container the host already
+      runs (ultraviolet shares SABnzbd's) instead of starting a dedicated
+      gluetun-qbittorrent; the vpn.* and gluetun* options are then unused.
+
       The WebUI is reached at http://localhost:<webUIPort>. The container
       pair is the only qBittorrent instance you want on the host — a
       second native qBittorrent running as the user would speak to the
@@ -60,16 +64,35 @@ in {
       description = "TZ env var inside the container. Affects qBittorrent's scheduler + log timestamps.";
     };
 
+    gluetunContainer = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "gluetun";
+      description = ''
+        Name of an existing gluetun container to share. When set, this
+        module creates no gluetun of its own: qBittorrent joins that
+        container's netns and the WebUI port is published on it. Two
+        gluetun containers can't share one WireGuard peer, so this is how
+        a host with one VPN device runs qBittorrent next to another client.
+      '';
+    };
+
     webUIPort = lib.mkOption {
       type = lib.types.port;
       default = 8080;
       description = ''
-        Host TCP port forwarded to qBittorrent's WebUI inside the netns.
-        Bound on the gluetun container (it owns the netns), not on the
-        qbittorrent container. Choose something free on this host —
-        ultraviolet already uses 8080 for SABnzbd-via-gluetun, so on a
-        host running both you'd offset this.
+        TCP port of qBittorrent's WebUI, both inside the netns and on the
+        host. Published on the gluetun container (it owns the netns), not
+        on the qbittorrent container. It must be free in the netns too, so
+        when sharing a gluetun with SABnzbd (8080) pick another port.
       '';
+    };
+
+    webUIAddress = lib.mkOption {
+      type = lib.types.nullOr lib.types.str;
+      default = null;
+      example = "127.0.0.1";
+      description = "Host address the WebUI port is published on. null publishes on all interfaces.";
     };
 
     configDir = lib.mkOption {
@@ -79,13 +102,26 @@ in {
     };
 
     downloadsDir = lib.mkOption {
-      type = lib.types.str;
+      type = lib.types.nullOr lib.types.str;
+      default = null;
       example = "/home/joshsymonds/Downloads/torrents";
       description = ''
         Host path mounted at /downloads inside the qBittorrent container.
         Created by tmpfiles with `puid:pgid` ownership so the container
         can write to it. Put this on a persistent filesystem — on an
-        impermanence host, /home is the natural choice.
+        impermanence host, /home is the natural choice. null skips it,
+        for hosts that mount their download locations via extraVolumes.
+      '';
+    };
+
+    extraVolumes = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [];
+      example = ["/mnt/video/torrents:/mnt/video/torrents"];
+      description = ''
+        Extra podman volume specs for the qBittorrent container. Mount
+        download locations at the same path the *arr apps see, so their
+        imports need no remote path mapping.
       '';
     };
 
@@ -172,143 +208,160 @@ in {
     };
   };
 
-  config = lib.mkIf cfg.enable {
-    virtualisation.oci-containers = {
-      backend = "podman";
+  config = let
+    ownGluetun = cfg.gluetunContainer == null;
+    netnsContainer =
+      if ownGluetun
+      then "gluetun-qbittorrent"
+      else cfg.gluetunContainer;
+    webUIPublish =
+      lib.optionalString (cfg.webUIAddress != null) "${cfg.webUIAddress}:"
+      + "${toString cfg.webUIPort}:${toString cfg.webUIPort}";
+  in
+    lib.mkIf cfg.enable {
+      virtualisation.oci-containers = {
+        backend = "podman";
 
-      containers = {
-        # gluetun owns the netns: WireGuard interface comes up here, FIREWALL=on
-        # is the killswitch (default-drop unless traffic is destined for the
-        # tunnel + provider DNS), and the WebUI port is bound on this container
-        # because the qbittorrent container shares this netns and therefore
-        # cannot publish ports itself.
-        gluetun-qbittorrent = {
-          image = cfg.gluetunImage;
+        containers = lib.mkMerge [
+          (lib.mkIf ownGluetun {
+            # gluetun owns the netns: WireGuard interface comes up here, FIREWALL=on
+            # is the killswitch (default-drop unless traffic is destined for the
+            # tunnel + provider DNS), and the WebUI port is bound on this container
+            # because the qbittorrent container shares this netns and therefore
+            # cannot publish ports itself.
+            gluetun-qbittorrent = {
+              image = cfg.gluetunImage;
 
-          environment =
-            {
-              VPN_SERVICE_PROVIDER = cfg.vpn.serviceProvider;
-              VPN_TYPE = cfg.vpn.type;
-              WIREGUARD_PRIVATE_KEY_SECRETFILE = "/gluetun/wireguard/privatekey";
-              WIREGUARD_ADDRESSES_SECRETFILE = "/gluetun/wireguard/addresses";
-              WIREGUARD_PRESHARED_KEY = ""; # Mullvad and most providers omit it.
-              FIREWALL = "on";
-              DNS_SERVER = "on"; # gluetun's resolver inside the netns; DNS-over-TLS upstream by default.
-              BLOCK_MALICIOUS =
-                if cfg.vpn.blockMalicious
-                then "on"
-                else "off";
-              VPN_PORT_FORWARDING =
-                if cfg.vpn.portForwarding
-                then "on"
-                else "off";
-              # The server list baked into a pinned gluetun image goes
-              # stale as the provider retires and re-keys relays; a dead
-              # peer handshakes silently into nothing. Refresh the list
-              # daily into the persisted /gluetun/servers.json (gluetun
-              # prefers whichever copy is newer). The first refresh
-              # fires one period after start, not at start.
-              UPDATER_PERIOD = "24h";
-              UPDATER_VPN_SERVICE_PROVIDERS = cfg.vpn.serviceProvider;
-            }
-            // lib.optionalAttrs (cfg.vpn.serverCities != null) {
-              SERVER_CITIES = cfg.vpn.serverCities;
-            }
-            // lib.optionalAttrs (cfg.vpn.serverCountries != null) {
-              SERVER_COUNTRIES = cfg.vpn.serverCountries;
-            }
-            // cfg.vpn.extraEnvironment;
+              environment =
+                {
+                  VPN_SERVICE_PROVIDER = cfg.vpn.serviceProvider;
+                  VPN_TYPE = cfg.vpn.type;
+                  WIREGUARD_PRIVATE_KEY_SECRETFILE = "/gluetun/wireguard/privatekey";
+                  WIREGUARD_ADDRESSES_SECRETFILE = "/gluetun/wireguard/addresses";
+                  WIREGUARD_PRESHARED_KEY = ""; # Mullvad and most providers omit it.
+                  FIREWALL = "on";
+                  DNS_SERVER = "on"; # gluetun's resolver inside the netns; DNS-over-TLS upstream by default.
+                  BLOCK_MALICIOUS =
+                    if cfg.vpn.blockMalicious
+                    then "on"
+                    else "off";
+                  VPN_PORT_FORWARDING =
+                    if cfg.vpn.portForwarding
+                    then "on"
+                    else "off";
+                  # The server list baked into a pinned gluetun image goes
+                  # stale as the provider retires and re-keys relays; a dead
+                  # peer handshakes silently into nothing. Refresh the list
+                  # daily into the persisted /gluetun/servers.json (gluetun
+                  # prefers whichever copy is newer). The first refresh
+                  # fires one period after start, not at start.
+                  UPDATER_PERIOD = "24h";
+                  UPDATER_VPN_SERVICE_PROVIDERS = cfg.vpn.serviceProvider;
+                }
+                // lib.optionalAttrs (cfg.vpn.serverCities != null) {
+                  SERVER_CITIES = cfg.vpn.serverCities;
+                }
+                // lib.optionalAttrs (cfg.vpn.serverCountries != null) {
+                  SERVER_COUNTRIES = cfg.vpn.serverCountries;
+                }
+                // cfg.vpn.extraEnvironment;
 
-          volumes = [
-            "${cfg.gluetunDataDir}:/gluetun"
-            "${cfg.vpn.privateKeyFile}:/gluetun/wireguard/privatekey:ro"
-            "${cfg.vpn.addressesFile}:/gluetun/wireguard/addresses:ro"
-          ];
+              volumes = [
+                "${cfg.gluetunDataDir}:/gluetun"
+                "${cfg.vpn.privateKeyFile}:/gluetun/wireguard/privatekey:ro"
+                "${cfg.vpn.addressesFile}:/gluetun/wireguard/addresses:ro"
+              ];
 
-          extraOptions = [
-            "--cap-add=NET_ADMIN"
-            "--device=/dev/net/tun"
-            "--sysctl=net.ipv4.conf.all.src_valid_mark=1"
-            # IPv4-only netns. gluetun (through v3.41.3) counts the eth0
-            # fe80::/64 link-local route as IPv6 support and then dials
-            # random IPv6 endpoints the podman bridge can't route
-            # (sendmmsg: network is unreachable), leaving the tunnel down
-            # until a healthcheck restart happens to pick IPv4. With IPv6
-            # off, detection is truthful and every endpoint is IPv4. The
-            # addressesFile must then hold only IPv4 CIDRs: gluetun
-            # refuses an IPv6 interface address when IPv6 is unsupported.
-            "--sysctl=net.ipv6.conf.all.disable_ipv6=1"
-            "--sysctl=net.ipv6.conf.default.disable_ipv6=1"
-            # gluetun is stateless (its only volume is a server-list
-            # cache); nothing it holds is worth a graceful drain. It also
-            # owns the netns + /dev/net/tun + the podman0 bridge — exactly
-            # the teardown that wedges systemd-shutdown's post-journald
-            # phase. So give podman stop a 1s SIGTERM grace, then SIGKILL.
-            "--stop-timeout=1"
-          ];
+              extraOptions = [
+                "--cap-add=NET_ADMIN"
+                "--device=/dev/net/tun"
+                "--sysctl=net.ipv4.conf.all.src_valid_mark=1"
+                # IPv4-only netns. gluetun (through v3.41.3) counts the eth0
+                # fe80::/64 link-local route as IPv6 support and then dials
+                # random IPv6 endpoints the podman bridge can't route
+                # (sendmmsg: network is unreachable), leaving the tunnel down
+                # until a healthcheck restart happens to pick IPv4. With IPv6
+                # off, detection is truthful and every endpoint is IPv4. The
+                # addressesFile must then hold only IPv4 CIDRs: gluetun
+                # refuses an IPv6 interface address when IPv6 is unsupported.
+                "--sysctl=net.ipv6.conf.all.disable_ipv6=1"
+                "--sysctl=net.ipv6.conf.default.disable_ipv6=1"
+                # gluetun is stateless (its only volume is a server-list
+                # cache); nothing it holds is worth a graceful drain. It also
+                # owns the netns + /dev/net/tun + the podman0 bridge — exactly
+                # the teardown that wedges systemd-shutdown's post-journald
+                # phase. So give podman stop a 1s SIGTERM grace, then SIGKILL.
+                "--stop-timeout=1"
+              ];
 
-          # The host port maps to 8080 inside the netns — where qbittorrent's
-          # WebUI listens (set via WEBUI_PORT on the qbittorrent container).
-          ports = ["${toString cfg.webUIPort}:8080"];
+              autoStart = true;
+            };
+          })
 
-          autoStart = true;
-        };
+          {
+            # The WebUI port is published on whichever container owns the netns;
+            # qbittorrent listens on the same port inside it (WEBUI_PORT below).
+            ${netnsContainer}.ports = [webUIPublish];
 
-        # qbittorrent shares gluetun's network namespace. dependsOn ensures the
-        # netns container is running first; --network=container:... mounts that
-        # netns into this one. qbittorrent never sees the host network — if
-        # gluetun crashes, qbittorrent immediately loses connectivity (no
-        # silent fallback to clear-net).
-        qbittorrent = {
-          image = cfg.image;
+            # qbittorrent shares gluetun's network namespace. dependsOn ensures the
+            # netns container is running first; --network=container:... mounts that
+            # netns into this one. qbittorrent never sees the host network — if
+            # gluetun crashes, qbittorrent immediately loses connectivity (no
+            # silent fallback to clear-net).
+            qbittorrent = {
+              image = cfg.image;
 
-          environment = {
-            PUID = toString cfg.puid;
-            PGID = toString cfg.pgid;
-            TZ = cfg.timezone;
-            WEBUI_PORT = "8080";
-          };
+              environment = {
+                PUID = toString cfg.puid;
+                PGID = toString cfg.pgid;
+                TZ = cfg.timezone;
+                WEBUI_PORT = toString cfg.webUIPort;
+              };
 
-          volumes = [
-            "${cfg.configDir}:/config"
-            "${cfg.downloadsDir}:/downloads"
-          ];
+              volumes =
+                ["${cfg.configDir}:/config"]
+                ++ lib.optional (cfg.downloadsDir != null) "${cfg.downloadsDir}:/downloads"
+                ++ cfg.extraVolumes;
 
-          dependsOn = ["gluetun-qbittorrent"];
-          extraOptions = [
-            "--network=container:gluetun-qbittorrent"
-            # qBittorrent is the one container with state worth
-            # protecting: on SIGTERM qbittorrent-nox flushes .fastresume
-            # / session into /config (sub-second normally). Give it a
-            # real—but short—10s grace so that flush completes; a
-            # zero-grace kill would only cost a force-recheck of any
-            # in-flight torrent (downloaded data in /downloads is already
-            # safe), but the flush is cheap insurance.
-            "--stop-timeout=10"
-          ];
+              dependsOn = [netnsContainer];
+              extraOptions = [
+                "--network=container:${netnsContainer}"
+                # qBittorrent is the one container with state worth
+                # protecting: on SIGTERM qbittorrent-nox flushes .fastresume
+                # / session into /config (sub-second normally). Give it a
+                # real—but short—10s grace so that flush completes; a
+                # zero-grace kill would only cost a force-recheck of any
+                # in-flight torrent (downloaded data in /downloads is already
+                # safe), but the flush is cheap insurance.
+                "--stop-timeout=10"
+              ];
 
-          autoStart = true;
-        };
+              autoStart = true;
+            };
+          }
+        ];
       };
+
+      systemd.tmpfiles.rules =
+        lib.optional ownGluetun "d ${cfg.gluetunDataDir} 0700 root root -"
+        ++ ["d ${cfg.configDir} 0755 ${toString cfg.puid} ${toString cfg.pgid} -"]
+        ++ lib.optional (cfg.downloadsDir != null) "d ${cfg.downloadsDir} 0755 ${toString cfg.puid} ${toString cfg.pgid} -";
+
+      # Backstop for the --stop-timeout values above. `podman stop` honours
+      # the container's own stop-timeout, but if podman itself wedges (the
+      # actual failure mode behind the shutdown hang), systemd must not idle
+      # the default 90s waiting on it and feed the post-journald stall.
+      # These caps sit just above each container's stop-timeout so the
+      # graceful path always wins when podman is healthy, and the unit is
+      # SIGKILLed promptly when it isn't. Generated unit names are
+      # `podman-<container>.service`. mkForce because virtualisation.oci-
+      # containers already pins these units to TimeoutStopSec=120, which is
+      # precisely the over-long wait we are here to shorten.
+      systemd.services = lib.mkMerge [
+        (lib.mkIf ownGluetun {
+          "podman-gluetun-qbittorrent".serviceConfig.TimeoutStopSec = lib.mkForce 10;
+        })
+        {"podman-qbittorrent".serviceConfig.TimeoutStopSec = lib.mkForce 20;}
+      ];
     };
-
-    systemd.tmpfiles.rules = [
-      "d ${cfg.gluetunDataDir} 0700 root root -"
-      "d ${cfg.configDir} 0755 ${toString cfg.puid} ${toString cfg.pgid} -"
-      "d ${cfg.downloadsDir} 0755 ${toString cfg.puid} ${toString cfg.pgid} -"
-    ];
-
-    # Backstop for the --stop-timeout values above. `podman stop` honours
-    # the container's own stop-timeout, but if podman itself wedges (the
-    # actual failure mode behind the shutdown hang), systemd must not idle
-    # the default 90s waiting on it and feed the post-journald stall.
-    # These caps sit just above each container's stop-timeout so the
-    # graceful path always wins when podman is healthy, and the unit is
-    # SIGKILLed promptly when it isn't. Generated unit names are
-    # `podman-<container>.service`. mkForce because virtualisation.oci-
-    # containers already pins these units to TimeoutStopSec=120, which is
-    # precisely the over-long wait we are here to shorten.
-    systemd.services."podman-gluetun-qbittorrent".serviceConfig.TimeoutStopSec = lib.mkForce 10;
-    systemd.services."podman-qbittorrent".serviceConfig.TimeoutStopSec = lib.mkForce 20;
-  };
 }

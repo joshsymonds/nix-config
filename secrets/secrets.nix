@@ -58,6 +58,7 @@ in {
   "secrets/hosts/ultraviolet/shimmer-jwt-secret.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/shimmer-env.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/mentat-env.age".publicKeys = keys.ultraviolet;
+  "secrets/hosts/ultraviolet/qbittorrent-webui-password.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/livekit-keys.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/mentat-voice-env.age".publicKeys = keys.ultraviolet;
   "secrets/hosts/ultraviolet/mentat-voice-private.age".publicKeys = keys.ultraviolet;

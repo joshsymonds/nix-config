@@ -98,6 +98,9 @@
           "/var/lib/sabnzbd:/config" # Config with secrets
           "/var/cache/sabnzbd:/downloads" # Local SSD for temp files (fast!)
           "/mnt/video/sabnzbd/completed:/mnt/video/sabnzbd/completed" # NFS mount path matches host
+          # The games category completes here, on the same NFS mount as the
+          # Questarr library, so Questarr can hardlink instead of copy.
+          "/mnt/games/sabnzbd:/mnt/games/sabnzbd"
         ];
 
         # Use Gluetun's network stack - this is the key!
@@ -121,7 +124,10 @@
     # The completed-downloads bind source lives on the NFS automount. Without
     # this ordering, a container started before the share is reachable binds
     # the bare local directory and silently fills the root disk.
-    services.podman-sabnzbd.unitConfig.RequiresMountsFor = "/mnt/video/sabnzbd/completed";
+    services.podman-sabnzbd.unitConfig.RequiresMountsFor = [
+      "/mnt/video/sabnzbd/completed"
+      "/mnt/games/sabnzbd"
+    ];
 
     tmpfiles.rules = [
       # Gluetun data directory (server list cache, etc.)

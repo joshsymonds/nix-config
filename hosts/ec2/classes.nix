@@ -14,6 +14,16 @@
     module = ./classes/commonframe-gate.nix;
   };
 
+  halmasuit-lab = {
+    instanceType = "g4dn.xlarge";
+    diskGb = 100;
+    spot = true;
+    reboot = true;
+    idleMinutes = 30;
+    maxHours = 4;
+    module = ./classes/halmasuit-lab.nix;
+  };
+
   muniment-runner = {
     instanceType = "c8a.16xlarge";
     diskGb = 400;

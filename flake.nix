@@ -733,6 +733,12 @@
             inherit inputs;
             outputs = self.outputs;
           };
+          ec2-halmasuit-lab-eval = import ./tests/ec2-halmasuit-lab-eval.nix {
+            pkgs = checkPkgs;
+            inherit inputs;
+            lab = self.nixosConfigurations.ec2-halmasuit-lab.config;
+            gnomon = self.nixosConfigurations.gnomon.config;
+          };
           ec2-launcher = config.packages.ec2.tests.stubbed;
           private-store-hook = import ./tests/private-store-hook.nix {
             pkgs = checkPkgs;

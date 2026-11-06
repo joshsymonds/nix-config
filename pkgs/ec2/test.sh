@@ -83,6 +83,15 @@ case "$2" in
     done
     cat "$STUB_FIXTURES/spot-$itype.json"
     ;;
+  describe-instance-type-offerings)
+    itype=
+    for a in "$@"; do
+      case "$a" in
+        Name=instance-type,Values=*) itype=${a##*Values=} ;;
+      esac
+    done
+    cat "$STUB_FIXTURES/offerings-$itype.json"
+    ;;
   describe-images)
     if [ -e "$STUB_FIXTURES/registered" ]; then
       cat "$STUB_FIXTURES/images-after-register.json"
@@ -92,6 +101,24 @@ case "$2" in
     ;;
   describe-security-groups) cat "$STUB_FIXTURES/security-groups.json" ;;
   run-instances)
+    # no-capacity-<zone> refuses a placed launch in that zone with the capacity
+    # error; other-error-<zone> refuses it with an error that is not a capacity one.
+    zone=
+    for a in "$@"; do
+      case "$a" in
+        AvailabilityZone=*) zone=${a#AvailabilityZone=} ;;
+      esac
+    done
+    if [ -n "$zone" ] && [ -e "$STUB_FIXTURES/no-capacity-$zone" ]; then
+      echo "An error occurred (InsufficientInstanceCapacity) when calling the RunInstances operation: We currently do not have sufficient capacity in the Availability Zone you requested ($zone)." >&2
+      exit 1
+    fi
+    if [ -n "$zone" ] && [ -e "$STUB_FIXTURES/other-error-$zone" ]; then
+      echo "An error occurred (UnsupportedOperation) when calling the RunInstances operation: injected failure in $zone." >&2
+      exit 1
+    fi
+    # warn-run-instances makes a successful launch also write a warning to stderr.
+    [ -e "$STUB_FIXTURES/warn-run-instances" ] && echo "stub aws: a warning from run-instances" >&2
     prev=
     userdata=
     for a in "$@"; do
@@ -142,6 +169,7 @@ case "$1" in
               ;;
           esac
         done
+        printf '%s\n' "$@" >"$STUB_FIXTURES/build-$attr.argv"
         echo "/nix/store/fixture-toplevel-$attr"
         ;;
     esac
@@ -187,12 +215,19 @@ esac
 CURLSTUB
 
 # ssh fails for the step named by fail-ssh-<step>: probe (the true readiness
-# check), nix-env, or switch. A hold-ssh-<step> fixture keeps the step running
-# until the release file exists, so a signal can arrive during it.
+# check), nix-env, switch, switch-boot (switch-to-configuration boot), boot-id
+# (a read of the boot id) or reboot (the reboot request). A hold-ssh-<step>
+# fixture keeps the step running until the release file exists, so a signal can
+# arrive during it. The boot-id read answers boot-id-before until the reboot
+# request has run, and boot-id-after from then on, except that the first
+# boot-id-lag reads after the reboot request answer boot-id-before.
 write_stub ssh <<'SSHSTUB'
 case "$*" in
   *nix-env*) step=nix-env ;;
+  *'switch-to-configuration boot'*) step=switch-boot ;;
   *switch-to-configuration*) step=switch ;;
+  *'systemctl reboot'*) step=reboot ;;
+  *boot_id*) step=boot-id ;;
   *) step=probe ;;
 esac
 [ -e "$STUB_FIXTURES/hold-ssh-$step" ] && {
@@ -201,9 +236,23 @@ esac
     sleep 0.1
   done
 }
+[ "$step" = reboot ] && : >"$STUB_FIXTURES/rebooted"
 [ -e "$STUB_FIXTURES/fail-ssh-$step" ] && {
   echo "ssh: injected failure ($step)" >&2
   exit 255
+}
+[ "$step" = boot-id ] && {
+  if [ -e "$STUB_FIXTURES/rebooted" ]; then
+    lag=$(cat "$STUB_FIXTURES/boot-id-lag" 2>/dev/null || echo 0)
+    if [ "$lag" -gt 0 ]; then
+      echo $((lag - 1)) >"$STUB_FIXTURES/boot-id-lag"
+      cat "$STUB_FIXTURES/boot-id-before"
+    else
+      cat "$STUB_FIXTURES/boot-id-after"
+    fi
+  else
+    cat "$STUB_FIXTURES/boot-id-before"
+  fi
 }
 exit 0
 SSHSTUB
@@ -217,8 +266,14 @@ echo snap-0feed00000000001
 COLDSTUB
 
 cat >"$STUB_FIXTURES/classes.json" <<'FIXTURE'
-{"commonframe-gate":{"instanceType":"c8a.4xlarge","diskGb":80,"spot":true,"idleMinutes":60,"maxHours":24},"muniment-runner":{"instanceType":"m8a.2xlarge","diskGb":200,"spot":false,"idleMinutes":30,"maxHours":12}}
+{"commonframe-gate":{"instanceType":"c8a.4xlarge","diskGb":80,"spot":true,"idleMinutes":60,"maxHours":24},"muniment-runner":{"instanceType":"m8a.2xlarge","diskGb":200,"spot":false,"idleMinutes":30,"maxHours":12},"reboot-probe":{"instanceType":"c8a.large","diskGb":40,"spot":false,"idleMinutes":30,"maxHours":12,"reboot":true}}
 FIXTURE
+
+# The boot ids a box reports before and after its reboot.
+BOOT_BEFORE="0b5e1c2a-7d3f-4e8a-9c61-2f4a8d7e1b03"
+BOOT_AFTER="e9a4f607-1c2b-4d5e-8f70-3a6b9c8d2e14"
+printf '%s\n' "$BOOT_BEFORE" >"$STUB_FIXTURES/boot-id-before"
+printf '%s\n' "$BOOT_AFTER" >"$STUB_FIXTURES/boot-id-after"
 
 t_running=$(date -u -d '210 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
 t_pending=$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
@@ -243,6 +298,22 @@ cat >"$STUB_FIXTURES/spot-c8a.4xlarge.json" <<'FIXTURE'
 FIXTURE
 cat >"$STUB_FIXTURES/spot-m8a.large.json" <<'FIXTURE'
 {"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.0450","AvailabilityZone":"us-west-2b"}]}
+FIXTURE
+
+# Zones offering each spot type. c8a.4xlarge lists its zones unsorted, so the
+# launcher must sort them.
+cat >"$STUB_FIXTURES/offerings-c8a.4xlarge.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"c8a.4xlarge","Location":"us-west-2c","LocationType":"availability-zone"},
+{"InstanceType":"c8a.4xlarge","Location":"us-west-2a","LocationType":"availability-zone"},
+{"InstanceType":"c8a.4xlarge","Location":"us-west-2b","LocationType":"availability-zone"}
+]}
+FIXTURE
+cat >"$STUB_FIXTURES/offerings-c8a.large.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"c8a.large","Location":"us-west-2b","LocationType":"availability-zone"},
+{"InstanceType":"c8a.large","Location":"us-west-2a","LocationType":"availability-zone"}
+]}
 FIXTURE
 
 # Base AMI lists. images.json is what describe-images returns before a rebuild;
@@ -338,7 +409,7 @@ launch_signalled() {
 run() {
   : >"$STUB_LOG"
   rm -f "$STUB_FIXTURES/user-data.seen" "$STUB_FIXTURES/user-data.mode" "$STUB_FIXTURES/nix-sshopts.seen" \
-    "$STUB_FIXTURES/registered"
+    "$STUB_FIXTURES/registered" "$STUB_FIXTURES/rebooted"
   if [ -n "$probe_signal" ]; then
     launch_signalled "$probe_signal" "$@"
   elif "$EC2" "$@" >"$OUT" 2>"$ERR"; then
@@ -428,7 +499,14 @@ inject() {
   : >"$STUB_FIXTURES/fail-$1"
 }
 clear_faults() {
-  rm -f "$STUB_FIXTURES"/fail-*
+  rm -f "$STUB_FIXTURES"/fail-* "$STUB_FIXTURES"/no-capacity-* "$STUB_FIXTURES"/other-error-* \
+    "$STUB_FIXTURES"/warn-run-instances
+}
+# expect_run_count <desc> <n>: run-instances was called exactly n times.
+expect_run_count() {
+  local count
+  count=$(grep -c '^aws ec2 run-instances ' "$STUB_LOG")
+  [ "$count" -eq "$2" ] || fail "$1: want $2 run-instances call(s), got $count"
 }
 # use_images <before> <after>: the describe-images lists from the named fixtures,
 # before a rebuild and after the new AMI is registered.
@@ -486,7 +564,8 @@ expect_out '128 vCPU' "help states the warden vCPU cap"
 expect_out 'fleet-max-hours' "help states the warden age rule"
 expect_out 'ec2 up <class>' "help lists up <class>"
 expect_out 'ec2 up --type' "help lists up --type"
-expect_out -- '--spot' "help lists --spot"
+expect_out '--spot' "help lists --spot"
+expect_out '--override-input <input> <flake-url>' "help lists --override-input"
 expect_out 'ec2 ls' "help lists ls"
 expect_out 'ec2 down <name>' "help lists down"
 expect_out 'ec2 help' "help lists help"
@@ -557,11 +636,17 @@ export EC2_FLEET_AWS_ENV_FILE=$ENV_FILE
 export EC2_FLEET_TS_ENV_FILE=$TS_ENV_FILE
 unset EC2_FLEET_READY_TIMEOUT
 for args in "" "--type c8a.large" "--type c8a.large --disk 0" "--type c8a.large --disk 20x" \
-  "commonframe-gate --spot" "commonframe-gate extra" "--type c8a.large --disk 20 commonframe-gate"; do
+  "commonframe-gate --spot" "commonframe-gate extra" "--type c8a.large --disk 20 commonframe-gate" \
+  "commonframe-gate --override-input halmasuit" "commonframe-gate --override-input" \
+  "--type c8a.large --disk 20 --override-input halmasuit git+file:///fixture/halmasuit"; do
   run up $args
   expect_nonzero "up $args"
   expect_no_log '^(aws|curl|ssh) |nix build' "up $args calls no AWS, Tailscale, ssh or nix build"
 done
+
+run up commonframe-gate --override-input halmasuit ""
+expect_nonzero "up with an empty override URL"
+expect_no_log '^(aws|curl|ssh) |nix build' "up with an empty override URL calls no AWS, Tailscale, ssh or nix build"
 
 run up nosuch-class
 expect_nonzero "up with an unknown class"
@@ -695,6 +780,13 @@ expect_nonzero "up with describe-images failing"
 expect_no_fixed 'run-instances' "up with describe-images failing launches nothing"
 clear_faults
 
+inject ec2-describe-instance-type-offerings
+run up commonframe-gate
+expect_nonzero "up with the zone listing failing"
+expect_no_fixed 'run-instances' "up with the zone listing failing launches nothing"
+expect_no_fixed 'api/v2' "up with the zone listing failing asks Tailscale nothing"
+clear_faults
+
 inject nix-build
 run up commonframe-gate
 expect_nonzero "up with nix build failing"
@@ -727,6 +819,10 @@ expect_fixed "--instance-initiated-shutdown-behavior terminate" "up terminates o
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=commonframe-gate},{Key=fleet-max-hours,Value=24}]" "up tags the instance"
 expect_fixed "ResourceType=volume,Tags=[{Key=fleet,Value=ec2},{Key=Name,Value=$name}]" "up tags the volume"
 expect_fixed "--instance-market-options MarketType=spot,SpotOptions={SpotInstanceType=one-time,InstanceInterruptionBehavior=terminate}" "up requests one-time spot with terminate on interruption"
+expect_fixed "aws ec2 describe-instance-type-offerings --output json --location-type availability-zone" "up lists the zones offering the type"
+expect_fixed "--placement AvailabilityZone=us-west-2a" "up places the spot request in the first sorted zone"
+expect_out '^market spot us-west-2a$' "up prints the spot market line"
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up commonframe-gate: the ready line is not the last stdout line"
 expect_fixed "--user-data file://" "up passes user-data as a file"
 expect_no_fixed "--key-name" "up launches with no key pair"
 expect_no_fixed "--iam-instance-profile" "up launches with no instance profile"
@@ -740,6 +836,8 @@ expect_order "up orders the launch and deploy steps" \
   "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name $TL" \
   "joshsymonds@$name sudo nix-env -p /nix/var/nix/profiles/system --set $TL" \
   "joshsymonds@$name sudo $TL/bin/switch-to-configuration switch"
+expect_no_fixed "switch-to-configuration boot" "up commonframe-gate boots nothing"
+expect_no_fixed "systemctl reboot" "up commonframe-gate reboots nothing"
 expect_fixed "-o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$XDG_STATE_HOME/ec2-fleet/known_hosts" "up sets the ssh host-key options"
 [ -d "$XDG_STATE_HOME/ec2-fleet" ] || fail "up did not create the ec2-fleet state directory"
 grep -F -q "UserKnownHostsFile=$XDG_STATE_HOME/ec2-fleet/known_hosts" "$STUB_FIXTURES/nix-sshopts.seen" || fail "up did not pass the host-key options to nix copy"
@@ -755,11 +853,97 @@ while IFS= read -r call; do
 done <<<"$mux_calls"
 expect_no_fixed "terminate-instances" "up commonframe-gate terminates nothing on success"
 
+# up commonframe-gate with overrides: each pair reaches the class toplevel build
+# as separate argv words, in order and verbatim. The ec2Classes eval and the base
+# build carry no override.
+URL_A='git+file:///fixture/halmasuit?rev=0123456789abcdef0123456789abcdef01234567&dir=nix'
+URL_B='github:NixOS/nixpkgs/nixos-unstable'
+rm -f "$STUB_FIXTURES"/build-*.argv
+run up commonframe-gate --override-input halmasuit "$URL_A" --override-input nixpkgs "$URL_B"
+expect_status 0 "up commonframe-gate with two overrides"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up commonframe-gate with two overrides prints the ready line"
+expect_no_log '^nix eval .*--override-input' "up with overrides evaluates ec2Classes without overrides"
+expected_class=$(printf '%s\n' build --no-link --print-out-paths --override-input halmasuit "$URL_A" \
+  --override-input nixpkgs "$URL_B" /fixture/flake#nixosConfigurations.ec2-commonframe-gate.config.system.build.toplevel)
+[ "$(cat "$STUB_FIXTURES/build-commonframe-gate.argv")" = "$expected_class" ] ||
+  fail "up with overrides: class toplevel build argv is not the expected overrides in order"
+expected_base=$(printf '%s\n' build --no-link --print-out-paths /fixture/flake#nixosConfigurations.ec2-base.config.system.build.toplevel)
+[ "$(cat "$STUB_FIXTURES/build-base.argv")" = "$expected_base" ] ||
+  fail "up with overrides: base toplevel build argv carries an override"
+
+# A class launched with an empty override set builds the class toplevel with no
+# override words at all.
+rm -f "$STUB_FIXTURES"/build-*.argv
+run up commonframe-gate
+expect_status 0 "up commonframe-gate without overrides"
+expected_plain=$(printf '%s\n' build --no-link --print-out-paths /fixture/flake#nixosConfigurations.ec2-commonframe-gate.config.system.build.toplevel)
+[ "$(cat "$STUB_FIXTURES/build-commonframe-gate.argv")" = "$expected_plain" ] ||
+  fail "up without overrides: class toplevel build argv gained words"
+
+# A spot class tries each zone that offers its type in sorted order, moving on
+# only past InsufficientInstanceCapacity. It stops at the first launch.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+run up commonframe-gate
+expect_status 0 "up commonframe-gate with us-west-2a out of capacity"
+expect_out '^market spot us-west-2b$' "up with us-west-2a out of capacity prints the market line of us-west-2b"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up with us-west-2a out of capacity prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+expect_order "up with us-west-2a out of capacity tries us-west-2a, then us-west-2b" \
+  "--placement AvailabilityZone=us-west-2a" \
+  "--placement AvailabilityZone=us-west-2b"
+expect_no_fixed "--placement AvailabilityZone=us-west-2c" "up with us-west-2a out of capacity does not try us-west-2c"
+expect_run_count "up with us-west-2a out of capacity" 2
+expect_userdata "up with us-west-2a out of capacity" "$name"
+expect_no_fixed "terminate-instances" "up with us-west-2a out of capacity terminates nothing on success"
+clear_faults
+
+# Every zone out of capacity: one on-demand launch with no placement and no
+# market options, after the zones in sorted order.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+: >"$STUB_FIXTURES/no-capacity-us-west-2c"
+run up commonframe-gate
+expect_status 0 "up commonframe-gate with every zone out of capacity"
+expect_out '^market on-demand$' "up with every zone out of capacity prints the on-demand market line"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up with every zone out of capacity prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+expect_order "up with every zone out of capacity tries the zones in sorted order, then on-demand" \
+  "--placement AvailabilityZone=us-west-2a" \
+  "--placement AvailabilityZone=us-west-2b" \
+  "--placement AvailabilityZone=us-west-2c"
+expect_run_count "up with every zone out of capacity" 4
+last_run=$(grep '^aws ec2 run-instances ' "$STUB_LOG" | tail -n 1)
+case $last_run in
+  *--placement*) fail "up with every zone out of capacity: the on-demand launch has a placement" ;;
+esac
+case $last_run in
+  *--instance-market-options*) fail "up with every zone out of capacity: the on-demand launch has market options" ;;
+esac
+expect_userdata "up with every zone out of capacity" "$name"
+expect_no_fixed "terminate-instances" "up with every zone out of capacity terminates nothing on success"
+clear_faults
+
+# A non-capacity error in a zone stops the launch: no further zone, no
+# on-demand launch, nothing launched, nothing terminated.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/other-error-us-west-2b"
+run up commonframe-gate
+expect_nonzero "up commonframe-gate with a non-capacity error in us-west-2b"
+expect_err 'UnsupportedOperation' "up with a non-capacity error prints the error"
+expect_run_count "up with a non-capacity error in us-west-2b" 2
+expect_no_fixed "--placement AvailabilityZone=us-west-2c" "up with a non-capacity error in us-west-2b does not try us-west-2c"
+expect_no_out '^market ' "up with a non-capacity error prints no market line"
+expect_no_fixed "wait instance-running" "up with a non-capacity error waits for no instance"
+expect_no_fixed "terminate-instances" "up with a non-capacity error terminates nothing"
+clear_faults
+
 # up --type --disk --spot: ad-hoc spot box, no deploy.
 run up --type c8a.large --disk 40 --spot
 expect_status 0 "ad-hoc spot up"
 expect_out '^ec2-[a-z0-9]{3} ready$' "ad-hoc spot up prints the ready line"
+expect_out '^market spot us-west-2a$' "ad-hoc spot up prints the spot market line"
 name=$(sed -n 's/ ready$//p' "$OUT")
+expect_fixed "--placement AvailabilityZone=us-west-2a" "ad-hoc spot up places the request in the first sorted zone"
 expect_fixed "--instance-type c8a.large" "ad-hoc up sets the instance type"
 expect_fixed "--block-device-mappings DeviceName=/dev/xvda,Ebs={VolumeSize=40,VolumeType=gp3,DeleteOnTermination=true}" "ad-hoc up sizes the root volume from --disk"
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=adhoc},{Key=fleet-max-hours,Value=24}]" "ad-hoc up tags an adhoc instance with 24 max hours"
@@ -781,6 +965,27 @@ expect_out '^ec2-[a-z0-9]{3} ready$' "ad-hoc on-demand up prints the ready line"
 name=$(sed -n 's/ ready$//p' "$OUT")
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=adhoc},{Key=fleet-max-hours,Value=24}]" "ad-hoc on-demand up tags the instance"
 expect_no_fixed "--instance-market-options" "ad-hoc on-demand up requests no spot"
+expect_no_fixed "--placement" "ad-hoc on-demand up sets no placement"
+expect_no_log 'describe-instance-type-offerings' "ad-hoc on-demand up lists no zones"
+expect_out '^market on-demand$' "ad-hoc on-demand up prints the on-demand market line"
+expect_run_count "ad-hoc on-demand up" 1
+
+# A warning on stderr from a successful run-instances is shown, and is not part
+# of the instance id: the launched instance is the one waited on and kept.
+: >"$STUB_FIXTURES/warn-run-instances"
+run up --type m8a.large --disk 20
+expect_status 0 "ad-hoc up with a warning from run-instances"
+expect_err 'stub aws: a warning from run-instances' "ad-hoc up with a warning from run-instances shows the warning"
+expect_fixed "aws ec2 wait instance-running --instance-ids i-0launched00000001" "ad-hoc up with a warning from run-instances waits for the launched instance"
+expect_no_fixed "terminate-instances" "ad-hoc up with a warning from run-instances terminates nothing"
+
+# With the launcher's stderr closed, relaying that warning fails after the
+# launch, and the launched instance is still terminated.
+: >"$STUB_LOG"
+if "$EC2" up --type m8a.large --disk 20 >"$OUT" 2>&-; then STATUS=0; else STATUS=$?; fi
+expect_nonzero "ad-hoc up with a warning from run-instances and stderr closed"
+expect_terminated "ad-hoc up with a warning from run-instances and stderr closed"
+clear_faults
 
 # up muniment-runner: on-demand class with its own disk and max hours.
 run up muniment-runner
@@ -791,8 +996,123 @@ expect_fixed "--instance-type m8a.2xlarge" "up muniment-runner sets its instance
 expect_fixed "Ebs={VolumeSize=200,VolumeType=gp3,DeleteOnTermination=true}" "up muniment-runner sizes its root volume"
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=muniment-runner},{Key=fleet-max-hours,Value=12}]" "up muniment-runner tags its max hours"
 expect_no_fixed "--instance-market-options" "up muniment-runner requests no spot"
+expect_no_fixed "--placement" "up muniment-runner sets no placement"
+expect_no_log 'describe-instance-type-offerings' "up muniment-runner lists no zones"
+expect_out '^market on-demand$' "up muniment-runner prints the on-demand market line"
+expect_run_count "up muniment-runner" 1
 expect_fixed "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name /nix/store/fixture-toplevel-muniment-runner" "up muniment-runner copies its own toplevel"
 expect_fixed "joshsymonds@$name sudo /nix/store/fixture-toplevel-muniment-runner/bin/switch-to-configuration switch" "up muniment-runner switches its own toplevel"
+
+# up reboot-probe: a class with reboot = true deploys with switch-to-configuration
+# boot, reboots the box and waits for a new boot id, and prints the ready line last.
+TL_REBOOT=/nix/store/fixture-toplevel-reboot-probe
+run up reboot-probe
+expect_status 0 "up reboot-probe"
+expect_out '^reboot-probe-[a-z0-9]{3} ready$' "up reboot-probe prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up reboot-probe: the ready line is not the last stdout line"
+expect_fixed "nix build --no-link --print-out-paths /fixture/flake#nixosConfigurations.ec2-reboot-probe.config.system.build.toplevel" "up reboot-probe builds its class toplevel"
+expect_userdata "up reboot-probe" "$name"
+expect_no_fixed "switch-to-configuration switch" "up reboot-probe switches nothing in place"
+expect_order "up reboot-probe orders copy, profile, boot id read, boot switch, reboot" \
+  "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name $TL_REBOOT" \
+  "joshsymonds@$name sudo nix-env -p /nix/var/nix/profiles/system --set $TL_REBOOT" \
+  "joshsymonds@$name cat /proc/sys/kernel/random/boot_id" \
+  "joshsymonds@$name sudo $TL_REBOOT/bin/switch-to-configuration boot" \
+  "joshsymonds@$name sudo systemctl reboot"
+reboot_line=$(grep -F -n -- "joshsymonds@$name sudo systemctl reboot" "$STUB_LOG" | cut -d: -f1)
+boot_reads=$(grep -F -c -- "joshsymonds@$name cat /proc/sys/kernel/random/boot_id" "$STUB_LOG")
+last_boot_line=$(grep -F -n -- "joshsymonds@$name cat /proc/sys/kernel/random/boot_id" "$STUB_LOG" | tail -n 1 | cut -d: -f1)
+if [ "$boot_reads" -ne 2 ] || [ -z "$reboot_line" ] || [ "$last_boot_line" -le "$reboot_line" ]; then
+  fail "up reboot-probe: want two boot id reads, the second after the reboot request"
+fi
+mux_calls=$(grep -E '^ssh ' "$STUB_LOG" | grep -F -- "joshsymonds@$name")
+[ "$(printf '%s\n' "$mux_calls" | grep -c .)" -eq 6 ] || fail "up reboot-probe made an unexpected number of ssh calls to $name"
+while IFS= read -r call; do
+  case $call in *"-o ControlMaster=no"*) ;; *) fail "up reboot-probe: ssh call without ControlMaster=no: $call" ;; esac
+  case $call in *"-o ControlPath=none"*) ;; *) fail "up reboot-probe: ssh call without ControlPath=none: $call" ;; esac
+done <<<"$mux_calls"
+# Every call on the reboot path is bounded on the client side, so a connection
+# that never answers or goes silent ends the call.
+bounded_calls=$(printf '%s\n' "$mux_calls" | grep -E 'boot_id|switch-to-configuration boot|systemctl reboot')
+[ "$(printf '%s\n' "$bounded_calls" | grep -c .)" -eq 4 ] || fail "up reboot-probe: want four reboot-path ssh calls to $name"
+while IFS= read -r call; do
+  for opt in ConnectTimeout= ServerAliveInterval= ServerAliveCountMax=; do
+    case $call in *"-o $opt"*) ;; *) fail "up reboot-probe: reboot-path ssh call without -o $opt: $call" ;; esac
+  done
+done <<<"$bounded_calls"
+expect_no_fixed "terminate-instances" "up reboot-probe terminates nothing on success"
+
+# The reboot request's ssh exit status does not fail the launch: the new boot id
+# is the evidence.
+inject ssh-reboot
+run up reboot-probe
+expect_status 0 "up reboot-probe with the reboot request failing"
+expect_out '^reboot-probe-[a-z0-9]{3} ready$' "up reboot-probe with the reboot request failing prints the ready line"
+expect_no_fixed "terminate-instances" "up reboot-probe with the reboot request failing terminates nothing"
+clear_faults
+
+# A box that answers the old boot id to its first two polls after the reboot is
+# polled again until a new one answers. Three reads after the reboot request
+# prove the wait loops rather than reading once; the launch ends ready. The
+# launcher's 5 s poll interval makes this case take about 10 s.
+printf '2\n' >"$STUB_FIXTURES/boot-id-lag"
+export EC2_FLEET_READY_TIMEOUT=60
+run up reboot-probe
+expect_status 0 "up reboot-probe with two stale boot id polls"
+expect_out '^reboot-probe-[a-z0-9]{3} ready$' "up reboot-probe with two stale boot id polls prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up reboot-probe with two stale boot id polls: the ready line is not the last stdout line"
+reboot_line=$(grep -F -n -- "joshsymonds@$name sudo systemctl reboot" "$STUB_LOG" | cut -d: -f1)
+polls=$(tail -n +"$((reboot_line + 1))" "$STUB_LOG" | grep -F -c -- "joshsymonds@$name cat /proc/sys/kernel/random/boot_id")
+[ "$polls" -eq 3 ] || fail "up reboot-probe with two stale boot id polls: want three polls after the reboot request, got $polls"
+expect_no_fixed "terminate-instances" "up reboot-probe with two stale boot id polls terminates nothing"
+unset EC2_FLEET_READY_TIMEOUT
+rm -f "$STUB_FIXTURES/boot-id-lag"
+
+# A reboot class whose box never reports a new boot id fails within the timeout,
+# after the reboot request, and terminates the box.
+export EC2_FLEET_READY_TIMEOUT=0
+printf '%s\n' "$BOOT_BEFORE" >"$STUB_FIXTURES/boot-id-after"
+run up reboot-probe
+expect_nonzero "up reboot-probe whose boot id never changes"
+expect_terminated "up reboot-probe whose boot id never changes"
+expect_no_out ' ready$' "up reboot-probe whose boot id never changes prints no ready line"
+expect_fixed "sudo systemctl reboot" "up reboot-probe whose boot id never changes requests the reboot"
+printf '%s\n' "$BOOT_AFTER" >"$STUB_FIXTURES/boot-id-after"
+
+# An empty boot id after the reboot is not evidence of a new boot.
+: >"$STUB_FIXTURES/boot-id-after"
+run up reboot-probe
+expect_nonzero "up reboot-probe with an empty boot id after the reboot"
+expect_terminated "up reboot-probe with an empty boot id after the reboot"
+expect_no_out ' ready$' "up reboot-probe with an empty boot id after the reboot prints no ready line"
+printf '%s\n' "$BOOT_AFTER" >"$STUB_FIXTURES/boot-id-after"
+unset EC2_FLEET_READY_TIMEOUT
+
+# A failed or empty boot id read before the reboot stops before the switch.
+inject ssh-boot-id
+run up reboot-probe
+expect_nonzero "up reboot-probe with the boot id read failing"
+expect_terminated "up reboot-probe with the boot id read failing"
+expect_no_fixed "switch-to-configuration" "up reboot-probe with the boot id read failing switches nothing"
+expect_no_fixed "systemctl reboot" "up reboot-probe with the boot id read failing reboots nothing"
+clear_faults
+: >"$STUB_FIXTURES/boot-id-before"
+run up reboot-probe
+expect_nonzero "up reboot-probe with an empty boot id before the reboot"
+expect_terminated "up reboot-probe with an empty boot id before the reboot"
+expect_no_fixed "switch-to-configuration" "up reboot-probe with an empty boot id before the reboot switches nothing"
+printf '%s\n' "$BOOT_BEFORE" >"$STUB_FIXTURES/boot-id-before"
+
+# A failed boot switch stops before the reboot request and terminates the box.
+inject ssh-switch-boot
+run up reboot-probe
+expect_nonzero "up reboot-probe with the boot switch failing"
+expect_terminated "up reboot-probe with the boot switch failing"
+expect_no_fixed "systemctl reboot" "up reboot-probe with the boot switch failing reboots nothing"
+expect_no_fixed "switch-to-configuration switch" "up reboot-probe with the boot switch failing switches in place"
+clear_faults
 
 # A failure after run-instances terminates the launched instance and exits nonzero.
 export EC2_FLEET_READY_TIMEOUT=0

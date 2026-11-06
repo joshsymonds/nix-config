@@ -1,6 +1,9 @@
 # EC2 fleet classes. flake.nix builds nixosConfigurations.ec2-<class> from
 # each entry, applying idleMinutes and maxHours to ec2Fleet and importing
 # module on top of the base. The remaining fields are for the launcher.
+# reboot = true (absent means false) deploys the class with
+# switch-to-configuration boot, reboots the box, and waits for a new boot id
+# instead of switching in place.
 {
   commonframe-gate = {
     instanceType = "c8a.16xlarge";

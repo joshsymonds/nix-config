@@ -9,7 +9,7 @@
   ...
 }: {
   imports = [
-    ../../../modules/hardware/gpu-nvidia.nix
+    ./nvidia.nix
     ../../../modules/desktop/halmasuit.nix
     inputs.dank-greeter.nixosModules.default
     inputs.halmasuit.nixosModules.gnomon-lab
@@ -20,11 +20,7 @@
   # gnomon's kernel (hosts/gnomon/default.nix).
   boot.kernelPackages = inputs.nix-cachyos-kernel.legacyPackages.x86_64-linux.linuxPackages-cachyos-latest;
 
-  hardware.gpu-nvidia = {
-    enable = true;
-    package = config.boot.kernelPackages.nvidiaPackages.new_feature;
-    containerToolkit = false;
-  };
+  hardware.gpu-nvidia.package = config.boot.kernelPackages.nvidiaPackages.new_feature;
 
   # NVIDIA modules in initrd, and vkms, the box's only display.
   boot.initrd.kernelModules = ["nvidia" "nvidia_modeset" "nvidia_uvm" "nvidia_drm" "vkms"];
@@ -55,6 +51,8 @@
     # Auto-discovery: with simpledrm blacklisted, vkms is the only card with a
     # connected connector. The T4 renders through rendering.renderNode.
     drmDevice = null;
+    # Every frame from stage 1 on. /run survives switch-root; the initramfs's /var does not.
+    diagnostic.recordFrames = "/run/halmasuit-lab/frames";
   };
 
   halmasuit.lab = {

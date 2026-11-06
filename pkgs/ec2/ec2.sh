@@ -7,9 +7,11 @@ region=us-west-2
 flake=${EC2_FLEET_FLAKE:-$HOME/nix-config}
 
 # launched is the instance cmd_up started and has not finished deploying;
-# userdata is the temp file holding the auth key until run-instances reads it.
+# userdata is the temp file holding the auth key until run-instances reads it;
+# runerr is the temp file holding the stderr of run-instances.
 launched=""
 userdata=""
+runerr=""
 # base_ami is the AMI cmd_up launches from; ensure_base_ami sets it.
 base_ami=""
 
@@ -136,13 +138,17 @@ cmd_down() {
 on_exit() {
   local status=$?
   if [ "$status" -ne 0 ] && [ -n "$launched" ]; then
-    echo "ec2: launch failed; terminating $launched" >&2
+    # A closed stderr must not stop the terminate.
+    echo "ec2: launch failed; terminating $launched" >&2 || :
     if ! aws ec2 terminate-instances --instance-ids "$launched" >/dev/null; then
-      echo "ec2: could not terminate $launched; terminate it by hand" >&2
+      echo "ec2: could not terminate $launched; terminate it by hand" >&2 || :
     fi
   fi
   if [ -n "$userdata" ]; then
     rm -f -- "$userdata"
+  fi
+  if [ -n "$runerr" ]; then
+    rm -f -- "$runerr"
   fi
 }
 
@@ -232,7 +238,8 @@ cmd_up() {
   local class="" type="" disk="" spot=no timeout
   local classes row itype disk_gb spot_req max_hours fleet_class prefix
   local known_dir deadline suffix name sgs sg body token key id toplevel base_path
-  local -a ssh_opts=() market=()
+  local zone_list zone reply market_line
+  local -a ssh_opts=() zones=() place=() market=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --type)
@@ -316,9 +323,18 @@ cmd_up() {
   sg=$(jq -r '.SecurityGroups[0].GroupId // empty' <<<"$sgs") || die "cannot read the security groups"
   [ -n "$sg" ] || die "no ec2-sg security group in $region"
 
+  # A spot launch tries each zone offering the type, in sorted order. The last
+  # attempt is on-demand, with no placement, so it runs after every zone.
   if [ "$spot_req" = yes ]; then
-    market=(--instance-market-options 'MarketType=spot,SpotOptions={SpotInstanceType=one-time,InstanceInterruptionBehavior=terminate}')
+    zone_list=$(aws ec2 describe-instance-type-offerings --output json --location-type availability-zone \
+      --filters "Name=instance-type,Values=$itype" |
+      jq -r '[.InstanceTypeOfferings[].Location] | sort | .[]') ||
+      die "cannot list the zones offering $itype"
+    if [ -n "$zone_list" ]; then
+      readarray -t zones <<<"$zone_list"
+    fi
   fi
+  zones+=("")
 
   body='{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:ec2"]}}},"expirySeconds":600}'
   token=$(printf 'data-urlencode = "client_id=%s"\ndata-urlencode = "client_secret=%s"\n' \
@@ -336,20 +352,44 @@ cmd_up() {
   printf 'EC2_FLEET_NAME=%s\nEC2_FLEET_TS_AUTHKEY=%s\n' "$name" "$key" >"$userdata" ||
     die "cannot write the user-data file"
 
-  id=$(aws ec2 run-instances --output text --query 'Instances[0].InstanceId' \
-    --image-id "$base_ami" --instance-type "$itype" --count 1 \
-    --block-device-mappings "DeviceName=/dev/xvda,Ebs={VolumeSize=$disk_gb,VolumeType=gp3,DeleteOnTermination=true}" \
-    --network-interfaces "DeviceIndex=0,AssociatePublicIpAddress=true,Groups=$sg" \
-    --metadata-options 'HttpTokens=required,HttpPutResponseHopLimit=1,HttpEndpoint=enabled' \
-    --instance-initiated-shutdown-behavior terminate \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=$fleet_class},{Key=fleet-max-hours,Value=$max_hours}]" \
-      "ResourceType=volume,Tags=[{Key=fleet,Value=ec2},{Key=Name,Value=$name}]" \
-    --user-data "file://$userdata" "${market[@]}") ||
+  runerr=$(mktemp) || die "cannot create a temp file"
+  for zone in "${zones[@]}"; do
+    place=()
+    market=()
+    if [ -n "$zone" ]; then
+      place=(--placement "AvailabilityZone=$zone")
+      market=(--instance-market-options 'MarketType=spot,SpotOptions={SpotInstanceType=one-time,InstanceInterruptionBehavior=terminate}')
+      market_line="market spot $zone"
+    else
+      market_line="market on-demand"
+    fi
+    if reply=$(aws ec2 run-instances --output text --query 'Instances[0].InstanceId' \
+      --image-id "$base_ami" --instance-type "$itype" --count 1 \
+      --block-device-mappings "DeviceName=/dev/xvda,Ebs={VolumeSize=$disk_gb,VolumeType=gp3,DeleteOnTermination=true}" \
+      --network-interfaces "DeviceIndex=0,AssociatePublicIpAddress=true,Groups=$sg" \
+      --metadata-options 'HttpTokens=required,HttpPutResponseHopLimit=1,HttpEndpoint=enabled' \
+      --instance-initiated-shutdown-behavior terminate \
+      --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=$fleet_class},{Key=fleet-max-hours,Value=$max_hours}]" \
+        "ResourceType=volume,Tags=[{Key=fleet,Value=ec2},{Key=Name,Value=$name}]" \
+      --user-data "file://$userdata" "${place[@]}" "${market[@]}" 2>"$runerr"); then
+      id=$reply
+      launched=$id
+      cat -- "$runerr" >&2
+      break
+    fi
+    if [ -n "$zone" ] && grep -q InsufficientInstanceCapacity "$runerr"; then
+      echo "ec2: no spot capacity for $itype in $zone" >&2
+      continue
+    fi
+    cat -- "$runerr" >&2
     die "run-instances failed; nothing was launched"
+  done
+  rm -f -- "$runerr"
+  runerr=""
   [ -n "$id" ] || die "run-instances returned no instance id; check for a new fleet=ec2 box"
-  launched=$id
   rm -f -- "$userdata"
   userdata=""
+  echo "$market_line"
 
   aws ec2 wait instance-running --instance-ids "$id" || die "$id did not reach running"
 

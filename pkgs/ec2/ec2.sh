@@ -237,10 +237,11 @@ ensure_base_ami() {
 # its toplevel built with each input override.
 cmd_up() {
   local class="" type="" disk="" spot=no timeout
-  local classes row itype disk_gb spot_req max_hours fleet_class prefix
+  local classes row itype disk_gb spot_req max_hours reboot_req fleet_class prefix
   local known_dir deadline suffix name sgs sg body token key id toplevel base_path
+  local boot_before boot_after
   local zone_list zone reply market_line
-  local -a ssh_opts=() zones=() place=() market=() overrides=()
+  local -a ssh_opts=() reboot_opts=() zones=() place=() market=() overrides=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --type)
@@ -291,16 +292,17 @@ cmd_up() {
   if [ -n "$class" ]; then
     classes=$(nix eval --json "$flake#ec2Classes") || die "cannot evaluate ec2Classes in $flake"
     row=$(jq -r --arg c "$class" '
-      if has($c) then .[$c] | [.instanceType, .diskGb, (if .spot then "yes" else "no" end), .maxHours] | @tsv
+      if has($c) then .[$c] | [.instanceType, .diskGb, (if .spot then "yes" else "no" end), .maxHours, (if .reboot then "yes" else "no" end)] | @tsv
       else empty end' <<<"$classes") || die "cannot read the class data"
     [ -n "$row" ] || die "unknown class: $class (see: ec2 help)"
-    IFS=$'\t' read -r itype disk_gb spot_req max_hours <<<"$row"
+    IFS=$'\t' read -r itype disk_gb spot_req max_hours reboot_req <<<"$row"
     fleet_class=$class
     prefix=$class
   else
     itype=$type
     disk_gb=$disk
     spot_req=$spot
+    reboot_req=no
     max_hours=24
     fleet_class=adhoc
     prefix=ec2
@@ -414,8 +416,28 @@ cmd_up() {
       die "nix copy to $name failed"
     ssh "${ssh_opts[@]}" "joshsymonds@$name" sudo nix-env -p /nix/var/nix/profiles/system --set "$toplevel" ||
       die "setting the system profile on $name failed"
-    ssh "${ssh_opts[@]}" "joshsymonds@$name" sudo "$toplevel/bin/switch-to-configuration" switch ||
-      die "switching $name to $toplevel failed"
+    if [ "$reboot_req" = yes ]; then
+      # Every call on the reboot path is bounded: a connection that never
+      # answers or goes silent ends the call instead of hanging the launch.
+      reboot_opts=("${ssh_opts[@]}" -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3)
+      boot_before=$(ssh "${reboot_opts[@]}" "joshsymonds@$name" cat /proc/sys/kernel/random/boot_id) ||
+        die "reading the boot id of $name failed"
+      [ -n "$boot_before" ] || die "$name reported no boot id before the reboot"
+      ssh "${reboot_opts[@]}" "joshsymonds@$name" sudo "$toplevel/bin/switch-to-configuration" boot ||
+        die "switching $name to $toplevel for boot failed"
+      deadline=$(($(date +%s) + timeout))
+      # The exit status of the reboot request is not checked: the connection
+      # drops as the box goes down. The new boot id is the evidence.
+      ssh "${reboot_opts[@]}" "joshsymonds@$name" sudo systemctl reboot || :
+      until boot_after=$(ssh "${reboot_opts[@]}" "joshsymonds@$name" cat /proc/sys/kernel/random/boot_id 2>/dev/null) &&
+        [ -n "$boot_after" ] && [ "$boot_after" != "$boot_before" ]; do
+        [ "$(date +%s)" -lt "$deadline" ] || die "$name did not report a new boot id within ${timeout}s"
+        sleep 5
+      done
+    else
+      ssh "${ssh_opts[@]}" "joshsymonds@$name" sudo "$toplevel/bin/switch-to-configuration" switch ||
+        die "switching $name to $toplevel failed"
+    fi
   fi
 
   launched=""

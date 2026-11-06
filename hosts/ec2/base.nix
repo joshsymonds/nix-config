@@ -139,6 +139,10 @@ in {
       };
     };
 
+    # tailscaled registers the node under the hostname it starts with, so it
+    # starts only after the fleet hostname is set.
+    systemd.services.tailscaled.after = ["ec2-fleet-identity.service"];
+
     systemd.services.tailscaled-autoconnect = {
       after = ["ec2-fleet-identity.service"];
       requires = ["ec2-fleet-identity.service"];

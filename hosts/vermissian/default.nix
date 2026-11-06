@@ -93,6 +93,8 @@ in
     # Performance tuning
     performance.profile = "dev";
     performance.cpuVendor = "amd";
+    # BFQ so gate scopes running at IOWeight=10 yield the disk to interactive work
+    performance.ioScheduler = "bfq";
 
     # Hardware setup
     hardware = {

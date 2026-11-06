@@ -4,7 +4,7 @@
 #   - intel_pstate driver mode
 #   - CPU scaling governor (schedutil/powersave)
 #   - Energy Performance Preference (EPP) via HWP
-#   - NVMe and SSD I/O scheduler (none - best for parallel queues)
+#   - NVMe and SSD I/O scheduler (performance.ioScheduler, default none)
 #
 # Intel-specific: the systemd service detects Intel CPUs at runtime
 # and skips gracefully on AMD or other architectures.
@@ -94,11 +94,11 @@ in {
       };
     };
 
-    # I/O scheduler: 'none' is optimal for NVMe (parallel queue hardware)
-    # and SSDs (no rotational latency to optimize for)
+    # I/O scheduler: performance.ioScheduler ('none' by default, optimal for NVMe
+    # parallel queues and SSDs; 'bfq' where cgroup IO weights must take effect)
     services.udev.extraRules = ''
-      ACTION=="add|change", KERNEL=="nvme[0-9]*n[0-9]*", ENV{DEVTYPE}=="disk", ATTR{queue/scheduler}="none"
-      ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="none"
+      ACTION=="add|change", KERNEL=="nvme[0-9]*n[0-9]*", ENV{DEVTYPE}=="disk", ATTR{queue/scheduler}="${cfg.ioScheduler}"
+      ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="${cfg.ioScheduler}"
     '';
   };
 }

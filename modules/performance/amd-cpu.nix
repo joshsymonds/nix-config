@@ -5,7 +5,7 @@
 #   - CPU scaling governor (schedutil/performance/powersave)
 #   - Energy Performance Preference (EPP) via CPPC
 #   - Preferred core scheduling (critical for 3D V-Cache CPUs like 9800X3D)
-#   - NVMe and SSD I/O scheduler (none - best for parallel queues)
+#   - NVMe and SSD I/O scheduler (performance.ioScheduler, default none)
 #
 # AMD-specific: the systemd service detects AMD CPUs at runtime
 # and skips gracefully on Intel or other architectures.
@@ -103,11 +103,11 @@ in {
       };
     };
 
-    # I/O scheduler: 'none' is optimal for NVMe (parallel queue hardware)
-    # and SSDs (no rotational latency to optimize for)
+    # I/O scheduler: performance.ioScheduler ('none' by default, optimal for NVMe
+    # parallel queues and SSDs; 'bfq' where cgroup IO weights must take effect)
     services.udev.extraRules = ''
-      ACTION=="add|change", KERNEL=="nvme[0-9]*n[0-9]*", ENV{DEVTYPE}=="disk", ATTR{queue/scheduler}="none", ATTR{queue/read_ahead_kb}="256"
-      ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="none"
+      ACTION=="add|change", KERNEL=="nvme[0-9]*n[0-9]*", ENV{DEVTYPE}=="disk", ATTR{queue/scheduler}="${cfg.ioScheduler}", ATTR{queue/read_ahead_kb}="256"
+      ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="${cfg.ioScheduler}"
     '';
   };
 }

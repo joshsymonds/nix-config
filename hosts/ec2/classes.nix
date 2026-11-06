@@ -14,6 +14,16 @@
     module = ./classes/commonframe-gate.nix;
   };
 
+  commonframe-gpu = {
+    instanceType = "g4dn.2xlarge";
+    diskGb = 200;
+    spot = true;
+    idleMinutes = 30;
+    maxHours = 12;
+    reboot = true;
+    module = ./classes/commonframe-gpu.nix;
+  };
+
   muniment-runner = {
     instanceType = "c8a.16xlarge";
     diskGb = 400;

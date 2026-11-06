@@ -194,7 +194,7 @@ in {
         # cloned mode for the multi-connector kernel-clone scanout;
         # DP-2 (the right monitor) joins the clone since both
         # support 2560x1440 @120Hz.
-        primaryOutput = "DP-3";
+        primaryOutput = lib.mkDefault "DP-3";
       };
 
       # PCI BDF of the RTX 5070 Ti. gnomon has multiple DRM devices —
@@ -208,7 +208,7 @@ in {
       # Also: the module adds Wants=/After=systemd-udev-settle.service
       # so halmasuit waits for udev's device-node creation to complete
       # — the race that bit us during the first deploy attempt.
-      drmDevice = "pci:0000:01:00.0";
+      drmDevice = lib.mkDefault "pci:0000:01:00.0";
 
       # Cursor theme + size — propagated through the broker's
       # session-leader env allowlist so the child compositor (niri)

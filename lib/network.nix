@@ -37,6 +37,8 @@
         backup = "/volume1/backup";
         creative = "/volume1/creative";
         atticd = "/volume1/atticd";
+        # Questarr game library. Exported only to ultraviolet and gnomon.
+        games = "/volume1/games";
         # Claude Code transcripts (per-host buckets under /mnt/claude/${HOST}/{personal,work}/).
         # Exported only to gnomon, ultraviolet, vermissian (see /etc/exports on blackbox).
         claude = "/volume1/claude";

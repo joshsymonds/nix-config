@@ -7,9 +7,11 @@ region=us-west-2
 flake=${EC2_FLEET_FLAKE:-$HOME/nix-config}
 
 # launched is the instance cmd_up started and has not finished deploying;
-# userdata is the temp file holding the auth key until run-instances reads it.
+# userdata is the temp file holding the auth key until run-instances reads it;
+# runerr is the temp file holding the stderr of run-instances.
 launched=""
 userdata=""
+runerr=""
 # base_ami is the AMI cmd_up launches from; ensure_base_ami sets it.
 base_ami=""
 
@@ -136,13 +138,17 @@ cmd_down() {
 on_exit() {
   local status=$?
   if [ "$status" -ne 0 ] && [ -n "$launched" ]; then
-    echo "ec2: launch failed; terminating $launched" >&2
+    # A closed stderr must not stop the terminate.
+    echo "ec2: launch failed; terminating $launched" >&2 || :
     if ! aws ec2 terminate-instances --instance-ids "$launched" >/dev/null; then
-      echo "ec2: could not terminate $launched; terminate it by hand" >&2
+      echo "ec2: could not terminate $launched; terminate it by hand" >&2 || :
     fi
   fi
   if [ -n "$userdata" ]; then
     rm -f -- "$userdata"
+  fi
+  if [ -n "$runerr" ]; then
+    rm -f -- "$runerr"
   fi
 }
 
@@ -226,13 +232,16 @@ ensure_base_ami() {
   build_base_image "$want"
 }
 
-# cmd_up <class> | --type <t> --disk <gb> [--spot]: launches a box, waits for
-# ssh on the tailnet, and for a class deploys its toplevel.
+# cmd_up <class> [--override-input <input> <flake-url>]... | --type <t> --disk <gb>
+# [--spot]: launches a box, waits for ssh on the tailnet, and for a class deploys
+# its toplevel built with each input override.
 cmd_up() {
   local class="" type="" disk="" spot=no timeout
-  local classes row itype disk_gb spot_req max_hours fleet_class prefix
+  local classes row itype disk_gb spot_req max_hours reboot_req fleet_class prefix
   local known_dir deadline suffix name sgs sg body token key id toplevel base_path
-  local -a ssh_opts=() market=()
+  local boot_before boot_after
+  local zone_list zone reply market_line
+  local -a ssh_opts=() reboot_opts=() zones=() place=() market=() overrides=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --type)
@@ -249,6 +258,12 @@ cmd_up() {
         spot=yes
         shift
         ;;
+      --override-input)
+        [ $# -ge 3 ] && [ -n "$2" ] && [ -n "$3" ] ||
+          die "--override-input needs an input and a flake URL"
+        overrides+=(--override-input "$2" "$3")
+        shift 3
+        ;;
       --*) die "unknown flag: $1 (see: ec2 help)" ;;
       *)
         [ -z "$class" ] || die "usage: ec2 up <class> | ec2 up --type <t> --disk <gb> [--spot]"
@@ -263,6 +278,9 @@ cmd_up() {
       die "a class takes no --type, --disk or --spot"
     fi
   else
+    if [ ${#overrides[@]} -gt 0 ]; then
+      die "--override-input needs a class"
+    fi
     if [ -z "$type" ] || [ -z "$disk" ]; then
       die "usage: ec2 up --type <t> --disk <gb> [--spot]"
     fi
@@ -274,16 +292,17 @@ cmd_up() {
   if [ -n "$class" ]; then
     classes=$(nix eval --json "$flake#ec2Classes") || die "cannot evaluate ec2Classes in $flake"
     row=$(jq -r --arg c "$class" '
-      if has($c) then .[$c] | [.instanceType, .diskGb, (if .spot then "yes" else "no" end), .maxHours] | @tsv
+      if has($c) then .[$c] | [.instanceType, .diskGb, (if .spot then "yes" else "no" end), .maxHours, (if .reboot then "yes" else "no" end)] | @tsv
       else empty end' <<<"$classes") || die "cannot read the class data"
     [ -n "$row" ] || die "unknown class: $class (see: ec2 help)"
-    IFS=$'\t' read -r itype disk_gb spot_req max_hours <<<"$row"
+    IFS=$'\t' read -r itype disk_gb spot_req max_hours reboot_req <<<"$row"
     fleet_class=$class
     prefix=$class
   else
     itype=$type
     disk_gb=$disk
     spot_req=$spot
+    reboot_req=no
     max_hours=24
     fleet_class=adhoc
     prefix=ec2
@@ -297,7 +316,7 @@ cmd_up() {
   export NIX_SSHOPTS="${ssh_opts[*]}"
 
   if [ -n "$class" ]; then
-    toplevel=$(nix build --no-link --print-out-paths "$flake#nixosConfigurations.ec2-$class.config.system.build.toplevel") ||
+    toplevel=$(nix build --no-link --print-out-paths "${overrides[@]}" "$flake#nixosConfigurations.ec2-$class.config.system.build.toplevel") ||
       die "nix build failed for ec2-$class"
     [ -n "$toplevel" ] || die "nix build printed no toplevel for ec2-$class"
   fi
@@ -316,9 +335,18 @@ cmd_up() {
   sg=$(jq -r '.SecurityGroups[0].GroupId // empty' <<<"$sgs") || die "cannot read the security groups"
   [ -n "$sg" ] || die "no ec2-sg security group in $region"
 
+  # A spot launch tries each zone offering the type, in sorted order. The last
+  # attempt is on-demand, with no placement, so it runs after every zone.
   if [ "$spot_req" = yes ]; then
-    market=(--instance-market-options 'MarketType=spot,SpotOptions={SpotInstanceType=one-time,InstanceInterruptionBehavior=terminate}')
+    zone_list=$(aws ec2 describe-instance-type-offerings --output json --location-type availability-zone \
+      --filters "Name=instance-type,Values=$itype" |
+      jq -r '[.InstanceTypeOfferings[].Location] | sort | .[]') ||
+      die "cannot list the zones offering $itype"
+    if [ -n "$zone_list" ]; then
+      readarray -t zones <<<"$zone_list"
+    fi
   fi
+  zones+=("")
 
   body='{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:ec2"]}}},"expirySeconds":600}'
   token=$(printf 'data-urlencode = "client_id=%s"\ndata-urlencode = "client_secret=%s"\n' \
@@ -336,20 +364,44 @@ cmd_up() {
   printf 'EC2_FLEET_NAME=%s\nEC2_FLEET_TS_AUTHKEY=%s\n' "$name" "$key" >"$userdata" ||
     die "cannot write the user-data file"
 
-  id=$(aws ec2 run-instances --output text --query 'Instances[0].InstanceId' \
-    --image-id "$base_ami" --instance-type "$itype" --count 1 \
-    --block-device-mappings "DeviceName=/dev/xvda,Ebs={VolumeSize=$disk_gb,VolumeType=gp3,DeleteOnTermination=true}" \
-    --network-interfaces "DeviceIndex=0,AssociatePublicIpAddress=true,Groups=$sg" \
-    --metadata-options 'HttpTokens=required,HttpPutResponseHopLimit=1,HttpEndpoint=enabled' \
-    --instance-initiated-shutdown-behavior terminate \
-    --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=$fleet_class},{Key=fleet-max-hours,Value=$max_hours}]" \
-      "ResourceType=volume,Tags=[{Key=fleet,Value=ec2},{Key=Name,Value=$name}]" \
-    --user-data "file://$userdata" "${market[@]}") ||
+  runerr=$(mktemp) || die "cannot create a temp file"
+  for zone in "${zones[@]}"; do
+    place=()
+    market=()
+    if [ -n "$zone" ]; then
+      place=(--placement "AvailabilityZone=$zone")
+      market=(--instance-market-options 'MarketType=spot,SpotOptions={SpotInstanceType=one-time,InstanceInterruptionBehavior=terminate}')
+      market_line="market spot $zone"
+    else
+      market_line="market on-demand"
+    fi
+    if reply=$(aws ec2 run-instances --output text --query 'Instances[0].InstanceId' \
+      --image-id "$base_ami" --instance-type "$itype" --count 1 \
+      --block-device-mappings "DeviceName=/dev/xvda,Ebs={VolumeSize=$disk_gb,VolumeType=gp3,DeleteOnTermination=true}" \
+      --network-interfaces "DeviceIndex=0,AssociatePublicIpAddress=true,Groups=$sg" \
+      --metadata-options 'HttpTokens=required,HttpPutResponseHopLimit=1,HttpEndpoint=enabled' \
+      --instance-initiated-shutdown-behavior terminate \
+      --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=$fleet_class},{Key=fleet-max-hours,Value=$max_hours}]" \
+        "ResourceType=volume,Tags=[{Key=fleet,Value=ec2},{Key=Name,Value=$name}]" \
+      --user-data "file://$userdata" "${place[@]}" "${market[@]}" 2>"$runerr"); then
+      id=$reply
+      launched=$id
+      cat -- "$runerr" >&2
+      break
+    fi
+    if [ -n "$zone" ] && grep -q InsufficientInstanceCapacity "$runerr"; then
+      echo "ec2: no spot capacity for $itype in $zone" >&2
+      continue
+    fi
+    cat -- "$runerr" >&2
     die "run-instances failed; nothing was launched"
+  done
+  rm -f -- "$runerr"
+  runerr=""
   [ -n "$id" ] || die "run-instances returned no instance id; check for a new fleet=ec2 box"
-  launched=$id
   rm -f -- "$userdata"
   userdata=""
+  echo "$market_line"
 
   aws ec2 wait instance-running --instance-ids "$id" || die "$id did not reach running"
 
@@ -364,8 +416,28 @@ cmd_up() {
       die "nix copy to $name failed"
     ssh "${ssh_opts[@]}" "joshsymonds@$name" sudo nix-env -p /nix/var/nix/profiles/system --set "$toplevel" ||
       die "setting the system profile on $name failed"
-    ssh "${ssh_opts[@]}" "joshsymonds@$name" sudo "$toplevel/bin/switch-to-configuration" switch ||
-      die "switching $name to $toplevel failed"
+    if [ "$reboot_req" = yes ]; then
+      # Every call on the reboot path is bounded: a connection that never
+      # answers or goes silent ends the call instead of hanging the launch.
+      reboot_opts=("${ssh_opts[@]}" -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=3)
+      boot_before=$(ssh "${reboot_opts[@]}" "joshsymonds@$name" cat /proc/sys/kernel/random/boot_id) ||
+        die "reading the boot id of $name failed"
+      [ -n "$boot_before" ] || die "$name reported no boot id before the reboot"
+      ssh "${reboot_opts[@]}" "joshsymonds@$name" sudo "$toplevel/bin/switch-to-configuration" boot ||
+        die "switching $name to $toplevel for boot failed"
+      deadline=$(($(date +%s) + timeout))
+      # The exit status of the reboot request is not checked: the connection
+      # drops as the box goes down. The new boot id is the evidence.
+      ssh "${reboot_opts[@]}" "joshsymonds@$name" sudo systemctl reboot || :
+      until boot_after=$(ssh "${reboot_opts[@]}" "joshsymonds@$name" cat /proc/sys/kernel/random/boot_id 2>/dev/null) &&
+        [ -n "$boot_after" ] && [ "$boot_after" != "$boot_before" ]; do
+        [ "$(date +%s)" -lt "$deadline" ] || die "$name did not report a new boot id within ${timeout}s"
+        sleep 5
+      done
+    else
+      ssh "${ssh_opts[@]}" "joshsymonds@$name" sudo "$toplevel/bin/switch-to-configuration" switch ||
+        die "switching $name to $toplevel failed"
+    fi
   fi
 
   launched=""
@@ -389,6 +461,9 @@ Flags:
   --type <t>    EC2 instance type for an ad-hoc box
   --disk <gb>   root volume size in GB for an ad-hoc box
   --spot        request spot capacity for an ad-hoc box
+  --override-input <input> <flake-url>
+                build a class box's toplevel with a flake input overridden;
+                repeat the flag for each input (classes only)
 
 Self-termination: a box powers off and terminates when it has been idle past
 its idleMinutes (default 60) or up past its maxHours (default 24). A box counts

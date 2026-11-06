@@ -31,5 +31,11 @@
       default = "none";
       description = "CPU vendor for pstate driver and governor tuning. Set to 'intel' or 'amd' to enable vendor-specific CPU tuning.";
     };
+
+    ioScheduler = lib.mkOption {
+      type = lib.types.enum ["none" "bfq" "mq-deadline" "kyber"];
+      default = "none";
+      description = "I/O scheduler for NVMe and non-rotational SATA disks. 'none' maximizes raw IOPS; 'bfq' honors cgroup IOWeight so background jobs yield the disk.";
+    };
   };
 }

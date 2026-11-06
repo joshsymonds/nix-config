@@ -169,6 +169,7 @@ case "$1" in
               ;;
           esac
         done
+        printf '%s\n' "$@" >"$STUB_FIXTURES/build-$attr.argv"
         echo "/nix/store/fixture-toplevel-$attr"
         ;;
     esac
@@ -536,7 +537,8 @@ expect_out '128 vCPU' "help states the warden vCPU cap"
 expect_out 'fleet-max-hours' "help states the warden age rule"
 expect_out 'ec2 up <class>' "help lists up <class>"
 expect_out 'ec2 up --type' "help lists up --type"
-expect_out -- '--spot' "help lists --spot"
+expect_out '--spot' "help lists --spot"
+expect_out '--override-input <input> <flake-url>' "help lists --override-input"
 expect_out 'ec2 ls' "help lists ls"
 expect_out 'ec2 down <name>' "help lists down"
 expect_out 'ec2 help' "help lists help"
@@ -607,11 +609,17 @@ export EC2_FLEET_AWS_ENV_FILE=$ENV_FILE
 export EC2_FLEET_TS_ENV_FILE=$TS_ENV_FILE
 unset EC2_FLEET_READY_TIMEOUT
 for args in "" "--type c8a.large" "--type c8a.large --disk 0" "--type c8a.large --disk 20x" \
-  "commonframe-gate --spot" "commonframe-gate extra" "--type c8a.large --disk 20 commonframe-gate"; do
+  "commonframe-gate --spot" "commonframe-gate extra" "--type c8a.large --disk 20 commonframe-gate" \
+  "commonframe-gate --override-input halmasuit" "commonframe-gate --override-input" \
+  "--type c8a.large --disk 20 --override-input halmasuit git+file:///fixture/halmasuit"; do
   run up $args
   expect_nonzero "up $args"
   expect_no_log '^(aws|curl|ssh) |nix build' "up $args calls no AWS, Tailscale, ssh or nix build"
 done
+
+run up commonframe-gate --override-input halmasuit ""
+expect_nonzero "up with an empty override URL"
+expect_no_log '^(aws|curl|ssh) |nix build' "up with an empty override URL calls no AWS, Tailscale, ssh or nix build"
 
 run up nosuch-class
 expect_nonzero "up with an unknown class"
@@ -815,6 +823,33 @@ while IFS= read -r call; do
   case $call in *"-o ControlPath=none"*) ;; *) fail "ssh call without ControlPath=none: $call" ;; esac
 done <<<"$mux_calls"
 expect_no_fixed "terminate-instances" "up commonframe-gate terminates nothing on success"
+
+# up commonframe-gate with overrides: each pair reaches the class toplevel build
+# as separate argv words, in order and verbatim. The ec2Classes eval and the base
+# build carry no override.
+URL_A='git+file:///fixture/halmasuit?rev=0123456789abcdef0123456789abcdef01234567&dir=nix'
+URL_B='github:NixOS/nixpkgs/nixos-unstable'
+rm -f "$STUB_FIXTURES"/build-*.argv
+run up commonframe-gate --override-input halmasuit "$URL_A" --override-input nixpkgs "$URL_B"
+expect_status 0 "up commonframe-gate with two overrides"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up commonframe-gate with two overrides prints the ready line"
+expect_no_log '^nix eval .*--override-input' "up with overrides evaluates ec2Classes without overrides"
+expected_class=$(printf '%s\n' build --no-link --print-out-paths --override-input halmasuit "$URL_A" \
+  --override-input nixpkgs "$URL_B" /fixture/flake#nixosConfigurations.ec2-commonframe-gate.config.system.build.toplevel)
+[ "$(cat "$STUB_FIXTURES/build-commonframe-gate.argv")" = "$expected_class" ] ||
+  fail "up with overrides: class toplevel build argv is not the expected overrides in order"
+expected_base=$(printf '%s\n' build --no-link --print-out-paths /fixture/flake#nixosConfigurations.ec2-base.config.system.build.toplevel)
+[ "$(cat "$STUB_FIXTURES/build-base.argv")" = "$expected_base" ] ||
+  fail "up with overrides: base toplevel build argv carries an override"
+
+# A class launched with an empty override set builds the class toplevel with no
+# override words at all.
+rm -f "$STUB_FIXTURES"/build-*.argv
+run up commonframe-gate
+expect_status 0 "up commonframe-gate without overrides"
+expected_plain=$(printf '%s\n' build --no-link --print-out-paths /fixture/flake#nixosConfigurations.ec2-commonframe-gate.config.system.build.toplevel)
+[ "$(cat "$STUB_FIXTURES/build-commonframe-gate.argv")" = "$expected_plain" ] ||
+  fail "up without overrides: class toplevel build argv gained words"
 
 # A spot class tries each zone that offers its type in sorted order, moving on
 # only past InsufficientInstanceCapacity. It stops at the first launch.

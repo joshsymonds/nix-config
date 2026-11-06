@@ -102,7 +102,7 @@ in {
 
     hardware.nvidia = {
       open = true;
-      nvidiaSettings = true;
+      nvidiaSettings = lib.mkDefault true;
       powerManagement.enable = lib.mkDefault true;
       package =
         if cfg.package != null

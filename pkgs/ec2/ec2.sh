@@ -462,9 +462,6 @@ cmd_up() {
     die "nix build failed for ec2-base"
   [ -n "$base_path" ] || die "nix build printed no toplevel for ec2-base"
 
-  suffix=$(shuf -r -n 3 -e {a..z} {0..9} | tr -d '\n') || die "cannot pick a random name"
-  name="$prefix-$suffix"
-
   # The walk runs over the regions in order. A spot launch tries the regions
   # offering the type in spot placement score order, each one's zones in sorted
   # order, as spot. Then, for every launch, the regions offering the type are
@@ -514,11 +511,15 @@ cmd_up() {
       continue
     fi
     # The region's base AMI and security group are found, or built, the first time
-    # the walk reaches the region. The Tailscale key follows the first region.
+    # the walk reaches the region. A launch gets its name, Tailscale key and
+    # user-data when it has none: at the first region, and again after a box fails
+    # its running wait.
     if [ -z "${region_sg[$aregion]:-}" ]; then
       resolve_region "$aregion" "${base_path##*/}"
     fi
     if [ -z "$userdata" ]; then
+      suffix=$(shuf -r -n 3 -e {a..z} {0..9} | tr -d '\n') || die "cannot pick a random name"
+      name="$prefix-$suffix"
       create_userdata "$name"
     fi
     place=()
@@ -546,7 +547,21 @@ cmd_up() {
       launched_region=$aregion
       cat -- "$runerr" >&2
       [ -n "$id" ] || die "run-instances returned no instance id; check for a new fleet=ec2 box"
-      break
+      if ec2_in "$aregion" wait instance-running --instance-ids "$id"; then
+        break
+      fi
+      # A box that does not reach running is terminated in its region and forgotten
+      # as the launched box, so on_exit does not terminate it again. The walk goes on
+      # with a fresh name, key and user-data.
+      launched=""
+      launched_region=""
+      ec2_in "$aregion" terminate-instances --instance-ids "$id" >/dev/null ||
+        die "could not terminate $id; terminate it by hand"
+      echo "ec2: $id did not reach running in $aregion; terminated it" >&2
+      id=""
+      rm -f -- "$userdata"
+      userdata=""
+      continue
     fi
     if grep -q InsufficientInstanceCapacity "$runerr"; then
       echo "ec2: no $kind capacity for $itype in ${zone:-$aregion}" >&2
@@ -574,8 +589,6 @@ cmd_up() {
   rm -f -- "$userdata"
   userdata=""
   echo "$market_line"
-
-  ec2_in "$launched_region" wait instance-running --instance-ids "$id" || die "$id did not reach running"
 
   deadline=$(($(date +%s) + timeout))
   until ssh "${ssh_opts[@]}" "joshsymonds@$name" true 2>/dev/null; do

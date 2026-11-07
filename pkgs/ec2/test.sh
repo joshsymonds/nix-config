@@ -196,6 +196,10 @@ case "$2" in
       if [ "$prev" = --user-data ]; then userdata=${a#file://}; fi
       prev=$a
     done
+    # Each call's user-data is kept as user-data.<call number>.seen; user-data.seen
+    # holds the latest call's copy.
+    n=$(grep -c '^aws ec2 run-instances ' "$STUB_LOG")
+    cp "$userdata" "$STUB_FIXTURES/user-data.$n.seen" || exit 1
     cp "$userdata" "$STUB_FIXTURES/user-data.seen" || exit 1
     stat -c %a "$userdata" >"$STUB_FIXTURES/user-data.mode"
     echo i-0launched00000001
@@ -208,7 +212,17 @@ case "$2" in
     esac
     ;;
   deregister-image | delete-snapshot) : ;;
-  wait) : ;;
+  wait)
+    # running-fail-left holds how many more instance-running waits fail.
+    if [ "$3" = instance-running ] && [ -e "$STUB_FIXTURES/running-fail-left" ]; then
+      left=$(cat "$STUB_FIXTURES/running-fail-left")
+      if [ "$left" -gt 0 ]; then
+        echo $((left - 1)) >"$STUB_FIXTURES/running-fail-left"
+        echo "An error occurred (WaiterFailed) when calling the WaitInstance operation: instance did not reach running." >&2
+        exit 255
+      fi
+    fi
+    ;;
   terminate-instances) echo '{"TerminatingInstances":[]}' ;;
   *)
     echo "stub aws: unexpected ec2 subcommand $2" >&2
@@ -279,7 +293,13 @@ case "$*" in
         exit 22
         ;;
     esac
-    echo '{"key":"tskey-auth-STUB-AUTHKEY-9e2b"}'
+    # The first key of a run is AUTHKEY; each later one carries its request number.
+    keys=$(cat "$STUB_FIXTURES/key-count" 2>/dev/null || echo 0)
+    keys=$((keys + 1))
+    echo "$keys" >"$STUB_FIXTURES/key-count"
+    key=tskey-auth-STUB-AUTHKEY-9e2b
+    [ "$keys" -eq 1 ] || key=$key-$keys
+    echo "{\"key\":\"$key\"}"
     ;;
   *)
     echo "stub curl: unexpected URL" >&2
@@ -591,6 +611,7 @@ run() {
   : >"$STUB_REGION_LOG"
   rm -f "$STUB_FIXTURES/user-data.seen" "$STUB_FIXTURES/user-data.mode" "$STUB_FIXTURES/nix-sshopts.seen" \
     "$STUB_FIXTURES/registered" "$STUB_FIXTURES/eu-west-1/registered" "$STUB_FIXTURES/rebooted"
+  rm -f "$STUB_FIXTURES"/user-data.*.seen "$STUB_FIXTURES/key-count"
   if [ -n "$probe_signal" ]; then
     launch_signalled "$probe_signal" "$@"
   elif "$EC2" "$@" >"$OUT" 2>"$ERR"; then
@@ -684,11 +705,15 @@ expect_order() {
     prev=$cur
   done
 }
-# expect_terminated <desc>: exactly one terminate for the launched instance.
-expect_terminated() {
+# expect_terminations <desc> <n>: exactly n terminates for the launched instance.
+expect_terminations() {
   local count
   count=$(grep -c -F -- 'terminate-instances --instance-ids i-0launched00000001' "$STUB_LOG")
-  [ "$count" -eq 1 ] || fail "$1: want one terminate-instances for i-0launched00000001, got $count"
+  [ "$count" -eq "$2" ] || fail "$1: want $2 terminate-instances for i-0launched00000001, got $count"
+}
+# expect_terminated <desc>: exactly one terminate for the launched instance.
+expect_terminated() {
+  expect_terminations "$1" 1
 }
 # expect_userdata <desc> <name>: the user-data run-instances received carried
 # the name and auth key, was mode 0600, and its file was removed.
@@ -703,12 +728,24 @@ expect_userdata() {
   [ "$(wc -l <"$seen")" -eq 2 ] || fail "$1: user-data is not exactly two lines"
   [ "$(cat "$STUB_FIXTURES/user-data.mode")" = 600 ] || fail "$1: user-data file was not mode 600"
 }
+# expect_attempt_userdata <desc> <call> <name> <key>: the user-data of run-instances
+# call number <call> carried the name and key, and had exactly two lines.
+expect_attempt_userdata() {
+  local seen="$STUB_FIXTURES/user-data.$2.seen"
+  if [ ! -f "$seen" ]; then
+    fail "$1: run-instances call $2 received no user-data file"
+    return
+  fi
+  grep -x -F -q "EC2_FLEET_NAME=$3" "$seen" || fail "$1: call $2 user-data lacks EC2_FLEET_NAME=$3"
+  grep -x -F -q "EC2_FLEET_TS_AUTHKEY=$4" "$seen" || fail "$1: call $2 user-data lacks EC2_FLEET_TS_AUTHKEY=$4"
+  [ "$(wc -l <"$seen")" -eq 2 ] || fail "$1: call $2 user-data is not exactly two lines"
+}
 inject() {
   : >"$STUB_FIXTURES/fail-$1"
 }
 clear_faults() {
   local dir
-  rm -f "$STUB_FIXTURES"/fail-* "$STUB_FIXTURES"/warn-run-instances
+  rm -f "$STUB_FIXTURES"/fail-* "$STUB_FIXTURES"/warn-run-instances "$STUB_FIXTURES/running-fail-left"
   for dir in "$STUB_FIXTURES" "$STUB_FIXTURES/eu-west-1"; do
     rm -f "$dir"/no-capacity-* "$dir"/other-error-* "$dir"/throttle-* "$dir"/account-throttle "$dir"/quota-*
   done
@@ -1841,13 +1878,78 @@ expect_no_fixed "systemctl reboot" "up reboot-probe with the boot switch failing
 expect_no_fixed "switch-to-configuration switch" "up reboot-probe with the boot switch failing switches in place"
 clear_faults
 
+# A box whose running wait fails is terminated once, in its region, and the walk
+# goes on with a fresh name, key and user-data. Attempt 1 is us-west-2a's spot
+# launch, whose running wait fails once; attempt 2, us-west-2b's spot launch,
+# reaches running, and the launch ends ready with the market line of that box.
+echo 1 >"$STUB_FIXTURES/running-fail-left"
+run up commonframe-gate
+expect_status 0 "up commonframe-gate with attempt 1's running wait failing once"
+expect_out '^market spot us-west-2b$' "up with attempt 1's running wait failing once prints the market line of the box that ran"
+[ "$(grep -c '^market ' "$OUT")" -eq 1 ] || fail "up with attempt 1's running wait failing once: want exactly one market line"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up with attempt 1's running wait failing once prints the ready line"
+name2=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name2 ready" ] || fail "up with attempt 1's running wait failing once: the ready line is not last"
+expect_err '^ec2: i-0launched00000001 did not reach running in us-west-2; terminated it$' "up with attempt 1's running wait failing once names the terminated box and region"
+expect_placements "up with attempt 1's running wait failing once" "zone us-west-2a spot" "zone us-west-2b spot"
+expect_run_count "up with attempt 1's running wait failing once" 2
+expect_terminated "up with attempt 1's running wait failing once"
+expect_region "up with attempt 1's running wait failing once terminates attempt 1's box in us-west-2" us-west-2 \
+  "terminate-instances --instance-ids i-0launched00000001"
+expect_no_region "up with attempt 1's running wait failing once terminates nothing in eu-west-1" eu-west-1 "terminate-instances"
+first_wait=$(grep -F -n -m1 -- 'aws ec2 wait instance-running' "$STUB_LOG" | cut -d: -f1)
+term_line=$(grep -F -n -m1 -- 'terminate-instances --instance-ids i-0launched00000001' "$STUB_LOG" | cut -d: -f1)
+second_run=$(grep -E -n '^aws ec2 run-instances ' "$STUB_LOG" | sed -n 2p | cut -d: -f1)
+if [ -z "$first_wait" ] || [ -z "$term_line" ] || [ -z "$second_run" ] ||
+  [ "$term_line" -le "$first_wait" ] || [ "$second_run" -le "$term_line" ]; then
+  fail "up with attempt 1's running wait failing once: want attempt 1's running wait, then its terminate, then attempt 2's run-instances"
+fi
+name1=$(sed -n 's/^EC2_FLEET_NAME=//p' "$STUB_FIXTURES/user-data.1.seen" 2>/dev/null)
+name2_ud=$(sed -n 's/^EC2_FLEET_NAME=//p' "$STUB_FIXTURES/user-data.2.seen" 2>/dev/null)
+[ "$name2_ud" = "$name2" ] || fail "up with attempt 1's running wait failing once: the ready box is not attempt 2's name"
+if [ -z "$name1" ] || [ "$name1" = "$name2" ]; then
+  fail "up with attempt 1's running wait failing once: attempt 2 reuses attempt 1's name"
+fi
+expect_attempt_userdata "up with attempt 1's running wait failing once: attempt 1" 1 "$name1" "$AUTHKEY"
+expect_attempt_userdata "up with attempt 1's running wait failing once: attempt 2" 2 "$name2" "$AUTHKEY-2"
+clear_faults
+
+# Every placed attempt refused, so the unplaced launch is the last attempt, and its
+# running wait fails. Nothing is left running: that box is terminated once, nothing
+# is printed as the launched box, and the launch exits nonzero.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+: >"$STUB_FIXTURES/no-capacity-us-west-2c"
+echo 1 >"$STUB_FIXTURES/running-fail-left"
+run up commonframe-gate
+expect_nonzero "up commonframe-gate with the running wait failing on the last attempt"
+expect_err 'no region could launch c8a\.4xlarge; nothing was launched' "up with the running wait failing on the last attempt names the exhausted walk"
+expect_run_count "up with the running wait failing on the last attempt" 7
+expect_placements "up with the running wait failing on the last attempt" \
+  "zone us-west-2a spot" "zone us-west-2b spot" "zone us-west-2c spot" \
+  "zone us-west-2a" "zone us-west-2b" "zone us-west-2c" "unplaced"
+expect_terminated "up with the running wait failing on the last attempt"
+expect_region "up with the running wait failing on the last attempt terminates its box in us-west-2" us-west-2 \
+  "terminate-instances --instance-ids i-0launched00000001"
+expect_no_out ' ready$' "up with the running wait failing on the last attempt prints no ready line"
+expect_no_out '^market ' "up with the running wait failing on the last attempt prints no market line"
+expect_no_fixed "nix copy" "up with the running wait failing on the last attempt copies nothing"
+clear_faults
+
 # A failure after run-instances terminates the launched instance and exits nonzero.
+# A persistent running-wait failure fails every attempt: each run-instances call's
+# box is terminated once, and the walk ends.
 export EC2_FLEET_READY_TIMEOUT=0
 for fault in ec2-wait ssh-probe nix-copy ssh-nix-env ssh-switch; do
   inject "$fault"
   run up commonframe-gate
   expect_nonzero "up commonframe-gate with $fault failing"
-  expect_terminated "up commonframe-gate with $fault failing"
+  if [ "$fault" = ec2-wait ]; then
+    expect_run_count "up commonframe-gate with ec2-wait failing" 7
+    expect_terminations "up commonframe-gate with ec2-wait failing" 7
+  else
+    expect_terminated "up commonframe-gate with $fault failing"
+  fi
   case "$fault" in
     ec2-wait | ssh-probe) expect_no_fixed "nix copy" "up with $fault failing does not copy" ;;
     nix-copy) expect_no_fixed "nix-env" "up with nix-copy failing does not set the profile" ;;
@@ -1860,7 +1962,12 @@ for fault in ec2-wait ssh-probe; do
   inject "$fault"
   run up --type c8a.large --disk 40 --spot
   expect_nonzero "ad-hoc up with $fault failing"
-  expect_terminated "ad-hoc up with $fault failing"
+  if [ "$fault" = ec2-wait ]; then
+    expect_run_count "ad-hoc up with ec2-wait failing" 5
+    expect_terminations "ad-hoc up with ec2-wait failing" 5
+  else
+    expect_terminated "ad-hoc up with $fault failing"
+  fi
   clear_faults
 done
 unset EC2_FLEET_READY_TIMEOUT

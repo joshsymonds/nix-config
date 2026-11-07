@@ -46,8 +46,6 @@ in {
   # needs names it, and it starts after the network so a refused or hung
   # endpoint only leaves path cold.
   config = lib.mkIf cfg.enable {
-    programs.fuse.userAllowOther = true;
-
     # The parent is created for the user too, or tmpfiles would make it root-owned.
     systemd.tmpfiles.rules = [
       "d ${dirOf cfg.path} 0755 ${cfg.user} ${owner.group} -"

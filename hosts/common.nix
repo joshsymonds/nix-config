@@ -325,5 +325,11 @@ in {
     openssh.authorizedKeys.keys = import ../lib/ssh-keys.nix;
   };
 
-  users.groups.joshsymonds = {};
+  # NixOS allocates a group with no declared gid from the system range
+  # (999 downward), so each host gave this group a different number below
+  # 1000. halmasuit's broker refuses a session whose primary gid is below
+  # 1000, and ultraviolet's containers run as PGID 1000. NixOS never renumbers
+  # an existing group: a host keeps its old gid until /etc/group is rebuilt
+  # (impermanent hosts, at boot) or the group is renumbered with groupmod.
+  users.groups.joshsymonds.gid = 1000;
 }

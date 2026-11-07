@@ -348,6 +348,12 @@ FIXTURE
 cat >"$STUB_FIXTURES/pricing-m8a.large.json" <<'FIXTURE'
 {"PriceList":["{\"terms\":{\"OnDemand\":{\"X\":{\"priceDimensions\":{\"Y\":{\"pricePerUnit\":{\"USD\":\"0.1000000000\"}}}}}}}"]}
 FIXTURE
+cat >"$STUB_FIXTURES/pricing-g4dn.xlarge.json" <<'FIXTURE'
+{"PriceList":["{\"terms\":{\"OnDemand\":{\"X\":{\"priceDimensions\":{\"Y\":{\"pricePerUnit\":{\"USD\":\"0.5260000000\"}}}}}}}"]}
+FIXTURE
+cat >"$STUB_FIXTURES/pricing-m8a.2xlarge.json" <<'FIXTURE'
+{"PriceList":["{\"terms\":{\"OnDemand\":{\"X\":{\"priceDimensions\":{\"Y\":{\"pricePerUnit\":{\"USD\":\"0.4120000000\"}}}}}}}"]}
+FIXTURE
 cat >"$STUB_FIXTURES/spot-c8a.4xlarge.json" <<'FIXTURE'
 {"SpotPriceHistory":[{"Timestamp":"2026-10-27T09:00:00+00:00","SpotPrice":"0.2100","AvailabilityZone":"us-west-2a"},{"Timestamp":"2026-10-27T08:00:00+00:00","SpotPrice":"0.1900","AvailabilityZone":"us-west-2a"}]}
 FIXTURE
@@ -422,6 +428,10 @@ FIXTURE
 # region shows.
 cat >"$STUB_FIXTURES/eu-west-1/pricing-m8a.large.json" <<'FIXTURE'
 {"PriceList":["{\"terms\":{\"OnDemand\":{\"X\":{\"priceDimensions\":{\"Y\":{\"pricePerUnit\":{\"USD\":\"0.1300000000\"}}}}}}}"]}
+FIXTURE
+# Ireland's g4dn.xlarge on-demand price is dearer than Oregon's by default.
+cat >"$STUB_FIXTURES/eu-west-1/pricing-g4dn.xlarge.json" <<'FIXTURE'
+{"PriceList":["{\"terms\":{\"OnDemand\":{\"X\":{\"priceDimensions\":{\"Y\":{\"pricePerUnit\":{\"USD\":\"0.6120000000\"}}}}}}}"]}
 FIXTURE
 cat >"$STUB_FIXTURES/eu-west-1/spot-m8a.large.json" <<'FIXTURE'
 {"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.0510","AvailabilityZone":"eu-west-1b"}]}
@@ -1278,6 +1288,26 @@ expect_no_region "Oregon terminates nothing" us-west-2 "terminate-instances"
 clear_faults
 unset EC2_FLEET_READY_TIMEOUT
 
+# Every spot zone in both regions throttled, Oregon cheaper: the next attempt is
+# Oregon's first on-demand zone, and it launches there.
+: >"$STUB_FIXTURES/throttle-spot-us-west-2a"
+: >"$STUB_FIXTURES/throttle-spot-us-west-2b"
+: >"$STUB_FIXTURES/throttle-spot-us-west-2c"
+: >"$STUB_FIXTURES/eu-west-1/throttle-spot-eu-west-1a"
+: >"$STUB_FIXTURES/eu-west-1/throttle-spot-eu-west-1b"
+: >"$STUB_FIXTURES/eu-west-1/throttle-spot-eu-west-1c"
+run up --type g4dn.xlarge --disk 20 --spot
+expect_status 0 "spot up with every spot zone in both regions throttled"
+expect_out '^market on-demand$' "spot up with every spot zone in both regions throttled prints the on-demand market line"
+expect_out '^ec2-[a-z0-9]{3} ready$' "spot up with every spot zone in both regions throttled prints the ready line"
+expect_placements "spot up with every spot zone in both regions throttled" \
+  "zone us-west-2a spot" "zone us-west-2b spot" "zone us-west-2c spot" \
+  "zone eu-west-1a spot" "zone eu-west-1b spot" "zone eu-west-1c spot" \
+  "zone us-west-2a"
+expect_region "Oregon's on-demand launch uses Oregon's AMI" us-west-2 \
+  "ec2 run-instances" "--image-id ami-newest00000002" "--placement AvailabilityZone=us-west-2a"
+clear_faults
+
 # On-demand: Oregon's zones and its unplaced attempt refused, so the launch lands
 # in Ireland's first zone. The unplaced refusal names its region and the walk goes on.
 : >"$STUB_FIXTURES/no-capacity-us-west-2a"
@@ -1321,6 +1351,7 @@ expect_placements "on-demand up of a type only Oregon offers" "zone us-west-2a"
 expect_region "Ireland is asked which zones offer the type" eu-west-1 \
   "ec2 describe-instance-type-offerings" "Values=g6.xlarge"
 [ "$(grep -c '^eu-west-1 ' "$STUB_REGION_LOG")" -eq 1 ] || fail "on-demand up of a type only Oregon offers made more than the offering lookup in eu-west-1"
+expect_no_log 'pricing get-products' "on-demand up of a type only Oregon offers looks up no price"
 
 # A type neither region offers: the launch stops before the base AMI, Tailscale or run-instances.
 run up --type p5.48xlarge --disk 40
@@ -1329,6 +1360,34 @@ expect_err 'no region offers p5\.48xlarge' "up of a type no region offers names 
 expect_no_fixed "describe-images" "up of a type no region offers looks up no AMI"
 expect_no_fixed "api/v2" "up of a type no region offers asks Tailscale nothing"
 expect_no_fixed "run-instances" "up of a type no region offers launches nothing"
+
+# Ireland's on-demand g4dn.xlarge is cheaper than Oregon's: Ireland's first zone is
+# the first on-demand attempt, and nothing is warned.
+cat >"$STUB_FIXTURES/eu-west-1/pricing-g4dn.xlarge.json" <<'FIXTURE'
+{"PriceList":["{\"terms\":{\"OnDemand\":{\"X\":{\"priceDimensions\":{\"Y\":{\"pricePerUnit\":{\"USD\":\"0.4000000000\"}}}}}}}"]}
+FIXTURE
+run up --type g4dn.xlarge --disk 20
+expect_status 0 "on-demand up with Ireland cheaper"
+expect_out '^ec2-[a-z0-9]{3} ready$' "on-demand up with Ireland cheaper prints the ready line"
+expect_placements "on-demand up with Ireland cheaper" "zone eu-west-1a"
+expect_region "Ireland's cheaper on-demand launch uses Ireland's AMI and security group" eu-west-1 \
+  "ec2 run-instances" "--image-id ami-irelandnew0002" "Groups=sg-0ireland0000001"
+if grep -q 'cannot rank' "$ERR"; then fail "on-demand up with Ireland cheaper warned that it cannot rank the regions"; fi
+
+# Ireland's price lookup fails while Ireland is the cheaper: the walk keeps the
+# fixed order, Oregon first, prints one warning, and launches in Oregon.
+inject eu-west-1-pricing-get-products
+run up --type g4dn.xlarge --disk 20
+expect_status 0 "on-demand up with Ireland's price lookup failing"
+expect_out '^ec2-[a-z0-9]{3} ready$' "on-demand up with Ireland's price lookup failing prints the ready line"
+expect_err '^ec2: cannot rank regions by on-demand price for g4dn\.xlarge; trying them in fixed order$' "on-demand up with Ireland's price lookup failing warns once in fixed order"
+[ "$(grep -c 'cannot rank' "$ERR")" -eq 1 ] || fail "on-demand up with Ireland's price lookup failing: want exactly one warning"
+expect_placements "on-demand up with Ireland's price lookup failing" "zone us-west-2a"
+expect_no_fixed "terminate-instances" "on-demand up with Ireland's price lookup failing terminates nothing on success"
+clear_faults
+cat >"$STUB_FIXTURES/eu-west-1/pricing-g4dn.xlarge.json" <<'FIXTURE'
+{"PriceList":["{\"terms\":{\"OnDemand\":{\"X\":{\"priceDimensions\":{\"Y\":{\"pricePerUnit\":{\"USD\":\"0.6120000000\"}}}}}}}"]}
+FIXTURE
 
 # Ireland's base AMI is stale: Ireland alone builds and registers an image in
 # eu-west-1, and prunes only its own two oldest base AMIs.
@@ -1428,6 +1487,35 @@ expect_out '^market on-demand$' "up muniment-runner prints the on-demand market 
 expect_run_count "up muniment-runner" 1
 expect_fixed "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name /nix/store/fixture-toplevel-muniment-runner" "up muniment-runner copies its own toplevel"
 expect_fixed "joshsymonds@$name sudo /nix/store/fixture-toplevel-muniment-runner/bin/switch-to-configuration switch" "up muniment-runner switches its own toplevel"
+
+# up muniment-runner with Ireland offering m8a.2xlarge too, Oregon cheaper, and every
+# Oregon on-demand attempt refused: the walk takes Oregon's zones and unplaced
+# attempt, then Ireland's first zone.
+cat >"$STUB_FIXTURES/eu-west-1/offerings-m8a.2xlarge.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"m8a.2xlarge","Location":"eu-west-1c","LocationType":"availability-zone"},
+{"InstanceType":"m8a.2xlarge","Location":"eu-west-1a","LocationType":"availability-zone"},
+{"InstanceType":"m8a.2xlarge","Location":"eu-west-1b","LocationType":"availability-zone"}
+]}
+FIXTURE
+cat >"$STUB_FIXTURES/eu-west-1/pricing-m8a.2xlarge.json" <<'FIXTURE'
+{"PriceList":["{\"terms\":{\"OnDemand\":{\"X\":{\"priceDimensions\":{\"Y\":{\"pricePerUnit\":{\"USD\":\"0.4500000000\"}}}}}}}"]}
+FIXTURE
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+: >"$STUB_FIXTURES/no-capacity-us-west-2c"
+: >"$STUB_FIXTURES/no-capacity-unplaced"
+run up muniment-runner
+expect_status 0 "up muniment-runner with Oregon's on-demand walk refused"
+expect_out '^market on-demand$' "up muniment-runner with Oregon's on-demand walk refused prints the on-demand market line"
+expect_out '^muniment-runner-[a-z0-9]{3} ready$' "up muniment-runner with Oregon's on-demand walk refused prints the ready line"
+expect_placements "up muniment-runner with Oregon's on-demand walk refused" \
+  "zone us-west-2a" "zone us-west-2b" "zone us-west-2c" "unplaced" "zone eu-west-1a"
+expect_region "up muniment-runner's Ireland launch uses Ireland's AMI and security group" eu-west-1 \
+  "ec2 run-instances" "--image-id ami-irelandnew0002" "Groups=sg-0ireland0000001" "--placement AvailabilityZone=eu-west-1a"
+clear_faults
+echo '{"InstanceTypeOfferings":[]}' >"$STUB_FIXTURES/eu-west-1/offerings-m8a.2xlarge.json"
+rm -f "$STUB_FIXTURES/eu-west-1/pricing-m8a.2xlarge.json"
 
 # up reboot-probe: a class with reboot = true deploys with switch-to-configuration
 # boot, reboots the box and waits for a new boot id, and prints the ready line last.

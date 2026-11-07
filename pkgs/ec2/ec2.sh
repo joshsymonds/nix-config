@@ -94,6 +94,29 @@ spot_price() {
     jq -r '.SpotPriceHistory | max_by(.Timestamp).SpotPrice // "n/a"'
 }
 
+# rank_regions <type> <region>...: prints the regions cheapest on-demand first,
+# equal prices in the order given. A price that cannot be read warns once on
+# stderr and prints the regions in the order given.
+rank_regions() {
+  local itype=$1 r p
+  local -a priced=()
+  shift
+  [ $# -gt 1 ] || {
+    printf '%s\n' "$@"
+    return 0
+  }
+  for r in "$@"; do
+    p=$(on_demand_price "$r" "$itype") || p=
+    [[ $p =~ ^[0-9]+(\.[0-9]+)?$ ]] || {
+      echo "ec2: cannot rank regions by on-demand price for $itype; trying them in fixed order" >&2
+      printf '%s\n' "$@"
+      return 0
+    }
+    priced+=("$p $r")
+  done
+  printf '%s\n' "${priced[@]}" | sort -s -n | cut -d' ' -f2
+}
+
 cmd_ls() {
   local region described rows name class itype spot launch az od sp
   load_aws_env
@@ -386,25 +409,38 @@ cmd_up() {
 
   # The walk runs over the regions in order. A spot launch tries each region's
   # zones offering the type, in sorted order, as spot. Then, for every launch,
-  # each region's zones as on-demand, placed, and its one on-demand attempt with
+  # the regions offering the type are ranked by on-demand price, cheapest first,
+  # and each one's zones as on-demand, placed, then its one on-demand attempt with
   # no placement. A region offering no zone for the type gets no attempt.
+  local ranked
+  local -a offering=() od_regions=()
+  local -A region_zones=()
   for r in "${regions[@]}"; do
     zone_list=$(ec2_in "$r" describe-instance-type-offerings --output json --location-type availability-zone \
       --filters "Name=instance-type,Values=$itype" |
       jq -r '[.InstanceTypeOfferings[].Location] | sort | .[]') ||
       die "cannot list the zones offering $itype in $r"
     [ -n "$zone_list" ] || continue
-    readarray -t zones <<<"$zone_list"
-    for zone in "${zones[@]}"; do
-      if [ "$spot_req" = yes ]; then
+    offering+=("$r")
+    region_zones[$r]=$zone_list
+    if [ "$spot_req" = yes ]; then
+      readarray -t zones <<<"$zone_list"
+      for zone in "${zones[@]}"; do
         spot_attempts+=("spot $r $zone")
-      fi
+      done
+    fi
+  done
+  [ ${#offering[@]} -gt 0 ] || die "no region offers $itype"
+  ranked=$(rank_regions "$itype" "${offering[@]}") || die "cannot order the regions offering $itype"
+  readarray -t od_regions <<<"$ranked"
+  for r in "${od_regions[@]}"; do
+    readarray -t zones <<<"${region_zones[$r]}"
+    for zone in "${zones[@]}"; do
       od_attempts+=("on-demand $r $zone")
     done
     od_attempts+=("on-demand $r")
   done
   attempts=("${spot_attempts[@]}" "${od_attempts[@]}")
-  [ ${#attempts[@]} -gt 0 ] || die "no region offers $itype"
 
   runerr=$(mktemp) || die "cannot create a temp file"
   for attempt in "${attempts[@]}"; do

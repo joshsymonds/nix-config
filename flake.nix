@@ -729,6 +729,11 @@
             inherit inputs;
             outputs = self.outputs;
           };
+          ec2-s3-cache = import ./tests/ec2-s3-cache.nix {
+            pkgs = checkPkgs;
+            inherit inputs;
+            outputs = self.outputs;
+          };
           ec2-identity = import ./tests/ec2-identity.nix {
             pkgs = checkPkgs;
             inherit inputs;

@@ -2,8 +2,15 @@
 {pkgs, ...}: {
   users.users.cf = {
     isNormalUser = true;
+    uid = 1001;
     linger = true;
     openssh.authorizedKeys.keys = import ../../../lib/ssh-keys.nix;
+  };
+
+  ec2Fleet.s3Cache = {
+    prefix = "commonframe/";
+    path = "/home/cf/.cache/commonframe";
+    user = "cf";
   };
 
   nix.settings.trusted-users = ["cf"];

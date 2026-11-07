@@ -1994,11 +1994,11 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1792675302,
-        "narHash": "sha256-zacPPjqPaUBcj5j4MczcBsmiz+sCOFogdcNg6kFPaHM=",
+        "lastModified": 1794021787,
+        "narHash": "sha256-tggGimmnw91+SeX0nnGWSrOrrpq6A5Fu4mkv5vrZKCo=",
         "owner": "joshsymonds",
         "repo": "halmasuit",
-        "rev": "d3cf255c21bf792c802cabb63406e988ae7f4bce",
+        "rev": "8660cb64ca0e69959161d2f66d8872f897d8d13a",
         "type": "github"
       },
       "original": {

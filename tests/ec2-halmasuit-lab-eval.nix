@@ -27,6 +27,8 @@
   pamLines = lib.splitString "\n" lab.security.pam.services.halmasuit.text;
   authLines = lib.filter (line: lib.hasPrefix "auth" line) pamLines;
   initrdEnv = lab.boot.initrd.systemd.services.halmasuit.environment;
+  labuser = lab.users.users.labuser or {};
+  greeterGroup = lab.services.halmasuit.greeterGroup;
 in
   # 0. class registry entry (hosts/ec2/classes.nix)
   assert check (cls.instanceType == "g4dn.xlarge") "classes.nix halmasuit-lab instanceType must be g4dn.xlarge";
@@ -94,6 +96,23 @@ in
   # 9. PAM
   assert check (!(lib.hasInfix "pam_u2f" lab.security.pam.services.halmasuit.text)) "security.pam.services.halmasuit must not contain pam_u2f";
   assert check (lib.all (line: !(lib.hasInfix "nullok" line)) authLines) "security.pam.services.halmasuit auth lines must not contain nullok";
+  # 10. lab login account labuser (J3, classes/halmasuit-lab.nix)
+  assert check (lab.users.users ? labuser) "users.users.labuser must be declared";
+  assert check (labuser.isNormalUser or false) "users.users.labuser.isNormalUser must be true";
+  assert check ((labuser.uid or null) == 1500) "users.users.labuser.uid must be 1500";
+  assert check ((labuser.uid or 0) >= 1000) "users.users.labuser.uid must be at least 1000";
+  assert check ((labuser.group or null) == "users") "users.users.labuser.group must be users";
+  assert check (lib.hasAttr greeterGroup lab.users.groups) "users.groups.${greeterGroup} must exist (services.halmasuit.greeterGroup)";
+  assert check ((labuser.extraGroups or null) == [greeterGroup]) "users.users.labuser.extraGroups must be exactly [services.halmasuit.greeterGroup]";
+  assert check (!(has (labuser.extraGroups or []) "wheel")) "users.users.labuser.extraGroups must not contain wheel";
+  assert check ((labuser.hashedPassword or null) == null) "users.users.labuser.hashedPassword must be unset";
+  assert check ((labuser.hashedPasswordFile or null) == null) "users.users.labuser.hashedPasswordFile must be unset";
+  assert check ((labuser.password or null) == null) "users.users.labuser.password must be unset";
+  assert check ((labuser.initialPassword or null) == null) "users.users.labuser.initialPassword must be unset";
+  assert check ((labuser.initialHashedPassword or null) == null) "users.users.labuser.initialHashedPassword must be unset";
+  assert check (!(lib.any (rule: has (rule.users or []) "labuser") lab.security.sudo.extraRules)) "security.sudo.extraRules must not name labuser";
+  assert check (!(lib.hasInfix "labuser" lab.security.sudo.configFile)) "security.sudo.configFile must not name labuser";
+  assert check (lab.users.mutableUsers == true) "users.mutableUsers must stay true (chpasswd password must persist across reboot)";
     pkgs.runCommand "ec2-halmasuit-lab-eval" {} ''
       touch "$out"
     ''

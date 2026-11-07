@@ -67,6 +67,14 @@
     u2fOffServices = ["halmasuit"];
   };
 
+  # Lab login account. Its password is set per run with `chpasswd`; no password is declared here.
+  users.users.labuser = {
+    isNormalUser = true;
+    uid = 1500;
+    group = "users";
+    extraGroups = [config.services.halmasuit.greeterGroup];
+  };
+
   # halmasuit.lab.enable declares gnomon's cryptroot LUKS device; this root is not encrypted.
   boot.initrd.luks.devices = lib.mkForce {};
 

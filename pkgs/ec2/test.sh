@@ -64,13 +64,27 @@ write_stub aws <<'AWSSTUB'
   exit 255
 }
 if [ "$1" = pricing ]; then
-  itype=
+  itype= region=
   for a in "$@"; do
     case "$a" in
       *Field=instanceType,Value=*) itype=${a##*Value=} ;;
+      *Field=regionCode,Value=*) region=${a##*Value=} ;;
     esac
   done
-  cat "$STUB_FIXTURES/pricing-$itype.json"
+  [ -e "$STUB_FIXTURES/fail-$region-$1-$2" ] && {
+    echo "An error occurred (AccessDenied) when calling $2 in $region" >&2
+    exit 255
+  }
+  # A price is read from the directory of the region its regionCode names.
+  case "$region" in
+    us-west-2) rdir=$STUB_FIXTURES ;;
+    eu-west-1) rdir=$STUB_FIXTURES/eu-west-1 ;;
+    *)
+      echo "stub aws: pricing call with no fleet regionCode: $*" >&2
+      exit 1
+      ;;
+  esac
+  cat "$rdir/pricing-$itype.json"
   exit 0
 fi
 [ "$1" = ec2 ] || {
@@ -87,6 +101,10 @@ case "${AWS_REGION:-}" in
     exit 1
     ;;
 esac
+[ -e "$STUB_FIXTURES/fail-$AWS_REGION-$1-$2" ] && {
+  echo "An error occurred (AccessDenied) when calling $2 in $AWS_REGION" >&2
+  exit 255
+}
 printf '%s %s\n' "$AWS_REGION" "$*" >>"$STUB_REGION_LOG"
 case "$2" in
   describe-instances) cat "$rdir/instances.json" ;;
@@ -394,7 +412,20 @@ cat >"$STUB_FIXTURES/eu-west-1/offerings-g4dn.xlarge.json" <<'FIXTURE'
 {"InstanceType":"g4dn.xlarge","Location":"eu-west-1b","LocationType":"availability-zone"}
 ]}
 FIXTURE
-echo '{"Reservations":[]}' >"$STUB_FIXTURES/eu-west-1/instances.json"
+t_irl=$(date -u -d '70 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+cat >"$STUB_FIXTURES/eu-west-1/instances.json" <<FIXTURE
+{"Reservations":[{"Instances":[
+  {"InstanceId":"i-0ireland0000001","InstanceType":"m8a.large","State":{"Name":"running"},"LaunchTime":"$t_irl","Placement":{"AvailabilityZone":"eu-west-1b"},"Tags":[{"Key":"Name","Value":"ec2-irl7k"},{"Key":"fleet","Value":"ec2"},{"Key":"fleet-class","Value":"adhoc"}]}
+]}]}
+FIXTURE
+# Ireland prices m8a.large differently from Oregon, so a row priced in the wrong
+# region shows.
+cat >"$STUB_FIXTURES/eu-west-1/pricing-m8a.large.json" <<'FIXTURE'
+{"PriceList":["{\"terms\":{\"OnDemand\":{\"X\":{\"priceDimensions\":{\"Y\":{\"pricePerUnit\":{\"USD\":\"0.1300000000\"}}}}}}}"]}
+FIXTURE
+cat >"$STUB_FIXTURES/eu-west-1/spot-m8a.large.json" <<'FIXTURE'
+{"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.0510","AvailabilityZone":"eu-west-1b"}]}
+FIXTURE
 cat >"$STUB_FIXTURES/eu-west-1/security-groups.json" <<'FIXTURE'
 {"SecurityGroups":[{"GroupId":"sg-0ireland0000001","GroupName":"ec2-fleet"}]}
 FIXTURE
@@ -752,8 +783,32 @@ expect_log 'describe-spot-price-history .*--availability-zone us-west-2a' "ls as
 expect_log 'describe-spot-price-history .*Linux/UNIX' "ls asks Linux/UNIX spot price"
 expect_no_log 'terminate-instances' "ls terminates nothing"
 
+# ls lists the Ireland box after Oregon's rows, priced and spot-priced in eu-west-1.
+expect_out '^ec2-irl7k +adhoc +m8a\.large +no +1h1[0-9]m +0\.1300000000 +0\.0510$' "ls row for the Ireland box priced in eu-west-1"
+last_west=$(grep -n '^ec2-x9z ' "$OUT" | cut -d: -f1)
+irl=$(grep -n '^ec2-irl7k ' "$OUT" | cut -d: -f1)
+if [ -z "$last_west" ] || [ -z "$irl" ] || [ "$irl" -le "$last_west" ]; then
+  fail "ls lists the Ireland box after all us-west-2 rows"
+fi
+expect_region "ls describes instances in eu-west-1" eu-west-1 "ec2 describe-instances"
+expect_region "ls describes instances in us-west-2" us-west-2 "ec2 describe-instances"
+expect_log 'Field=regionCode,Value=eu-west-1' "ls prices the Ireland box in eu-west-1"
+expect_region "ls asks Ireland spot price in eu-west-1 for its zone" eu-west-1 \
+  "describe-spot-price-history" "--instance-types m8a.large" "--availability-zone eu-west-1b"
+expect_no_region "ls asks no Ireland zone in us-west-2" us-west-2 "--availability-zone eu-west-1b"
+expect_region "ls asks Oregon spot price in us-west-2 for its zone" us-west-2 \
+  "describe-spot-price-history" "--availability-zone us-west-2b"
+
 # ls exits nonzero when any AWS call it depends on fails.
 for failing in ec2-describe-instances pricing-get-products ec2-describe-spot-price-history; do
+  : >"$STUB_FIXTURES/fail-$failing"
+  run ls
+  expect_nonzero "ls with $failing failing"
+  rm -f "$STUB_FIXTURES/fail-$failing"
+done
+
+# ls exits nonzero when one region's call fails alone.
+for failing in eu-west-1-ec2-describe-instances eu-west-1-pricing-get-products eu-west-1-ec2-describe-spot-price-history; do
   : >"$STUB_FIXTURES/fail-$failing"
   run ls
   expect_nonzero "ls with $failing failing"

@@ -95,29 +95,31 @@ spot_price() {
 }
 
 cmd_ls() {
-  local described rows name class itype spot launch az od sp
+  local region described rows name class itype spot launch az od sp
   load_aws_env
-  described=$(ec2_in us-west-2 describe-instances --output json \
-    --filters 'Name=tag:fleet,Values=ec2' 'Name=instance-state-name,Values=pending,running')
-  rows=$(jq -r '
-    def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
-    .Reservations[].Instances[]
-    | select(.State.Name == "pending" or .State.Name == "running")
-    | select(tag("fleet") == "ec2")
-    | [tag("Name"), tag("fleet-class"), .InstanceType,
-       (if .InstanceLifecycle == "spot" then "yes" else "no" end),
-       .LaunchTime, .Placement.AvailabilityZone]
-    | @tsv' <<<"$described")
   printf '%-28s %-18s %-14s %-5s %-8s %-13s %s\n' NAME CLASS TYPE SPOT AGE ON-DEMAND/HR SPOT/HR
-  if [ -z "$rows" ]; then
-    return 0
-  fi
-  while IFS=$'\t' read -r name class itype spot launch az; do
-    od=$(on_demand_price us-west-2 "$itype") || die "pricing lookup failed for $itype"
-    sp=$(spot_price us-west-2 "$itype" "$az") || die "spot price lookup failed for $itype in $az"
-    printf '%-28s %-18s %-14s %-5s %-8s %-13s %s\n' "$name" "$class" "$itype" "$spot" \
-      "$(age_of "$launch")" "$od" "$sp"
-  done <<<"$rows"
+  for region in "${regions[@]}"; do
+    described=$(ec2_in "$region" describe-instances --output json \
+      --filters 'Name=tag:fleet,Values=ec2' 'Name=instance-state-name,Values=pending,running')
+    rows=$(jq -r '
+      def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
+      .Reservations[].Instances[]
+      | select(.State.Name == "pending" or .State.Name == "running")
+      | select(tag("fleet") == "ec2")
+      | [tag("Name"), tag("fleet-class"), .InstanceType,
+         (if .InstanceLifecycle == "spot" then "yes" else "no" end),
+         .LaunchTime, .Placement.AvailabilityZone]
+      | @tsv' <<<"$described")
+    if [ -z "$rows" ]; then
+      continue
+    fi
+    while IFS=$'\t' read -r name class itype spot launch az; do
+      od=$(on_demand_price "$region" "$itype") || die "pricing lookup failed for $itype in $region"
+      sp=$(spot_price "$region" "$itype" "$az") || die "spot price lookup failed for $itype in $az"
+      printf '%-28s %-18s %-14s %-5s %-8s %-13s %s\n' "$name" "$class" "$itype" "$spot" \
+        "$(age_of "$launch")" "$od" "$sp"
+    done <<<"$rows"
+  done
 }
 
 cmd_down() {

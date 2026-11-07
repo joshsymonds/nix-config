@@ -1,23 +1,34 @@
-# ec2: launch, list, and terminate fleet boxes in us-west-2.
+# ec2: launch, list, and terminate fleet boxes in us-west-2 and eu-west-1.
 # AWS credentials come only from $EC2_FLEET_AWS_ENV_FILE and the Tailscale OAuth
 # client only from $EC2_FLEET_TS_ENV_FILE. Neither is printed or placed on a
 # command line.
 
-region=us-west-2
+regions=(us-west-2 eu-west-1)
 flake=${EC2_FLEET_FLAKE:-$HOME/nix-config}
 
 # launched is the instance cmd_up started and has not finished deploying;
-# userdata is the temp file holding the auth key until run-instances reads it;
-# runerr is the temp file holding the stderr of run-instances.
+# launched_region is the region it runs in; userdata is the temp file holding
+# the auth key until run-instances reads it; runerr is the temp file holding the
+# stderr of run-instances.
 launched=""
+launched_region=""
 userdata=""
 runerr=""
-# base_ami is the AMI cmd_up launches from; ensure_base_ami sets it.
+# base_ami is the AMI ensure_base_ami found or built; region_ami and region_sg
+# hold each region's base AMI and security group once the walk reaches it.
 base_ami=""
+declare -A region_ami=() region_sg=()
 
 die() {
   echo "ec2: $*" >&2
   exit 1
+}
+
+# ec2_in <region> <ec2 subcommand and args>: runs one aws ec2 call in the region.
+ec2_in() {
+  local r=$1
+  shift
+  AWS_REGION=$r AWS_DEFAULT_REGION=$r aws ec2 "$@"
 }
 
 load_aws_env() {
@@ -33,7 +44,7 @@ load_aws_env() {
   if [ -z "$access" ] || [ -z "$secret" ]; then
     die "$EC2_FLEET_AWS_ENV_FILE lacks AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY"
   fi
-  export AWS_ACCESS_KEY_ID=$access AWS_SECRET_ACCESS_KEY=$secret AWS_DEFAULT_REGION=$region
+  export AWS_ACCESS_KEY_ID=$access AWS_SECRET_ACCESS_KEY=$secret
 }
 
 # load_ts_env: reads the Tailscale OAuth client into ts_client_id and
@@ -64,11 +75,11 @@ age_of() {
   printf '%dh%02dm' $((secs / 3600)) $((secs % 3600 / 60))
 }
 
-# on_demand_price <type>: Linux on-demand $/hr in us-west-2.
+# on_demand_price <region> <type>: Linux on-demand $/hr in the region.
 on_demand_price() {
   aws pricing get-products --region us-east-1 --service-code AmazonEC2 --output json \
-    --filters "Type=TERM_MATCH,Field=instanceType,Value=$1" \
-    "Type=TERM_MATCH,Field=regionCode,Value=$region" \
+    --filters "Type=TERM_MATCH,Field=instanceType,Value=$2" \
+    "Type=TERM_MATCH,Field=regionCode,Value=$1" \
     "Type=TERM_MATCH,Field=operatingSystem,Value=Linux" \
     "Type=TERM_MATCH,Field=tenancy,Value=Shared" \
     "Type=TERM_MATCH,Field=preInstalledSw,Value=NA" \
@@ -76,60 +87,151 @@ on_demand_price() {
     jq -r '[.PriceList[] | fromjson | .terms.OnDemand[].priceDimensions[].pricePerUnit.USD] | first // "n/a"'
 }
 
-# spot_price <type> <az>: newest Linux spot $/hr for the type in the zone.
+# spot_price <region> <type> <az>: newest Linux spot $/hr for the type in the zone.
 spot_price() {
-  aws ec2 describe-spot-price-history --output json --instance-types "$1" \
-    --availability-zone "$2" --product-descriptions 'Linux/UNIX' |
+  ec2_in "$1" describe-spot-price-history --output json --instance-types "$2" \
+    --availability-zone "$3" --product-descriptions 'Linux/UNIX' |
     jq -r '.SpotPriceHistory | max_by(.Timestamp).SpotPrice // "n/a"'
 }
 
-cmd_ls() {
-  local described rows name class itype spot launch az od sp
-  load_aws_env
-  described=$(aws ec2 describe-instances --output json \
-    --filters 'Name=tag:fleet,Values=ec2' 'Name=instance-state-name,Values=pending,running')
-  rows=$(jq -r '
-    def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
-    .Reservations[].Instances[]
-    | select(.State.Name == "pending" or .State.Name == "running")
-    | select(tag("fleet") == "ec2")
-    | [tag("Name"), tag("fleet-class"), .InstanceType,
-       (if .InstanceLifecycle == "spot" then "yes" else "no" end),
-       .LaunchTime, .Placement.AvailabilityZone]
-    | @tsv' <<<"$described")
-  printf '%-28s %-18s %-14s %-5s %-8s %-13s %s\n' NAME CLASS TYPE SPOT AGE ON-DEMAND/HR SPOT/HR
-  if [ -z "$rows" ]; then
+# rank_regions <type> <region>...: prints the regions cheapest on-demand first,
+# equal prices in the order given. A price that cannot be read warns once on
+# stderr and prints the regions in the order given.
+rank_regions() {
+  local itype=$1 r p
+  local -a priced=()
+  shift
+  [ $# -gt 1 ] || {
+    printf '%s\n' "$@"
     return 0
-  fi
-  while IFS=$'\t' read -r name class itype spot launch az; do
-    od=$(on_demand_price "$itype") || die "pricing lookup failed for $itype"
-    sp=$(spot_price "$itype" "$az") || die "spot price lookup failed for $itype in $az"
-    printf '%-28s %-18s %-14s %-5s %-8s %-13s %s\n' "$name" "$class" "$itype" "$spot" \
-      "$(age_of "$launch")" "$od" "$sp"
-  done <<<"$rows"
+  }
+  for r in "$@"; do
+    p=$(on_demand_price "$r" "$itype") || p=
+    [[ $p =~ ^[0-9]+(\.[0-9]+)?$ ]] || {
+      echo "ec2: cannot rank regions by on-demand price for $itype; trying them in fixed order" >&2
+      printf '%s\n' "$@"
+      return 0
+    }
+    priced+=("$p $r")
+  done
+  printf '%s\n' "${priced[@]}" | sort -s -n | cut -d' ' -f2
+}
+
+# region_spot_price <type> <region>: prints the lowest current spot $/hr among the
+# region's offering zones, from region_zones. Fails when any zone's price cannot
+# be read.
+region_spot_price() {
+  local itype=$1 r=$2 zone p
+  local -a zones=() prices=()
+  readarray -t zones <<<"${region_zones[$r]}"
+  for zone in "${zones[@]}"; do
+    p=$(spot_price "$r" "$itype" "$zone") || return 1
+    [[ $p =~ ^[0-9]+(\.[0-9]+)?$ ]] || return 1
+    prices+=("$p")
+  done
+  printf '%s\n' "${prices[@]}" | sort -n | head -n 1
+}
+
+# rank_spot_regions <type> <region>...: prints the regions highest spot placement
+# score first, from one score lookup in us-west-2. A score tie goes to the region
+# with the lower spot price, read only for the tied regions; a price tie keeps the
+# order given. A failed or incomplete score lookup, or an unreadable price, warns
+# once on stderr and prints the regions in the order given.
+rank_spot_regions() {
+  local itype=$1 r s p scores
+  local -a scored=() keyed=()
+  local -A count=()
+  shift
+  [ $# -gt 1 ] || {
+    printf '%s\n' "$@"
+    return 0
+  }
+  scores=$(ec2_in us-west-2 get-spot-placement-scores --output json \
+    --region-names "$@" --instance-types "$itype" --target-capacity 1) || scores=
+  for r in "$@"; do
+    s=$(jq -r --arg r "$r" '[.SpotPlacementScores[] | select(.Region == $r) | .Score | numbers] | first // empty' <<<"$scores") || s=
+    [[ $s =~ ^[0-9]+$ ]] || {
+      echo "ec2: cannot rank regions by spot placement score for $itype; trying them in fixed order" >&2
+      printf '%s\n' "$@"
+      return 0
+    }
+    scored+=("$s $r")
+    count[$s]=$((${count[$s]:-0} + 1))
+  done
+  for entry in "${scored[@]}"; do
+    s=${entry%% *}
+    r=${entry#* }
+    p=0
+    if [ "${count[$s]}" -gt 1 ]; then
+      p=$(region_spot_price "$itype" "$r") || p=
+      [[ $p =~ ^[0-9]+(\.[0-9]+)?$ ]] || {
+        echo "ec2: cannot break the spot score tie for $itype by price; trying them in fixed order" >&2
+        printf '%s\n' "$@"
+        return 0
+      }
+    fi
+    keyed+=("$s $p $r")
+  done
+  printf '%s\n' "${keyed[@]}" | sort -s -k1,1nr -k2,2n | cut -d' ' -f3
+}
+
+cmd_ls() {
+  local region described rows name class itype spot launch az od sp
+  load_aws_env
+  printf '%-28s %-18s %-14s %-5s %-8s %-13s %s\n' NAME CLASS TYPE SPOT AGE ON-DEMAND/HR SPOT/HR
+  for region in "${regions[@]}"; do
+    described=$(ec2_in "$region" describe-instances --output json \
+      --filters 'Name=tag:fleet,Values=ec2' 'Name=instance-state-name,Values=pending,running')
+    rows=$(jq -r '
+      def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
+      .Reservations[].Instances[]
+      | select(.State.Name == "pending" or .State.Name == "running")
+      | select(tag("fleet") == "ec2")
+      | [tag("Name"), tag("fleet-class"), .InstanceType,
+         (if .InstanceLifecycle == "spot" then "yes" else "no" end),
+         .LaunchTime, .Placement.AvailabilityZone]
+      | @tsv' <<<"$described")
+    if [ -z "$rows" ]; then
+      continue
+    fi
+    while IFS=$'\t' read -r name class itype spot launch az; do
+      od=$(on_demand_price "$region" "$itype") || die "pricing lookup failed for $itype in $region"
+      sp=$(spot_price "$region" "$itype" "$az") || die "spot price lookup failed for $itype in $az"
+      printf '%-28s %-18s %-14s %-5s %-8s %-13s %s\n' "$name" "$class" "$itype" "$spot" \
+        "$(age_of "$launch")" "$od" "$sp"
+    done <<<"$rows"
+  done
 }
 
 cmd_down() {
-  local name described ids
+  local name region described ids matches=""
   [ $# -eq 1 ] || die "usage: ec2 down <name>"
   name=$1
   load_aws_env
-  described=$(aws ec2 describe-instances --output json \
-    --filters "Name=tag:Name,Values=$name" 'Name=tag:fleet,Values=ec2' \
-    'Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down')
-  ids=$(jq -r --arg name "$name" '
-    def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
-    .Reservations[].Instances[]
-    | select(.State.Name != "terminated")
-    | select(tag("fleet") == "ec2" and tag("Name") == $name)
-    | .InstanceId' <<<"$described")
-  if [ -z "$ids" ]; then
+  # Each match is one "<region> <instance id>" line, collected across both regions.
+  for region in "${regions[@]}"; do
+    described=$(ec2_in "$region" describe-instances --output json \
+      --filters "Name=tag:Name,Values=$name" 'Name=tag:fleet,Values=ec2' \
+      'Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down')
+    ids=$(jq -r --arg name "$name" --arg region "$region" '
+      def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
+      .Reservations[].Instances[]
+      | select(.State.Name != "terminated")
+      | select(tag("fleet") == "ec2" and tag("Name") == $name)
+      | "\($region) \(.InstanceId)"' <<<"$described")
+    if [ -n "$ids" ]; then
+      matches+="$ids"$'\n'
+    fi
+  done
+  if [ -z "$matches" ]; then
     die "no fleet box named $name"
   fi
-  case "$ids" in
+  matches=${matches%$'\n'}
+  case "$matches" in
     *$'\n'*) die "more than one fleet box named $name; refusing to terminate" ;;
   esac
-  aws ec2 terminate-instances --instance-ids "$ids" >/dev/null
+  read -r region ids <<<"$matches"
+  ec2_in "$region" terminate-instances --instance-ids "$ids" >/dev/null
   echo "terminating $ids ($name)"
 }
 
@@ -140,7 +242,7 @@ on_exit() {
   if [ "$status" -ne 0 ] && [ -n "$launched" ]; then
     # A closed stderr must not stop the terminate.
     echo "ec2: launch failed; terminating $launched" >&2 || :
-    if ! aws ec2 terminate-instances --instance-ids "$launched" >/dev/null; then
+    if ! ec2_in "$launched_region" terminate-instances --instance-ids "$launched" >/dev/null; then
       echo "ec2: could not terminate $launched; terminate it by hand" >&2 || :
     fi
   fi
@@ -152,12 +254,12 @@ on_exit() {
   fi
 }
 
-# build_base_image <toplevel basename>: builds the raw base image, uploads it as
-# a fleet=ec2-base snapshot, registers an AMI tagged with the toplevel, waits for
-# it, and prunes all but the newest two base AMIs and their snapshots. Sets
-# base_ami to the new AMI.
+# build_base_image <region> <toplevel basename>: builds the raw base image, uploads
+# it in the region as a fleet=ec2-base snapshot, registers an AMI tagged with the
+# toplevel, waits for it, and prunes all but the newest two of the region's base
+# AMIs and their snapshots. Sets base_ami to the new AMI.
 build_base_image() {
-  local tl=$1 image_out image_file snap stamp reg described prune_rows
+  local r=$1 tl=$2 image_out image_file snap stamp reg described prune_rows
   local -a fields
   local old_snap
   image_out=$(nix build --no-link --print-out-paths "$flake#ec2-base-image") ||
@@ -167,33 +269,33 @@ build_base_image() {
     die "cannot read the image-info of $image_out"
   [ -f "$image_file" ] || die "image-info of $image_out names no readable file"
 
-  snap=$(coldsnap --region "$region" upload --wait --no-progress \
+  snap=$(coldsnap --region "$r" upload --wait --no-progress \
     --tag Key=fleet,Value=ec2-base "$image_file") || die "coldsnap upload of $image_file failed"
   [[ $snap =~ ^snap-[0-9a-f]+$ ]] || die "coldsnap printed no snapshot id"
 
   stamp=$(date -u +%Y%m%d%H%M%S) || die "cannot read the clock"
-  if ! reg=$(aws ec2 register-image --output text --query ImageId \
+  if ! reg=$(ec2_in "$r" register-image --output text --query ImageId \
     --name "ec2-base-$tl-$stamp" --architecture x86_64 --virtualization-type hvm \
     --root-device-name /dev/xvda --ena-support --boot-mode legacy-bios \
     --block-device-mappings "DeviceName=/dev/xvda,Ebs={SnapshotId=$snap,VolumeType=gp3,DeleteOnTermination=true}" \
     --tag-specifications "ResourceType=image,Tags=[{Key=fleet,Value=ec2-base},{Key=fleet-toplevel,Value=$tl}]"); then
     echo "ec2: register-image failed; deleting the unused snapshot $snap" >&2
-    aws ec2 delete-snapshot --snapshot-id "$snap" >/dev/null ||
+    ec2_in "$r" delete-snapshot --snapshot-id "$snap" >/dev/null ||
       die "could not delete unused snapshot $snap; delete it by hand"
     die "register-image failed"
   fi
   [[ $reg == ami-* ]] || die "register-image printed no AMI id"
 
-  if ! aws ec2 wait image-available --image-ids "$reg"; then
+  if ! ec2_in "$r" wait image-available --image-ids "$reg"; then
     echo "ec2: $reg did not become available; deregistering it and deleting its snapshot $snap" >&2
-    aws ec2 deregister-image --image-id "$reg" >/dev/null ||
+    ec2_in "$r" deregister-image --image-id "$reg" >/dev/null ||
       die "could not deregister $reg; deregister it and delete snapshot $snap by hand"
-    aws ec2 delete-snapshot --snapshot-id "$snap" >/dev/null ||
+    ec2_in "$r" delete-snapshot --snapshot-id "$snap" >/dev/null ||
       die "could not delete snapshot $snap of $reg; delete it by hand"
     die "$reg did not become available"
   fi
 
-  described=$(aws ec2 describe-images --owners self --output json \
+  described=$(ec2_in "$r" describe-images --owners self --output json \
     --filters 'Name=tag:fleet,Values=ec2-base') || die "describe-images failed before pruning"
   prune_rows=$(jq -r '
     .Images | sort_by(.CreationDate) | reverse | .[2:][]
@@ -201,10 +303,10 @@ build_base_image() {
     | @tsv' <<<"$described") || die "cannot read the base AMIs to prune"
   if [ -n "$prune_rows" ]; then
     while IFS=$'\t' read -r -a fields; do
-      aws ec2 deregister-image --image-id "${fields[0]}" >/dev/null ||
+      ec2_in "$r" deregister-image --image-id "${fields[0]}" >/dev/null ||
         die "could not deregister ${fields[0]}"
       for old_snap in "${fields[@]:1}"; do
-        aws ec2 delete-snapshot --snapshot-id "$old_snap" >/dev/null ||
+        ec2_in "$r" delete-snapshot --snapshot-id "$old_snap" >/dev/null ||
           die "could not delete snapshot $old_snap of ${fields[0]}"
       done
     done <<<"$prune_rows"
@@ -212,13 +314,13 @@ build_base_image() {
   base_ami=$reg
 }
 
-# ensure_base_ami <toplevel basename>: sets base_ami to the newest available
-# fleet=ec2-base AMI when its fleet-toplevel tag names the toplevel. Otherwise it
-# builds one.
+# ensure_base_ami <region> <toplevel basename>: sets base_ami to the newest
+# available fleet=ec2-base AMI in the region when its fleet-toplevel tag names the
+# toplevel. Otherwise it builds one there.
 ensure_base_ami() {
-  local want=$1 images row newest_ami newest_tl
-  images=$(aws ec2 describe-images --owners self --output json \
-    --filters 'Name=tag:fleet,Values=ec2-base') || die "describe-images failed"
+  local r=$1 want=$2 images row newest_ami newest_tl
+  images=$(ec2_in "$r" describe-images --owners self --output json \
+    --filters 'Name=tag:fleet,Values=ec2-base') || die "describe-images failed in $r"
   row=$(jq -r '
     def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
     (.Images | map(select(.State == "available")) | sort_by(.CreationDate) | last // {})
@@ -229,7 +331,41 @@ ensure_base_ami() {
     base_ami=$newest_ami
     return 0
   fi
-  build_base_image "$want"
+  build_base_image "$r" "$want"
+}
+
+# resolve_region <region> <toplevel basename>: finds or builds the region's base
+# AMI and finds its ec2-sg security group, into region_ami and region_sg.
+resolve_region() {
+  local r=$1 sgs sg
+  ensure_base_ami "$r" "$2"
+  region_ami[$r]=$base_ami
+  sgs=$(ec2_in "$r" describe-security-groups --output json \
+    --filters 'Name=tag:fleet,Values=ec2-sg') || die "describe-security-groups failed in $r"
+  sg=$(jq -r '.SecurityGroups[0].GroupId // empty' <<<"$sgs") || die "cannot read the security groups in $r"
+  [ -n "$sg" ] || die "no ec2-sg security group in $r"
+  region_sg[$r]=$sg
+}
+
+# create_userdata <name>: asks Tailscale for a tagged, single-use auth key and
+# writes the user-data file that carries it, setting userdata to that file.
+create_userdata() {
+  local name=$1 body token key
+  body='{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:ec2"]}}},"expirySeconds":600}'
+  token=$(printf 'data-urlencode = "client_id=%s"\ndata-urlencode = "client_secret=%s"\n' \
+    "$ts_client_id" "$ts_client_secret" |
+    curl --config - -fsS https://api.tailscale.com/api/v2/oauth/token | jq -r '.access_token // empty') ||
+    die "Tailscale OAuth token request failed"
+  [ -n "$token" ] || die "Tailscale returned no access token"
+  key=$(printf 'header = "Authorization: Bearer %s"\n' "$token" |
+    curl --config - -fsS -H 'Content-Type: application/json' -d "$body" \
+      https://api.tailscale.com/api/v2/tailnet/-/keys | jq -r '.key // empty') ||
+    die "Tailscale auth key request failed"
+  [ -n "$key" ] || die "Tailscale returned no auth key"
+
+  userdata=$(mktemp) || die "cannot create a temp file"
+  printf 'EC2_FLEET_NAME=%s\nEC2_FLEET_TS_AUTHKEY=%s\n' "$name" "$key" >"$userdata" ||
+    die "cannot write the user-data file"
 }
 
 # cmd_up <class> [--override-input <input> <flake-url>]... | --type <t> --disk <gb>
@@ -238,10 +374,11 @@ ensure_base_ami() {
 cmd_up() {
   local class="" type="" disk="" spot=no timeout
   local classes row itype disk_gb spot_req max_hours reboot_req fleet_class prefix
-  local known_dir deadline suffix name sgs sg body token key id toplevel base_path
+  local known_dir deadline suffix name toplevel base_path id=""
   local boot_before boot_after
-  local zone_list zone kind attempt reply market_line
-  local -a ssh_opts=() reboot_opts=() zones=() attempts=() place=() market=() overrides=()
+  local zone_list zone r kind aregion attempt reply market_line
+  local -a ssh_opts=() reboot_opts=() zones=() attempts=() spot_attempts=() od_attempts=()
+  local -a place=() market=() overrides=()
   while [ $# -gt 0 ]; do
     case "$1" in
       --type)
@@ -325,52 +462,66 @@ cmd_up() {
     die "nix build failed for ec2-base"
   [ -n "$base_path" ] || die "nix build printed no toplevel for ec2-base"
 
-  suffix=$(shuf -r -n 3 -e {a..z} {0..9} | tr -d '\n') || die "cannot pick a random name"
-  name="$prefix-$suffix"
-
-  ensure_base_ami "${base_path##*/}"
-
-  sgs=$(aws ec2 describe-security-groups --output json \
-    --filters 'Name=tag:fleet,Values=ec2-sg') || die "describe-security-groups failed"
-  sg=$(jq -r '.SecurityGroups[0].GroupId // empty' <<<"$sgs") || die "cannot read the security groups"
-  [ -n "$sg" ] || die "no ec2-sg security group in $region"
-
-  # A spot launch tries each zone offering the type, in sorted order, as spot.
-  # It then tries the same zones as on-demand, placed, and last one on-demand
-  # with no placement, so that attempt runs after every zone.
-  if [ "$spot_req" = yes ]; then
-    zone_list=$(aws ec2 describe-instance-type-offerings --output json --location-type availability-zone \
+  # The walk runs over the regions in order. A spot launch tries the regions
+  # offering the type in spot placement score order, each one's zones in sorted
+  # order, as spot. Then, for every launch, the regions offering the type are
+  # ranked by on-demand price, cheapest first, and each one's zones as on-demand,
+  # placed, then its one on-demand attempt with no placement. A region offering
+  # no zone for the type gets no attempt.
+  local ranked spot_ranked
+  local -a offering=() od_regions=() spot_regions=()
+  local -A region_zones=() quota_skip=()
+  for r in "${regions[@]}"; do
+    zone_list=$(ec2_in "$r" describe-instance-type-offerings --output json --location-type availability-zone \
       --filters "Name=instance-type,Values=$itype" |
       jq -r '[.InstanceTypeOfferings[].Location] | sort | .[]') ||
-      die "cannot list the zones offering $itype"
-    if [ -n "$zone_list" ]; then
-      readarray -t zones <<<"$zone_list"
-    fi
+      die "cannot list the zones offering $itype in $r"
+    [ -n "$zone_list" ] || continue
+    offering+=("$r")
+    region_zones[$r]=$zone_list
+  done
+  [ ${#offering[@]} -gt 0 ] || die "no region offers $itype"
+  if [ "$spot_req" = yes ]; then
+    spot_ranked=$(rank_spot_regions "$itype" "${offering[@]}") || die "cannot order the regions offering $itype for spot"
+    readarray -t spot_regions <<<"$spot_ranked"
+    for r in "${spot_regions[@]}"; do
+      readarray -t zones <<<"${region_zones[$r]}"
+      for zone in "${zones[@]}"; do
+        spot_attempts+=("spot $r $zone")
+      done
+    done
   fi
-  attempts=()
-  for zone in "${zones[@]}"; do attempts+=("spot $zone"); done
-  for zone in "${zones[@]}"; do attempts+=("on-demand $zone"); done
-  attempts+=("on-demand")
-
-  body='{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:ec2"]}}},"expirySeconds":600}'
-  token=$(printf 'data-urlencode = "client_id=%s"\ndata-urlencode = "client_secret=%s"\n' \
-    "$ts_client_id" "$ts_client_secret" |
-    curl --config - -fsS https://api.tailscale.com/api/v2/oauth/token | jq -r '.access_token // empty') ||
-    die "Tailscale OAuth token request failed"
-  [ -n "$token" ] || die "Tailscale returned no access token"
-  key=$(printf 'header = "Authorization: Bearer %s"\n' "$token" |
-    curl --config - -fsS -H 'Content-Type: application/json' -d "$body" \
-      https://api.tailscale.com/api/v2/tailnet/-/keys | jq -r '.key // empty') ||
-    die "Tailscale auth key request failed"
-  [ -n "$key" ] || die "Tailscale returned no auth key"
-
-  userdata=$(mktemp) || die "cannot create a temp file"
-  printf 'EC2_FLEET_NAME=%s\nEC2_FLEET_TS_AUTHKEY=%s\n' "$name" "$key" >"$userdata" ||
-    die "cannot write the user-data file"
+  ranked=$(rank_regions "$itype" "${offering[@]}") || die "cannot order the regions offering $itype"
+  readarray -t od_regions <<<"$ranked"
+  for r in "${od_regions[@]}"; do
+    readarray -t zones <<<"${region_zones[$r]}"
+    for zone in "${zones[@]}"; do
+      od_attempts+=("on-demand $r $zone")
+    done
+    od_attempts+=("on-demand $r")
+  done
+  attempts=("${spot_attempts[@]}" "${od_attempts[@]}")
 
   runerr=$(mktemp) || die "cannot create a temp file"
   for attempt in "${attempts[@]}"; do
-    read -r kind zone <<<"$attempt"
+    read -r kind aregion zone <<<"$attempt"
+    # A market that hit its quota in a region is skipped there for the rest of
+    # the walk, placed and unplaced alike.
+    if [ -n "${quota_skip[$kind:$aregion]:-}" ]; then
+      continue
+    fi
+    # The region's base AMI and security group are found, or built, the first time
+    # the walk reaches the region. A launch gets its name, Tailscale key and
+    # user-data when it has none: at the first region, and again after a box fails
+    # its running wait.
+    if [ -z "${region_sg[$aregion]:-}" ]; then
+      resolve_region "$aregion" "${base_path##*/}"
+    fi
+    if [ -z "$userdata" ]; then
+      suffix=$(shuf -r -n 3 -e {a..z} {0..9} | tr -d '\n') || die "cannot pick a random name"
+      name="$prefix-$suffix"
+      create_userdata "$name"
+    fi
     place=()
     market=()
     if [ -n "$zone" ]; then
@@ -382,10 +533,10 @@ cmd_up() {
     else
       market_line="market on-demand"
     fi
-    if reply=$(aws ec2 run-instances --output text --query 'Instances[0].InstanceId' \
-      --image-id "$base_ami" --instance-type "$itype" --count 1 \
+    if reply=$(ec2_in "$aregion" run-instances --output text --query 'Instances[0].InstanceId' \
+      --image-id "${region_ami[$aregion]}" --instance-type "$itype" --count 1 \
       --block-device-mappings "DeviceName=/dev/xvda,Ebs={VolumeSize=$disk_gb,VolumeType=gp3,DeleteOnTermination=true}" \
-      --network-interfaces "DeviceIndex=0,AssociatePublicIpAddress=true,Groups=$sg" \
+      --network-interfaces "DeviceIndex=0,AssociatePublicIpAddress=true,Groups=${region_sg[$aregion]}" \
       --metadata-options 'HttpTokens=required,HttpPutResponseHopLimit=1,HttpEndpoint=enabled' \
       --instance-initiated-shutdown-behavior terminate \
       --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=$fleet_class},{Key=fleet-max-hours,Value=$max_hours}]" \
@@ -393,11 +544,27 @@ cmd_up() {
       --user-data "file://$userdata" "${place[@]}" "${market[@]}" 2>"$runerr"); then
       id=$reply
       launched=$id
+      launched_region=$aregion
       cat -- "$runerr" >&2
-      break
+      [ -n "$id" ] || die "run-instances returned no instance id; check for a new fleet=ec2 box"
+      if ec2_in "$aregion" wait instance-running --instance-ids "$id"; then
+        break
+      fi
+      # A box that does not reach running is terminated in its region and forgotten
+      # as the launched box, so on_exit does not terminate it again. The walk goes on
+      # with a fresh name, key and user-data.
+      launched=""
+      launched_region=""
+      ec2_in "$aregion" terminate-instances --instance-ids "$id" >/dev/null ||
+        die "could not terminate $id; terminate it by hand"
+      echo "ec2: $id did not reach running in $aregion; terminated it" >&2
+      id=""
+      rm -f -- "$userdata"
+      userdata=""
+      continue
     fi
-    if [ -n "$zone" ] && grep -q InsufficientInstanceCapacity "$runerr"; then
-      echo "ec2: no $kind capacity for $itype in $zone" >&2
+    if grep -q InsufficientInstanceCapacity "$runerr"; then
+      echo "ec2: no $kind capacity for $itype in ${zone:-$aregion}" >&2
       continue
     fi
     # A RequestLimitExceeded that names an availability zone is throttling of
@@ -406,17 +573,22 @@ cmd_up() {
       echo "ec2: $kind launch throttled in $zone" >&2
       continue
     fi
+    # A spot or on-demand quota refusal names the market's quota; the market's
+    # attempts in this region are skipped, and the walk goes on.
+    if grep -q -E 'MaxSpotInstanceCountExceeded|VcpuLimitExceeded' "$runerr"; then
+      echo "ec2: $kind quota reached for $itype in $aregion; skipping its $kind attempts there" >&2
+      quota_skip[$kind:$aregion]=yes
+      continue
+    fi
     cat -- "$runerr" >&2
     die "run-instances failed; nothing was launched"
   done
   rm -f -- "$runerr"
   runerr=""
-  [ -n "$id" ] || die "run-instances returned no instance id; check for a new fleet=ec2 box"
+  [ -n "$id" ] || die "no region could launch $itype; nothing was launched"
   rm -f -- "$userdata"
   userdata=""
   echo "$market_line"
-
-  aws ec2 wait instance-running --instance-ids "$id" || die "$id did not reach running"
 
   deadline=$(($(date +%s) + timeout))
   until ssh "${ssh_opts[@]}" "joshsymonds@$name" true 2>/dev/null; do
@@ -454,6 +626,7 @@ cmd_up() {
   fi
 
   launched=""
+  launched_region=""
   echo "$name ready"
 }
 
@@ -461,7 +634,7 @@ cmd_help() {
   local classes
   classes=$(nix eval --json "$flake#ec2Classes")
   cat <<'USAGE'
-ec2 - launch, list, and terminate fleet boxes in us-west-2
+ec2 - launch, list, and terminate fleet boxes in us-west-2 and eu-west-1
 
 Usage:
   ec2 up <class>                          start a box of a class

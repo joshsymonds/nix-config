@@ -360,7 +360,7 @@ echo snap-0feed00000000001
 COLDSTUB
 
 cat >"$STUB_FIXTURES/classes.json" <<'FIXTURE'
-{"commonframe-gate":{"instanceType":"c8a.4xlarge","diskGb":80,"spot":true,"idleMinutes":60,"maxHours":24},"muniment-runner":{"instanceType":"m8a.2xlarge","diskGb":200,"spot":false,"idleMinutes":30,"maxHours":12},"reboot-probe":{"instanceType":"c8a.large","diskGb":40,"spot":false,"idleMinutes":30,"maxHours":12,"reboot":true}}
+{"commonframe-gate":{"instanceType":"c8a.4xlarge","diskGb":80,"spot":true,"idleMinutes":60,"maxHours":24},"muniment-runner":{"instanceType":"m8a.2xlarge","diskGb":200,"spot":false,"idleMinutes":30,"maxHours":12,"cache":true},"reboot-probe":{"instanceType":"c8a.large","diskGb":40,"spot":false,"idleMinutes":30,"maxHours":12,"reboot":true}}
 FIXTURE
 
 # The boot ids a box reports before and after its reboot.
@@ -760,7 +760,8 @@ expect_run_count() {
 # for a placed call, " spot" appended to a spot call, "unplaced" for no placement.
 run_placements() {
   grep '^aws ec2 run-instances ' "$STUB_LOG" |
-    sed -E -e 's/^.*--user-data file:[^ ]+//' -e 's/ --instance-market-options .*$/ spot/' \
+    sed -E -e 's/^.*--user-data file:[^ ]+//' -e 's/ --iam-instance-profile Name=[^ ]+//' \
+      -e 's/ --instance-market-options .*$/ spot/' \
       -e 's/^ --placement AvailabilityZone=/zone /' -e 's/^$/unplaced/'
 }
 # expect_placements <desc> <placement>...: the run-instances calls placed as listed.
@@ -1399,6 +1400,7 @@ clear_faults
 : >"$STUB_FIXTURES/quota-on-demand"
 run up --type g4dn.xlarge --disk 20
 expect_status 0 "on-demand up with Oregon's vCPU quota reached"
+expect_no_fixed "--iam-instance-profile" "ad-hoc up launches with no instance profile"
 expect_out '^market on-demand$' "on-demand up with Oregon's vCPU quota reached prints the on-demand market line"
 expect_out '^ec2-[a-z0-9]{3} ready$' "on-demand up with Oregon's vCPU quota reached prints the ready line"
 name=$(sed -n 's/ ready$//p' "$OUT")
@@ -1732,6 +1734,7 @@ expect_fixed "--instance-type m8a.2xlarge" "up muniment-runner sets its instance
 expect_fixed "Ebs={VolumeSize=200,VolumeType=gp3,DeleteOnTermination=true}" "up muniment-runner sizes its root volume"
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=muniment-runner},{Key=fleet-max-hours,Value=12}]" "up muniment-runner tags its max hours"
 expect_no_fixed "--instance-market-options" "up muniment-runner requests no spot"
+expect_fixed "--iam-instance-profile Name=ec2-fleet-cache" "up muniment-runner launches with the cache instance profile"
 expect_fixed "--placement AvailabilityZone=us-west-2a" "up muniment-runner places its first on-demand attempt in the first sorted zone"
 expect_log 'describe-instance-type-offerings' "up muniment-runner lists zones"
 expect_out '^market on-demand$' "up muniment-runner prints the on-demand market line"

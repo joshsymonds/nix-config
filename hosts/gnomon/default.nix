@@ -707,6 +707,37 @@ in
       deviceAccessUser = "joshsymonds";
     };
 
+    # ── GPU tuning: LACT ────────────────────────────────────────────────
+    # LACT sets the RTX 5070 Ti's power limit and clock offsets through
+    # NVML, which works on Wayland. settings mirrors the config.yaml that
+    # `lact cli power-limit set` wrote (schema version 7), so
+    # /etc/lact/config.yaml is a read-only symlink and the GUI can't save.
+    # Test clock offsets live with an NVML CLI, then add the stable ones
+    # here. The GPU key carries the PCI address, so moving the card to
+    # another slot changes it (`lact cli list`).
+    # power_cap 350: the vBIOS maximum (default 300). Raising it changes no
+    # voltage, only how long boost clocks hold under load.
+    # Superposition (in systemPackages below) is the native benchmark for
+    # A/B scores and stability loops.
+    services.lact = {
+      enable = true;
+      settings = {
+        version = 7;
+        daemon = {
+          log_level = "info";
+          admin_group = "wheel";
+          disable_clocks_cleanup = false;
+        };
+        apply_settings_timer = 5;
+        gpus."10DE:2C05-1043:89F7-0000:01:00.0" = {
+          fan_control_enabled = false;
+          power_cap = 350.0;
+        };
+        current_profile = null;
+        auto_switch_profiles = false;
+      };
+    };
+
     # ── Unattended recovery from a hard lock ────────────────────────────
     # A too-deep undervolt can freeze the machine outright. systemd pets
     # the SP5100 TCO watchdog; if it stops for 60s, the chipset resets the
@@ -812,7 +843,7 @@ in
     # policies never match. See the module for the full reasoning.
     services.cloudflareWarpDns.enable = true;
 
-    environment.systemPackages = with pkgs; [sbctl tailscale];
+    environment.systemPackages = with pkgs; [sbctl tailscale unigine-superposition];
 
     # Wired LAN comes up in 1-3s when the cable is live; without this cap,
     # systemd-networkd-wait-online holds network-online.target for the full

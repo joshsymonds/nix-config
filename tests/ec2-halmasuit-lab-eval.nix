@@ -29,6 +29,7 @@
   initrdEnv = lab.boot.initrd.systemd.services.halmasuit.environment;
   labuser = lab.users.users.labuser or {};
   greeterGroup = lab.services.halmasuit.greeterGroup;
+  primaryGid = (lab.users.groups.${labuser.group or ""} or {}).gid or null;
 in
   # 0. class registry entry (hosts/ec2/classes.nix)
   assert check (cls.instanceType == "g4dn.xlarge") "classes.nix halmasuit-lab instanceType must be g4dn.xlarge";
@@ -101,7 +102,10 @@ in
   assert check (labuser.isNormalUser or false) "users.users.labuser.isNormalUser must be true";
   assert check ((labuser.uid or null) == 1500) "users.users.labuser.uid must be 1500";
   assert check ((labuser.uid or 0) >= 1000) "users.users.labuser.uid must be at least 1000";
-  assert check ((labuser.group or null) == "users") "users.users.labuser.group must be users";
+  assert check ((labuser.group or null) == "labuser") "users.users.labuser.group must be labuser";
+  assert check ((labuser.group or null) != "users") "users.users.labuser.group must not be users (gid 100 is below the broker UID_MIN floor)";
+  assert check (primaryGid == 1500) "the primary group of users.users.labuser must resolve through users.groups to gid 1500";
+  assert check (primaryGid >= 1000) "the primary group of users.users.labuser must have a gid of at least 1000";
   assert check (lib.hasAttr greeterGroup lab.users.groups) "users.groups.${greeterGroup} must exist (services.halmasuit.greeterGroup)";
   assert check ((labuser.extraGroups or null) == [greeterGroup]) "users.users.labuser.extraGroups must be exactly [services.halmasuit.greeterGroup]";
   assert check (!(has (labuser.extraGroups or []) "wheel")) "users.users.labuser.extraGroups must not contain wheel";

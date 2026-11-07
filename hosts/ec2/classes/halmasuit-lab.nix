@@ -68,10 +68,12 @@
   };
 
   # Lab login account. Its password is set per run with `chpasswd`; no password is declared here.
+  # Its primary group is its own gid 1500: the broker's UID_MIN floor covers gid as well as uid.
+  users.groups.labuser.gid = 1500;
   users.users.labuser = {
     isNormalUser = true;
     uid = 1500;
-    group = "users";
+    group = "labuser";
     extraGroups = [config.services.halmasuit.greeterGroup];
   };
 

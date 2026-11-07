@@ -20,6 +20,7 @@ in
       ./disko.nix
       ./hardware-configuration.nix
       ./mullvad-proxy.nix
+      ./vpn-exit.nix
       ./services/marvin-blackbox-reap.nix
       inputs.lanzaboote.nixosModules.lanzaboote
 

@@ -1,6 +1,8 @@
 {pkgs, ...}: {
   imports = [
     ../headless-x86_64-linux.nix
+    ../vpn-exit
+    ../git-conditional
     ../claude-code/transcripts.nix
     ../claude-code/transcript-sync.nix
     ../ec2-fleet

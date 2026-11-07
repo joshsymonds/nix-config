@@ -1,5 +1,4 @@
 {
-  config,
   inputs,
   lib,
   pkgs,
@@ -7,6 +6,8 @@
 }: {
   imports = [
     ../desktop-x86_64-linux.nix
+    ../vpn-exit
+    ../git-conditional
     ../vesktop
     ../spicetify
     ../calendar
@@ -164,25 +165,6 @@
 
   # Same signing key vermissian uses — single user identity across machines
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
-
-  # Per-directory git settings whose contents stay out of this public repo:
-  # the conditional include and what it applies are encrypted, and decrypted
-  # into fixed paths so git and ssh can read them.
-  programs.git.includes = [{path = config.age.secrets."git-conditional".path;}];
-  age.secrets = {
-    "git-conditional" = {
-      file = ../../secrets/user/git-conditional.age;
-      path = "${config.home.homeDirectory}/.config/git/conditional";
-    };
-    "git-conditional-config" = {
-      file = ../../secrets/user/git-conditional-config.age;
-      path = "${config.home.homeDirectory}/.config/git/conditional-config";
-    };
-    "git-conditional-key" = {
-      file = ../../secrets/user/git-conditional-key.age;
-      path = "${config.home.homeDirectory}/.config/git/conditional-key";
-    };
-  };
 
   # Gnomon-only Claude skill: research-first methodology for Steam-on-Linux
   # debugging. Born from the PRAGMATA debacle (commit 6251c4c) where ~10

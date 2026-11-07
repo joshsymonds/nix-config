@@ -50,7 +50,8 @@ in {
   # includeIf, the settings it applies, and that identity's ssh key.
   "secrets/user/git-conditional.age".publicKeys = keys.joshsymonds;
   "secrets/user/git-conditional-config.age".publicKeys = keys.joshsymonds;
-  "secrets/user/git-conditional-key.age".publicKeys = keys.joshsymonds;
+  "secrets/user/git-conditional-key-gnomon.age".publicKeys = keys.joshsymonds;
+  "secrets/user/git-conditional-key-vermissian.age".publicKeys = keys.joshsymonds;
   # OpenTofu state/plan encryption passphrase for infra/aws.
   "secrets/user/ec2-fleet-tofu-passphrase.age".publicKeys = keys.joshsymonds;
 
@@ -93,6 +94,9 @@ in {
   "secrets/hosts/gnomon/joshsymonds-password-hash.age".publicKeys = keys.gnomon;
   "secrets/hosts/vermissian/mullvad-privatekey.age".publicKeys = keys.vermissian;
   "secrets/hosts/vermissian/mullvad-addresses.age".publicKeys = keys.vermissian;
+  # vermissian's vpn-exit (hosts/vermissian/vpn-exit.nix): its own Mullvad device.
+  "secrets/hosts/vermissian/mullvad-exit-privatekey.age".publicKeys = keys.vermissian;
+  "secrets/hosts/vermissian/mullvad-exit-addresses.age".publicKeys = keys.vermissian;
   "secrets/hosts/vermissian/cloudflared-token.age".publicKeys = keys.vermissian;
   # Out-of-band Coder Docker stack (see the coder-db-password/coder-env
   # comment above) — no in-repo age.secrets declaration, not an orphan.

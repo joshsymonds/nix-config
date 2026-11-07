@@ -470,6 +470,7 @@
         {
           ec2Fleet.idleMinutes = c.idleMinutes;
           ec2Fleet.maxHours = c.maxHours;
+          ec2Fleet.s3Cache.enable = c.cache or false;
         }
       ];
 

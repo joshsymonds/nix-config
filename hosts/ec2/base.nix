@@ -81,6 +81,7 @@ in {
     "${inputs.nixpkgs}/nixos/maintainers/scripts/ec2/amazon-image.nix"
     ../../modules/nix/defaults.nix
     ../../modules/nix/substituters.nix
+    ./s3-cache.nix
   ];
 
   config = {

@@ -22,7 +22,7 @@ data "aws_iam_policy_document" "launcher" {
     condition {
       test     = "StringEquals"
       variable = "aws:RequestedRegion"
-      values   = ["us-west-2"]
+      values   = local.fleet_regions
     }
   }
 
@@ -33,12 +33,26 @@ data "aws_iam_policy_document" "launcher" {
     resources = ["*"]
   }
 
+  # Spot placement scores are region-scoped, so they follow the Read region condition.
+  statement {
+    sid       = "SpotPlacementScores"
+    effect    = "Allow"
+    actions   = ["ec2:GetSpotPlacementScores"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "aws:RequestedRegion"
+      values   = local.fleet_regions
+    }
+  }
+
   # Launch: instances must carry fleet=ec2 and an allowlisted type.
   statement {
     sid       = "RunInstancesInstance"
     effect    = "Allow"
     actions   = ["ec2:RunInstances"]
-    resources = ["arn:aws:ec2:us-west-2:${data.aws_caller_identity.current.account_id}:instance/*"]
+    resources = [for r in local.fleet_regions : "arn:aws:ec2:${r}:${data.aws_caller_identity.current.account_id}:instance/*"]
 
     condition {
       test     = "StringEquals"
@@ -57,7 +71,7 @@ data "aws_iam_policy_document" "launcher" {
     sid       = "RunInstancesVolume"
     effect    = "Allow"
     actions   = ["ec2:RunInstances"]
-    resources = ["arn:aws:ec2:us-west-2:${data.aws_caller_identity.current.account_id}:volume/*"]
+    resources = [for r in local.fleet_regions : "arn:aws:ec2:${r}:${data.aws_caller_identity.current.account_id}:volume/*"]
 
     condition {
       test     = "StringEquals"
@@ -70,14 +84,14 @@ data "aws_iam_policy_document" "launcher" {
     sid       = "RunInstancesSecurityGroup"
     effect    = "Allow"
     actions   = ["ec2:RunInstances"]
-    resources = [aws_security_group.fleet.arn]
+    resources = [for sg in aws_security_group.fleet : sg.arn]
   }
 
   statement {
     sid       = "RunInstancesOwnImage"
     effect    = "Allow"
     actions   = ["ec2:RunInstances"]
-    resources = ["arn:aws:ec2:us-west-2::image/*"]
+    resources = [for r in local.fleet_regions : "arn:aws:ec2:${r}::image/*"]
 
     condition {
       test     = "StringEquals"
@@ -90,10 +104,10 @@ data "aws_iam_policy_document" "launcher" {
     sid     = "RunInstancesNetwork"
     effect  = "Allow"
     actions = ["ec2:RunInstances"]
-    resources = [
-      "arn:aws:ec2:us-west-2:${data.aws_caller_identity.current.account_id}:subnet/*",
-      "arn:aws:ec2:us-west-2:${data.aws_caller_identity.current.account_id}:network-interface/*",
-    ]
+    resources = flatten([for r in local.fleet_regions : [
+      "arn:aws:ec2:${r}:${data.aws_caller_identity.current.account_id}:subnet/*",
+      "arn:aws:ec2:${r}:${data.aws_caller_identity.current.account_id}:network-interface/*",
+    ]])
   }
 
   # Tagging, only as part of creating a resource.
@@ -101,11 +115,11 @@ data "aws_iam_policy_document" "launcher" {
     sid     = "CreateTagsOnCreate"
     effect  = "Allow"
     actions = ["ec2:CreateTags"]
-    resources = [
-      "arn:aws:ec2:us-west-2:${data.aws_caller_identity.current.account_id}:*/*",
-      "arn:aws:ec2:us-west-2::image/*",
-      "arn:aws:ec2:us-west-2::snapshot/*",
-    ]
+    resources = flatten([for r in local.fleet_regions : [
+      "arn:aws:ec2:${r}:${data.aws_caller_identity.current.account_id}:*/*",
+      "arn:aws:ec2:${r}::image/*",
+      "arn:aws:ec2:${r}::snapshot/*",
+    ]])
 
     condition {
       test     = "StringEquals"
@@ -119,7 +133,7 @@ data "aws_iam_policy_document" "launcher" {
     sid       = "StartSnapshotBase"
     effect    = "Allow"
     actions   = ["ebs:StartSnapshot"]
-    resources = ["arn:aws:ec2:us-west-2::snapshot/*"]
+    resources = [for r in local.fleet_regions : "arn:aws:ec2:${r}::snapshot/*"]
 
     condition {
       test     = "StringEquals"
@@ -133,7 +147,7 @@ data "aws_iam_policy_document" "launcher" {
     sid       = "TagSnapshotOnStartBase"
     effect    = "Allow"
     actions   = ["ec2:CreateTags"]
-    resources = ["arn:aws:ec2:us-west-2::snapshot/*"]
+    resources = [for r in local.fleet_regions : "arn:aws:ec2:${r}::snapshot/*"]
 
     condition {
       test     = "StringEquals"
@@ -156,10 +170,10 @@ data "aws_iam_policy_document" "launcher" {
       "ebs:CompleteSnapshot",
       "ec2:RegisterImage",
     ]
-    resources = [
-      "arn:aws:ec2:us-west-2::snapshot/*",
-      "arn:aws:ec2:us-west-2::image/*",
-    ]
+    resources = flatten([for r in local.fleet_regions : [
+      "arn:aws:ec2:${r}::snapshot/*",
+      "arn:aws:ec2:${r}::image/*",
+    ]])
   }
 
   # Cleanup is limited to base-tagged images and snapshots.
@@ -167,10 +181,10 @@ data "aws_iam_policy_document" "launcher" {
     sid     = "CleanupBaseImage"
     effect  = "Allow"
     actions = ["ec2:DeregisterImage", "ec2:DeleteSnapshot"]
-    resources = [
-      "arn:aws:ec2:us-west-2::image/*",
-      "arn:aws:ec2:us-west-2::snapshot/*",
-    ]
+    resources = flatten([for r in local.fleet_regions : [
+      "arn:aws:ec2:${r}::image/*",
+      "arn:aws:ec2:${r}::snapshot/*",
+    ]])
 
     condition {
       test     = "StringEquals"
@@ -184,7 +198,7 @@ data "aws_iam_policy_document" "launcher" {
     sid       = "TerminateFleetInstances"
     effect    = "Allow"
     actions   = ["ec2:TerminateInstances"]
-    resources = ["arn:aws:ec2:us-west-2:${data.aws_caller_identity.current.account_id}:instance/*"]
+    resources = [for r in local.fleet_regions : "arn:aws:ec2:${r}:${data.aws_caller_identity.current.account_id}:instance/*"]
 
     condition {
       test     = "StringEquals"

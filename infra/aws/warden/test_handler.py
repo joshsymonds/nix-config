@@ -35,7 +35,14 @@ def box(
 class StubEC2:
     """Hand-written EC2 client. Applies the Filters it receives and pages results."""
 
-    def __init__(self, instances, page_size=1000, volumes=None, failing_volumes=()):
+    def __init__(
+        self,
+        instances,
+        page_size=1000,
+        volumes=None,
+        failing_volumes=(),
+        failing_terminate=False,
+    ):
         # Without an explicit volume list, every instance gets one compliant root volume.
         self._instances = instances
         if volumes is None:
@@ -46,6 +53,7 @@ class StubEC2:
         self._volumes = list(volumes)
         self._page_size = page_size
         self._failing_volumes = set(failing_volumes)
+        self._failing_terminate = failing_terminate
         self.describe_calls = []
         self.terminate_calls = []
         self.volume_describe_calls = []
@@ -65,6 +73,8 @@ class StubEC2:
 
     def terminate_instances(self, InstanceIds):
         self.terminate_calls.append({"InstanceIds": list(InstanceIds)})
+        if self._failing_terminate:
+            raise RuntimeError(f"UnauthorizedOperation terminating {list(InstanceIds)}")
         return {"TerminatingInstances": []}
 
     def describe_volumes(self, Filters=None, NextToken=None):
@@ -165,7 +175,7 @@ def test_over_cap_terminates_newest_first_until_rest_fits():
         box("newest", 1, cores=32),
     ])
 
-    assert handler.sweep(client, NOW) == ["newest", "newer"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["newest", "newer"]
     assert client.terminate_calls == [{"InstanceIds": ["newest", "newer"]}]
 
 
@@ -176,7 +186,7 @@ def test_default_max_hours_is_24_when_tag_absent():
         box("on-boundary", 24),
     ])
 
-    assert handler.sweep(client, NOW) == ["expired"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["expired"]
     assert client.terminate_calls == [{"InstanceIds": ["expired"]}]
 
 
@@ -187,7 +197,7 @@ def test_fleet_max_hours_tag_overrides_default():
         box("long-kept", 25, max_hours="48"),
     ])
 
-    assert handler.sweep(client, NOW) == ["short-expired"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["short-expired"]
 
 
 def test_max_hours_tag_at_ceiling_is_honored():
@@ -195,7 +205,7 @@ def test_max_hours_tag_at_ceiling_is_honored():
         box("ceiling-kept", 47, max_hours="48"),
     ])
 
-    assert handler.sweep(client, NOW) == []
+    assert handler.sweep({"us-west-2": client}, NOW) == []
     assert client.terminate_calls == []
 
 
@@ -206,7 +216,7 @@ def test_max_hours_tag_above_ceiling_falls_back_to_default(raw):
         box("fresh", 23, max_hours=raw),
     ])
 
-    assert handler.sweep(client, NOW) == ["expired"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["expired"]
     assert client.terminate_calls == [{"InstanceIds": ["expired"]}]
 
 
@@ -217,7 +227,7 @@ def test_invalid_max_hours_tag_falls_back_to_default(raw):
         box("fresh", 23, max_hours=raw),
     ])
 
-    assert handler.sweep(client, NOW) == ["expired"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["expired"]
 
 
 @pytest.mark.parametrize("raw", ["100000000", "99999999999999"])
@@ -232,7 +242,7 @@ def test_unrepresentable_max_hours_tag_falls_back_to_default(raw):
         box("n3", 3, cores=32),
     ])
 
-    assert handler.sweep(client, NOW) == ["poisoned", "n1"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["poisoned", "n1"]
     assert client.terminate_calls == [{"InstanceIds": ["poisoned", "n1"]}]
 
 
@@ -245,7 +255,7 @@ def test_stopped_boxes_count_toward_vcpu_cap():
         box("running-new", 1, cores=32),
     ])
 
-    assert handler.sweep(client, NOW) == ["running-new"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["running-new"]
 
 
 def test_non_fleet_and_terminated_boxes_are_ignored():
@@ -257,14 +267,14 @@ def test_non_fleet_and_terminated_boxes_are_ignored():
         box("terminated-expired", 100, cores=32, state="terminated"),
     ])
 
-    assert handler.sweep(client, NOW) == []
+    assert handler.sweep({"us-west-2": client}, NOW) == []
     assert client.terminate_calls == []
 
 
 def test_describe_filters_fleet_tag_and_live_states():
     client = StubEC2([])
 
-    handler.sweep(client, NOW)
+    handler.sweep({"us-west-2": client}, NOW)
 
     assert client.describe_calls == [{
         "Filters": [
@@ -296,7 +306,7 @@ def test_pagination_visits_every_page():
         page_size=2,
     )
 
-    assert handler.sweep(client, NOW) == ["expired-last-page"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["expired-last-page"]
     assert [c["NextToken"] for c in client.describe_calls] == [None, "2", "4"]
 
 
@@ -306,14 +316,14 @@ def test_no_op_at_cap_boundary_makes_no_terminate_call():
         box("b", 1, cores=32),
     ])
 
-    assert handler.sweep(client, NOW) == []
+    assert handler.sweep({"us-west-2": client}, NOW) == []
     assert client.terminate_calls == []
 
 
 def test_no_instances_makes_no_terminate_call():
     client = StubEC2([])
 
-    assert handler.sweep(client, NOW) == []
+    assert handler.sweep({"us-west-2": client}, NOW) == []
     assert client.terminate_calls == []
 
 
@@ -328,30 +338,121 @@ def test_vcpu_is_core_count_times_threads_per_core():
         box("tiny-newest", 0.5, cores=1, threads=1),
     ])
 
-    assert handler.sweep(client, NOW) == ["tiny-newest"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["tiny-newest"]
 
 
 def test_handler_builds_ec2_client_and_returns_terminated_ids(monkeypatch):
     # handler() reads the real clock, so fixtures are placed relative to it.
     real_now = datetime.now(timezone.utc)
-    client = StubEC2([
-        {**box("expired", 0), "LaunchTime": real_now - timedelta(hours=100)},
-        {**box("fresh", 0), "LaunchTime": real_now - timedelta(hours=1)},
+    west = StubEC2([
+        {**box("west-expired", 0), "LaunchTime": real_now - timedelta(hours=100)},
     ])
+    eu = StubEC2([
+        {**box("eu-fresh", 0), "LaunchTime": real_now - timedelta(hours=1)},
+    ])
+    clients = {"us-west-2": west, "eu-west-1": eu}
 
     class FakeBoto3:
         requested = []
 
         @classmethod
-        def client(cls, service):
-            cls.requested.append(service)
-            return client
+        def client(cls, service, region_name):
+            cls.requested.append((service, region_name))
+            return clients[region_name]
 
     monkeypatch.setitem(sys.modules, "boto3", FakeBoto3)
+    monkeypatch.setenv("FLEET_REGIONS", "us-west-2,eu-west-1")
 
-    assert handler.handler({}, None) == ["expired"]
-    assert FakeBoto3.requested == ["ec2"]
-    assert client.terminate_calls == [{"InstanceIds": ["expired"]}]
+    assert handler.handler({}, None) == ["west-expired"]
+    assert FakeBoto3.requested == [("ec2", "us-west-2"), ("ec2", "eu-west-1")]
+    assert west.terminate_calls == [{"InstanceIds": ["west-expired"]}]
+    assert eu.terminate_calls == []
+
+
+@pytest.mark.parametrize("value", [None, ""])
+def test_handler_raises_when_fleet_regions_is_absent_or_empty(monkeypatch, value):
+    class FakeBoto3:
+        requested = []
+
+        @classmethod
+        def client(cls, service, region_name):
+            cls.requested.append((service, region_name))
+            return StubEC2([])
+
+    monkeypatch.setitem(sys.modules, "boto3", FakeBoto3)
+    if value is None:
+        monkeypatch.delenv("FLEET_REGIONS", raising=False)
+    else:
+        monkeypatch.setenv("FLEET_REGIONS", value)
+
+    with pytest.raises(RuntimeError, match="FLEET_REGIONS"):
+        handler.handler({}, None)
+    assert FakeBoto3.requested == []
+
+
+def test_each_region_terminates_only_its_own_boxes():
+    west = StubEC2([box("west-expired", 25)])
+    eu = StubEC2(
+        [box("eu-violator", 1, cores=32)],
+        volumes=[in_use_volume("vol-eu", "eu-violator", iops=3001)],
+    )
+
+    assert handler.sweep({"us-west-2": west, "eu-west-1": eu}, NOW) == [
+        "west-expired",
+        "eu-violator",
+    ]
+    assert west.terminate_calls == [{"InstanceIds": ["west-expired"]}]
+    assert eu.terminate_calls == [{"InstanceIds": ["eu-violator"]}]
+
+
+def test_vcpu_cap_counts_boxes_in_every_region():
+    # 96 vCPU in each region is 192 fleet-wide, over the cap, though each region alone is
+    # under it. The newest box fleet-wide is in eu-west-1; cutting it leaves 96, so only
+    # that box goes and us-west-2 receives no terminate call.
+    west = StubEC2([box("west-old", 2, cores=48)])
+    eu = StubEC2([box("eu-new", 1, cores=48)])
+
+    assert handler.sweep({"us-west-2": west, "eu-west-1": eu}, NOW) == ["eu-new"]
+    assert west.terminate_calls == []
+    assert eu.terminate_calls == [{"InstanceIds": ["eu-new"]}]
+
+
+def test_orphan_volumes_are_deleted_in_each_region():
+    west = StubEC2([], volumes=[volume("vol-west", 30)])
+    eu = StubEC2([], volumes=[volume("vol-eu", 30)])
+
+    handler.sweep({"us-west-2": west, "eu-west-1": eu}, NOW)
+
+    assert west.delete_calls == ["vol-west"]
+    assert eu.delete_calls == ["vol-eu"]
+
+
+def test_failed_delete_in_one_region_does_not_skip_other_region():
+    west = StubEC2(
+        [box("west-expired", 25)],
+        volumes=[volume("vol-bad", 30), volume("vol-west-good", 30)],
+        failing_volumes=["vol-bad"],
+    )
+    eu = StubEC2([box("eu-expired", 25)], volumes=[volume("vol-eu", 30)])
+
+    with pytest.raises(RuntimeError, match="vol-bad"):
+        handler.sweep({"us-west-2": west, "eu-west-1": eu}, NOW)
+
+    assert west.terminate_calls == [{"InstanceIds": ["west-expired"]}]
+    assert eu.terminate_calls == [{"InstanceIds": ["eu-expired"]}]
+    assert west.delete_calls == ["vol-bad", "vol-west-good"]
+    assert eu.delete_calls == ["vol-eu"]
+
+
+def test_failed_terminate_in_one_region_does_not_skip_other_region():
+    west = StubEC2([box("west-expired", 25)], failing_terminate=True)
+    eu = StubEC2([box("eu-expired", 25)], volumes=[volume("vol-eu", 30)])
+
+    with pytest.raises(RuntimeError, match="west-expired"):
+        handler.sweep({"us-west-2": west, "eu-west-1": eu}, NOW)
+
+    assert eu.terminate_calls == [{"InstanceIds": ["eu-expired"]}]
+    assert eu.delete_calls == ["vol-eu"]
 
 
 def test_available_fleet_volume_older_than_15_minutes_is_deleted():
@@ -362,7 +463,7 @@ def test_available_fleet_volume_older_than_15_minutes_is_deleted():
         volume("vol-untagged", 60, fleet=False),
     ])
 
-    assert handler.sweep(client, NOW) == []
+    assert handler.sweep({"us-west-2": client}, NOW) == []
     assert client.delete_calls == ["vol-orphan"]
 
 
@@ -373,7 +474,7 @@ def test_volume_describe_filters_fleet_tag_and_available_status_across_pages():
         page_size=2,
     )
 
-    handler.sweep(client, NOW)
+    handler.sweep({"us-west-2": client}, NOW)
 
     available_calls = [
         c for c in client.volume_describe_calls
@@ -397,7 +498,7 @@ def test_orphan_deletes_run_after_terminations_and_survive_one_failure():
     )
 
     with pytest.raises(RuntimeError, match="vol-bad"):
-        handler.sweep(client, NOW)
+        handler.sweep({"us-west-2": client}, NOW)
 
     assert client.terminate_calls == [{"InstanceIds": ["expired"]}]
     assert client.delete_calls == ["vol-bad", "vol-good"]
@@ -409,7 +510,7 @@ def test_compliant_volume_at_every_limit_is_kept():
         volumes=[in_use_volume("vol-ok", "ok", size=512, iops=3000, throughput=125)],
     )
 
-    assert handler.sweep(client, NOW) == []
+    assert handler.sweep({"us-west-2": client}, NOW) == []
     assert client.terminate_calls == []
 
 
@@ -426,7 +527,7 @@ def test_volume_off_launcher_shape_terminates_box(override):
         volumes=[in_use_volume("vol-bad", "bad", **override)],
     )
 
-    assert handler.sweep(client, NOW) == ["bad"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["bad"]
     assert client.terminate_calls == [{"InstanceIds": ["bad"]}]
 
 
@@ -439,14 +540,14 @@ def test_box_with_two_fleet_volumes_terminates():
         ],
     )
 
-    assert handler.sweep(client, NOW) == ["bad"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["bad"]
     assert client.terminate_calls == [{"InstanceIds": ["bad"]}]
 
 
 def test_box_whose_root_volume_is_not_attached_yet_is_kept():
     client = StubEC2([box("launching", 0, cores=32, state="pending")], volumes=[])
 
-    assert handler.sweep(client, NOW) == []
+    assert handler.sweep({"us-west-2": client}, NOW) == []
     assert client.terminate_calls == []
 
 
@@ -466,7 +567,7 @@ def test_shape_violator_does_not_count_toward_vcpu_cap():
         ],
     )
 
-    assert handler.sweep(client, NOW) == ["violator"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["violator"]
     assert client.terminate_calls == [{"InstanceIds": ["violator"]}]
 
 
@@ -479,14 +580,14 @@ def test_expired_and_violator_are_terminated_in_one_call():
         ],
     )
 
-    assert handler.sweep(client, NOW) == ["expired", "bad"]
+    assert handler.sweep({"us-west-2": client}, NOW) == ["expired", "bad"]
     assert client.terminate_calls == [{"InstanceIds": ["expired", "bad"]}]
 
 
 def test_in_use_volume_describe_filters_fleet_tag_and_in_use_status_across_pages():
     client = StubEC2([box(f"i{n}", 1, cores=1, threads=1) for n in range(5)], page_size=2)
 
-    assert handler.sweep(client, NOW) == []
+    assert handler.sweep({"us-west-2": client}, NOW) == []
 
     in_use_calls = [
         c for c in client.volume_describe_calls

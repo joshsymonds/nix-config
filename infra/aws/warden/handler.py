@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta, timezone
 
 CAP_VCPU = 128
@@ -25,38 +26,60 @@ MAX_THROUGHPUT = 125
 def handler(event, context):
     import boto3
 
-    ec2 = boto3.client("ec2")
-    return sweep(ec2, datetime.now(timezone.utc))
+    clients = {
+        region: boto3.client("ec2", region_name=region) for region in _fleet_regions()
+    }
+    return sweep(clients, datetime.now(timezone.utc))
 
 
-def sweep(ec2, now: datetime) -> list[str]:
-    # Instances are read before volumes: a box launched between the two reads is then
-    # never judged against a volume list older than the box itself.
-    instances = _fleet_instances(ec2)
-    attached = _attachments_by_instance(_in_use_fleet_volumes(ec2))
+def _fleet_regions() -> list[str]:
+    regions = [r.strip() for r in os.environ.get("FLEET_REGIONS", "").split(",") if r.strip()]
+    if not regions:
+        raise RuntimeError("FLEET_REGIONS must name at least one region")
+    return regions
+
+
+def sweep(clients: dict, now: datetime) -> list[str]:
+    # Per region, instances are read before volumes: a box launched between the two reads
+    # is then never judged against a volume list older than the box itself.
+    fleet = []
+    attached = {}
+    for region, ec2 in clients.items():
+        fleet.extend((region, instance) for instance in _fleet_instances(ec2))
+        attached.update(_attachments_by_instance(_in_use_fleet_volumes(ec2)))
 
     doomed = []
     live = []
-    for instance in instances:
+    for region, instance in fleet:
         if _deadline(instance) < now or _off_shape(attached.get(instance["InstanceId"], [])):
-            doomed.append(instance["InstanceId"])
+            doomed.append((region, instance["InstanceId"]))
         else:
-            live.append(instance)
+            live.append((region, instance))
 
-    remaining_vcpu = sum(_vcpus(i) for i in live)
-    for instance in sorted(live, key=lambda i: i["LaunchTime"], reverse=True):
+    remaining_vcpu = sum(_vcpus(instance) for _, instance in live)
+    for region, instance in sorted(live, key=lambda r: r[1]["LaunchTime"], reverse=True):
         if remaining_vcpu <= CAP_VCPU:
             break
-        doomed.append(instance["InstanceId"])
+        doomed.append((region, instance["InstanceId"]))
         remaining_vcpu -= _vcpus(instance)
 
-    if doomed:
-        ec2.terminate_instances(InstanceIds=doomed)
-    _delete_orphan_volumes(ec2, now)
-    return doomed
+    failed = []
+    for region, ec2 in clients.items():
+        ids = [instance_id for doomed_region, instance_id in doomed if doomed_region == region]
+        if not ids:
+            continue
+        try:
+            ec2.terminate_instances(InstanceIds=ids)
+        except Exception as error:
+            failed.append(f"{region} terminate {', '.join(ids)} ({error})")
+    for region, ec2 in clients.items():
+        failed.extend(_delete_orphan_volumes(ec2, region, now))
+    if failed:
+        raise RuntimeError(f"fleet sweep failed: {'; '.join(failed)}")
+    return [instance_id for _, instance_id in doomed]
 
 
-def _delete_orphan_volumes(ec2, now: datetime) -> None:
+def _delete_orphan_volumes(ec2, region: str, now: datetime) -> list[str]:
     cutoff = now - ORPHAN_AGE
     failed = []
     for volume in _fleet_volumes(ec2):
@@ -65,9 +88,8 @@ def _delete_orphan_volumes(ec2, now: datetime) -> None:
         try:
             ec2.delete_volume(VolumeId=volume["VolumeId"])
         except Exception as error:
-            failed.append(f"{volume['VolumeId']} ({error})")
-    if failed:
-        raise RuntimeError(f"failed to delete orphaned fleet volumes: {', '.join(failed)}")
+            failed.append(f"{region} delete {volume['VolumeId']} ({error})")
+    return failed
 
 
 def _fleet_volumes(ec2) -> list[dict]:

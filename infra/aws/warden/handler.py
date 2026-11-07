@@ -88,6 +88,10 @@ def _delete_orphan_volumes(ec2, region: str, now: datetime) -> list[str]:
         try:
             ec2.delete_volume(VolumeId=volume["VolumeId"])
         except Exception as error:
+            # Another warden may have deleted this volume first; a gone volume is deleted.
+            error_code = getattr(error, "response", {}).get("Error", {}).get("Code")
+            if error_code == "InvalidVolume.NotFound":
+                continue
             failed.append(f"{region} delete {volume['VolumeId']} ({error})")
     return failed
 

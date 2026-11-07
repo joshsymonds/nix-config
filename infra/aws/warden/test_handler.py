@@ -32,6 +32,14 @@ def box(
     }
 
 
+class StubClientError(Exception):
+    """Carries the response shape of botocore.exceptions.ClientError."""
+
+    def __init__(self, code):
+        super().__init__(f"An error occurred ({code}) when calling the DeleteVolume operation")
+        self.response = {"Error": {"Code": code, "Message": "stub"}}
+
+
 class StubEC2:
     """Hand-written EC2 client. Applies the Filters it receives and pages results."""
 
@@ -41,6 +49,7 @@ class StubEC2:
         page_size=1000,
         volumes=None,
         failing_volumes=(),
+        volume_errors=None,
         failing_terminate=False,
     ):
         # Without an explicit volume list, every instance gets one compliant root volume.
@@ -53,6 +62,7 @@ class StubEC2:
         self._volumes = list(volumes)
         self._page_size = page_size
         self._failing_volumes = set(failing_volumes)
+        self._volume_errors = dict(volume_errors or {})
         self._failing_terminate = failing_terminate
         self.describe_calls = []
         self.terminate_calls = []
@@ -91,6 +101,8 @@ class StubEC2:
         self.delete_calls.append(VolumeId)
         if VolumeId in self._failing_volumes:
             raise RuntimeError(f"UnauthorizedOperation deleting {VolumeId}")
+        if VolumeId in self._volume_errors:
+            raise self._volume_errors[VolumeId]
 
 
 def volume(volume_id, minutes_old, *, state="available", fleet=True):
@@ -502,6 +514,30 @@ def test_orphan_deletes_run_after_terminations_and_survive_one_failure():
 
     assert client.terminate_calls == [{"InstanceIds": ["expired"]}]
     assert client.delete_calls == ["vol-bad", "vol-good"]
+
+
+def test_orphan_already_gone_counts_as_deleted_and_sweep_completes():
+    client = StubEC2(
+        [],
+        volumes=[volume("vol-gone", 30), volume("vol-good", 30)],
+        volume_errors={"vol-gone": StubClientError("InvalidVolume.NotFound")},
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == []
+    assert client.delete_calls == ["vol-gone", "vol-good"]
+
+
+def test_orphan_delete_with_other_client_error_still_raises():
+    client = StubEC2(
+        [],
+        volumes=[volume("vol-denied", 30), volume("vol-good", 30)],
+        volume_errors={"vol-denied": StubClientError("UnauthorizedOperation")},
+    )
+
+    with pytest.raises(RuntimeError, match="vol-denied"):
+        handler.sweep({"us-west-2": client}, NOW)
+
+    assert client.delete_calls == ["vol-denied", "vol-good"]
 
 
 def test_compliant_volume_at_every_limit_is_kept():

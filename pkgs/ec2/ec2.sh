@@ -117,6 +117,64 @@ rank_regions() {
   printf '%s\n' "${priced[@]}" | sort -s -n | cut -d' ' -f2
 }
 
+# region_spot_price <type> <region>: prints the lowest current spot $/hr among the
+# region's offering zones, from region_zones. Fails when any zone's price cannot
+# be read.
+region_spot_price() {
+  local itype=$1 r=$2 zone p
+  local -a zones=() prices=()
+  readarray -t zones <<<"${region_zones[$r]}"
+  for zone in "${zones[@]}"; do
+    p=$(spot_price "$r" "$itype" "$zone") || return 1
+    [[ $p =~ ^[0-9]+(\.[0-9]+)?$ ]] || return 1
+    prices+=("$p")
+  done
+  printf '%s\n' "${prices[@]}" | sort -n | head -n 1
+}
+
+# rank_spot_regions <type> <region>...: prints the regions highest spot placement
+# score first, from one score lookup in us-west-2. A score tie goes to the region
+# with the lower spot price, read only for the tied regions; a price tie keeps the
+# order given. A failed or incomplete score lookup, or an unreadable price, warns
+# once on stderr and prints the regions in the order given.
+rank_spot_regions() {
+  local itype=$1 r s p scores
+  local -a scored=() keyed=()
+  local -A count=()
+  shift
+  [ $# -gt 1 ] || {
+    printf '%s\n' "$@"
+    return 0
+  }
+  scores=$(ec2_in us-west-2 get-spot-placement-scores --output json \
+    --region-names "$@" --instance-types "$itype" --target-capacity 1) || scores=
+  for r in "$@"; do
+    s=$(jq -r --arg r "$r" '[.SpotPlacementScores[] | select(.Region == $r) | .Score | numbers] | first // empty' <<<"$scores") || s=
+    [[ $s =~ ^[0-9]+$ ]] || {
+      echo "ec2: cannot rank regions by spot placement score for $itype; trying them in fixed order" >&2
+      printf '%s\n' "$@"
+      return 0
+    }
+    scored+=("$s $r")
+    count[$s]=$((${count[$s]:-0} + 1))
+  done
+  for entry in "${scored[@]}"; do
+    s=${entry%% *}
+    r=${entry#* }
+    p=0
+    if [ "${count[$s]}" -gt 1 ]; then
+      p=$(region_spot_price "$itype" "$r") || p=
+      [[ $p =~ ^[0-9]+(\.[0-9]+)?$ ]] || {
+        echo "ec2: cannot break the spot score tie for $itype by price; trying them in fixed order" >&2
+        printf '%s\n' "$@"
+        return 0
+      }
+    fi
+    keyed+=("$s $p $r")
+  done
+  printf '%s\n' "${keyed[@]}" | sort -s -k1,1nr -k2,2n | cut -d' ' -f3
+}
+
 cmd_ls() {
   local region described rows name class itype spot launch az od sp
   load_aws_env
@@ -407,13 +465,14 @@ cmd_up() {
   suffix=$(shuf -r -n 3 -e {a..z} {0..9} | tr -d '\n') || die "cannot pick a random name"
   name="$prefix-$suffix"
 
-  # The walk runs over the regions in order. A spot launch tries each region's
-  # zones offering the type, in sorted order, as spot. Then, for every launch,
-  # the regions offering the type are ranked by on-demand price, cheapest first,
-  # and each one's zones as on-demand, placed, then its one on-demand attempt with
-  # no placement. A region offering no zone for the type gets no attempt.
-  local ranked
-  local -a offering=() od_regions=()
+  # The walk runs over the regions in order. A spot launch tries the regions
+  # offering the type in spot placement score order, each one's zones in sorted
+  # order, as spot. Then, for every launch, the regions offering the type are
+  # ranked by on-demand price, cheapest first, and each one's zones as on-demand,
+  # placed, then its one on-demand attempt with no placement. A region offering
+  # no zone for the type gets no attempt.
+  local ranked spot_ranked
+  local -a offering=() od_regions=() spot_regions=()
   local -A region_zones=()
   for r in "${regions[@]}"; do
     zone_list=$(ec2_in "$r" describe-instance-type-offerings --output json --location-type availability-zone \
@@ -423,14 +482,18 @@ cmd_up() {
     [ -n "$zone_list" ] || continue
     offering+=("$r")
     region_zones[$r]=$zone_list
-    if [ "$spot_req" = yes ]; then
-      readarray -t zones <<<"$zone_list"
+  done
+  [ ${#offering[@]} -gt 0 ] || die "no region offers $itype"
+  if [ "$spot_req" = yes ]; then
+    spot_ranked=$(rank_spot_regions "$itype" "${offering[@]}") || die "cannot order the regions offering $itype for spot"
+    readarray -t spot_regions <<<"$spot_ranked"
+    for r in "${spot_regions[@]}"; do
+      readarray -t zones <<<"${region_zones[$r]}"
       for zone in "${zones[@]}"; do
         spot_attempts+=("spot $r $zone")
       done
-    fi
-  done
-  [ ${#offering[@]} -gt 0 ] || die "no region offers $itype"
+    done
+  fi
   ranked=$(rank_regions "$itype" "${offering[@]}") || die "cannot order the regions offering $itype"
   readarray -t od_regions <<<"$ranked"
   for r in "${od_regions[@]}"; do

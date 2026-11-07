@@ -126,6 +126,15 @@ case "$2" in
     done
     cat "$rdir/offerings-$itype.json"
     ;;
+  get-spot-placement-scores)
+    prev=
+    itype=
+    for a in "$@"; do
+      if [ "$prev" = --instance-types ]; then itype=$a; fi
+      prev=$a
+    done
+    cat "$rdir/scores-$itype.json"
+    ;;
   describe-images)
     if [ -e "$rdir/registered" ]; then
       cat "$rdir/images-after-register.json"
@@ -435,6 +444,17 @@ cat >"$STUB_FIXTURES/eu-west-1/pricing-g4dn.xlarge.json" <<'FIXTURE'
 FIXTURE
 cat >"$STUB_FIXTURES/eu-west-1/spot-m8a.large.json" <<'FIXTURE'
 {"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.0510","AvailabilityZone":"eu-west-1b"}]}
+FIXTURE
+# g4dn.xlarge's spot placement scores tie and Oregon's spot price is lower, so the
+# default spot walk keeps the fixed order. The score answer is read in us-west-2.
+cat >"$STUB_FIXTURES/scores-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPlacementScores":[{"Region":"us-west-2","Score":5},{"Region":"eu-west-1","Score":5}]}
+FIXTURE
+cat >"$STUB_FIXTURES/spot-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.2100","AvailabilityZone":"us-west-2a"}]}
+FIXTURE
+cat >"$STUB_FIXTURES/eu-west-1/spot-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.2400","AvailabilityZone":"eu-west-1a"}]}
 FIXTURE
 cat >"$STUB_FIXTURES/eu-west-1/security-groups.json" <<'FIXTURE'
 {"SecurityGroups":[{"GroupId":"sg-0ireland0000001","GroupName":"ec2-fleet"}]}
@@ -1421,6 +1441,121 @@ expect_order "Ireland's image steps run in order before its launch" \
   "--image-id ami-irelandnew0005"
 clear_faults
 use_eu_images images-full images-registered
+
+# The spot walk orders the regions by spot placement score, from one score call
+# in us-west-2 that names both offering regions. Each case sets the scores or
+# prices it needs and restores the default fixtures afterwards.
+
+# Ireland's score is higher: its first spot zone is the first attempt. No price is read.
+cat >"$STUB_FIXTURES/scores-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPlacementScores":[{"Region":"us-west-2","Score":3},{"Region":"eu-west-1","Score":7}]}
+FIXTURE
+run up --type g4dn.xlarge --disk 40 --spot
+expect_status 0 "spot up with Ireland's score higher"
+expect_out '^market spot eu-west-1a$' "spot up with Ireland's score higher prints Ireland's market line"
+expect_out '^ec2-[a-z0-9]{3} ready$' "spot up with Ireland's score higher prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+expect_placements "spot up with Ireland's score higher" "zone eu-west-1a spot"
+[ "$(grep -c '^aws ec2 get-spot-placement-scores ' "$STUB_LOG")" -eq 1 ] || fail "spot up with Ireland's score higher: want exactly one score call"
+expect_region "spot up with Ireland's score higher asks the scores in us-west-2 for both regions" us-west-2 \
+  "ec2 get-spot-placement-scores" "--region-names us-west-2 eu-west-1" "--instance-types g4dn.xlarge" "--target-capacity 1"
+[ "$(grep -c '^eu-west-1 .*get-spot-placement-scores' "$STUB_REGION_LOG")" -eq 0 ] || fail "spot up with Ireland's score higher asks a score in eu-west-1"
+expect_no_log "describe-spot-price-history" "spot up with Ireland's score higher reads no spot price"
+if grep -q 'cannot' "$ERR"; then fail "spot up with Ireland's score higher warned"; fi
+expect_userdata "spot up with Ireland's score higher" "$name"
+expect_no_fixed "terminate-instances" "spot up with Ireland's score higher terminates nothing on success"
+clear_faults
+cat >"$STUB_FIXTURES/scores-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPlacementScores":[{"Region":"us-west-2","Score":5},{"Region":"eu-west-1","Score":5}]}
+FIXTURE
+
+# Scores tied and Ireland's spot price lower: Ireland's first spot zone is the first attempt.
+cat >"$STUB_FIXTURES/eu-west-1/spot-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.1800","AvailabilityZone":"eu-west-1a"}]}
+FIXTURE
+run up --type g4dn.xlarge --disk 40 --spot
+expect_status 0 "spot up with scores tied and Ireland's spot price lower"
+expect_out '^market spot eu-west-1a$' "spot up with scores tied and Ireland's spot price lower prints Ireland's market line"
+expect_placements "spot up with scores tied and Ireland's spot price lower" "zone eu-west-1a spot"
+expect_region "scores tied: Oregon's spot price is read in us-west-2" us-west-2 \
+  "describe-spot-price-history" "--instance-types g4dn.xlarge" "--availability-zone us-west-2c"
+expect_region "scores tied: Ireland's spot price is read in eu-west-1" eu-west-1 \
+  "describe-spot-price-history" "--instance-types g4dn.xlarge" "--availability-zone eu-west-1c"
+if grep -q 'cannot' "$ERR"; then fail "spot up with scores tied and Ireland's spot price lower warned"; fi
+clear_faults
+cat >"$STUB_FIXTURES/eu-west-1/spot-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.2400","AvailabilityZone":"eu-west-1a"}]}
+FIXTURE
+
+# Scores tied and the spot prices equal: the fixed order holds, Oregon first.
+cat >"$STUB_FIXTURES/eu-west-1/spot-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.2100","AvailabilityZone":"eu-west-1a"}]}
+FIXTURE
+run up --type g4dn.xlarge --disk 40 --spot
+expect_status 0 "spot up with scores tied and spot prices equal"
+expect_placements "spot up with scores tied and spot prices equal" "zone us-west-2a spot"
+if grep -q 'cannot' "$ERR"; then fail "spot up with scores tied and spot prices equal warned"; fi
+clear_faults
+cat >"$STUB_FIXTURES/eu-west-1/spot-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.2400","AvailabilityZone":"eu-west-1a"}]}
+FIXTURE
+
+# Scores tied and Ireland's spot price has no history: the price cannot be read, so
+# the fixed order holds, Oregon first, with one warning on stderr.
+cat >"$STUB_FIXTURES/eu-west-1/spot-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPriceHistory":[]}
+FIXTURE
+run up --type g4dn.xlarge --disk 40 --spot
+expect_status 0 "spot up with Ireland's spot price unreadable"
+expect_err '^ec2: cannot break the spot score tie for g4dn\.xlarge by price; trying them in fixed order$' "spot up with Ireland's spot price unreadable warns once in fixed order"
+[ "$(grep -c 'cannot break the spot score tie' "$ERR")" -eq 1 ] || fail "spot up with Ireland's spot price unreadable: want exactly one warning"
+expect_placements "spot up with Ireland's spot price unreadable" "zone us-west-2a spot"
+clear_faults
+cat >"$STUB_FIXTURES/eu-west-1/spot-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPriceHistory":[{"Timestamp":"2026-10-27T07:00:00+00:00","SpotPrice":"0.2400","AvailabilityZone":"eu-west-1a"}]}
+FIXTURE
+
+# The score lookup fails: the spot walk keeps the fixed order, Oregon's zones then
+# Ireland's, with one warning on stderr, and launches in Ireland's first zone.
+inject ec2-get-spot-placement-scores
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+: >"$STUB_FIXTURES/no-capacity-us-west-2c"
+run up --type g4dn.xlarge --disk 40 --spot
+expect_status 0 "spot up with the score lookup failing"
+expect_out '^market spot eu-west-1a$' "spot up with the score lookup failing prints Ireland's market line"
+expect_err '^ec2: cannot rank regions by spot placement score for g4dn\.xlarge; trying them in fixed order$' "spot up with the score lookup failing warns in fixed order"
+[ "$(grep -c 'cannot rank regions by spot' "$ERR")" -eq 1 ] || fail "spot up with the score lookup failing: want exactly one warning"
+expect_placements "spot up with the score lookup failing" \
+  "zone us-west-2a spot" "zone us-west-2b spot" "zone us-west-2c spot" "zone eu-west-1a spot"
+clear_faults
+
+# The score answer lacks Ireland's score: that counts as a failed lookup, so the
+# walk keeps the fixed order and warns once. No price is read.
+cat >"$STUB_FIXTURES/scores-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPlacementScores":[{"Region":"us-west-2","Score":3}]}
+FIXTURE
+run up --type g4dn.xlarge --disk 40 --spot
+expect_status 0 "spot up with Ireland's score missing from the answer"
+expect_err '^ec2: cannot rank regions by spot placement score for g4dn\.xlarge; trying them in fixed order$' "spot up with Ireland's score missing from the answer warns in fixed order"
+[ "$(grep -c 'cannot rank regions by spot' "$ERR")" -eq 1 ] || fail "spot up with Ireland's score missing from the answer: want exactly one warning"
+expect_placements "spot up with Ireland's score missing from the answer" "zone us-west-2a spot"
+expect_no_log "describe-spot-price-history" "spot up with Ireland's score missing from the answer reads no spot price"
+clear_faults
+cat >"$STUB_FIXTURES/scores-g4dn.xlarge.json" <<'FIXTURE'
+{"SpotPlacementScores":[{"Region":"us-west-2","Score":5},{"Region":"eu-west-1","Score":5}]}
+FIXTURE
+
+# Oregon-only types make no score call: commonframe-gate is a spot class and
+# c8a.large is an ad-hoc spot type, and both are offered in Oregon alone.
+use_images images-full images-registered-only
+run up commonframe-gate
+expect_status 0 "up commonframe-gate with no score call"
+expect_no_log "get-spot-placement-scores" "up commonframe-gate makes no score call"
+run up --type c8a.large --disk 40 --spot
+expect_status 0 "ad-hoc spot up of an Oregon-only type"
+expect_no_log "get-spot-placement-scores" "ad-hoc spot up of an Oregon-only type makes no score call"
+clear_faults
 
 # up --type --disk --spot: ad-hoc spot box, no deploy.
 run up --type c8a.large --disk 40 --spot

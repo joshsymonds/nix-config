@@ -6,8 +6,7 @@
 # two tunnels on one WireGuard key fight over the peer's endpoint. The key was
 # generated locally (2026-11-06) and only its public half registered with
 # Mullvad; the address file holds the IPv4 address Mullvad assigned (IPv4
-# only, as the module requires). Egress rides vermissian's always-on WARP like
-# mullvad0 does.
+# only, as the module requires).
 {config, ...}: {
   imports = [
     ../../modules/services/vpn-exit.nix

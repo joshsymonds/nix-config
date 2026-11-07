@@ -4,9 +4,9 @@
   osConfig,
   ...
 }: let
-  # A second Firefox that only ever talks through the host's VPN exit
-  # (modules/services/vpn-exit.nix). It exists where the exit publishes its
-  # HTTP proxy, and nowhere else.
+  # Clients of the host's VPN exit (modules/services/vpn-exit.nix), present
+  # where the exit publishes its HTTP proxy and nowhere else: a second Firefox
+  # that only ever talks through it, and ssh-vpn.
   exit = osConfig.services.vpn-exit or {};
   enabled = (exit.enable or false) && (exit.httpProxy.enable or false);
   port = toString (exit.httpProxy.port or 8888);
@@ -25,7 +25,7 @@
   # The everyday profile's ui.key.menuAccessKey=0 applies here for the same
   # reason (home-manager/firefox).
   userJs = pkgs.writeText "firefox-vpn-user.js" ''
-    // Managed by nix-config (home-manager/firefox-vpn). Do not edit.
+    // Managed by nix-config (home-manager/vpn-exit). Do not edit.
     user_pref("network.proxy.type", 1);
     user_pref("network.proxy.http", "127.0.0.1");
     user_pref("network.proxy.http_port", ${port});
@@ -51,7 +51,7 @@
   '';
 
   userChrome = ''
-    /* Managed by nix-config (home-manager/firefox-vpn). */
+    /* Managed by nix-config (home-manager/vpn-exit). */
     #navigator-toolbox, #TabsToolbar, #nav-bar, #PersonalToolbar {
       background: ${yellow} !important;
       color: ${navy} !important;
@@ -76,7 +76,7 @@
   '';
 
   userContent = ''
-    /* Managed by nix-config (home-manager/firefox-vpn). */
+    /* Managed by nix-config (home-manager/vpn-exit). */
     @-moz-document url("about:newtab"), url("about:home"), url("about:blank") {
       html, body {
         --newtab-background-color: ${navy} !important;
@@ -110,9 +110,17 @@
     # apps out of this instance and gives niri something to match.
     exec ${pkgs.firefox}/bin/firefox --name ${appId} --profile "$HOME/${profileDir}" "$@"
   '';
+  # ssh with its connection carried through the exit's proxy (HTTP CONNECT).
+  # If the exit is down the connection fails; it never goes out directly.
+  # GitHub's SSH is also on ssh.github.com:443 for proxies that only allow 443.
+  sshVpn = pkgs.writeShellScriptBin "ssh-vpn" ''
+    exec ${pkgs.openssh}/bin/ssh \
+      -o "ProxyCommand=${pkgs.netcat-openbsd}/bin/nc -X connect -x 127.0.0.1:${port} %h %p" \
+      "$@"
+  '';
 in {
   config = lib.mkIf enabled {
-    home.packages = [launcher];
+    home.packages = [launcher sshVpn];
 
     home.file = {
       "${profileDir}/user.js".source = userJs;

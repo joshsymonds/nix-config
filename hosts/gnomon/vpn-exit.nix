@@ -1,6 +1,7 @@
 # gnomon's VPN exit (services.vpn-exit): one Mullvad WireGuard tunnel in a
 # gluetun container. qBittorrent joins its netns (qbittorrent-vpn.nix), and
-# the loopback HTTP proxy is for host programs (firefox-vpn).
+# the loopback HTTP proxy is for host programs (home-manager/vpn-exit:
+# firefox-vpn, ssh-vpn).
 #
 # Mullvad's WireGuard config is per-device, so gnomon needs its own peer
 # (a new peer added under your Mullvad account → WireGuard configuration,

@@ -46,6 +46,11 @@ in {
   # IAM user ec2-fleet-launcher (created by OpenTofu in infra/aws), env-style
   # AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY, read by the `ec2` launcher.
   "secrets/user/ec2-fleet-aws.age".publicKeys = keys.joshsymonds;
+  # A per-directory git identity (home-manager/hosts/gnomon.nix): the
+  # includeIf, the settings it applies, and that identity's ssh key.
+  "secrets/user/git-conditional.age".publicKeys = keys.joshsymonds;
+  "secrets/user/git-conditional-config.age".publicKeys = keys.joshsymonds;
+  "secrets/user/git-conditional-key.age".publicKeys = keys.joshsymonds;
   # OpenTofu state/plan encryption passphrase for infra/aws.
   "secrets/user/ec2-fleet-tofu-passphrase.age".publicKeys = keys.joshsymonds;
 

@@ -4,8 +4,9 @@
   ...
 }: {
   # The ec2 fleet launcher and the agenix user secrets it reads. Imported only
-  # by hosts that launch fleet boxes; the fleet boxes themselves (hosts/ec2.nix)
-  # carry no agenix secrets and no IAM role.
+  # by hosts that launch fleet boxes. The fleet boxes themselves (base config in
+  # hosts/ec2/base.nix) carry no agenix secrets; only boxes of a class with
+  # `cache = true` carry the ec2-fleet-cache IAM role.
   age.secrets = {
     "ec2-fleet-aws".file = ../../secrets/user/ec2-fleet-aws.age;
     "tailscale-fleet-oauth".file = ../../secrets/user/tailscale-fleet-oauth.age;

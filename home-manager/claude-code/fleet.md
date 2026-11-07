@@ -34,9 +34,9 @@ Cloud workers (ec2) below.
 
 ## Cloud workers (ec2)
 
-Ephemeral NixOS boxes in us-west-2 for work that outgrows the home hosts. The
-`ec2` command runs on vermissian and gnomon, the only hosts with its AWS
-credentials.
+Ephemeral NixOS boxes run in us-west-2 or eu-west-1 for work that outgrows
+the home hosts. The `ec2` command runs on vermissian and gnomon, the only
+hosts with its AWS credentials.
 
 - `ec2 up <class>` starts a box of a class. `ec2 up --type <t> --disk <gb>
   [--spot]` starts an ad-hoc box; `--disk` is at most 512. `ec2 help` lists the
@@ -47,9 +47,10 @@ credentials.
 - A class with `reboot = true` deploys with switch-to-configuration boot,
   reboots, and waits for a new boot id before the ready line. `<name> ready`
   stays the last stdout line.
-- Spot launches try every us-west-2 zone offering the type, then on-demand.
-  The launch prints `market spot <zone>` or `market on-demand` before the ready
-  line.
+- Spot launches try every zone of both regions offering the type, with
+  regions ranked by AWS spot placement score and ties going to the cheaper
+  spot price, then on-demand in the cheapest region first. The launch prints
+  `market spot <zone>` or `market on-demand` before the ready line.
 - `ec2 ls` lists pending and running boxes. `ec2 down <name>` terminates one.
 - Names are `<class>-xxx`, or `ec2-xxx` for ad-hoc boxes. Connect with
   `ssh joshsymonds@<name>`. A box keeps its name on the tailnet across reboots.

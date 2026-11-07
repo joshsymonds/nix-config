@@ -2,86 +2,19 @@
   pkgs,
   config,
   ...
-}: {
-  age.secrets."mullvad-privatekey" = {
-    file = ../../secrets/hosts/ultraviolet/mullvad-privatekey.age;
-    owner = "root";
-    mode = "0600";
-  };
-  age.secrets."mullvad-addresses" = {
-    file = ../../secrets/hosts/ultraviolet/mullvad-addresses.age;
-    owner = "root";
-    mode = "0600";
-  };
-  # SABnzbd with Mullvad VPN using Gluetun container
-  # Gluetun provides VPN with built-in killswitch
-
+}: let
+  exit = config.services.vpn-exit.containerName;
+in {
+  # SABnzbd inside the host's VPN exit (vpn-exit.nix): Mullvad with gluetun's
+  # killswitch.
   virtualisation.oci-containers = {
     backend = "podman";
 
     containers = {
-      # Gluetun VPN container - handles all VPN connectivity
-      gluetun = {
-        image = "docker.io/qmcgaw/gluetun:v3.41.3"; # Pin to stable version
+      # The exit owns the netns, so SABnzbd's web interface is published on it.
+      ${exit}.ports = ["8080:8080"];
 
-        environment = {
-          VPN_SERVICE_PROVIDER = "mullvad";
-          VPN_TYPE = "wireguard";
-          # Mullvad WireGuard configuration - reads from secret files
-          WIREGUARD_PRIVATE_KEY_SECRETFILE = "/gluetun/wireguard/privatekey";
-          WIREGUARD_ADDRESSES_SECRETFILE = "/gluetun/wireguard/addresses";
-          WIREGUARD_PRESHARED_KEY = ""; # Mullvad doesn't use preshared keys
-          SERVER_CITIES = "Los Angeles CA"; # Choose your preferred city
-
-          # Killswitch is enabled by default in Gluetun
-          FIREWALL = "on";
-          DNS_SERVER = "on"; # Built-in resolver; upstream defaults to DNS over TLS
-          BLOCK_MALICIOUS = "on";
-          BLOCK_ADS = "off"; # Set to "on" if you want ad blocking
-
-          # Mullvad doesn't support port forwarding anymore
-          VPN_PORT_FORWARDING = "off";
-
-          # HTTP proxy for LAN devices / testing
-          HTTPPROXY = "on";
-          FIREWALL_OUTBOUND_SUBNETS = "172.31.0.0/24";
-
-          # Refresh Mullvad's relay list daily into the persisted
-          # /gluetun/servers.json; the list baked into the pinned image
-          # goes stale as relays are retired and re-keyed.
-          UPDATER_PERIOD = "24h";
-          UPDATER_VPN_SERVICE_PROVIDERS = "mullvad";
-        };
-
-        volumes = [
-          "/var/lib/gluetun:/gluetun"
-          "${config.age.secrets."mullvad-privatekey".path}:/gluetun/wireguard/privatekey:ro"
-          "${config.age.secrets."mullvad-addresses".path}:/gluetun/wireguard/addresses:ro"
-        ];
-
-        extraOptions = [
-          "--cap-add=NET_ADMIN"
-          "--device=/dev/net/tun"
-          "--sysctl=net.ipv4.conf.all.src_valid_mark=1"
-          # IPv4-only netns: ultraviolet has no IPv6 upstream, and with IPv6
-          # enabled gluetun reads the eth0 link-local route as IPv6 support
-          # and keeps dialing unroutable IPv6 Mullvad endpoints. Same fix as
-          # modules/services/qbittorrent-vpn.nix; the addresses secret is
-          # IPv4-only to match.
-          "--sysctl=net.ipv6.conf.all.disable_ipv6=1"
-          "--sysctl=net.ipv6.conf.default.disable_ipv6=1"
-        ];
-
-        ports = [
-          "8080:8080" # SABnzbd web interface
-          "8888:8888" # HTTP proxy (Gluetun)
-          "8388:8388" # Shadowsocks proxy (Gluetun)
-        ];
-
-        autoStart = true;
-      };
-
-      # SABnzbd container - routes through Gluetun
+      # SABnzbd container - routes through the exit
       sabnzbd = {
         image = "docker.io/linuxserver/sabnzbd:5.1.3";
 
@@ -98,12 +31,15 @@
           "/var/lib/sabnzbd:/config" # Config with secrets
           "/var/cache/sabnzbd:/downloads" # Local SSD for temp files (fast!)
           "/mnt/video/sabnzbd/completed:/mnt/video/sabnzbd/completed" # NFS mount path matches host
+          # The games category completes here, on the same NFS mount as the
+          # Questarr library, so Questarr can hardlink instead of copy.
+          "/mnt/games/sabnzbd:/mnt/games/sabnzbd"
         ];
 
-        # Use Gluetun's network stack - this is the key!
-        dependsOn = ["gluetun"];
+        # Use the exit's network stack - this is the key!
+        dependsOn = [exit];
         extraOptions = [
-          "--network=container:gluetun" # Use Gluetun's network (VPN + killswitch)
+          "--network=container:${exit}" # The exit's network (VPN + killswitch)
 
           # Performance optimizations
           "--cpu-shares=2048" # Higher CPU priority
@@ -121,12 +57,12 @@
     # The completed-downloads bind source lives on the NFS automount. Without
     # this ordering, a container started before the share is reachable binds
     # the bare local directory and silently fills the root disk.
-    services.podman-sabnzbd.unitConfig.RequiresMountsFor = "/mnt/video/sabnzbd/completed";
+    services.podman-sabnzbd.unitConfig.RequiresMountsFor = [
+      "/mnt/video/sabnzbd/completed"
+      "/mnt/games/sabnzbd"
+    ];
 
     tmpfiles.rules = [
-      # Gluetun data directory (server list cache, etc.)
-      "d /var/lib/gluetun 0700 root root -"
-
       # SABnzbd directories
       "d /var/lib/sabnzbd 0755 1000 1000 -"
       "d /var/lib/sabnzbd/admin 0755 1000 1000 -"
@@ -382,7 +318,7 @@
   # Health check service
   systemd.services.sabnzbd-vpn-health = {
     description = "Check SABnzbd VPN connection health";
-    after = ["podman-gluetun.service" "podman-sabnzbd.service"];
+    after = ["podman-${exit}.service" "podman-sabnzbd.service"];
 
     serviceConfig = {
       Type = "oneshot";

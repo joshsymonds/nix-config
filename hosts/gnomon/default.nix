@@ -12,6 +12,7 @@ in
   }: {
     imports = [
       ./disko.nix
+      ./vpn-exit.nix
       ./qbittorrent-vpn.nix
       ../../modules/desktop/dms-niri.nix
       ../../modules/hardware/gpu-nvidia.nix
@@ -127,8 +128,8 @@ in
     # Open-WebUI talks to llama-swap over the OpenAI-compatible endpoint
     # so all the multi-model UX (picker, persona-per-model) still works;
     # llama-swap auto-spawns/evicts llama-server backends per model on
-    # demand. Open-WebUI ships on 8081 because gluetun-qbittorrent holds
-    # 8080 (see qbittorrent-vpn.nix).
+    # demand. Open-WebUI ships on 8081 because the VPN exit publishes
+    # qBittorrent's WebUI on 8080 (see qbittorrent-vpn.nix).
     #
     # Sources: nohurry/gemma-4-26B-A4B-it-heretic-GUFF (Unsloth-imatrix
     # quants of coder3101's Heretic-abliterated Gemma 4 26B-A4B-it).
@@ -450,7 +451,7 @@ in
 
     # Docker for kind/ctlptl (marvin-blackbox runs here when vermissian is
     # busy). Same shape as vermissian; podman keeps the oci-containers
-    # backend (modules/services/qbittorrent-vpn.nix), Docker is only for
+    # backend (modules/services/vpn-exit.nix), Docker is only for
     # dev tooling. /var/lib/docker is persisted in ./disko.nix.
     virtualisation.docker = {
       enable = true;

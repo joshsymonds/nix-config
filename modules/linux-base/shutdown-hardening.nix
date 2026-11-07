@@ -8,7 +8,7 @@
 # On gnomon it has hung effectively forever on occasion; the trigger was
 # the qbittorrent/gluetun podman stack (overlay mounts + a network
 # namespace + the podman0 bridge on a LUKS-backed btrfs root), fixed
-# primarily in modules/services/qbittorrent-vpn.nix. On vermissian
+# primarily in modules/services/vpn-exit.nix and qbittorrent-vpn.nix. On vermissian
 # (2026-10-20) that phase took ~24s with nothing to show for it.
 #
 # This module is the host-wide *backstop* and the "so we can actually

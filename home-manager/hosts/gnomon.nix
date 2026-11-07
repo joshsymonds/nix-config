@@ -6,6 +6,8 @@
 }: {
   imports = [
     ../desktop-x86_64-linux.nix
+    ../vpn-exit
+    ../git-conditional
     ../vesktop
     ../spicetify
     ../calendar

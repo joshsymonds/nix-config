@@ -22,6 +22,7 @@ in {
     ./devspaces-client
     ./direnv-prewarm
     ./firefox
+    ./vpn-exit/firefox.nix
     ./niri
     ./dms
     # DMS's niri HM module adds the niri-flake-typed bindings DMS needs;

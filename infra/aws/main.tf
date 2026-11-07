@@ -44,8 +44,14 @@ provider "aws" {
   region = "us-west-2"
 }
 
+locals {
+  fleet_regions = ["us-west-2", "eu-west-1"]
+}
+
 data "aws_caller_identity" "current" {}
 
 data "aws_vpc" "default" {
-  default = true
+  for_each = toset(local.fleet_regions)
+  region   = each.key
+  default  = true
 }

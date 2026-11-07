@@ -38,9 +38,10 @@
       # and the activation re-downloads runtimes (~500 MB+) every time.
       # Per-user state (~/.var/app/...) lives on @home and survives natively.
       "/var/lib/flatpak"
-      # services.qbittorrent-vpn — listed unconditionally because empty
-      # dirs in /persist cost nothing while the service is disabled. When
-      # enabled, gluetun caches server lists here and qbittorrent stores
+      # services.vpn-exit + services.qbittorrent-vpn — listed
+      # unconditionally because empty dirs in /persist cost nothing while
+      # the services are disabled. When enabled, gluetun caches server
+      # lists here and qbittorrent stores
       # torrent state + resume data + the WebUI password under /config.
       # Downloads themselves land in ~/Downloads/torrents (on @home,
       # persistent natively).

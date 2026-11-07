@@ -123,26 +123,34 @@ cmd_ls() {
 }
 
 cmd_down() {
-  local name described ids
+  local name region described ids matches=""
   [ $# -eq 1 ] || die "usage: ec2 down <name>"
   name=$1
   load_aws_env
-  described=$(ec2_in us-west-2 describe-instances --output json \
-    --filters "Name=tag:Name,Values=$name" 'Name=tag:fleet,Values=ec2' \
-    'Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down')
-  ids=$(jq -r --arg name "$name" '
-    def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
-    .Reservations[].Instances[]
-    | select(.State.Name != "terminated")
-    | select(tag("fleet") == "ec2" and tag("Name") == $name)
-    | .InstanceId' <<<"$described")
-  if [ -z "$ids" ]; then
+  # Each match is one "<region> <instance id>" line, collected across both regions.
+  for region in "${regions[@]}"; do
+    described=$(ec2_in "$region" describe-instances --output json \
+      --filters "Name=tag:Name,Values=$name" 'Name=tag:fleet,Values=ec2' \
+      'Name=instance-state-name,Values=pending,running,stopping,stopped,shutting-down')
+    ids=$(jq -r --arg name "$name" --arg region "$region" '
+      def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
+      .Reservations[].Instances[]
+      | select(.State.Name != "terminated")
+      | select(tag("fleet") == "ec2" and tag("Name") == $name)
+      | "\($region) \(.InstanceId)"' <<<"$described")
+    if [ -n "$ids" ]; then
+      matches+="$ids"$'\n'
+    fi
+  done
+  if [ -z "$matches" ]; then
     die "no fleet box named $name"
   fi
-  case "$ids" in
+  matches=${matches%$'\n'}
+  case "$matches" in
     *$'\n'*) die "more than one fleet box named $name; refusing to terminate" ;;
   esac
-  ec2_in us-west-2 terminate-instances --instance-ids "$ids" >/dev/null
+  read -r region ids <<<"$matches"
+  ec2_in "$region" terminate-instances --instance-ids "$ids" >/dev/null
   echo "terminating $ids ($name)"
 }
 

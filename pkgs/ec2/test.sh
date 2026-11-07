@@ -846,6 +846,45 @@ run down old-box
 expect_nonzero "down of a terminated box"
 expect_no_log 'terminate-instances' "down of a terminated box terminates nothing"
 
+# down: a box in either region is terminated in the region it runs in.
+run down ec2-irl7k
+expect_status 0 "down of the Ireland box"
+expect_region "down terminates the Ireland box in eu-west-1" eu-west-1 "terminate-instances --instance-ids i-0ireland0000001"
+expect_no_region "down of the Ireland box terminates nothing in us-west-2" us-west-2 "terminate-instances"
+if [ "$(grep -c 'terminate-instances' "$STUB_LOG")" -ne 1 ]; then
+  fail "down of the Ireland box made more than one terminate-instances call"
+fi
+
+run down commonframe-gate-a1b
+expect_status 0 "down of the Oregon box"
+expect_region "down terminates the Oregon box in us-west-2" us-west-2 "terminate-instances --instance-ids i-0fixture00000001"
+expect_no_region "down of the Oregon box terminates nothing in eu-west-1" eu-west-1 "terminate-instances"
+
+# down: one name held by a box in each region terminates nothing.
+cp "$STUB_FIXTURES/eu-west-1/instances.json" "$work/ireland-instances.json"
+cat >"$STUB_FIXTURES/eu-west-1/instances.json" <<FIXTURE
+{"Reservations":[{"Instances":[
+  {"InstanceId":"i-0ireland0000002","InstanceType":"c8a.large","State":{"Name":"running"},"LaunchTime":"$t_irl","Placement":{"AvailabilityZone":"eu-west-1a"},"Tags":[{"Key":"Name","Value":"commonframe-gate-a1b"},{"Key":"fleet","Value":"ec2"},{"Key":"fleet-class","Value":"commonframe-gate"}]}
+]}]}
+FIXTURE
+run down commonframe-gate-a1b
+expect_nonzero "down of a name held in both regions"
+expect_err 'more than one fleet box named commonframe-gate-a1b' "down of a name held in both regions names the ambiguity"
+expect_no_log 'terminate-instances' "down of a name held in both regions terminates nothing"
+cp "$work/ireland-instances.json" "$STUB_FIXTURES/eu-west-1/instances.json"
+
+# down: a failed lookup in either region terminates nothing and exits nonzero.
+inject eu-west-1-ec2-describe-instances
+run down commonframe-gate-a1b
+expect_nonzero "down with eu-west-1 describe-instances failing"
+expect_no_log 'terminate-instances' "down with eu-west-1 describe-instances failing terminates nothing"
+clear_faults
+inject us-west-2-ec2-describe-instances
+run down ec2-irl7k
+expect_nonzero "down with us-west-2 describe-instances failing"
+expect_no_log 'terminate-instances' "down with us-west-2 describe-instances failing terminates nothing"
+clear_faults
+
 # up: bad arguments are refused before any AWS, Tailscale, ssh or nix build call.
 export EC2_FLEET_AWS_ENV_FILE=$ENV_FILE
 export EC2_FLEET_TS_ENV_FILE=$TS_ENV_FILE

@@ -9,6 +9,7 @@ EC2=$1
 work=$(mktemp -d)
 trap 'rm -rf -- "$work"' EXIT
 STUB_LOG="$work/calls.log"
+STUB_REGION_LOG="$work/regions.log"
 STUB_FIXTURES="$work/fixtures"
 OUT="$work/stdout"
 ERR="$work/stderr"
@@ -19,13 +20,17 @@ TS_SECRET="TS-SECRET-STUB-3c8d"
 TOKEN="TOKEN-STUB-4b1e"
 AUTHKEY="tskey-auth-STUB-AUTHKEY-9e2b"
 BODY='{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"preauthorized":true,"tags":["tag:ec2"]}}},"expirySeconds":600}'
-export STUB_LOG STUB_FIXTURES
+export STUB_LOG STUB_REGION_LOG STUB_FIXTURES
 export PATH="$work/bin:$PATH"
 export EC2_FLEET_FLAKE=/fixture/flake
 export XDG_STATE_HOME="$work/state"
 export TMPDIR="$work/tmp"
-mkdir -p "$work/bin" "$STUB_FIXTURES" "$TMPDIR"
+# The region is named only by the launcher's own calls, so a call that forgets
+# its region finds none here.
+unset AWS_REGION AWS_DEFAULT_REGION
+mkdir -p "$work/bin" "$STUB_FIXTURES/eu-west-1" "$TMPDIR"
 : >"$STUB_LOG"
+: >"$STUB_REGION_LOG"
 
 failures=0
 STATUS=0
@@ -72,8 +77,19 @@ fi
   echo "stub aws: unexpected service $1" >&2
   exit 1
 }
+# An ec2 call names its fleet region through AWS_REGION. Each region reads its
+# own fixtures: us-west-2 the top of $STUB_FIXTURES, eu-west-1 its subdirectory.
+case "${AWS_REGION:-}" in
+  us-west-2) rdir=$STUB_FIXTURES ;;
+  eu-west-1) rdir=$STUB_FIXTURES/eu-west-1 ;;
+  *)
+    echo "stub aws: ec2 call with no fleet region (AWS_REGION=${AWS_REGION:-unset}): $*" >&2
+    exit 1
+    ;;
+esac
+printf '%s %s\n' "$AWS_REGION" "$*" >>"$STUB_REGION_LOG"
 case "$2" in
-  describe-instances) cat "$STUB_FIXTURES/instances.json" ;;
+  describe-instances) cat "$rdir/instances.json" ;;
   describe-spot-price-history)
     prev=
     itype=
@@ -81,7 +97,7 @@ case "$2" in
       if [ "$prev" = --instance-types ]; then itype=$a; fi
       prev=$a
     done
-    cat "$STUB_FIXTURES/spot-$itype.json"
+    cat "$rdir/spot-$itype.json"
     ;;
   describe-instance-type-offerings)
     itype=
@@ -90,22 +106,23 @@ case "$2" in
         Name=instance-type,Values=*) itype=${a##*Values=} ;;
       esac
     done
-    cat "$STUB_FIXTURES/offerings-$itype.json"
+    cat "$rdir/offerings-$itype.json"
     ;;
   describe-images)
-    if [ -e "$STUB_FIXTURES/registered" ]; then
-      cat "$STUB_FIXTURES/images-after-register.json"
+    if [ -e "$rdir/registered" ]; then
+      cat "$rdir/images-after-register.json"
     else
-      cat "$STUB_FIXTURES/images.json"
+      cat "$rdir/images.json"
     fi
     ;;
-  describe-security-groups) cat "$STUB_FIXTURES/security-groups.json" ;;
+  describe-security-groups) cat "$rdir/security-groups.json" ;;
   run-instances)
     # no-capacity-<zone> refuses a placed launch in that zone with the capacity
     # error; other-error-<zone> refuses it with an error that is not a capacity one.
     # throttle-<spot|on-demand>-<zone> refuses a placed launch of that market in
     # that zone with a zone-scoped throttle; account-throttle refuses every launch
-    # with an account-level throttle that names no zone.
+    # with an account-level throttle that names no zone. no-capacity-unplaced
+    # refuses a launch with no placement, in the region's own directory.
     zone=
     market=on-demand
     for a in "$@"; do
@@ -114,19 +131,23 @@ case "$2" in
         --instance-market-options) market=spot ;;
       esac
     done
-    if [ -n "$zone" ] && [ -e "$STUB_FIXTURES/no-capacity-$zone" ]; then
+    if [ -n "$zone" ] && [ -e "$rdir/no-capacity-$zone" ]; then
       echo "An error occurred (InsufficientInstanceCapacity) when calling the RunInstances operation: We currently do not have sufficient capacity in the Availability Zone you requested ($zone)." >&2
       exit 1
     fi
-    if [ -n "$zone" ] && [ -e "$STUB_FIXTURES/other-error-$zone" ]; then
+    if [ -z "$zone" ] && [ -e "$rdir/no-capacity-unplaced" ]; then
+      echo "An error occurred (InsufficientInstanceCapacity) when calling the RunInstances operation: We currently do not have sufficient capacity for the requested instance in $AWS_REGION." >&2
+      exit 1
+    fi
+    if [ -n "$zone" ] && [ -e "$rdir/other-error-$zone" ]; then
       echo "An error occurred (UnsupportedOperation) when calling the RunInstances operation: injected failure in $zone." >&2
       exit 1
     fi
-    if [ -n "$zone" ] && [ -e "$STUB_FIXTURES/throttle-$market-$zone" ]; then
+    if [ -n "$zone" ] && [ -e "$rdir/throttle-$market-$zone" ]; then
       echo "An error occurred (RequestLimitExceeded) when calling the RunInstances operation (reached max retries: 2): Request limit exceeded. Your ec2:RunInstances request has been throttled due to an operational issue in availability zone usw2-az1. Throttling will be removed once the issue is resolved." >&2
       exit 1
     fi
-    if [ -e "$STUB_FIXTURES/account-throttle" ]; then
+    if [ -e "$rdir/account-throttle" ]; then
       echo "An error occurred (RequestLimitExceeded) when calling the RunInstances operation (reached max retries: 2): Request limit exceeded." >&2
       exit 1
     fi
@@ -143,8 +164,11 @@ case "$2" in
     echo i-0launched00000001
     ;;
   register-image)
-    : >"$STUB_FIXTURES/registered"
-    echo ami-registered0000004
+    : >"$rdir/registered"
+    case "$AWS_REGION" in
+      us-west-2) echo ami-registered0000004 ;;
+      eu-west-1) echo ami-irelandnew0005 ;;
+    esac
     ;;
   deregister-image | delete-snapshot) : ;;
   wait) : ;;
@@ -328,6 +352,52 @@ cat >"$STUB_FIXTURES/offerings-c8a.large.json" <<'FIXTURE'
 {"InstanceType":"c8a.large","Location":"us-west-2a","LocationType":"availability-zone"}
 ]}
 FIXTURE
+cat >"$STUB_FIXTURES/offerings-m8a.2xlarge.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"m8a.2xlarge","Location":"us-west-2c","LocationType":"availability-zone"},
+{"InstanceType":"m8a.2xlarge","Location":"us-west-2a","LocationType":"availability-zone"},
+{"InstanceType":"m8a.2xlarge","Location":"us-west-2b","LocationType":"availability-zone"}
+]}
+FIXTURE
+cat >"$STUB_FIXTURES/offerings-m8a.large.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"m8a.large","Location":"us-west-2b","LocationType":"availability-zone"},
+{"InstanceType":"m8a.large","Location":"us-west-2a","LocationType":"availability-zone"}
+]}
+FIXTURE
+# g4dn.xlarge is offered in both fleet regions, g6.xlarge in Oregon only, and
+# p5.48xlarge in neither.
+cat >"$STUB_FIXTURES/offerings-g4dn.xlarge.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"g4dn.xlarge","Location":"us-west-2b","LocationType":"availability-zone"},
+{"InstanceType":"g4dn.xlarge","Location":"us-west-2a","LocationType":"availability-zone"},
+{"InstanceType":"g4dn.xlarge","Location":"us-west-2c","LocationType":"availability-zone"}
+]}
+FIXTURE
+cat >"$STUB_FIXTURES/offerings-g6.xlarge.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"g6.xlarge","Location":"us-west-2b","LocationType":"availability-zone"},
+{"InstanceType":"g6.xlarge","Location":"us-west-2a","LocationType":"availability-zone"}
+]}
+FIXTURE
+echo '{"InstanceTypeOfferings":[]}' >"$STUB_FIXTURES/offerings-p5.48xlarge.json"
+
+# eu-west-1 offers none of the classes' and ad-hoc types above, so every existing
+# case keeps its call list; it offers g4dn.xlarge in three zones, unsorted.
+for itype in c8a.4xlarge c8a.large m8a.2xlarge m8a.large g6.xlarge p5.48xlarge; do
+  echo '{"InstanceTypeOfferings":[]}' >"$STUB_FIXTURES/eu-west-1/offerings-$itype.json"
+done
+cat >"$STUB_FIXTURES/eu-west-1/offerings-g4dn.xlarge.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"g4dn.xlarge","Location":"eu-west-1c","LocationType":"availability-zone"},
+{"InstanceType":"g4dn.xlarge","Location":"eu-west-1a","LocationType":"availability-zone"},
+{"InstanceType":"g4dn.xlarge","Location":"eu-west-1b","LocationType":"availability-zone"}
+]}
+FIXTURE
+echo '{"Reservations":[]}' >"$STUB_FIXTURES/eu-west-1/instances.json"
+cat >"$STUB_FIXTURES/eu-west-1/security-groups.json" <<'FIXTURE'
+{"SecurityGroups":[{"GroupId":"sg-0ireland0000001","GroupName":"ec2-fleet"}]}
+FIXTURE
 
 # Base AMI lists. images.json is what describe-images returns before a rebuild;
 # images-after-register.json is what it returns once the stub register-image has
@@ -377,6 +447,32 @@ cat >"$STUB_FIXTURES/images-pending-match.json" <<'FIXTURE'
 {"ImageId":"ami-pending000000005","CreationDate":"2026-10-20T10:00:00.000Z","State":"pending","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000015"}}]}
 ]}
 FIXTURE
+# Ireland's base AMI lists. The newest one carries the base toplevel, so the
+# default needs no rebuild; images-stale has a mismatched newest AMI.
+cat >"$STUB_FIXTURES/eu-west-1/images-full.json" <<'FIXTURE'
+{"Images":[
+{"ImageId":"ami-irelandold0001","State":"available","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-previous"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0e1d00000000001"}}]},
+{"ImageId":"ami-irelandnew0002","State":"available","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0e1d00000000002"}}]}
+]}
+FIXTURE
+cat >"$STUB_FIXTURES/eu-west-1/images-stale.json" <<'FIXTURE'
+{"Images":[
+{"ImageId":"ami-irestale-old1","State":"available","CreationDate":"2026-08-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0e1d00000000011"}}]},
+{"ImageId":"ami-irestale-mid2","State":"available","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-middle"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0e1d00000000012"}}]},
+{"ImageId":"ami-irestale-new3","State":"available","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-latest"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0e1d00000000013"}}]}
+]}
+FIXTURE
+cat >"$STUB_FIXTURES/eu-west-1/images-registered.json" <<'FIXTURE'
+{"Images":[
+{"ImageId":"ami-irestale-old1","State":"available","CreationDate":"2026-08-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0e1d00000000011"}}]},
+{"ImageId":"ami-irestale-mid2","State":"available","CreationDate":"2026-09-01T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-middle"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0e1d00000000012"}}]},
+{"ImageId":"ami-irestale-new3","State":"available","CreationDate":"2026-10-20T10:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-latest"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0e1d00000000013"}}]},
+{"ImageId":"ami-irelandnew0005","State":"available","CreationDate":"2026-10-27T09:00:00.000Z","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0feed00000000001"}}]}
+]}
+FIXTURE
+cp "$STUB_FIXTURES/eu-west-1/images-full.json" "$STUB_FIXTURES/eu-west-1/images.json"
+cp "$STUB_FIXTURES/eu-west-1/images-registered.json" "$STUB_FIXTURES/eu-west-1/images-after-register.json"
+
 # The image fixture: nixpkgs writes image-info.json with an absolute .file.
 mkdir -p "$STUB_FIXTURES/image/nix-support"
 printf 'raw disk fixture\n' >"$STUB_FIXTURES/nixos.raw"
@@ -421,8 +517,9 @@ launch_signalled() {
 # With probe_signal set, the launcher gets that signal during its ssh probe.
 run() {
   : >"$STUB_LOG"
+  : >"$STUB_REGION_LOG"
   rm -f "$STUB_FIXTURES/user-data.seen" "$STUB_FIXTURES/user-data.mode" "$STUB_FIXTURES/nix-sshopts.seen" \
-    "$STUB_FIXTURES/registered" "$STUB_FIXTURES/rebooted"
+    "$STUB_FIXTURES/registered" "$STUB_FIXTURES/eu-west-1/registered" "$STUB_FIXTURES/rebooted"
   if [ -n "$probe_signal" ]; then
     launch_signalled "$probe_signal" "$@"
   elif "$EC2" "$@" >"$OUT" 2>"$ERR"; then
@@ -475,6 +572,33 @@ expect_fixed() {
 expect_no_fixed() {
   if grep -F -q -- "$1" "$STUB_LOG"; then fail "$2: unexpected stub call containing: $1"; fi
 }
+# expect_region <desc> <region> <literal>...: one ec2 call in the region contains
+# every literal. expect_no_region: no ec2 call in the region contains a literal.
+expect_region() {
+  local desc=$1 region=$2 line lit ok found=no
+  shift 2
+  while IFS= read -r line; do
+    case $line in "$region "*) ;; *) continue ;; esac
+    ok=yes
+    for lit in "$@"; do
+      case $line in *"$lit"*) ;; *) ok=no ;; esac
+    done
+    if [ "$ok" = yes ]; then
+      found=yes
+      break
+    fi
+  done <"$STUB_REGION_LOG"
+  [ "$found" = yes ] || fail "$desc: no $region call with: $*"
+}
+expect_no_region() {
+  local desc=$1 region=$2 lit
+  shift 2
+  for lit in "$@"; do
+    if grep -F -- "$region " "$STUB_REGION_LOG" | grep -F -q -- "$lit"; then
+      fail "$desc: unexpected $region call containing: $lit"
+    fi
+  done
+}
 # expect_order <desc> <pattern>...: each literal pattern first appears in the
 # call log after the one before it.
 expect_order() {
@@ -512,9 +636,11 @@ inject() {
   : >"$STUB_FIXTURES/fail-$1"
 }
 clear_faults() {
-  rm -f "$STUB_FIXTURES"/fail-* "$STUB_FIXTURES"/no-capacity-* "$STUB_FIXTURES"/other-error-* \
-    "$STUB_FIXTURES"/throttle-* "$STUB_FIXTURES"/account-throttle \
-    "$STUB_FIXTURES"/warn-run-instances
+  local dir
+  rm -f "$STUB_FIXTURES"/fail-* "$STUB_FIXTURES"/warn-run-instances
+  for dir in "$STUB_FIXTURES" "$STUB_FIXTURES/eu-west-1"; do
+    rm -f "$dir"/no-capacity-* "$dir"/other-error-* "$dir"/throttle-* "$dir"/account-throttle
+  done
 }
 # expect_run_count <desc> <n>: run-instances was called exactly n times.
 expect_run_count() {
@@ -542,6 +668,11 @@ expect_placements() {
 use_images() {
   cp "$STUB_FIXTURES/$1.json" "$STUB_FIXTURES/images.json" || exit 1
   cp "$STUB_FIXTURES/$2.json" "$STUB_FIXTURES/images-after-register.json" || exit 1
+}
+# use_eu_images <before> <after>: as use_images, for Ireland's lists.
+use_eu_images() {
+  cp "$STUB_FIXTURES/eu-west-1/$1.json" "$STUB_FIXTURES/eu-west-1/images.json" || exit 1
+  cp "$STUB_FIXTURES/eu-west-1/$2.json" "$STUB_FIXTURES/eu-west-1/images-after-register.json" || exit 1
 }
 # rebuild_run <ec2 args...>: runs the launcher in a case where an image rebuild
 # is expected, which alone allows coldsnap and the image calls.
@@ -1011,6 +1142,133 @@ expect_no_fixed "wait instance-running" "up with an account-level throttle waits
 expect_no_fixed "terminate-instances" "up with an account-level throttle terminates nothing"
 clear_faults
 
+# The region walk: a type offered in both regions tries Oregon's spot zones, then
+# Ireland's; then, for every launch, Oregon's on-demand zones and its unplaced
+# attempt, then Ireland's. Ireland's attempts use Ireland's AMI and security
+# group and run their AWS calls in eu-west-1.
+
+# Every Oregon zone refused: the spot launch lands in Ireland's first zone.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+: >"$STUB_FIXTURES/no-capacity-us-west-2c"
+run up --type g4dn.xlarge --disk 40 --spot
+expect_status 0 "spot up with every Oregon zone out of capacity"
+expect_out '^market spot eu-west-1a$' "spot up with every Oregon zone out of capacity prints Ireland's market line"
+expect_out '^ec2-[a-z0-9]{3} ready$' "spot up with every Oregon zone out of capacity prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+expect_placements "spot up with every Oregon zone out of capacity" \
+  "zone us-west-2a spot" "zone us-west-2b spot" "zone us-west-2c spot" "zone eu-west-1a spot"
+expect_region "Ireland's launch uses Ireland's AMI and security group" eu-west-1 \
+  "ec2 run-instances" "--image-id ami-irelandnew0002" "Groups=sg-0ireland0000001" "--placement AvailabilityZone=eu-west-1a"
+expect_region "Ireland looks up its own AMI" eu-west-1 "ec2 describe-images"
+expect_region "Ireland looks up its own security group" eu-west-1 "ec2 describe-security-groups"
+expect_region "Ireland's launch is waited on in eu-west-1" eu-west-1 "ec2 wait instance-running --instance-ids i-0launched00000001"
+expect_no_region "Oregon's AMI is never launched in Ireland" eu-west-1 "--image-id ami-newest00000002"
+expect_no_region "Oregon launches nothing once every Oregon zone is refused" us-west-2 "wait instance-running"
+expect_userdata "spot up with every Oregon zone out of capacity" "$name"
+expect_no_fixed "terminate-instances" "spot up with every Oregon zone out of capacity terminates nothing on success"
+clear_faults
+
+# Ireland's launch fails its ssh probe: the one instance is terminated in eu-west-1.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+: >"$STUB_FIXTURES/no-capacity-us-west-2c"
+inject ssh-probe
+export EC2_FLEET_READY_TIMEOUT=0
+run up --type g4dn.xlarge --disk 40 --spot
+expect_nonzero "spot up with Ireland's ssh probe failing"
+expect_terminated "spot up with Ireland's ssh probe failing"
+expect_region "Ireland's launch is terminated in eu-west-1" eu-west-1 \
+  "ec2 terminate-instances --instance-ids i-0launched00000001"
+expect_no_region "Oregon terminates nothing" us-west-2 "terminate-instances"
+clear_faults
+unset EC2_FLEET_READY_TIMEOUT
+
+# On-demand: Oregon's zones and its unplaced attempt refused, so the launch lands
+# in Ireland's first zone. The unplaced refusal names its region and the walk goes on.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+: >"$STUB_FIXTURES/no-capacity-us-west-2c"
+: >"$STUB_FIXTURES/no-capacity-unplaced"
+run up --type g4dn.xlarge --disk 20
+expect_status 0 "on-demand up with Oregon's zones and unplaced attempt refused"
+expect_out '^market on-demand$' "on-demand up with Oregon's zones and unplaced attempt refused prints the on-demand market line"
+expect_out '^ec2-[a-z0-9]{3} ready$' "on-demand up with Oregon's zones and unplaced attempt refused prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+expect_placements "on-demand up with Oregon's zones and unplaced attempt refused" \
+  "zone us-west-2a" "zone us-west-2b" "zone us-west-2c" "unplaced" "zone eu-west-1a"
+expect_err 'no on-demand capacity for g4dn\.xlarge in us-west-2$' "on-demand up names the refused unplaced attempt by region"
+expect_region "Ireland's on-demand launch uses Ireland's AMI and security group" eu-west-1 \
+  "ec2 run-instances" "--image-id ami-irelandnew0002" "Groups=sg-0ireland0000001" "--placement AvailabilityZone=eu-west-1a"
+expect_userdata "on-demand up with Oregon's zones and unplaced attempt refused" "$name"
+expect_no_fixed "terminate-instances" "on-demand up with Oregon's zones and unplaced attempt refused terminates nothing on success"
+clear_faults
+
+# Every attempt in both regions refused: the launch stops with nothing launched,
+# after every on-demand zone and unplaced attempt of both regions.
+for dir in "$STUB_FIXTURES" "$STUB_FIXTURES/eu-west-1"; do
+  for zone in us-west-2a us-west-2b us-west-2c eu-west-1a eu-west-1b eu-west-1c; do
+    : >"$dir/no-capacity-$zone"
+  done
+  : >"$dir/no-capacity-unplaced"
+done
+run up --type g4dn.xlarge --disk 20
+expect_nonzero "on-demand up with every attempt in both regions refused"
+expect_err 'no region could launch g4dn\.xlarge; nothing was launched' "on-demand up with every attempt refused says nothing was launched"
+expect_run_count "on-demand up with every attempt in both regions refused" 8
+expect_no_fixed "terminate-instances" "on-demand up with every attempt refused terminates nothing"
+clear_faults
+
+# A type only Oregon offers: Ireland is asked for its zones and nothing else.
+run up --type g6.xlarge --disk 40
+expect_status 0 "on-demand up of a type only Oregon offers"
+expect_out '^ec2-[a-z0-9]{3} ready$' "on-demand up of a type only Oregon offers prints the ready line"
+expect_placements "on-demand up of a type only Oregon offers" "zone us-west-2a"
+expect_region "Ireland is asked which zones offer the type" eu-west-1 \
+  "ec2 describe-instance-type-offerings" "Values=g6.xlarge"
+[ "$(grep -c '^eu-west-1 ' "$STUB_REGION_LOG")" -eq 1 ] || fail "on-demand up of a type only Oregon offers made more than the offering lookup in eu-west-1"
+
+# A type neither region offers: the launch stops before the base AMI, Tailscale or run-instances.
+run up --type p5.48xlarge --disk 40
+expect_nonzero "up of a type no region offers"
+expect_err 'no region offers p5\.48xlarge' "up of a type no region offers names it"
+expect_no_fixed "describe-images" "up of a type no region offers looks up no AMI"
+expect_no_fixed "api/v2" "up of a type no region offers asks Tailscale nothing"
+expect_no_fixed "run-instances" "up of a type no region offers launches nothing"
+
+# Ireland's base AMI is stale: Ireland alone builds and registers an image in
+# eu-west-1, and prunes only its own two oldest base AMIs.
+use_eu_images images-stale images-registered
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+: >"$STUB_FIXTURES/no-capacity-us-west-2c"
+rebuild_run up --type g4dn.xlarge --disk 40 --spot
+expect_status 0 "spot up with Ireland's base AMI stale"
+expect_out '^market spot eu-west-1a$' "spot up with Ireland's base AMI stale prints Ireland's market line"
+expect_out '^ec2-[a-z0-9]{3} ready$' "spot up with Ireland's base AMI stale prints the ready line"
+expect_fixed "coldsnap --region eu-west-1 upload --wait --no-progress --tag Key=fleet,Value=ec2-base $STUB_FIXTURES/nixos.raw" "Ireland uploads its image in eu-west-1"
+expect_region "Ireland registers its image in eu-west-1" eu-west-1 \
+  "ec2 register-image" "--tag-specifications ResourceType=image,Tags=[{Key=fleet,Value=ec2-base},{Key=fleet-toplevel,Value=fixture-toplevel-base}]"
+expect_region "Ireland waits for its new AMI in eu-west-1" eu-west-1 "ec2 wait image-available --image-ids ami-irelandnew0005"
+expect_region "Ireland prunes its second-oldest AMI in eu-west-1" eu-west-1 "ec2 deregister-image --image-id ami-irestale-mid2"
+expect_region "Ireland prunes its oldest AMI in eu-west-1" eu-west-1 "ec2 deregister-image --image-id ami-irestale-old1"
+expect_region "Ireland deletes the snapshot of its second-oldest AMI" eu-west-1 "ec2 delete-snapshot --snapshot-id snap-0e1d00000000012"
+expect_region "Ireland deletes the snapshot of its oldest AMI" eu-west-1 "ec2 delete-snapshot --snapshot-id snap-0e1d00000000011"
+expect_no_region "Ireland keeps its two newest AMIs" eu-west-1 \
+  "deregister-image --image-id ami-irestale-new3" "deregister-image --image-id ami-irelandnew0005" "delete-snapshot --snapshot-id snap-0e1d00000000013"
+expect_no_region "Oregon's AMIs are untouched when only Ireland rebuilds" us-west-2 \
+  "register-image" "deregister-image" "delete-snapshot"
+expect_region "Ireland launches its new AMI in eu-west-1" eu-west-1 \
+  "ec2 run-instances" "--image-id ami-irelandnew0005" "Groups=sg-0ireland0000001"
+expect_order "Ireland's image steps run in order before its launch" \
+  "coldsnap --region eu-west-1 upload" \
+  "aws ec2 register-image" \
+  "aws ec2 wait image-available --image-ids ami-irelandnew0005" \
+  "aws ec2 deregister-image --image-id ami-irestale-mid2" \
+  "--image-id ami-irelandnew0005"
+clear_faults
+use_eu_images images-full images-registered
+
 # up --type --disk --spot: ad-hoc spot box, no deploy.
 run up --type c8a.large --disk 40 --spot
 expect_status 0 "ad-hoc spot up"
@@ -1039,8 +1297,8 @@ expect_out '^ec2-[a-z0-9]{3} ready$' "ad-hoc on-demand up prints the ready line"
 name=$(sed -n 's/ ready$//p' "$OUT")
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=adhoc},{Key=fleet-max-hours,Value=24}]" "ad-hoc on-demand up tags the instance"
 expect_no_fixed "--instance-market-options" "ad-hoc on-demand up requests no spot"
-expect_no_fixed "--placement" "ad-hoc on-demand up sets no placement"
-expect_no_log 'describe-instance-type-offerings' "ad-hoc on-demand up lists no zones"
+expect_fixed "--placement AvailabilityZone=us-west-2a" "ad-hoc on-demand up places its first on-demand attempt in the first sorted zone"
+expect_log 'describe-instance-type-offerings' "ad-hoc on-demand up lists zones"
 expect_out '^market on-demand$' "ad-hoc on-demand up prints the on-demand market line"
 expect_run_count "ad-hoc on-demand up" 1
 
@@ -1070,8 +1328,8 @@ expect_fixed "--instance-type m8a.2xlarge" "up muniment-runner sets its instance
 expect_fixed "Ebs={VolumeSize=200,VolumeType=gp3,DeleteOnTermination=true}" "up muniment-runner sizes its root volume"
 expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=muniment-runner},{Key=fleet-max-hours,Value=12}]" "up muniment-runner tags its max hours"
 expect_no_fixed "--instance-market-options" "up muniment-runner requests no spot"
-expect_no_fixed "--placement" "up muniment-runner sets no placement"
-expect_no_log 'describe-instance-type-offerings' "up muniment-runner lists no zones"
+expect_fixed "--placement AvailabilityZone=us-west-2a" "up muniment-runner places its first on-demand attempt in the first sorted zone"
+expect_log 'describe-instance-type-offerings' "up muniment-runner lists zones"
 expect_out '^market on-demand$' "up muniment-runner prints the on-demand market line"
 expect_run_count "up muniment-runner" 1
 expect_fixed "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name /nix/store/fixture-toplevel-muniment-runner" "up muniment-runner copies its own toplevel"

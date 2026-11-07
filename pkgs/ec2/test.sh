@@ -150,6 +150,8 @@ case "$2" in
     # that zone with a zone-scoped throttle; account-throttle refuses every launch
     # with an account-level throttle that names no zone. no-capacity-unplaced
     # refuses a launch with no placement, in the region's own directory.
+    # quota-<spot|on-demand> refuses every launch of that market in that region,
+    # placed or not, with the market's quota error.
     zone=
     market=on-demand
     for a in "$@"; do
@@ -172,6 +174,14 @@ case "$2" in
     fi
     if [ -n "$zone" ] && [ -e "$rdir/throttle-$market-$zone" ]; then
       echo "An error occurred (RequestLimitExceeded) when calling the RunInstances operation (reached max retries: 2): Request limit exceeded. Your ec2:RunInstances request has been throttled due to an operational issue in availability zone usw2-az1. Throttling will be removed once the issue is resolved." >&2
+      exit 1
+    fi
+    if [ -e "$rdir/quota-$market" ]; then
+      if [ "$market" = spot ]; then
+        echo "An error occurred (MaxSpotInstanceCountExceeded) when calling the RunInstances operation: Max spot instance count exceeded." >&2
+      else
+        echo "An error occurred (VcpuLimitExceeded) when calling the RunInstances operation: You have requested more vCPU capacity than your current vCPU limit of 640 allows for the instance bucket that the specified instance type belongs to." >&2
+      fi
       exit 1
     fi
     if [ -e "$rdir/account-throttle" ]; then
@@ -700,7 +710,7 @@ clear_faults() {
   local dir
   rm -f "$STUB_FIXTURES"/fail-* "$STUB_FIXTURES"/warn-run-instances
   for dir in "$STUB_FIXTURES" "$STUB_FIXTURES/eu-west-1"; do
-    rm -f "$dir"/no-capacity-* "$dir"/other-error-* "$dir"/throttle-* "$dir"/account-throttle
+    rm -f "$dir"/no-capacity-* "$dir"/other-error-* "$dir"/throttle-* "$dir"/account-throttle "$dir"/quota-*
   done
 }
 # expect_run_count <desc> <n>: run-instances was called exactly n times.
@@ -1326,6 +1336,74 @@ expect_placements "spot up with every spot zone in both regions throttled" \
   "zone us-west-2a"
 expect_region "Oregon's on-demand launch uses Oregon's AMI" us-west-2 \
   "ec2 run-instances" "--image-id ami-newest00000002" "--placement AvailabilityZone=us-west-2a"
+clear_faults
+
+# Oregon's spot quota is reached: its first spot attempt is refused with the quota
+# error, the walk skips Oregon's other spot attempts and launches spot in Ireland's
+# first zone. The stderr line names the market, the type and the region.
+: >"$STUB_FIXTURES/quota-spot"
+run up --type g4dn.xlarge --disk 40 --spot
+expect_status 0 "spot up with Oregon's spot quota reached"
+expect_out '^market spot eu-west-1a$' "spot up with Oregon's spot quota reached prints Ireland's market line"
+expect_out '^ec2-[a-z0-9]{3} ready$' "spot up with Oregon's spot quota reached prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "spot up with Oregon's spot quota reached: the ready line is not last"
+expect_err '^ec2: spot quota reached for g4dn\.xlarge in us-west-2; skipping its spot attempts there$' "spot up with Oregon's spot quota reached names the market, type and region"
+expect_placements "spot up with Oregon's spot quota reached" "zone us-west-2a spot" "zone eu-west-1a spot"
+expect_run_count "spot up with Oregon's spot quota reached" 2
+expect_userdata "spot up with Oregon's spot quota reached" "$name"
+expect_no_fixed "terminate-instances" "spot up with Oregon's spot quota reached terminates nothing on success"
+clear_faults
+
+# Oregon's on-demand vCPU quota is reached: its first on-demand attempt is refused
+# with the quota error, the walk skips Oregon's other on-demand attempts, placed and
+# unplaced, and launches in Ireland's first zone.
+: >"$STUB_FIXTURES/quota-on-demand"
+run up --type g4dn.xlarge --disk 20
+expect_status 0 "on-demand up with Oregon's vCPU quota reached"
+expect_out '^market on-demand$' "on-demand up with Oregon's vCPU quota reached prints the on-demand market line"
+expect_out '^ec2-[a-z0-9]{3} ready$' "on-demand up with Oregon's vCPU quota reached prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "on-demand up with Oregon's vCPU quota reached: the ready line is not last"
+expect_err '^ec2: on-demand quota reached for g4dn\.xlarge in us-west-2; skipping its on-demand attempts there$' "on-demand up with Oregon's vCPU quota reached names the market, type and region"
+expect_placements "on-demand up with Oregon's vCPU quota reached" "zone us-west-2a" "zone eu-west-1a"
+expect_run_count "on-demand up with Oregon's vCPU quota reached" 2
+expect_region "Ireland's launch after the quota uses Ireland's AMI and security group" eu-west-1 \
+  "ec2 run-instances" "--image-id ami-irelandnew0002" "Groups=sg-0ireland0000001" "--placement AvailabilityZone=eu-west-1a"
+expect_userdata "on-demand up with Oregon's vCPU quota reached" "$name"
+expect_no_fixed "terminate-instances" "on-demand up with Oregon's vCPU quota reached terminates nothing on success"
+clear_faults
+
+# Spot quota reached in both regions: each region's spot attempts are skipped at
+# their first refusal, and the walk moves on to Oregon's on-demand zone. Each region
+# names its own quota line.
+: >"$STUB_FIXTURES/quota-spot"
+: >"$STUB_FIXTURES/eu-west-1/quota-spot"
+run up --type g4dn.xlarge --disk 20 --spot
+expect_status 0 "spot up with the spot quota reached in both regions"
+expect_out '^market on-demand$' "spot up with the spot quota reached in both regions prints the on-demand market line"
+expect_out '^ec2-[a-z0-9]{3} ready$' "spot up with the spot quota reached in both regions prints the ready line"
+expect_placements "spot up with the spot quota reached in both regions" \
+  "zone us-west-2a spot" "zone eu-west-1a spot" "zone us-west-2a"
+expect_err '^ec2: spot quota reached for g4dn\.xlarge in us-west-2; skipping its spot attempts there$' "spot up with the spot quota reached in both regions names Oregon's quota"
+expect_err '^ec2: spot quota reached for g4dn\.xlarge in eu-west-1; skipping its spot attempts there$' "spot up with the spot quota reached in both regions names Ireland's quota"
+[ "$(grep -c 'quota reached' "$ERR")" -eq 2 ] || fail "spot up with the spot quota reached in both regions: want exactly two quota lines"
+clear_faults
+
+# commonframe-gate's spot quota is reached in Oregon, its only region: the spot
+# attempts are skipped and the on-demand launch lands in Oregon's first zone.
+: >"$STUB_FIXTURES/quota-spot"
+run up commonframe-gate
+expect_status 0 "up commonframe-gate with Oregon's spot quota reached"
+expect_out '^market on-demand$' "up commonframe-gate with Oregon's spot quota reached prints the on-demand market line"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up commonframe-gate with Oregon's spot quota reached prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up commonframe-gate with Oregon's spot quota reached: the ready line is not last"
+expect_err '^ec2: spot quota reached for c8a\.4xlarge in us-west-2; skipping its spot attempts there$' "up commonframe-gate with Oregon's spot quota reached names the market, type and region"
+expect_placements "up commonframe-gate with Oregon's spot quota reached" "zone us-west-2a spot" "zone us-west-2a"
+expect_run_count "up commonframe-gate with Oregon's spot quota reached" 2
+expect_userdata "up commonframe-gate with Oregon's spot quota reached" "$name"
+expect_no_fixed "terminate-instances" "up commonframe-gate with Oregon's spot quota reached terminates nothing on success"
 clear_faults
 
 # On-demand: Oregon's zones and its unplaced attempt refused, so the launch lands

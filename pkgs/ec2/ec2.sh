@@ -473,7 +473,7 @@ cmd_up() {
   # no zone for the type gets no attempt.
   local ranked spot_ranked
   local -a offering=() od_regions=() spot_regions=()
-  local -A region_zones=()
+  local -A region_zones=() quota_skip=()
   for r in "${regions[@]}"; do
     zone_list=$(ec2_in "$r" describe-instance-type-offerings --output json --location-type availability-zone \
       --filters "Name=instance-type,Values=$itype" |
@@ -508,6 +508,11 @@ cmd_up() {
   runerr=$(mktemp) || die "cannot create a temp file"
   for attempt in "${attempts[@]}"; do
     read -r kind aregion zone <<<"$attempt"
+    # A market that hit its quota in a region is skipped there for the rest of
+    # the walk, placed and unplaced alike.
+    if [ -n "${quota_skip[$kind:$aregion]:-}" ]; then
+      continue
+    fi
     # The region's base AMI and security group are found, or built, the first time
     # the walk reaches the region. The Tailscale key follows the first region.
     if [ -z "${region_sg[$aregion]:-}" ]; then
@@ -551,6 +556,13 @@ cmd_up() {
     # that zone; one that names none is account-level and stops the launch.
     if [ -n "$zone" ] && grep -E -q 'RequestLimitExceeded.*availability zone [a-z0-9-]+' "$runerr"; then
       echo "ec2: $kind launch throttled in $zone" >&2
+      continue
+    fi
+    # A spot or on-demand quota refusal names the market's quota; the market's
+    # attempts in this region are skipped, and the walk goes on.
+    if grep -q -E 'MaxSpotInstanceCountExceeded|VcpuLimitExceeded' "$runerr"; then
+      echo "ec2: $kind quota reached for $itype in $aregion; skipping its $kind attempts there" >&2
+      quota_skip[$kind:$aregion]=yes
       continue
     fi
     cat -- "$runerr" >&2

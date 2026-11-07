@@ -70,7 +70,7 @@ data "aws_iam_policy_document" "launcher" {
     sid       = "RunInstancesSecurityGroup"
     effect    = "Allow"
     actions   = ["ec2:RunInstances"]
-    resources = [aws_security_group.fleet.arn]
+    resources = [for sg in aws_security_group.fleet : sg.arn]
   }
 
   statement {

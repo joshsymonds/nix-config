@@ -1,8 +1,6 @@
 # ultraviolet composition of services.qbittorrent-vpn.
 #
-# qBittorrent joins SABnzbd's gluetun (sabnzbd-vpn.nix) instead of running
-# its own: there is one Mullvad WireGuard device for this host, and two
-# gluetun containers on the same peer would fight over the handshake.
+# qBittorrent joins the host's VPN exit (vpn-exit.nix), next to SABnzbd.
 # Mullvad has no port forwarding, so torrents are outbound-only.
 #
 # Downloads land on the NAS at the paths the importers see, by category:
@@ -19,7 +17,6 @@
 
   services.qbittorrent-vpn = {
     enable = true;
-    gluetunContainer = "gluetun";
     # SABnzbd holds 8080 inside the shared netns.
     webUIPort = 8090;
     webUIAddress = "127.0.0.1";

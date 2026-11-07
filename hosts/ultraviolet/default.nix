@@ -17,9 +17,10 @@ in
       # Periodic Podman + Nix store cleanup
       ../../modules/services/cleanup-services.nix
 
+      # The host's one Mullvad exit (gluetun); SABnzbd and qBittorrent join it
+      ./vpn-exit.nix
       # SABnzbd with Mullvad VPN (migrated from bluedesert)
       ./sabnzbd-vpn.nix
-      # qBittorrent in the same gluetun netns
       ./qbittorrent.nix
 
       # Home Assistant for home automation

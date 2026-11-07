@@ -23,6 +23,7 @@ in
       ../../modules/services/yubikey-auth.nix
       inputs.lanzaboote.nixosModules.lanzaboote
       inputs.nix-flatpak.nixosModules.nix-flatpak
+      inputs.corecycler.nixosModules.default
     ];
 
     # creative-lab model/training store. Persisted (survives @root-blank
@@ -670,10 +671,55 @@ in
     #
     # Rebuilds locally on every kernel bump, along with the kernel itself.
     # Few minutes per `update`; acceptable trade for the fan visibility.
+    #
+    # ryzen_smu (AMD SMU mailbox) is for corecycler below. aggregateModules
+    # requires a .ko.cer beside every external module (nixpkgs@6bd75267);
+    # `make modules_install` writes it through kmodigest (common-flags.nix
+    # cmd_sign), but ryzen-smu's installPhase copies the .ko by hand, so
+    # nothing signs it. Run kmodigest on the installed module instead.
     boot.extraModulePackages = [
       config.boot.kernelPackages.it87
+      (config.boot.kernelPackages.ryzen-smu.overrideAttrs (old: {
+        postInstall =
+          (old.postInstall or "")
+          + ''
+            ko=$out/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/kernel/drivers/ryzen_smu/ryzen_smu.ko
+            chmod u+w "$ko"
+            ${lib.getExe pkgs.buildPackages.kmodigest} "$ko"
+            chmod 444 "$ko"
+          '';
+      }))
     ];
-    boot.kernelModules = ["kvm-amd" "it87"];
+    boot.kernelModules = ["kvm-amd" "it87" "ryzen_smu"];
+
+    # ── PBO Curve Optimizer tuning: corecycler ──────────────────────────
+    # Loads msr and adds the user to its device-access group; ryzen_smu
+    # and it87 are declared above instead (ryzenSmu = false). Out-of-tree
+    # modules load under Secure Boot because lockdown is off and module
+    # signatures aren't enforced. MCE detection shells out to dmesg, which
+    # hardening.nix restricts (dmesg_restrict = 1 outranks the module's
+    # mkDefault 0), so run the headless tuner as root:
+    # `sudo corecycler tune --config F`, `sudo corecycler resume`.
+    services.corecycler = {
+      enable = true;
+      ryzenSmu = false;
+      unfreeBackends = true; # mprime + y-cruncher
+      deviceAccessUser = "joshsymonds";
+    };
+
+    # ── Unattended recovery from a hard lock ────────────────────────────
+    # A too-deep undervolt can freeze the machine outright. systemd pets
+    # the SP5100 TCO watchdog; if it stops for 60s, the chipset resets the
+    # board. hardlockup_panic turns an NMI-detected stuck CPU into a panic,
+    # and kernel.panic reboots 10s later. TPM-sealed LUKS (PCR 7) then
+    # unlocks without a YubiKey, so gnomon comes back on its own.
+    # (RebootWatchdogSec, the shutdown-phase counterpart, lives in
+    # modules/linux-base/shutdown-hardening.nix.)
+    systemd.settings.Manager.RuntimeWatchdogSec = "60s";
+    boot.kernel.sysctl = {
+      "kernel.hardlockup_panic" = 1;
+      "kernel.panic" = 10;
+    };
 
     # aarch64 user-mode emulation (qemu binfmt): lets gnomon eval-check and
     # build shrike's nix-on-droid closure (nixOnDroidConfigurations.shrike).

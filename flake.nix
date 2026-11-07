@@ -114,6 +114,14 @@
       inputs.rust-overlay.follows = "rust-overlay";
     };
 
+    # linux-corecycler — per-core stability tester and PBO Curve Optimizer
+    # tuner for Ryzen (ryzen_smu module + MSR access). gnomon only.
+    corecycler = {
+      url = "github:Daaboulex/linux-corecycler";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-parts.follows = "flake-parts";
+    };
+
     # DankMaterialShell — Quickshell-based desktop shell for niri (and others).
     # Provides notifications, launcher, lockscreen, polkit agent, idle, login greeter
     # as cohesive Quickshell modules, replacing the typical mako/fuzzel/swaylock stitchwork.

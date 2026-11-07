@@ -206,6 +206,20 @@ data "aws_iam_policy_document" "launcher" {
       values   = ["ec2"]
     }
   }
+
+  # Pass the cache role to EC2 only.
+  statement {
+    sid       = "PassFleetCacheRole"
+    effect    = "Allow"
+    actions   = ["iam:PassRole"]
+    resources = [aws_iam_role.fleet_cache.arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PassedToService"
+      values   = ["ec2.amazonaws.com"]
+    }
+  }
 }
 
 # Customer managed, not inline: IAM caps user inline policies at 2,048 characters.

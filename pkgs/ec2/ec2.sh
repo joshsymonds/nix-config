@@ -1,4 +1,4 @@
-# ec2: launch, list, and terminate fleet boxes in us-west-2.
+# ec2: launch, list, and terminate fleet boxes in us-west-2 and eu-west-1.
 # AWS credentials come only from $EC2_FLEET_AWS_ENV_FILE and the Tailscale OAuth
 # client only from $EC2_FLEET_TS_ENV_FILE. Neither is printed or placed on a
 # command line.
@@ -634,7 +634,7 @@ cmd_help() {
   local classes
   classes=$(nix eval --json "$flake#ec2Classes")
   cat <<'USAGE'
-ec2 - launch, list, and terminate fleet boxes in us-west-2
+ec2 - launch, list, and terminate fleet boxes in us-west-2 and eu-west-1
 
 Usage:
   ec2 up <class>                          start a box of a class

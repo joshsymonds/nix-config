@@ -821,6 +821,7 @@ expect_rebuilt() {
 unset EC2_FLEET_AWS_ENV_FILE
 run help
 expect_status 0 "help"
+expect_out 'fleet boxes in us-west-2 and eu-west-1$' "help names both fleet regions"
 expect_out 'commonframe-gate .*c8a\.4xlarge' "help names commonframe-gate with its type"
 expect_out 'muniment-runner .*m8a\.2xlarge' "help names muniment-runner with its type"
 expect_out 'idleMinutes' "help states the idle rule"

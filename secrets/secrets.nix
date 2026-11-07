@@ -92,9 +92,7 @@ in {
   "secrets/hosts/gnomon/mullvad-privatekey.age".publicKeys = keys.gnomon;
   "secrets/hosts/gnomon/mullvad-addresses.age".publicKeys = keys.gnomon;
   "secrets/hosts/gnomon/joshsymonds-password-hash.age".publicKeys = keys.gnomon;
-  "secrets/hosts/vermissian/mullvad-privatekey.age".publicKeys = keys.vermissian;
-  "secrets/hosts/vermissian/mullvad-addresses.age".publicKeys = keys.vermissian;
-  # vermissian's vpn-exit (hosts/vermissian/vpn-exit.nix): its own Mullvad device.
+  # vermissian's vpn-exit (hosts/vermissian/vpn-exit.nix).
   "secrets/hosts/vermissian/mullvad-exit-privatekey.age".publicKeys = keys.vermissian;
   "secrets/hosts/vermissian/mullvad-exit-addresses.age".publicKeys = keys.vermissian;
   "secrets/hosts/vermissian/cloudflared-token.age".publicKeys = keys.vermissian;

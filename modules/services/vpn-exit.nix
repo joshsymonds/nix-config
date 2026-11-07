@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }: let
   cfg = config.services.vpn-exit;
@@ -8,6 +9,18 @@
     if b
     then "on"
     else "off";
+  publish = address: port:
+    lib.optionalString (address != null) "${address}:"
+    + "${toString port}:${toString port}";
+  socksName = "${cfg.containerName}-socks";
+  # Built here from nixpkgs rather than pulled, so the one image this module
+  # adds is exactly what nixpkgs ships.
+  socksImage = pkgs.dockerTools.buildLayeredImage {
+    name = "vpn-exit-socks";
+    tag = "nix";
+    contents = [pkgs.microsocks];
+    config.Cmd = ["${pkgs.microsocks}/bin/microsocks" "-i" "0.0.0.0" "-p" (toString cfg.socksProxy.port)];
+  };
 in {
   options.services.vpn-exit = {
     enable = lib.mkEnableOption ''
@@ -23,8 +36,8 @@ in {
         and publish their ports on that container, since a container sharing
         a netns can't publish its own (qbittorrent-vpn and ultraviolet's
         SABnzbd do this).
-      - Host programs use gluetun's HTTP proxy (httpProxy), which also exits
-        through the tunnel.
+      - Host programs use gluetun's HTTP proxy (httpProxy) or the SOCKS5
+        proxy (socksProxy), which also exit through the tunnel.
 
       gluetun's FIREWALL=on killswitch drops every packet that isn't headed
       into the tunnel, so when the tunnel is down everything behind it loses
@@ -153,6 +166,28 @@ in {
       };
     };
 
+    socksProxy = {
+      enable = lib.mkEnableOption ''
+        a SOCKS5 proxy (microsocks, from nixpkgs) inside the exit's
+        namespace, for clients that speak SOCKS rather than HTTP CONNECT. It
+        runs as its own container joined to the exit, so it leaves through the
+        tunnel behind the same killswitch. Hostnames a client hands it
+        (socks5h-style) resolve in the tunnel too
+      '';
+
+      port = lib.mkOption {
+        type = lib.types.port;
+        default = 1080;
+        description = "Port the SOCKS5 proxy listens on in the namespace and is published on.";
+      };
+
+      address = lib.mkOption {
+        type = lib.types.nullOr lib.types.str;
+        default = "127.0.0.1";
+        description = "Host address the SOCKS5 proxy is published on. null publishes on every interface.";
+      };
+    };
+
     extraEnvironment = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = {};
@@ -162,8 +197,27 @@ in {
   };
 
   config = lib.mkIf cfg.enable {
+    assertions = [
+      {
+        assertion = !(cfg.httpProxy.enable && cfg.socksProxy.enable && cfg.httpProxy.port == cfg.socksProxy.port);
+        message = "services.vpn-exit: httpProxy.port and socksProxy.port both listen in the exit's netns and must differ.";
+      }
+    ];
+
     virtualisation.oci-containers = {
       backend = "podman";
+
+      containers.${socksName} = lib.mkIf cfg.socksProxy.enable {
+        image = "vpn-exit-socks:nix";
+        imageFile = socksImage;
+        dependsOn = [cfg.containerName];
+        extraOptions = [
+          "--network=container:${cfg.containerName}"
+          # Stateless, like the exit itself.
+          "--stop-timeout=1"
+        ];
+        autoStart = true;
+      };
 
       containers.${cfg.containerName} = {
         image = cfg.image;
@@ -209,10 +263,10 @@ in {
           "${cfg.addressesFile}:/gluetun/wireguard/addresses:ro"
         ];
 
-        ports = lib.optional cfg.httpProxy.enable (
-          lib.optionalString (cfg.httpProxy.address != null) "${cfg.httpProxy.address}:"
-          + "${toString cfg.httpProxy.port}:${toString cfg.httpProxy.port}"
-        );
+        # The socks container shares this netns, so its port is published here.
+        ports =
+          lib.optional cfg.httpProxy.enable (publish cfg.httpProxy.address cfg.httpProxy.port)
+          ++ lib.optional cfg.socksProxy.enable (publish cfg.socksProxy.address cfg.socksProxy.port);
 
         extraOptions = [
           "--cap-add=NET_ADMIN"
@@ -247,6 +301,11 @@ in {
     # and feed the post-journald stall. Just above the stop-timeout, so the
     # graceful path wins when podman is healthy. mkForce because
     # virtualisation.oci-containers pins these units to TimeoutStopSec=120.
-    systemd.services."podman-${cfg.containerName}".serviceConfig.TimeoutStopSec = lib.mkForce 10;
+    systemd.services = {
+      "podman-${cfg.containerName}".serviceConfig.TimeoutStopSec = lib.mkForce 10;
+      "podman-${socksName}" = lib.mkIf cfg.socksProxy.enable {
+        serviceConfig.TimeoutStopSec = lib.mkForce 10;
+      };
+    };
   };
 }

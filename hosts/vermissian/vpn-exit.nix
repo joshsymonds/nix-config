@@ -1,12 +1,12 @@
 # vermissian's VPN exit (services.vpn-exit): one Mullvad WireGuard tunnel in
-# a gluetun container, with the loopback HTTP proxy for host programs
-# (home-manager/vpn-exit: ssh-vpn).
+# a gluetun container. Host programs reach it through the loopback proxies:
+# HTTP for ssh-vpn (home-manager/vpn-exit), SOCKS5 for bathhouse's crawl
+# (~/Personal/bathhouse, default socks5://127.0.0.1:1080).
 #
-# Its own Mullvad device, separate from mullvad-proxy.nix's "Keen Jaguar":
-# two tunnels on one WireGuard key fight over the peer's endpoint. The key was
-# generated locally (2026-11-06) and only its public half registered with
-# Mullvad; the address file holds the IPv4 address Mullvad assigned (IPv4
-# only, as the module requires).
+# The key was generated locally (2026-11-06) and only its public half
+# registered with Mullvad as a device; the address file holds the IPv4
+# address Mullvad assigned (IPv4 only, as the module requires). Rotate by
+# registering a new key and re-encrypting both secrets.
 {config, ...}: {
   imports = [
     ../../modules/services/vpn-exit.nix
@@ -18,6 +18,7 @@
     privateKeyFile = config.age.secrets."mullvad-exit-privatekey".path;
     addressesFile = config.age.secrets."mullvad-exit-addresses".path;
     httpProxy.enable = true;
+    socksProxy.enable = true;
   };
 
   age.secrets = {

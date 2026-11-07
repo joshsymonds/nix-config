@@ -310,17 +310,20 @@ CURLSTUB
 
 # ssh fails for the step named by fail-ssh-<step>: probe (the true readiness
 # check), nix-env, switch, switch-boot (switch-to-configuration boot), boot-id
-# (a read of the boot id) or reboot (the reboot request). A hold-ssh-<step>
-# fixture keeps the step running until the release file exists, so a signal can
-# arrive during it. The boot-id read answers boot-id-before until the reboot
-# request has run, and boot-id-after from then on, except that the first
-# boot-id-lag reads after the reboot request answer boot-id-before.
+# (a read of the boot id), reboot (the reboot request) or failed-units (the
+# failed-unit query). A hold-ssh-<step> fixture keeps the step running until the
+# release file exists, so a signal can arrive during it. The boot-id read answers
+# boot-id-before until the reboot request has run, and boot-id-after from then
+# on, except that the first boot-id-lag reads after the reboot request answer
+# boot-id-before. A switch-status fixture makes the in-place switch exit with its
+# status, and a failed-units fixture is the output of the failed-unit query.
 write_stub ssh <<'SSHSTUB'
 case "$*" in
   *nix-env*) step=nix-env ;;
   *'switch-to-configuration boot'*) step=switch-boot ;;
   *switch-to-configuration*) step=switch ;;
   *'systemctl reboot'*) step=reboot ;;
+  *'systemctl list-units'*) step=failed-units ;;
   *boot_id*) step=boot-id ;;
   *) step=probe ;;
 esac
@@ -335,6 +338,11 @@ esac
   echo "ssh: injected failure ($step)" >&2
   exit 255
 }
+[ "$step" = failed-units ] && {
+  cat "$STUB_FIXTURES/failed-units" 2>/dev/null
+  exit 0
+}
+[ "$step" = switch ] && [ -e "$STUB_FIXTURES/switch-status" ] && exit "$(cat "$STUB_FIXTURES/switch-status")"
 [ "$step" = boot-id ] && {
   if [ -e "$STUB_FIXTURES/rebooted" ]; then
     lag=$(cat "$STUB_FIXTURES/boot-id-lag" 2>/dev/null || echo 0)
@@ -746,6 +754,7 @@ inject() {
 clear_faults() {
   local dir
   rm -f "$STUB_FIXTURES"/fail-* "$STUB_FIXTURES"/warn-run-instances "$STUB_FIXTURES/running-fail-left"
+  rm -f "$STUB_FIXTURES/switch-status" "$STUB_FIXTURES/failed-units"
   for dir in "$STUB_FIXTURES" "$STUB_FIXTURES/eu-west-1"; do
     rm -f "$dir"/no-capacity-* "$dir"/other-error-* "$dir"/throttle-* "$dir"/account-throttle "$dir"/quota-*
   done
@@ -1741,6 +1750,57 @@ expect_out '^market on-demand$' "up muniment-runner prints the on-demand market 
 expect_run_count "up muniment-runner" 1
 expect_fixed "nix copy --no-check-sigs --substitute-on-destination --to ssh-ng://joshsymonds@$name /nix/store/fixture-toplevel-muniment-runner" "up muniment-runner copies its own toplevel"
 expect_fixed "joshsymonds@$name sudo /nix/store/fixture-toplevel-muniment-runner/bin/switch-to-configuration switch" "up muniment-runner switches its own toplevel"
+
+# An in-place switch of a cache class that exits 4 with only ec2-s3-cache failed
+# keeps the box up cold: one stderr line names the cold cache, and the ready line
+# is still last on stdout.
+printf '4\n' >"$STUB_FIXTURES/switch-status"
+printf 'ec2-s3-cache.service loaded failed failed S3 cache mount\n' >"$STUB_FIXTURES/failed-units"
+run up muniment-runner
+expect_status 0 "up muniment-runner with the switch exiting 4 and only ec2-s3-cache failed"
+expect_err 'cold cache' "up muniment-runner with the switch exiting 4 and only ec2-s3-cache failed names the cold cache"
+expect_no_fixed "terminate-instances" "up muniment-runner with the switch exiting 4 and only ec2-s3-cache failed keeps the box"
+expect_fixed "systemctl list-units --state=failed --plain --no-legend --no-pager" "up muniment-runner with the switch exiting 4 queries the failed units"
+expect_out '^muniment-runner-[a-z0-9]{3} ready$' "up muniment-runner with the switch exiting 4 and only ec2-s3-cache failed prints the ready line"
+name2=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name2 ready" ] || fail "up muniment-runner with the switch exiting 4 and only ec2-s3-cache failed: the ready line is not last"
+
+# Exit 4 with another unit failed too is a real switch failure: the box dies.
+printf 'ec2-s3-cache.service loaded failed failed S3 cache mount\nsshd.service loaded failed failed OpenSSH\n' >"$STUB_FIXTURES/failed-units"
+run up muniment-runner
+expect_nonzero "up muniment-runner with the switch exiting 4 and another unit failed"
+expect_terminated "up muniment-runner with the switch exiting 4 and another unit failed"
+
+# Exit 4 with no failed unit listed is a real switch failure too.
+printf '' >"$STUB_FIXTURES/failed-units"
+run up muniment-runner
+expect_nonzero "up muniment-runner with the switch exiting 4 and no unit failed"
+expect_terminated "up muniment-runner with the switch exiting 4 and no unit failed"
+
+# Any other switch exit status is a real switch failure, even when only
+# ec2-s3-cache failed.
+printf 'ec2-s3-cache.service loaded failed failed S3 cache mount\n' >"$STUB_FIXTURES/failed-units"
+printf '1\n' >"$STUB_FIXTURES/switch-status"
+run up muniment-runner
+expect_nonzero "up muniment-runner with the switch exiting 1"
+expect_terminated "up muniment-runner with the switch exiting 1"
+
+# A failed failed-unit query after exit 4 is a real switch failure.
+printf '4\n' >"$STUB_FIXTURES/switch-status"
+inject ssh-failed-units
+run up muniment-runner
+expect_nonzero "up muniment-runner with the failed-unit query failing"
+expect_terminated "up muniment-runner with the failed-unit query failing"
+clear_faults
+
+# A class without cache is a real switch failure even when only ec2-s3-cache
+# failed.
+printf '4\n' >"$STUB_FIXTURES/switch-status"
+printf 'ec2-s3-cache.service loaded failed failed S3 cache mount\n' >"$STUB_FIXTURES/failed-units"
+run up commonframe-gate
+expect_nonzero "up commonframe-gate with the switch exiting 4 and only ec2-s3-cache failed"
+expect_terminated "up commonframe-gate with the switch exiting 4 and only ec2-s3-cache failed"
+clear_faults
 
 # up muniment-runner with Ireland offering m8a.2xlarge too, Oregon cheaper, and every
 # Oregon on-demand attempt refused: the walk takes Oregon's zones and unplaced

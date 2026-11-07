@@ -90,11 +90,13 @@ sudo age -d -i /etc/age/<host>.agekey secrets/hosts/<host>/<name>.age
 
 Each class is an attribute in `hosts/ec2/classes.nix` with `instanceType`,
 `diskGb`, `spot`, `idleMinutes`, `maxHours`, and `module` (a path under
-`hosts/ec2/classes/`), plus optional `reboot` (default `false`). The module
-holds the class's config; `commonframe-gate.nix` is an example. `diskGb` must
-be at most 512 and `maxHours` at most 48. The warden terminates a box whose
-root volume is larger, and a `fleet-max-hours` tag above 48 counts as the
-24-hour default.
+`hosts/ec2/classes/`), plus optional `reboot` (default `false`) and `cache`
+(default `false`). With `cache = true` the launcher passes instance profile
+ec2-fleet-cache and the box runs `ec2Fleet.s3Cache`, a read-write Mountpoint
+mount of the class's prefix at its path. The module holds the class's config;
+`commonframe-gate.nix` is an example. `diskGb` must be at most 512 and
+`maxHours` at most 48. The warden terminates a box whose root volume is
+larger, and a `fleet-max-hours` tag above 48 counts as the 24-hour default.
 
 1. Add the entry to `hosts/ec2/classes.nix` and write its module in
    `hosts/ec2/classes/<class>.nix`.

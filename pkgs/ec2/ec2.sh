@@ -373,9 +373,9 @@ create_userdata() {
 # its toplevel built with each input override.
 cmd_up() {
   local class="" type="" disk="" spot=no timeout
-  local classes row itype disk_gb spot_req max_hours reboot_req fleet_class prefix
+  local classes row itype disk_gb spot_req max_hours reboot_req cache_req fleet_class prefix
   local known_dir deadline suffix name toplevel base_path id=""
-  local boot_before boot_after
+  local boot_before boot_after switch_status failed_units
   local zone_list zone r kind aregion attempt reply market_line
   local -a ssh_opts=() reboot_opts=() zones=() attempts=() spot_attempts=() od_attempts=()
   local -a place=() market=() overrides=()
@@ -429,10 +429,10 @@ cmd_up() {
   if [ -n "$class" ]; then
     classes=$(nix eval --json "$flake#ec2Classes") || die "cannot evaluate ec2Classes in $flake"
     row=$(jq -r --arg c "$class" '
-      if has($c) then .[$c] | [.instanceType, .diskGb, (if .spot then "yes" else "no" end), .maxHours, (if .reboot then "yes" else "no" end)] | @tsv
+      if has($c) then .[$c] | [.instanceType, .diskGb, (if .spot then "yes" else "no" end), .maxHours, (if .reboot then "yes" else "no" end), (if .cache then "yes" else "no" end)] | @tsv
       else empty end' <<<"$classes") || die "cannot read the class data"
     [ -n "$row" ] || die "unknown class: $class (see: ec2 help)"
-    IFS=$'\t' read -r itype disk_gb spot_req max_hours reboot_req <<<"$row"
+    IFS=$'\t' read -r itype disk_gb spot_req max_hours reboot_req cache_req <<<"$row"
     fleet_class=$class
     prefix=$class
   else
@@ -440,6 +440,7 @@ cmd_up() {
     disk_gb=$disk
     spot_req=$spot
     reboot_req=no
+    cache_req=no
     max_hours=24
     fleet_class=adhoc
     prefix=ec2
@@ -524,6 +525,10 @@ cmd_up() {
     fi
     place=()
     market=()
+    profile=()
+    if [ "$cache_req" = yes ]; then
+      profile=(--iam-instance-profile Name=ec2-fleet-cache)
+    fi
     if [ -n "$zone" ]; then
       place=(--placement "AvailabilityZone=$zone")
     fi
@@ -541,7 +546,7 @@ cmd_up() {
       --instance-initiated-shutdown-behavior terminate \
       --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=$fleet_class},{Key=fleet-max-hours,Value=$max_hours}]" \
         "ResourceType=volume,Tags=[{Key=fleet,Value=ec2},{Key=Name,Value=$name}]" \
-      --user-data "file://$userdata" "${place[@]}" "${market[@]}" 2>"$runerr"); then
+      --user-data "file://$userdata" "${place[@]}" "${market[@]}" "${profile[@]}" 2>"$runerr"); then
       id=$reply
       launched=$id
       launched_region=$aregion
@@ -620,8 +625,19 @@ cmd_up() {
         sleep 5
       done
     else
-      ssh "${ssh_opts[@]}" "joshsymonds@$name" sudo "$toplevel/bin/switch-to-configuration" switch ||
-        die "switching $name to $toplevel failed"
+      switch_status=0
+      ssh "${ssh_opts[@]}" "joshsymonds@$name" sudo "$toplevel/bin/switch-to-configuration" switch || switch_status=$?
+      if [ "$switch_status" -ne 0 ]; then
+        # Exit 4 comes after the whole switch. On a cache class, when the cache
+        # mount is the only failed unit, the box stays up with a cold cache.
+        [ "$switch_status" -eq 4 ] && [ "$cache_req" = yes ] ||
+          die "switching $name to $toplevel failed"
+        failed_units=$(ssh "${ssh_opts[@]}" "joshsymonds@$name" systemctl list-units --state=failed --plain --no-legend --no-pager) ||
+          die "listing the failed units of $name failed"
+        [ "$(printf '%s\n' "$failed_units" | cut -d ' ' -f 1)" = ec2-s3-cache.service ] ||
+          die "switching $name to $toplevel failed"
+        echo "ec2: the cache mount of $name failed; $name is up with a cold cache" >&2
+      fi
     fi
   fi
 

@@ -64,6 +64,15 @@ hosts with its AWS credentials.
   true. It deletes unattached fleet volumes.
 - Budget is $200/month. At 100%, RunInstances and snapshot creation are denied.
 - Boxes carry tag:ec2 and cannot reach ultraviolet, the NAS, or the home LAN.
-  They hold no agenix secrets and no IAM role. Keep it that way.
+  They hold no agenix secrets. Boxes of a class with `cache = true` carry IAM
+  role ec2-fleet-cache, which can open sessions on bucket
+  joshsymonds-ec2-fleet-cache--usw2-az1--x-s3 and nothing else. The class's
+  prefix is mounted read-write (Mountpoint) at its path, owned by its user:
+  commonframe uses /home/cf/.cache/commonframe with prefix commonframe/.
+  Objects expire after 14 days. Other boxes carry no role. Keep it that way.
+- Boot never waits on the cache mount; a failed mount leaves a cold local
+  directory. The bucket is S3 Express One Zone in us-west-2, zone usw2-az1, so
+  Ireland boxes reach it cross-region. A box starts warm only when its
+  commonframe Sim build matches the one that baked the cache.
 - Classes are defined in `hosts/ec2/classes.nix`, with modules in
   `hosts/ec2/classes/`.

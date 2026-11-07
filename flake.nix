@@ -478,6 +478,7 @@
         {
           ec2Fleet.idleMinutes = c.idleMinutes;
           ec2Fleet.maxHours = c.maxHours;
+          ec2Fleet.s3Cache.enable = c.cache or false;
         }
       ];
 
@@ -732,6 +733,11 @@
             vermissian = self.nixosConfigurations.vermissian.config;
           };
           ec2-idle = import ./tests/ec2-idle.nix {
+            pkgs = checkPkgs;
+            inherit inputs;
+            outputs = self.outputs;
+          };
+          ec2-s3-cache = import ./tests/ec2-s3-cache.nix {
             pkgs = checkPkgs;
             inherit inputs;
             outputs = self.outputs;

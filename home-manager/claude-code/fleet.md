@@ -76,7 +76,9 @@ hosts with its AWS credentials.
   volume of at most 512 GB, at 3000 IOPS and 125 MB/s, with DeleteOnTermination
   true. It deletes unattached fleet volumes. `ec2 up` refuses a launch that
   would pass the cap.
-- Budget is $200/month. At 100%, RunInstances and snapshot creation are denied.
+- Budget is $600/month (budget `ec2-fleet`). AWS emails at 50%, 80% and 100%;
+  at 100% RunInstances and snapshot creation are denied. The launcher can
+  read the budget (`budgets:ViewBudget`); its spend figure lags by hours.
 - Boxes carry tag:ec2 and cannot reach ultraviolet, the NAS, or the home LAN.
   They hold no agenix secrets. Boxes of a class with `cache = true` carry IAM
   role ec2-fleet-cache, which can open sessions on bucket

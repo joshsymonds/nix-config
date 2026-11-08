@@ -23,7 +23,6 @@ in
       ../../modules/services/yubikey-auth.nix
       inputs.lanzaboote.nixosModules.lanzaboote
       inputs.nix-flatpak.nixosModules.nix-flatpak
-      inputs.corecycler.nixosModules.default
     ];
 
     # creative-lab model/training store. Persisted (survives @root-blank
@@ -671,54 +670,25 @@ in
     #
     # Rebuilds locally on every kernel bump, along with the kernel itself.
     # Few minutes per `update`; acceptable trade for the fan visibility.
-    #
-    # ryzen_smu (AMD SMU mailbox) is for corecycler below. aggregateModules
-    # requires a .ko.cer beside every external module (nixpkgs@6bd75267);
-    # `make modules_install` writes it through kmodigest (common-flags.nix
-    # cmd_sign), but ryzen-smu's installPhase copies the .ko by hand, so
-    # nothing signs it. Run kmodigest on the installed module instead.
     boot.extraModulePackages = [
       config.boot.kernelPackages.it87
-      (config.boot.kernelPackages.ryzen-smu.overrideAttrs (old: {
-        postInstall =
-          (old.postInstall or "")
-          + ''
-            ko=$out/lib/modules/${config.boot.kernelPackages.kernel.modDirVersion}/kernel/drivers/ryzen_smu/ryzen_smu.ko
-            chmod u+w "$ko"
-            ${lib.getExe pkgs.buildPackages.kmodigest} "$ko"
-            chmod 444 "$ko"
-          '';
-      }))
     ];
-    boot.kernelModules = ["kvm-amd" "it87" "ryzen_smu"];
-
-    # ── PBO Curve Optimizer tuning: corecycler ──────────────────────────
-    # Loads msr and adds the user to its device-access group; ryzen_smu
-    # and it87 are declared above instead (ryzenSmu = false). Out-of-tree
-    # modules load under Secure Boot because lockdown is off and module
-    # signatures aren't enforced. MCE detection shells out to dmesg, which
-    # hardening.nix restricts (dmesg_restrict = 1 outranks the module's
-    # mkDefault 0), so run the headless tuner as root:
-    # `sudo corecycler tune --config F`, `sudo corecycler resume`.
-    services.corecycler = {
-      enable = true;
-      ryzenSmu = false;
-      unfreeBackends = true; # mprime + y-cruncher
-      deviceAccessUser = "joshsymonds";
-    };
+    boot.kernelModules = ["kvm-amd" "it87"];
 
     # ── GPU tuning: LACT ────────────────────────────────────────────────
     # LACT sets the RTX 5070 Ti's power limit and clock offsets through
     # NVML, which works on Wayland. settings mirrors the config.yaml that
     # `lact cli power-limit set` wrote (schema version 7), so
     # /etc/lact/config.yaml is a read-only symlink and the GUI can't save.
-    # Test clock offsets live with an NVML CLI, then add the stable ones
-    # here. The GPU key carries the PCI address, so moving the card to
-    # another slot changes it (`lact cli list`).
+    # Test clock offsets live with nvidia_oc (NVML; gone on reboot or a
+    # lactd restart), then add the stable ones here. The GPU key carries
+    # the PCI address, so moving the card to another slot changes it
+    # (`lact cli list`).
     # power_cap 350: the vBIOS maximum (default 300). Raising it changes no
     # voltage, only how long boost clocks hold under load.
     # Superposition (in systemPackages below) is the native benchmark for
-    # A/B scores and stability loops.
+    # A/B scores and stability loops; MangoHud (home-manager) is the
+    # in-game clock/temperature/power overlay.
     services.lact = {
       enable = true;
       settings = {
@@ -739,7 +709,8 @@ in
     };
 
     # ── Unattended recovery from a hard lock ────────────────────────────
-    # A too-deep undervolt can freeze the machine outright. systemd pets
+    # An unstable undervolt or overclock can freeze the machine outright
+    # (the Nov 2026 Curve Optimizer tuning did, repeatedly). systemd pets
     # the SP5100 TCO watchdog; if it stops for 60s, the chipset resets the
     # board. hardlockup_panic turns an NMI-detected stuck CPU into a panic,
     # and kernel.panic reboots 10s later. TPM-sealed LUKS (PCR 7) then
@@ -843,7 +814,7 @@ in
     # policies never match. See the module for the full reasoning.
     services.cloudflareWarpDns.enable = true;
 
-    environment.systemPackages = with pkgs; [sbctl tailscale unigine-superposition];
+    environment.systemPackages = with pkgs; [sbctl tailscale unigine-superposition nvidia_oc];
 
     # Wired LAN comes up in 1-3s when the cable is live; without this cap,
     # systemd-networkd-wait-online holds network-online.target for the full

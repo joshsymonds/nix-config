@@ -38,9 +38,11 @@ Ephemeral NixOS boxes run in us-west-2 or eu-west-1 for work that outgrows
 the home hosts. The `ec2` command runs on vermissian and gnomon, the only
 hosts with its AWS credentials.
 
-- `ec2 up <class>` starts a box of a class. `ec2 up --type <t> --disk <gb>
-  [--spot]` starts an ad-hoc box; `--disk` is at most 512. `ec2 help` lists the
-  classes.
+- `ec2 up <class> [--spot-only]` starts a box of a class. `ec2 up <class> --type
+  <t>` puts it on type t with the class's name, tags, disk and toplevel; the
+  class's module must suit t. `ec2 up --type <t> --disk <gb> [--spot |
+  --spot-only]` starts an ad-hoc box; `--disk` is at most 512. `ec2 help` lists
+  the classes. A class takes no `--disk` or `--spot`.
 - `ec2 up <class> [--override-input <input> <flake-url>]...` builds the class
   toplevel with those flake input overrides. The flag repeats and works only
   for class launches.
@@ -51,6 +53,9 @@ hosts with its AWS credentials.
   regions ranked by AWS spot placement score and ties going to the cheaper
   spot price, then on-demand in the cheapest region first. The launch prints
   `market spot <zone>` or `market on-demand` before the ready line.
+  `--spot-only` (class or ad hoc) makes spot attempts only, never on-demand.
+  With no zone placing a box, the launch fails naming spot. A `spot = false`
+  class refuses it. Ad hoc, it implies `--spot`.
 - `ec2 ls` lists pending and running boxes. `ec2 down <name>` terminates one.
 - Names are `<class>-xxx`, or `ec2-xxx` for ad-hoc boxes. Connect with
   `ssh joshsymonds@<name>`. A box keeps its name on the tailnet across reboots.

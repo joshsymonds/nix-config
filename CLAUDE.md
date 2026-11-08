@@ -104,4 +104,6 @@ larger, and a `fleet-max-hours` tag above 48 counts as the 24-hour default.
 3. `nix flake check`
 4. `update`
 5. `ec2 up <class>` launches a box. The first launch after a base change
-   rebuilds the base AMI, which takes minutes.
+   rebuilds the base AMI, which takes minutes. Concurrent launches on one host
+   in the same region build the base AMI once; the others wait for that build
+   and reuse its image.

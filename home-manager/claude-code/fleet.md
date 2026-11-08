@@ -46,6 +46,9 @@ hosts with its AWS credentials.
 - `ec2 up <class> [--override-input <input> <flake-url>]...` builds the class
   toplevel with those flake input overrides. The flag repeats and works only
   for class launches.
+- Several `ec2 up` launches on one host that need a new base image in the same
+  region build it once. Each other launch prints a line saying it is waiting for
+  the base image, waits for that build, and reuses its image.
 - A class with `reboot = true` deploys with switch-to-configuration boot,
   reboots, and waits for a new boot id before the ready line. `<name> ready`
   stays the last stdout line.

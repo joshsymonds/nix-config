@@ -318,7 +318,7 @@ exit_if_signalled() {
 # keeping the newest two and every AMI created within the last 24 hours. Sets
 # base_ami to the new AMI.
 build_base_image() {
-  local r=$1 tl=$2 image_out image_file snap stamp reg described prune_rows cutoff
+  local r=$1 tl=$2 image_out image_file snap stamp reg described prune_rows cutoff err
   local -a fields
   local old_snap
   image_out=$(nix build --no-link --print-out-paths "$flake#ec2-base-image") ||
@@ -363,12 +363,22 @@ build_base_image() {
     | [.ImageId] + [.BlockDeviceMappings[]?.Ebs.SnapshotId // empty]
     | @tsv' <<<"$described") || die "cannot read the base AMIs to prune"
   if [ -n "$prune_rows" ]; then
+    # An image or snapshot already gone counts as pruned. Any other error ends the
+    # launch, with the aws error text on stderr.
     while IFS=$'\t' read -r -a fields; do
-      ec2_in "$r" deregister-image --image-id "${fields[0]}" >/dev/null ||
-        die "could not deregister ${fields[0]}"
+      if ! err=$(ec2_in "$r" deregister-image --image-id "${fields[0]}" 2>&1 >/dev/null); then
+        if [[ $err != *"(InvalidAMIID.NotFound)"* && $err != *"(InvalidAMIID.Unavailable)"* ]]; then
+          printf '%s\n' "$err" >&2
+          die "could not deregister ${fields[0]}"
+        fi
+      fi
       for old_snap in "${fields[@]:1}"; do
-        ec2_in "$r" delete-snapshot --snapshot-id "$old_snap" >/dev/null ||
-          die "could not delete snapshot $old_snap of ${fields[0]}"
+        if ! err=$(ec2_in "$r" delete-snapshot --snapshot-id "$old_snap" 2>&1 >/dev/null); then
+          if [[ $err != *"(InvalidSnapshot.NotFound)"* ]]; then
+            printf '%s\n' "$err" >&2
+            die "could not delete snapshot $old_snap of ${fields[0]}"
+          fi
+        fi
       done
     done <<<"$prune_rows"
   fi

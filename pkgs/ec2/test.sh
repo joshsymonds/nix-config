@@ -261,7 +261,15 @@ case "$2" in
       eu-west-1) echo ami-irelandnew0005 ;;
     esac
     ;;
-  deregister-image | delete-snapshot) : ;;
+  deregister-image | delete-snapshot)
+    # gone-<id> holds the error code AWS returns for an image or snapshot that
+    # another launch already removed.
+    if [ -e "$rdir/gone-$4" ]; then
+      code=$(cat "$rdir/gone-$4")
+      echo "aws: [ERROR]: An error occurred ($code) when calling the $2 operation: '$4' is no longer available" >&2
+      exit 254
+    fi
+    ;;
   wait)
     # running-fail-left holds how many more instance-running waits fail.
     if [ "$3" = instance-running ] && [ -e "$STUB_FIXTURES/running-fail-left" ]; then
@@ -1188,6 +1196,19 @@ rebuild_run up commonframe-gate
 expect_status 0 "up with three base AMIs made in the last 24 hours"
 expect_no_fixed "deregister-image" "up with recent base AMIs deregisters no base AMI made in the last 24 hours"
 expect_no_fixed "delete-snapshot" "up with recent base AMIs deletes no snapshot of a base AMI made in the last 24 hours"
+
+# An image or snapshot the prune finds already gone is counted as pruned, and the
+# launch goes on. A gone-<id> file names the code the stub answers for <id>.
+use_images images-stale images-registered
+echo InvalidAMIID.Unavailable >"$STUB_FIXTURES/gone-ami-middle00000002"
+echo InvalidAMIID.NotFound >"$STUB_FIXTURES/gone-ami-oldest000000001"
+echo InvalidSnapshot.NotFound >"$STUB_FIXTURES/gone-snap-0a1d00000000011"
+rebuild_run up commonframe-gate
+rm -f "$STUB_FIXTURES"/gone-*
+expect_status 0 "up when the prune finds images and a snapshot already gone"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up when the prune finds images already gone prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up when the prune finds images already gone: the ready line is not the last stdout line"
 
 # A newest base AMI that is still pending is never launched. Here the newest
 # available AMI carries another toplevel, so the image is rebuilt instead.

@@ -11,7 +11,7 @@
     diskGb = 200;
     spot = true;
     cache = true;
-    idleMinutes = 30;
+    idleMinutes = 5;
     maxHours = 24;
     module = ./classes/commonframe-gate.nix;
   };
@@ -31,7 +31,7 @@
     diskGb = 200;
     spot = true;
     cache = true;
-    idleMinutes = 30;
+    idleMinutes = 5;
     maxHours = 12;
     reboot = true;
     module = ./classes/commonframe-gpu.nix;

@@ -426,10 +426,11 @@ create_userdata() {
     die "cannot write the user-data file"
 }
 
-# cmd_up <class> [--override-input <input> <flake-url>]... | --type <t> --disk <gb>
-# [--spot] [--spot-only]: launches a box, waits for ssh on the tailnet, and for a class
-# deploys its toplevel built with each input override. --spot-only makes spot attempts
-# only; an ad-hoc box implies --spot.
+# cmd_up <class> [--type <t>] [--override-input <input> <flake-url>]... | --type <t>
+# --disk <gb> [--spot] [--spot-only]: launches a box, waits for ssh on the tailnet, and
+# for a class deploys its toplevel built with each input override. --type runs a class's
+# box on that type instead of the class's own. --spot-only makes spot attempts only; an
+# ad-hoc box implies --spot.
 cmd_up() {
   local class="" type="" disk="" spot=no spot_only=no timeout
   local classes row itype disk_gb spot_req max_hours reboot_req cache_req fleet_class prefix
@@ -441,7 +442,7 @@ cmd_up() {
   while [ $# -gt 0 ]; do
     case "$1" in
       --type)
-        [ $# -ge 2 ] || die "--type needs a value"
+        [ $# -ge 2 ] && [ -n "$2" ] || die "--type needs a value"
         type=$2
         shift 2
         ;;
@@ -474,8 +475,8 @@ cmd_up() {
   done
 
   if [ -n "$class" ]; then
-    if [ -n "$type$disk" ] || [ "$spot" = yes ]; then
-      die "a class takes no --type, --disk or --spot"
+    if [ -n "$disk" ] || [ "$spot" = yes ]; then
+      die "a class takes no --disk or --spot"
     fi
   else
     if [ ${#overrides[@]} -gt 0 ]; then
@@ -498,6 +499,9 @@ cmd_up() {
       else empty end' <<<"$classes") || die "cannot read the class data"
     [ -n "$row" ] || die "unknown class: $class (see: ec2 help)"
     IFS=$'\t' read -r itype disk_gb spot_req max_hours reboot_req cache_req <<<"$row"
+    if [ -n "$type" ]; then
+      itype=$type
+    fi
     if [ "$spot_only" = yes ] && [ "$spot_req" != yes ]; then
       die "$class is not a spot class; --spot-only needs one"
     fi
@@ -761,14 +765,15 @@ cmd_help() {
 ec2 - launch, list, and terminate fleet boxes in us-west-2 and eu-west-1
 
 Usage:
-  ec2 up <class>                          start a box of a class
+  ec2 up <class> [--type <t>]             start a box of a class, on type t with --type
   ec2 up --type <t> --disk <gb> [--spot]  start an ad-hoc box
   ec2 ls                                  list pending and running fleet boxes
   ec2 down <name>                         terminate a fleet box
   ec2 help                                show this help
 
 Flags:
-  --type <t>    EC2 instance type for an ad-hoc box
+  --type <t>    EC2 instance type for an ad-hoc box; for a class, the type its
+                box runs on in place of the class's own
   --disk <gb>   root volume size in GB for an ad-hoc box
   --spot        request spot capacity for an ad-hoc box
   --spot-only   make spot attempts only, with no on-demand fallback; an ad-hoc

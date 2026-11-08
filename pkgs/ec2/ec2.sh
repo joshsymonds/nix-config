@@ -9,11 +9,16 @@ flake=${EC2_FLEET_FLAKE:-$HOME/nix-config}
 # launched is the instance cmd_up started and has not finished deploying;
 # launched_region is the region it runs in; userdata is the temp file holding
 # the auth key until run-instances reads it; runerr is the temp file holding the
-# stderr of run-instances.
+# stderr of run-instances. client_token is the --client-token of the run-instances
+# call that failed without a known refusal, and client_region the region it ran in;
+# lookup_interval is the seconds between the lookups for that token.
 launched=""
 launched_region=""
 userdata=""
 runerr=""
+client_token=""
+client_region=""
+lookup_interval=""
 # base_ami is the AMI ensure_base_ami found or built; region_ami and region_sg
 # hold each region's base AMI and security group once the walk reaches it.
 base_ami=""
@@ -235,8 +240,35 @@ cmd_down() {
   echo "terminating $ids ($name)"
 }
 
+# lookup_client_token <region> <token>: finds the instances run-instances started
+# under the client token in the region and terminates them. A failed call may
+# still be landing its box, so it looks up to six times, lookup_interval seconds
+# apart, and stops at the first match.
+lookup_client_token() {
+  local r=$1 tok=$2 i described ids
+  local -a found=()
+  for i in 1 2 3 4 5 6; do
+    described=$(ec2_in "$r" describe-instances --output json --filters "Name=client-token,Values=$tok") || described=
+    ids=$(jq -r '[.Reservations[].Instances[] | select(.State.Name != "terminated") | .InstanceId] | join(" ")' <<<"$described") || ids=
+    if [ -n "$ids" ]; then
+      read -r -a found <<<"$ids"
+      if ec2_in "$r" terminate-instances --instance-ids "${found[@]}" >/dev/null; then
+        echo "ec2: terminating ${found[*]}, started under client token $tok in $r" >&2 || :
+      else
+        echo "ec2: could not terminate ${found[*]}; terminate it by hand" >&2 || :
+      fi
+      return
+    fi
+    if [ "$i" -lt 6 ]; then
+      sleep "$lookup_interval"
+    fi
+  done
+  echo "ec2: no instance was found for client token $tok in $r; check for a new fleet=ec2 box" >&2 || :
+}
+
 # on_exit: when the launcher exits nonzero after run-instances, terminates the
-# launched instance and removes the auth-key temp file.
+# launched instance, or looks up the box of a failed run-instances call by its
+# client token, and removes the auth-key temp file.
 on_exit() {
   local status=$?
   if [ "$status" -ne 0 ] && [ -n "$launched" ]; then
@@ -245,6 +277,8 @@ on_exit() {
     if ! ec2_in "$launched_region" terminate-instances --instance-ids "$launched" >/dev/null; then
       echo "ec2: could not terminate $launched; terminate it by hand" >&2 || :
     fi
+  elif [ "$status" -ne 0 ] && [ -n "$client_token" ]; then
+    lookup_client_token "$client_region" "$client_token"
   fi
   if [ -n "$userdata" ]; then
     rm -f -- "$userdata"
@@ -425,6 +459,8 @@ cmd_up() {
   fi
   timeout=${EC2_FLEET_READY_TIMEOUT:-600}
   [[ $timeout =~ ^[0-9]+$ ]] || die "EC2_FLEET_READY_TIMEOUT must be whole seconds"
+  lookup_interval=${EC2_FLEET_LOOKUP_INTERVAL:-5}
+  [[ $lookup_interval =~ ^[0-9]+$ ]] || die "EC2_FLEET_LOOKUP_INTERVAL must be whole seconds"
 
   if [ -n "$class" ]; then
     classes=$(nix eval --json "$flake#ec2Classes") || die "cannot evaluate ec2Classes in $flake"
@@ -538,12 +574,17 @@ cmd_up() {
     else
       market_line="market on-demand"
     fi
+    # Each call carries a fresh client token, recorded with its region before the
+    # call, so a call that fails without a known refusal can be looked up by it.
+    client_token=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n') || die "cannot make a client token"
+    client_region=$aregion
     if reply=$(ec2_in "$aregion" run-instances --output text --query 'Instances[0].InstanceId' \
       --image-id "${region_ami[$aregion]}" --instance-type "$itype" --count 1 \
       --block-device-mappings "DeviceName=/dev/xvda,Ebs={VolumeSize=$disk_gb,VolumeType=gp3,DeleteOnTermination=true}" \
       --network-interfaces "DeviceIndex=0,AssociatePublicIpAddress=true,Groups=${region_sg[$aregion]}" \
       --metadata-options 'HttpTokens=required,HttpPutResponseHopLimit=1,HttpEndpoint=enabled' \
       --instance-initiated-shutdown-behavior terminate \
+      --client-token "$client_token" \
       --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=$fleet_class},{Key=fleet-max-hours,Value=$max_hours}]" \
         "ResourceType=volume,Tags=[{Key=fleet,Value=ec2},{Key=Name,Value=$name}]" \
       --user-data "file://$userdata" "${place[@]}" "${market[@]}" "${profile[@]}" 2>"$runerr"); then
@@ -552,6 +593,8 @@ cmd_up() {
       launched_region=$aregion
       cat -- "$runerr" >&2
       [ -n "$id" ] || die "run-instances returned no instance id; check for a new fleet=ec2 box"
+      client_token=""
+      client_region=""
       if ec2_in "$aregion" wait instance-running --instance-ids "$id"; then
         break
       fi
@@ -568,25 +611,33 @@ cmd_up() {
       userdata=""
       continue
     fi
+    # A known refusal launched nothing, so its client token is cleared. Any other
+    # failure keeps the token for on_exit to look up.
     if grep -q InsufficientInstanceCapacity "$runerr"; then
+      client_token=""
+      client_region=""
       echo "ec2: no $kind capacity for $itype in ${zone:-$aregion}" >&2
       continue
     fi
     # A RequestLimitExceeded that names an availability zone is throttling of
     # that zone; one that names none is account-level and stops the launch.
     if [ -n "$zone" ] && grep -E -q 'RequestLimitExceeded.*availability zone [a-z0-9-]+' "$runerr"; then
+      client_token=""
+      client_region=""
       echo "ec2: $kind launch throttled in $zone" >&2
       continue
     fi
     # A spot or on-demand quota refusal names the market's quota; the market's
     # attempts in this region are skipped, and the walk goes on.
     if grep -q -E 'MaxSpotInstanceCountExceeded|VcpuLimitExceeded' "$runerr"; then
+      client_token=""
+      client_region=""
       echo "ec2: $kind quota reached for $itype in $aregion; skipping its $kind attempts there" >&2
       quota_skip[$kind:$aregion]=yes
       continue
     fi
     cat -- "$runerr" >&2
-    die "run-instances failed; nothing was launched"
+    die "run-instances failed"
   done
   rm -f -- "$runerr"
   runerr=""

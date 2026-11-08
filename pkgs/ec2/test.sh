@@ -23,6 +23,7 @@ BODY='{"capabilities":{"devices":{"create":{"reusable":false,"ephemeral":true,"p
 export STUB_LOG STUB_REGION_LOG STUB_FIXTURES
 export PATH="$work/bin:$PATH"
 export EC2_FLEET_FLAKE=/fixture/flake
+export EC2_FLEET_LOOKUP_INTERVAL=0
 export XDG_STATE_HOME="$work/state"
 export TMPDIR="$work/tmp"
 # The region is named only by the launcher's own calls, so a call that forgets
@@ -107,7 +108,25 @@ esac
 }
 printf '%s %s\n' "$AWS_REGION" "$*" >>"$STUB_REGION_LOG"
 case "$2" in
-  describe-instances) cat "$rdir/instances.json" ;;
+  describe-instances)
+    # A client-token filter answers only with the boxes recorded under that token
+    # in this region; any other describe answers with the fixture fleet.
+    token=
+    for a in "$@"; do
+      case "$a" in
+        Name=client-token,Values=*) token=${a#Name=client-token,Values=} ;;
+      esac
+    done
+    if [ -n "$token" ]; then
+      if [ -e "$rdir/by-token/$token.json" ]; then
+        cat "$rdir/by-token/$token.json"
+      else
+        echo '{"Reservations":[]}'
+      fi
+    else
+      cat "$rdir/instances.json"
+    fi
+    ;;
   describe-spot-price-history)
     prev=
     itype=
@@ -183,6 +202,26 @@ case "$2" in
         echo "An error occurred (VcpuLimitExceeded) when calling the RunInstances operation: You have requested more vCPU capacity than your current vCPU limit of 640 allows for the instance bucket that the specified instance type belongs to." >&2
       fi
       exit 1
+    fi
+    # timeout-<zone> and no-id-<zone> (timeout-unplaced and no-id-unplaced for a
+    # launch with no placement) start a box under the call's --client-token in the
+    # region's directory, so describe-instances sees it there only. timeout-<key>
+    # then times out with an unrecognised error; no-id-<key> answers with no id.
+    key=${zone:-unplaced}
+    if [ -e "$rdir/timeout-$key" ] || [ -e "$rdir/no-id-$key" ]; then
+      prev=
+      tok=
+      for a in "$@"; do
+        if [ "$prev" = --client-token ]; then tok=$a; fi
+        prev=$a
+      done
+      mkdir -p "$rdir/by-token" || exit 1
+      printf '%s\n' '{"Reservations":[{"Instances":[{"InstanceId":"i-0launched00000001","State":{"Name":"pending"},"Tags":[]}]}]}' >"$rdir/by-token/$tok.json" || exit 1
+      if [ -e "$rdir/no-id-$key" ]; then
+        exit 0
+      fi
+      echo "An error occurred (RequestTimeout) when calling the RunInstances operation: Request timed out." >&2
+      exit 255
     fi
     if [ -e "$rdir/account-throttle" ]; then
       echo "An error occurred (RequestLimitExceeded) when calling the RunInstances operation (reached max retries: 2): Request limit exceeded." >&2
@@ -757,7 +796,13 @@ clear_faults() {
   rm -f "$STUB_FIXTURES/switch-status" "$STUB_FIXTURES/failed-units"
   for dir in "$STUB_FIXTURES" "$STUB_FIXTURES/eu-west-1"; do
     rm -f "$dir"/no-capacity-* "$dir"/other-error-* "$dir"/throttle-* "$dir"/account-throttle "$dir"/quota-*
+    rm -f "$dir"/timeout-* "$dir"/no-id-*
+    rm -rf -- "$dir/by-token"
   done
+}
+# client_token_of <n>: the --client-token of run-instances call number <n>.
+client_token_of() {
+  grep '^aws ec2 run-instances ' "$STUB_LOG" | sed -n "$1p" | grep -o -- '--client-token [^ ]*' | cut -d' ' -f2
 }
 # expect_run_count <desc> <n>: run-instances was called exactly n times.
 expect_run_count() {
@@ -1323,6 +1368,109 @@ expect_no_out '^market ' "up with an account-level throttle prints no market lin
 expect_no_fixed "wait instance-running" "up with an account-level throttle waits for no instance"
 expect_no_fixed "terminate-instances" "up with an account-level throttle terminates nothing"
 clear_faults
+
+# A run-instances call that times out after starting a box: the launcher looks the
+# box up by the attempt's client token in its region, terminates it, and exits
+# nonzero.
+: >"$STUB_FIXTURES/timeout-us-west-2a"
+run up commonframe-gate
+tok=$(client_token_of 1)
+[ -n "$tok" ] || fail "up with run-instances timing out after a box started: run-instances carried no --client-token"
+expect_nonzero "up commonframe-gate with run-instances timing out after a box started"
+expect_err 'RequestTimeout' "up with run-instances timing out after a box started prints the error"
+expect_run_count "up with run-instances timing out after a box started" 1
+expect_region "up with run-instances timing out after a box started looks up its token in us-west-2" us-west-2 \
+  "describe-instances" "Name=client-token,Values=$tok"
+expect_region "up with run-instances timing out after a box started terminates the box in us-west-2" us-west-2 \
+  "terminate-instances --instance-ids i-0launched00000001"
+expect_terminated "up with run-instances timing out after a box started"
+clear_faults
+
+# run-instances answers with no id after starting a box: the launch is a failure
+# with no launched instance, so the lookup by token finds and terminates the box.
+: >"$STUB_FIXTURES/no-id-us-west-2a"
+run up commonframe-gate
+tok=$(client_token_of 1)
+[ -n "$tok" ] || fail "up with run-instances returning no id: run-instances carried no --client-token"
+expect_nonzero "up commonframe-gate with run-instances returning no id"
+expect_err 'run-instances returned no instance id' "up with run-instances returning no id names the missing id"
+expect_run_count "up with run-instances returning no id" 1
+expect_region "up with run-instances returning no id looks up its token in us-west-2" us-west-2 \
+  "describe-instances" "Name=client-token,Values=$tok"
+expect_terminated "up with run-instances returning no id"
+clear_faults
+
+# An unrecognised run-instances error that started nothing: the lookup makes its six
+# tries in us-west-2, finds no box, terminates nothing, and names the token and the
+# region on stderr. The message no longer says nothing was launched.
+: >"$STUB_FIXTURES/other-error-us-west-2a"
+run up commonframe-gate
+tok=$(client_token_of 1)
+[ -n "$tok" ] || fail "up with an unrecognised run-instances error: run-instances carried no --client-token"
+expect_nonzero "up commonframe-gate with an unrecognised run-instances error"
+expect_run_count "up with an unrecognised run-instances error" 1
+lookups=$(grep -F -- "Name=client-token,Values=$tok" "$STUB_REGION_LOG" | grep -c '^us-west-2 ')
+[ "$lookups" -eq 6 ] || fail "up with an unrecognised run-instances error: want 6 lookups in us-west-2, got $lookups"
+[ "$(grep -c -F 'Name=client-token' "$STUB_REGION_LOG")" -eq 6 ] || fail "up with an unrecognised run-instances error: lookups outside us-west-2"
+expect_err "no instance was found for client token $tok in us-west-2" "up with an unrecognised run-instances error names the token and region"
+expect_no_fixed "terminate-instances" "up with an unrecognised run-instances error terminates nothing"
+if grep -F -q 'nothing was launched' "$ERR"; then
+  fail "up with an unrecognised run-instances error still says nothing was launched"
+fi
+clear_faults
+
+# A capacity refusal clears its token: the unrecognised error after it looks up only
+# the failed attempt's token, and a launch with no failure looks up nothing.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/other-error-us-west-2b"
+run up commonframe-gate
+first=$(client_token_of 1)
+tok=$(client_token_of 2)
+[ -n "$first" ] && [ -n "$tok" ] && [ "$first" != "$tok" ] || fail "up after a capacity refusal: attempts did not carry distinct client tokens"
+expect_run_count "up after a capacity refusal" 2
+expect_region "up after a capacity refusal looks up the failed attempt's token in us-west-2" us-west-2 \
+  "Name=client-token,Values=$tok"
+expect_no_region "up after a capacity refusal does not look up the refused attempt's token" us-west-2 \
+  "Values=$first"
+clear_faults
+
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+run up commonframe-gate
+expect_status 0 "up commonframe-gate after a capacity refusal"
+expect_no_fixed "describe-instances" "up after a capacity refusal and a launch looks up no token"
+clear_faults
+
+# The walk's failed attempt is the fourth, in Ireland: each attempt carries its own
+# client token, and the lookup filters on the failed attempt's token in eu-west-1
+# alone.
+for zone in us-west-2a us-west-2b us-west-2c; do
+  : >"$STUB_FIXTURES/no-capacity-$zone"
+done
+: >"$STUB_FIXTURES/eu-west-1/timeout-eu-west-1a"
+run up --type g4dn.xlarge --disk 40 --spot
+expect_nonzero "spot up with run-instances timing out in eu-west-1a"
+expect_run_count "spot up with run-instances timing out in eu-west-1a" 4
+distinct=$(grep '^aws ec2 run-instances ' "$STUB_LOG" | grep -o -- '--client-token [^ ]*' | sort -u | wc -l)
+[ "$distinct" -eq 4 ] || fail "spot up with run-instances timing out in eu-west-1a: want 4 distinct client tokens, got $distinct"
+tok=$(client_token_of 4)
+[ -n "$tok" ] || fail "spot up with run-instances timing out in eu-west-1a: run-instances carried no --client-token"
+expect_region "spot up with run-instances timing out in eu-west-1a looks up the failed token in eu-west-1" eu-west-1 \
+  "describe-instances" "Name=client-token,Values=$tok"
+expect_no_region "spot up with run-instances timing out in eu-west-1a looks up no token in us-west-2" us-west-2 \
+  "Name=client-token"
+[ "$(grep -c -F 'Name=client-token' "$STUB_REGION_LOG")" -eq 1 ] || fail "spot up with run-instances timing out in eu-west-1a: want one lookup"
+expect_region "spot up with run-instances timing out in eu-west-1a terminates the box in eu-west-1" eu-west-1 \
+  "terminate-instances --instance-ids i-0launched00000001"
+expect_terminated "spot up with run-instances timing out in eu-west-1a"
+clear_faults
+
+# The lookup interval is read as whole seconds, like the ready timeout.
+export EC2_FLEET_LOOKUP_INTERVAL=soon
+run up commonframe-gate
+export EC2_FLEET_LOOKUP_INTERVAL=0
+expect_nonzero "up with EC2_FLEET_LOOKUP_INTERVAL not whole seconds"
+expect_err 'EC2_FLEET_LOOKUP_INTERVAL must be whole seconds' "up with EC2_FLEET_LOOKUP_INTERVAL not whole seconds names the knob"
+expect_run_count "up with EC2_FLEET_LOOKUP_INTERVAL not whole seconds" 0
 
 # The region walk: a type offered in both regions tries Oregon's spot zones, then
 # Ireland's; then, for every launch, Oregon's on-demand zones and its unplaced

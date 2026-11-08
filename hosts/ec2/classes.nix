@@ -7,7 +7,7 @@
 # fleet S3 cache mount on the box (ec2Fleet.s3Cache.enable).
 {
   commonframe-gate = {
-    instanceType = "c8a.16xlarge";
+    instanceType = "c8a.4xlarge";
     diskGb = 200;
     spot = true;
     cache = true;

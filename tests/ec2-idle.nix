@@ -110,7 +110,7 @@ in
       # in the background; the compiler server replaces the shell in the
       # foreground, so the session holds only those two processes.
       buildServers.succeed("install -m 0600 ${keys.snakeOilEd25519PrivateKey} /run/build-key")
-      buildServers.succeed("ssh -n -i /run/build-key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null joshsymonds@localhost '${dotnet}/bin/dotnet /usr/share/dotnet/sdk/10.0.401/MSBuild.dll /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false & exec ${vbcsCompiler}/bin/VBCSCompiler -pipename:build' >/dev/null 2>&1 & echo $! > /run/build-ssh.pid")
+      buildServers.succeed("ssh -n -i /run/build-key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null joshsymonds@localhost '${dotnet}/bin/dotnet /usr/share/dotnet/sdk/10.0.401/MSBuild.dll /noautoresponse /nologo /nodemode:1 /nodeReuse:true /low:false & exec ${vbcsCompiler}/bin/VBCSCompiler -pipename:build' >/dev/null 2>&1 &")
       buildServers.wait_until_succeeds("pgrep -x VBCSCompiler", timeout=60)
       buildServers.wait_until_succeeds("pgrep -x dotnet", timeout=60)
       buildServers.succeed("test \"$(cat /proc/$(pgrep -x VBCSCompiler)/comm)\" = VBCSCompiler")

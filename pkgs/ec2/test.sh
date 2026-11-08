@@ -922,6 +922,7 @@ expect_out 'fleet-max-hours' "help states the warden age rule"
 expect_out 'ec2 up <class>' "help lists up <class>"
 expect_out 'ec2 up --type' "help lists up --type"
 expect_out '--spot' "help lists --spot"
+expect_out '--spot-only' "help lists --spot-only"
 expect_out '--override-input <input> <flake-url>' "help lists --override-input"
 expect_out 'ec2 ls' "help lists ls"
 expect_out 'ec2 down <name>' "help lists down"
@@ -1335,6 +1336,60 @@ expect_run_count "up with every zone out of capacity" 7
 expect_err 'no on-demand capacity for c8a\.4xlarge in us-west-2c$' "up with every zone out of capacity names the on-demand zone skipped"
 expect_userdata "up with every zone out of capacity" "$name"
 expect_no_fixed "terminate-instances" "up with every zone out of capacity terminates nothing on success"
+clear_faults
+
+# up --spot-only: every spot zone out of capacity fails the launch with no
+# on-demand attempt, and the failure names spot. The spot zones run in sorted order.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+: >"$STUB_FIXTURES/no-capacity-us-west-2c"
+run up commonframe-gate --spot-only
+expect_nonzero "up commonframe-gate --spot-only with every spot zone out of capacity"
+expect_placements "up commonframe-gate --spot-only with every spot zone out of capacity" \
+  "zone us-west-2a spot" "zone us-west-2b spot" "zone us-west-2c spot"
+expect_run_count "up commonframe-gate --spot-only with every spot zone out of capacity" 3
+expect_err 'no region could launch c8a\.4xlarge as spot; nothing was launched' "up commonframe-gate --spot-only with every spot zone out of capacity names spot"
+expect_no_out '^market ' "up commonframe-gate --spot-only with every spot zone out of capacity prints no market line"
+clear_faults
+
+# up --spot-only placing on the first try: the spot market line and the ready line.
+run up commonframe-gate --spot-only
+expect_status 0 "up commonframe-gate --spot-only placing first try"
+expect_out '^market spot us-west-2a$' "up commonframe-gate --spot-only placing first try prints the spot market line"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up commonframe-gate --spot-only placing first try prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up commonframe-gate --spot-only placing first try does not end with the ready line"
+expect_placements "up commonframe-gate --spot-only placing first try" "zone us-west-2a spot"
+expect_run_count "up commonframe-gate --spot-only placing first try" 1
+expect_userdata "up commonframe-gate --spot-only placing first try" "$name"
+expect_no_fixed "terminate-instances" "up commonframe-gate --spot-only placing first try terminates nothing"
+clear_faults
+
+# up --spot-only on a spot-false class is refused before any AWS, Tailscale, ssh or
+# nix build call.
+run up muniment-runner --spot-only
+expect_nonzero "up muniment-runner --spot-only"
+expect_err 'not a spot class' "up muniment-runner --spot-only names the refusal"
+expect_no_log '^(aws|curl|ssh) |nix build' "up muniment-runner --spot-only calls no AWS, Tailscale, ssh or nix build"
+
+# Ad-hoc --spot-only implies --spot: every spot zone out of capacity fails the launch
+# with no on-demand attempt, and the failure names spot.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+run up --type c8a.large --disk 40 --spot-only
+expect_nonzero "ad-hoc up --spot-only with every spot zone out of capacity"
+expect_placements "ad-hoc up --spot-only with every spot zone out of capacity" \
+  "zone us-west-2a spot" "zone us-west-2b spot"
+expect_run_count "ad-hoc up --spot-only with every spot zone out of capacity" 2
+expect_err 'no region could launch c8a\.large as spot; nothing was launched' "ad-hoc up --spot-only with every spot zone out of capacity names spot"
+expect_no_out '^market on-demand$' "ad-hoc up --spot-only with every spot zone out of capacity prints no on-demand market line"
+clear_faults
+
+# Ad-hoc --spot-only placing on the first try requests spot.
+run up --type c8a.large --disk 40 --spot-only
+expect_status 0 "ad-hoc up --spot-only placing first try"
+expect_out '^market spot us-west-2a$' "ad-hoc up --spot-only placing first try prints the spot market line"
+expect_placements "ad-hoc up --spot-only placing first try" "zone us-west-2a spot"
 clear_faults
 
 # A non-capacity error in a zone stops the launch: no further zone, no

@@ -427,10 +427,11 @@ create_userdata() {
 }
 
 # cmd_up <class> [--override-input <input> <flake-url>]... | --type <t> --disk <gb>
-# [--spot]: launches a box, waits for ssh on the tailnet, and for a class deploys
-# its toplevel built with each input override.
+# [--spot] [--spot-only]: launches a box, waits for ssh on the tailnet, and for a class
+# deploys its toplevel built with each input override. --spot-only makes spot attempts
+# only; an ad-hoc box implies --spot.
 cmd_up() {
-  local class="" type="" disk="" spot=no timeout
+  local class="" type="" disk="" spot=no spot_only=no timeout
   local classes row itype disk_gb spot_req max_hours reboot_req cache_req fleet_class prefix
   local known_dir deadline suffix name toplevel base_path id=""
   local boot_before boot_after switch_status failed_units
@@ -453,6 +454,10 @@ cmd_up() {
         spot=yes
         shift
         ;;
+      --spot-only)
+        spot_only=yes
+        shift
+        ;;
       --override-input)
         [ $# -ge 3 ] && [ -n "$2" ] && [ -n "$3" ] ||
           die "--override-input needs an input and a flake URL"
@@ -461,7 +466,7 @@ cmd_up() {
         ;;
       --*) die "unknown flag: $1 (see: ec2 help)" ;;
       *)
-        [ -z "$class" ] || die "usage: ec2 up <class> | ec2 up --type <t> --disk <gb> [--spot]"
+        [ -z "$class" ] || die "usage: ec2 up <class> | ec2 up --type <t> --disk <gb> [--spot] [--spot-only]"
         class=$1
         shift
         ;;
@@ -477,7 +482,7 @@ cmd_up() {
       die "--override-input needs a class"
     fi
     if [ -z "$type" ] || [ -z "$disk" ]; then
-      die "usage: ec2 up --type <t> --disk <gb> [--spot]"
+      die "usage: ec2 up --type <t> --disk <gb> [--spot] [--spot-only]"
     fi
     [[ $disk =~ ^[1-9][0-9]*$ ]] || die "--disk must be a positive integer"
   fi
@@ -493,12 +498,18 @@ cmd_up() {
       else empty end' <<<"$classes") || die "cannot read the class data"
     [ -n "$row" ] || die "unknown class: $class (see: ec2 help)"
     IFS=$'\t' read -r itype disk_gb spot_req max_hours reboot_req cache_req <<<"$row"
+    if [ "$spot_only" = yes ] && [ "$spot_req" != yes ]; then
+      die "$class is not a spot class; --spot-only needs one"
+    fi
     fleet_class=$class
     prefix=$class
   else
     itype=$type
     disk_gb=$disk
     spot_req=$spot
+    if [ "$spot_only" = yes ]; then
+      spot_req=yes
+    fi
     reboot_req=no
     cache_req=no
     max_hours=24
@@ -528,7 +539,8 @@ cmd_up() {
   # order, as spot. Then, for every launch, the regions offering the type are
   # ranked by on-demand price, cheapest first, and each one's zones as on-demand,
   # placed, then its one on-demand attempt with no placement. A region offering
-  # no zone for the type gets no attempt.
+  # no zone for the type gets no attempt. A spot-only launch makes the spot attempts
+  # alone.
   local ranked spot_ranked
   local -a offering=() od_regions=() spot_regions=()
   local -A region_zones=() quota_skip=()
@@ -552,15 +564,17 @@ cmd_up() {
       done
     done
   fi
-  ranked=$(rank_regions "$itype" "${offering[@]}") || die "cannot order the regions offering $itype"
-  readarray -t od_regions <<<"$ranked"
-  for r in "${od_regions[@]}"; do
-    readarray -t zones <<<"${region_zones[$r]}"
-    for zone in "${zones[@]}"; do
-      od_attempts+=("on-demand $r $zone")
+  if [ "$spot_only" != yes ]; then
+    ranked=$(rank_regions "$itype" "${offering[@]}") || die "cannot order the regions offering $itype"
+    readarray -t od_regions <<<"$ranked"
+    for r in "${od_regions[@]}"; do
+      readarray -t zones <<<"${region_zones[$r]}"
+      for zone in "${zones[@]}"; do
+        od_attempts+=("on-demand $r $zone")
+      done
+      od_attempts+=("on-demand $r")
     done
-    od_attempts+=("on-demand $r")
-  done
+  fi
   attempts=("${spot_attempts[@]}" "${od_attempts[@]}")
 
   runerr=$(mktemp) || die "cannot create a temp file"
@@ -679,7 +693,12 @@ cmd_up() {
   done
   rm -f -- "$runerr"
   runerr=""
-  [ -n "$id" ] || die "no region could launch $itype; nothing was launched"
+  if [ -z "$id" ]; then
+    if [ "$spot_only" = yes ]; then
+      die "no region could launch $itype as spot; nothing was launched"
+    fi
+    die "no region could launch $itype; nothing was launched"
+  fi
   rm -f -- "$userdata"
   userdata=""
   echo "$market_line"
@@ -752,6 +771,8 @@ Flags:
   --type <t>    EC2 instance type for an ad-hoc box
   --disk <gb>   root volume size in GB for an ad-hoc box
   --spot        request spot capacity for an ad-hoc box
+  --spot-only   make spot attempts only, with no on-demand fallback; an ad-hoc
+                box implies --spot, and a class must be a spot class
   --override-input <input> <flake-url>
                 build a class box's toplevel with a flake input overridden;
                 repeat the flag for each input (classes only)

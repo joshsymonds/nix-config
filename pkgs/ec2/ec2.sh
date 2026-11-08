@@ -19,6 +19,8 @@ runerr=""
 client_token=""
 client_region=""
 lookup_interval=""
+# signalled is the exit status of a HUP, INT or TERM noted while run-instances runs.
+signalled=""
 # base_ami is the AMI ensure_base_ami found or built; region_ami and region_sg
 # hold each region's base AMI and security group once the walk reaches it.
 base_ami=""
@@ -288,6 +290,28 @@ on_exit() {
   fi
 }
 
+# set_note_traps: while run-instances runs, HUP, INT and TERM only note the signal
+# in signalled; exit_if_signalled acts on it once the call's outcome is recorded.
+set_note_traps() {
+  trap 'signalled=129' HUP
+  trap 'signalled=130' INT
+  trap 'signalled=143' TERM
+}
+
+# set_exit_traps: HUP, INT and TERM exit with their status, so on_exit runs.
+set_exit_traps() {
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+}
+
+# exit_if_signalled: exits with the status of a signal noted during run-instances.
+exit_if_signalled() {
+  if [ -n "$signalled" ]; then
+    exit "$signalled"
+  fi
+}
+
 # build_base_image <region> <toplevel basename>: builds the raw base image, uploads
 # it in the region as a fleet=ec2-base snapshot, registers an AMI tagged with the
 # toplevel, waits for it, and prunes all but the newest two of the region's base
@@ -410,7 +434,7 @@ cmd_up() {
   local classes row itype disk_gb spot_req max_hours reboot_req cache_req fleet_class prefix
   local known_dir deadline suffix name toplevel base_path id=""
   local boot_before boot_after switch_status failed_units
-  local zone_list zone r kind aregion attempt reply market_line
+  local zone_list zone r kind aregion attempt reply run_status market_line
   local -a ssh_opts=() reboot_opts=() zones=() attempts=() spot_attempts=() od_attempts=()
   local -a place=() market=() overrides=()
   while [ $# -gt 0 ]; do
@@ -578,7 +602,12 @@ cmd_up() {
     # call, so a call that fails without a known refusal can be looked up by it.
     client_token=$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n') || die "cannot make a client token"
     client_region=$aregion
-    if reply=$(ec2_in "$aregion" run-instances --output text --query 'Instances[0].InstanceId' \
+    # The call runs in a subshell that ignores HUP, INT and TERM, so aws keeps the box
+    # it starts. A signal that arrives meanwhile is noted, and acted on below.
+    signalled=""
+    set_note_traps
+    run_status=0
+    reply=$(trap '' HUP INT TERM; ec2_in "$aregion" run-instances --output text --query 'Instances[0].InstanceId' \
       --image-id "${region_ami[$aregion]}" --instance-type "$itype" --count 1 \
       --block-device-mappings "DeviceName=/dev/xvda,Ebs={VolumeSize=$disk_gb,VolumeType=gp3,DeleteOnTermination=true}" \
       --network-interfaces "DeviceIndex=0,AssociatePublicIpAddress=true,Groups=${region_sg[$aregion]}" \
@@ -587,11 +616,14 @@ cmd_up() {
       --client-token "$client_token" \
       --tag-specifications "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=$fleet_class},{Key=fleet-max-hours,Value=$max_hours}]" \
         "ResourceType=volume,Tags=[{Key=fleet,Value=ec2},{Key=Name,Value=$name}]" \
-      --user-data "file://$userdata" "${place[@]}" "${market[@]}" "${profile[@]}" 2>"$runerr"); then
+      --user-data "file://$userdata" "${place[@]}" "${market[@]}" "${profile[@]}" 2>"$runerr") || run_status=$?
+    set_exit_traps
+    if [ "$run_status" -eq 0 ]; then
       id=$reply
       launched=$id
       launched_region=$aregion
       cat -- "$runerr" >&2
+      exit_if_signalled
       [ -n "$id" ] || die "run-instances returned no instance id; check for a new fleet=ec2 box"
       client_token=""
       client_region=""
@@ -617,6 +649,7 @@ cmd_up() {
       client_token=""
       client_region=""
       echo "ec2: no $kind capacity for $itype in ${zone:-$aregion}" >&2
+      exit_if_signalled
       continue
     fi
     # A RequestLimitExceeded that names an availability zone is throttling of
@@ -625,6 +658,7 @@ cmd_up() {
       client_token=""
       client_region=""
       echo "ec2: $kind launch throttled in $zone" >&2
+      exit_if_signalled
       continue
     fi
     # A spot or on-demand quota refusal names the market's quota; the market's
@@ -634,9 +668,11 @@ cmd_up() {
       client_region=""
       echo "ec2: $kind quota reached for $itype in $aregion; skipping its $kind attempts there" >&2
       quota_skip[$kind:$aregion]=yes
+      exit_if_signalled
       continue
     fi
     cat -- "$runerr" >&2
+    exit_if_signalled
     die "run-instances failed"
   done
   rm -f -- "$runerr"
@@ -732,9 +768,7 @@ USAGE
 }
 
 # An interrupt exits nonzero, so on_exit terminates a launched instance.
-trap 'exit 129' HUP
-trap 'exit 130' INT
-trap 'exit 143' TERM
+set_exit_traps
 trap on_exit EXIT
 
 case "${1:-help}" in

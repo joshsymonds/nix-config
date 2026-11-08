@@ -36,6 +36,8 @@ mkdir -p "$work/bin" "$STUB_FIXTURES/eu-west-1" "$TMPDIR"
 failures=0
 STATUS=0
 probe_signal=
+run_signal=
+signal_group=
 expect_rebuild=no
 
 fail() {
@@ -163,6 +165,14 @@ case "$2" in
     ;;
   describe-security-groups) cat "$rdir/security-groups.json" ;;
   run-instances)
+    # hold-run-instances keeps the call running until the release file exists, so a
+    # signal can arrive during it.
+    [ -e "$STUB_FIXTURES/hold-run-instances" ] && {
+      for _ in $(seq 1 100); do
+        [ -e "$STUB_FIXTURES/release" ] && break
+        sleep 0.1
+      done
+    }
     # no-capacity-<zone> refuses a placed launch in that zone with the capacity
     # error; other-error-<zone> refuses it with an error that is not a capacity one.
     # throttle-<spot|on-demand>-<zone> refuses a placed launch of that market in
@@ -625,30 +635,36 @@ echo '{"SecurityGroups":[]}' >"$STUB_FIXTURES/security-groups-none.json"
 printf 'AWS_ACCESS_KEY_ID=AKIASTUBKEY0001\nAWS_SECRET_ACCESS_KEY=%s\n' "$SECRET" >"$ENV_FILE"
 printf 'TS_API_CLIENT_ID=TS-CLIENT-STUB\nTS_API_CLIENT_SECRET=%s\n' "$TS_SECRET" >"$TS_ENV_FILE"
 
-# launch_signalled <signal> <ec2 args...>: starts the launcher with job control on,
-# so SIGINT is not ignored on entry, holds its ssh readiness probe, sends the
-# signal to the launcher while the probe runs, then releases the probe. Sets STATUS.
+# launch_signalled <signal> <step> <log pattern> <ec2 args...>: starts the launcher
+# with job control on, so SIGINT is not ignored on entry, holds the stub step
+# <step> (its hold-<step> fixture), waits until the stub log has a line matching
+# <log pattern>, sends the signal to the launcher while the step runs, then
+# releases the step. With signal_group=yes the signal also goes to the launcher's
+# process group. Sets STATUS.
 launch_signalled() {
-  local sig=$1 pid i
-  shift
-  : >"$STUB_FIXTURES/hold-ssh-probe"
+  local sig=$1 step=$2 pat=$3 pid i
+  shift 3
+  : >"$STUB_FIXTURES/hold-$step"
   set -m
   "$EC2" "$@" >"$OUT" 2>"$ERR" &
   pid=$!
   set +m
   for i in $(seq 1 100); do
-    grep -q '^ssh ' "$STUB_LOG" && break
+    grep -q "$pat" "$STUB_LOG" && break
     sleep 0.1
   done
-  grep -q '^ssh ' "$STUB_LOG" || fail "no ssh readiness probe ran before SIG$sig"
+  grep -q "$pat" "$STUB_LOG" || fail "no $step call ran before SIG$sig"
   kill -s "$sig" "$pid" 2>/dev/null
+  if [ "$signal_group" = yes ]; then
+    kill -s "$sig" -- "-$pid" 2>/dev/null
+  fi
   : >"$STUB_FIXTURES/release"
   if wait "$pid"; then
     STATUS=0
   else
     STATUS=$?
   fi
-  rm -f "$STUB_FIXTURES/hold-ssh-probe" "$STUB_FIXTURES/release"
+  rm -f "$STUB_FIXTURES/hold-$step" "$STUB_FIXTURES/release"
 }
 
 # run <ec2 args...>: runs the launcher, sets STATUS/OUT/ERR, resets the call log.
@@ -660,7 +676,9 @@ run() {
     "$STUB_FIXTURES/registered" "$STUB_FIXTURES/eu-west-1/registered" "$STUB_FIXTURES/rebooted"
   rm -f "$STUB_FIXTURES"/user-data.*.seen "$STUB_FIXTURES/key-count"
   if [ -n "$probe_signal" ]; then
-    launch_signalled "$probe_signal" "$@"
+    launch_signalled "$probe_signal" ssh-probe '^ssh ' "$@"
+  elif [ -n "$run_signal" ]; then
+    launch_signalled "$run_signal" run-instances '^aws ec2 run-instances ' "$@"
   elif "$EC2" "$@" >"$OUT" 2>"$ERR"; then
     STATUS=0
   else
@@ -2201,6 +2219,37 @@ for sig in TERM INT HUP; do
   probe_signal=
   expect_nonzero "up commonframe-gate with SIG$sig during the ssh probe"
   expect_terminated "up commonframe-gate with SIG$sig during the ssh probe"
+done
+
+# A signal during run-instances. The held call returns a box: the launcher exits
+# nonzero after that one call, before the running wait, and on_exit terminates the
+# box by its id once. INT also goes to the launcher's process group, so the call
+# must survive it.
+for sig in TERM INT HUP; do
+  if [ "$sig" = INT ]; then signal_group=yes; fi
+  run_signal=$sig
+  run up commonframe-gate
+  run_signal=
+  signal_group=
+  expect_nonzero "up commonframe-gate with SIG$sig during a run-instances call that returns a box"
+  expect_terminated "up commonframe-gate with SIG$sig during a run-instances call that returns a box"
+  expect_run_count "up commonframe-gate with SIG$sig during a run-instances call that returns a box" 1
+  expect_no_fixed "wait instance-running" "up commonframe-gate with SIG$sig during a run-instances call that returns a box"
+done
+
+# The held call is refused for capacity: it launched nothing, so the launcher exits
+# after that one call and terminates nothing.
+for sig in TERM INT HUP; do
+  if [ "$sig" = INT ]; then signal_group=yes; fi
+  : >"$STUB_FIXTURES/no-capacity-us-west-2a"
+  run_signal=$sig
+  run up commonframe-gate
+  run_signal=
+  signal_group=
+  clear_faults
+  expect_nonzero "up commonframe-gate with SIG$sig during a run-instances call refused for capacity"
+  expect_run_count "up commonframe-gate with SIG$sig during a run-instances call refused for capacity" 1
+  expect_no_fixed "terminate-instances" "up commonframe-gate with SIG$sig during a run-instances call refused for capacity"
 done
 
 if [ "$failures" -ne 0 ]; then

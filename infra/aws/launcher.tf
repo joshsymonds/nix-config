@@ -33,6 +33,14 @@ data "aws_iam_policy_document" "launcher" {
     resources = ["*"]
   }
 
+  # Month-to-date spend against the fleet budget, for callers that pace launches.
+  statement {
+    sid       = "ViewFleetBudget"
+    effect    = "Allow"
+    actions   = ["budgets:ViewBudget"]
+    resources = [aws_budgets_budget.fleet.arn]
+  }
+
   # Spot placement scores are region-scoped, so they follow the Read region condition.
   statement {
     sid       = "SpotPlacementScores"

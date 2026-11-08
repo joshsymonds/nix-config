@@ -3,7 +3,7 @@ locals {
     "c8a.medium", "c8a.large", "c8a.xlarge", "c8a.2xlarge", "c8a.4xlarge", "c8a.8xlarge", "c8a.12xlarge", "c8a.16xlarge",
     "m8a.medium", "m8a.large", "m8a.xlarge", "m8a.2xlarge", "m8a.4xlarge", "m8a.8xlarge", "m8a.12xlarge", "m8a.16xlarge",
     "r8a.medium", "r8a.large", "r8a.xlarge", "r8a.2xlarge", "r8a.4xlarge", "r8a.8xlarge", "r8a.12xlarge", "r8a.16xlarge",
-    "g4dn.xlarge", "g4dn.2xlarge", "g6.xlarge",
+    "g4dn.xlarge", "g4dn.2xlarge", "g4dn.4xlarge", "g6.xlarge", "g6.2xlarge",
   ]
 }
 

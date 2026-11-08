@@ -72,10 +72,10 @@ hosts with its AWS credentials.
   `maxHours`. Defaults are 60 minutes idle and 24 hours max.
 - The warden terminates the newest boxes while fleet boxes total more than 128
   vCPU, and any box up past its `fleet-max-hours` tag (default 24; a tag above
-  48 counts as 24). `ec2 up` refuses a launch that would pass the cap. It also
-  terminates a box whose volumes are not one gp3 root volume of at most 512 GB,
-  at 3000 IOPS and 125 MB/s, with DeleteOnTermination true. It deletes
-  unattached fleet volumes.
+  48 counts as 24). It also terminates a box whose volumes are not one gp3 root
+  volume of at most 512 GB, at 3000 IOPS and 125 MB/s, with DeleteOnTermination
+  true. It deletes unattached fleet volumes. `ec2 up` refuses a launch that
+  would pass the cap.
 - Budget is $200/month. At 100%, RunInstances and snapshot creation are denied.
 - Boxes carry tag:ec2 and cannot reach ultraviolet, the NAS, or the home LAN.
   They hold no agenix secrets. Boxes of a class with `cache = true` carry IAM

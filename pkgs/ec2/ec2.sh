@@ -630,13 +630,14 @@ cmd_up() {
       if ec2_in "$aregion" wait instance-running --instance-ids "$id"; then
         break
       fi
-      # A box that does not reach running is terminated in its region and forgotten
-      # as the launched box, so on_exit does not terminate it again. The walk goes on
-      # with a fresh name, key and user-data.
-      launched=""
-      launched_region=""
+      # A box that does not reach running is terminated in its region. It is forgotten
+      # as the launched box only once that terminate has returned, so a signal or
+      # failure during the terminate leaves on_exit to end it. The walk goes on with a
+      # fresh name, key and user-data.
       ec2_in "$aregion" terminate-instances --instance-ids "$id" >/dev/null ||
         die "could not terminate $id; terminate it by hand"
+      launched=""
+      launched_region=""
       echo "ec2: $id did not reach running in $aregion; terminated it" >&2
       id=""
       rm -f -- "$userdata"

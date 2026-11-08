@@ -37,6 +37,7 @@ failures=0
 STATUS=0
 probe_signal=
 run_signal=
+terminate_signal=
 signal_group=
 expect_rebuild=no
 
@@ -272,7 +273,19 @@ case "$2" in
       fi
     fi
     ;;
-  terminate-instances) echo '{"TerminatingInstances":[]}' ;;
+  terminate-instances)
+    # hold-terminate-instances keeps the call running until the release file exists,
+    # so a signal can arrive during it. A call that finishes records its instance id
+    # in terminated, after the hold.
+    [ -e "$STUB_FIXTURES/hold-terminate-instances" ] && {
+      for _ in $(seq 1 100); do
+        [ -e "$STUB_FIXTURES/release" ] && break
+        sleep 0.1
+      done
+    }
+    echo "$4" >>"$STUB_FIXTURES/terminated"
+    echo '{"TerminatingInstances":[]}'
+    ;;
   *)
     echo "stub aws: unexpected ec2 subcommand $2" >&2
     exit 1
@@ -674,11 +687,13 @@ run() {
   : >"$STUB_REGION_LOG"
   rm -f "$STUB_FIXTURES/user-data.seen" "$STUB_FIXTURES/user-data.mode" "$STUB_FIXTURES/nix-sshopts.seen" \
     "$STUB_FIXTURES/registered" "$STUB_FIXTURES/eu-west-1/registered" "$STUB_FIXTURES/rebooted"
-  rm -f "$STUB_FIXTURES"/user-data.*.seen "$STUB_FIXTURES/key-count"
+  rm -f "$STUB_FIXTURES"/user-data.*.seen "$STUB_FIXTURES/key-count" "$STUB_FIXTURES/terminated"
   if [ -n "$probe_signal" ]; then
     launch_signalled "$probe_signal" ssh-probe '^ssh ' "$@"
   elif [ -n "$run_signal" ]; then
     launch_signalled "$run_signal" run-instances '^aws ec2 run-instances ' "$@"
+  elif [ -n "$terminate_signal" ]; then
+    launch_signalled "$terminate_signal" terminate-instances '^aws ec2 terminate-instances --instance-ids i-0launched00000001' "$@"
   elif "$EC2" "$@" >"$OUT" 2>"$ERR"; then
     STATUS=0
   else
@@ -2251,6 +2266,24 @@ for sig in TERM INT HUP; do
   expect_run_count "up commonframe-gate with SIG$sig during a run-instances call refused for capacity" 1
   expect_no_fixed "terminate-instances" "up commonframe-gate with SIG$sig during a run-instances call refused for capacity"
 done
+
+# A signal during the terminate of a box whose running wait failed. The terminate is
+# held, and TERM goes to the launcher and its process group, so the held terminate
+# does not finish. The box is still ended: a terminate completes after the hold, and
+# the launch exits nonzero.
+echo 1 >"$STUB_FIXTURES/running-fail-left"
+: >"$STUB_FIXTURES/hold-terminate-instances"
+terminate_signal=TERM
+signal_group=yes
+run up commonframe-gate
+terminate_signal=
+signal_group=
+rm -f "$STUB_FIXTURES/hold-terminate-instances"
+clear_faults
+expect_nonzero "up commonframe-gate with SIG TERM during the terminate of a box whose running wait failed"
+done_count=$(grep -c -x 'i-0launched00000001' "$STUB_FIXTURES/terminated" 2>/dev/null) || done_count=0
+[ "$done_count" -ge 1 ] || fail "up commonframe-gate with SIG TERM during the terminate of a box whose running wait failed: no terminate of i-0launched00000001 completed"
+rm -f "$STUB_FIXTURES/terminated"
 
 if [ "$failures" -ne 0 ]; then
   echo "ec2 stubbed test: $failures check(s) failed" >&2

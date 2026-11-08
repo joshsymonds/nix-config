@@ -4,16 +4,18 @@
   coldsnap,
   coreutils,
   curl,
+  gnugrep,
   jq,
   lib,
   nix,
   openssh,
   runCommand,
+  util-linux,
   writeShellApplication,
 }: let
   launcher = writeShellApplication {
     name = "ec2";
-    runtimeInputs = [awscli2 coldsnap jq curl openssh nix coreutils];
+    runtimeInputs = [awscli2 coldsnap jq curl openssh nix coreutils gnugrep util-linux];
     text = builtins.readFile ./ec2.sh;
     passthru = {inherit tests;};
   };
@@ -24,7 +26,7 @@
   # be runtimeInputs).
   stubbed = writeShellApplication {
     name = "ec2";
-    runtimeInputs = [coreutils jq];
+    runtimeInputs = [coreutils jq util-linux];
     text = builtins.readFile ./ec2.sh;
   };
 

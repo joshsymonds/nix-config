@@ -434,6 +434,12 @@ write_stub coldsnap <<'COLDSTUB'
   echo "stub coldsnap: injected failure" >&2
   exit 1
 }
+[ -e "$STUB_FIXTURES/hold-coldsnap" ] && {
+  for _ in $(seq 1 300); do
+    [ -e "$STUB_FIXTURES/release-coldsnap" ] && break
+    sleep 0.1
+  done
+}
 echo snap-0feed00000000001
 COLDSTUB
 
@@ -2447,6 +2453,46 @@ expect_nonzero "up commonframe-gate with SIG TERM right after the box id is reco
 expect_terminated "up commonframe-gate with SIG TERM right after the box id is recorded"
 grep -q -F -x 'us-west-2 ec2 terminate-instances --instance-ids i-0launched00000001' "$STUB_REGION_LOG" ||
   fail "up commonframe-gate with SIG TERM right after the box id is recorded: no terminate of i-0launched00000001 in us-west-2"
+
+# Two concurrent launches on one host after a base change build the image once.
+# The second waits on the region's base image lock, says so on stderr only, and
+# launches from the image the first one registered.
+use_images images-stale images-registered
+: >"$STUB_LOG"
+rm -f "$STUB_FIXTURES/registered" "$STUB_FIXTURES/release-coldsnap"
+: >"$STUB_FIXTURES/hold-coldsnap"
+"$EC2" up commonframe-gate >"$work/out-a" 2>"$work/err-a" &
+pid_a=$!
+for _ in $(seq 1 100); do
+  grep -q '^coldsnap ' "$STUB_LOG" && break
+  sleep 0.1
+done
+"$EC2" up commonframe-gate >"$work/out-b" 2>"$work/err-b" &
+pid_b=$!
+waited=no
+for _ in $(seq 1 300); do
+  if grep -q -F 'waiting for the base image in us-west-2' "$work/err-b"; then
+    waited=yes
+    break
+  fi
+  sleep 0.1
+done
+: >"$STUB_FIXTURES/release-coldsnap"
+wait "$pid_a"
+status_a=$?
+wait "$pid_b"
+status_b=$?
+rm -f "$STUB_FIXTURES/hold-coldsnap" "$STUB_FIXTURES/release-coldsnap"
+[ "$waited" = yes ] || fail "concurrent up commonframe-gate: the second launch printed no wait line for the base image in us-west-2 on stderr: $(cat "$work/err-b")"
+[ "$status_a" -eq 0 ] || fail "concurrent up commonframe-gate, first launch: exit $status_a: $(cat "$work/err-a")"
+[ "$status_b" -eq 0 ] || fail "concurrent up commonframe-gate, second launch: exit $status_b: $(cat "$work/err-b")"
+grep -q -F 'waiting for the base image' "$work/out-b" && fail "concurrent up commonframe-gate: the wait line went to stdout"
+builds=$(grep -c '^aws ec2 register-image ' "$STUB_LOG")
+uploads=$(grep -c '^coldsnap ' "$STUB_LOG")
+[ "$builds" -eq 1 ] || fail "concurrent up commonframe-gate registered $builds base AMIs, want 1"
+[ "$uploads" -eq 1 ] || fail "concurrent up commonframe-gate uploaded $uploads images, want 1"
+reused=$(grep -c '^aws ec2 run-instances .*--image-id ami-registered0000004' "$STUB_LOG")
+[ "$reused" -eq 2 ] || fail "concurrent up commonframe-gate launched from the registered AMI $reused times, want 2"
 
 if [ "$failures" -ne 0 ]; then
   echo "ec2 stubbed test: $failures check(s) failed" >&2

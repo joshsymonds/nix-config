@@ -387,9 +387,16 @@ build_base_image() {
 
 # ensure_base_ami <region> <toplevel basename>: sets base_ami to the newest
 # available fleet=ec2-base AMI in the region when its fleet-toplevel tag names the
-# toplevel. Otherwise it builds one there.
+# toplevel. Otherwise it builds one there. A per-region lock is held from the
+# describe-images check through any build, so a concurrent launch waits here and
+# reuses the image the first one built. The lock is released before returning.
 ensure_base_ami() {
-  local r=$1 want=$2 images row newest_ami newest_tl
+  local r=$1 want=$2 images row newest_ami newest_tl fd
+  exec {fd}>"$known_dir/base-ami-$r.lock" || die "cannot open the base image lock in $r"
+  if ! flock -n "$fd"; then
+    echo "ec2: waiting for the base image in $r; another launch is checking or building it" >&2
+    flock "$fd" || die "cannot take the base image lock in $r"
+  fi
   images=$(ec2_in "$r" describe-images --owners self --output json \
     --filters 'Name=tag:fleet,Values=ec2-base') || die "describe-images failed in $r"
   row=$(jq -r '
@@ -400,9 +407,10 @@ ensure_base_ami() {
   IFS=$'\t' read -r newest_ami newest_tl <<<"$row"
   if [ -n "$newest_ami" ] && [ "$newest_tl" = "$want" ]; then
     base_ami=$newest_ami
-    return 0
+  else
+    build_base_image "$r" "$want"
   fi
-  build_base_image "$r" "$want"
+  exec {fd}>&-
 }
 
 # resolve_region <region> <toplevel basename>: finds or builds the region's base

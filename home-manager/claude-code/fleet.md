@@ -55,8 +55,11 @@ hosts with its AWS credentials.
 - Names are `<class>-xxx`, or `ec2-xxx` for ad-hoc boxes. Connect with
   `ssh joshsymonds@<name>`. A box keeps its name on the tailnet across reboots.
 - A box powers off and terminates after `idleMinutes` with no ssh session, load
-  of 1.0 or more, or busyCommand exiting 0. It also terminates at `maxHours`.
-  Defaults are 60 minutes idle and 24 hours max.
+  of 1.0 or more, or busyCommand exiting 0. An ssh session counts only when a
+  process in its scope is not sshd-session, VBCSCompiler (the Roslyn compiler
+  server), or a dotnet MSBuild node (dotnet with MSBuild.dll and /nodemode: in
+  its command line); a plain dotnet process still counts. It also terminates at
+  `maxHours`. Defaults are 60 minutes idle and 24 hours max.
 - The warden terminates the newest boxes while fleet boxes total more than 128
   vCPU, and any box up past its `fleet-max-hours` tag (default 24; a tag above
   48 counts as 24). It also terminates a box whose volumes are not one gp3 root

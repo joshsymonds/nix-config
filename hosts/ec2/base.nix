@@ -24,13 +24,21 @@
     # background job left under it. A background job whose shell exited is
     # reparented, so the scope is what links it to the session. An idle
     # ControlPersist master has only its sshd-session process in the scope.
+    # Two build servers linger after a build and do not count: the Roslyn
+    # compiler server (VBCSCompiler) and an MSBuild node (dotnet with MSBuild.dll
+    # and /nodemode: on its command line). Any other process, plain dotnet
+    # included, counts.
     ssh_session_open() {
       for pid in $(ss -Htnp state established '( sport = :22 )' | grep -o 'pid=[0-9]*' | cut -d= -f2 | sort -u); do
         cg=$(awk -F: '{print $3}' "/proc/$pid/cgroup" 2>/dev/null)
         case "$cg" in */session-*.scope) ;; *) continue ;; esac
         for q in $(cat "/sys/fs/cgroup$cg/cgroup.procs" 2>/dev/null); do
           comm=$(cat "/proc/$q/comm" 2>/dev/null) || continue
-          [ "$comm" = sshd-session ] || return 0
+          case "$comm" in
+            sshd-session|VBCSCompiler) ;;
+            dotnet) grep -aqF MSBuild.dll "/proc/$q/cmdline" && grep -aqF /nodemode: "/proc/$q/cmdline" || return 0 ;;
+            *) return 0 ;;
+          esac
         done
       done
       return 1

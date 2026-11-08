@@ -514,6 +514,30 @@ cat >"$STUB_FIXTURES/offerings-g6.xlarge.json" <<'FIXTURE'
 ]}
 FIXTURE
 echo '{"InstanceTypeOfferings":[]}' >"$STUB_FIXTURES/offerings-p5.48xlarge.json"
+# c8a.8xlarge is offered in both fleet regions, so a spot walk scores it. Oregon
+# scores it higher, so the score tie that reads spot prices does not arise.
+cat >"$STUB_FIXTURES/offerings-c8a.8xlarge.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"c8a.8xlarge","Location":"us-west-2c","LocationType":"availability-zone"},
+{"InstanceType":"c8a.8xlarge","Location":"us-west-2a","LocationType":"availability-zone"},
+{"InstanceType":"c8a.8xlarge","Location":"us-west-2b","LocationType":"availability-zone"}
+]}
+FIXTURE
+cat >"$STUB_FIXTURES/eu-west-1/offerings-c8a.8xlarge.json" <<'FIXTURE'
+{"InstanceTypeOfferings":[
+{"InstanceType":"c8a.8xlarge","Location":"eu-west-1b","LocationType":"availability-zone"},
+{"InstanceType":"c8a.8xlarge","Location":"eu-west-1a","LocationType":"availability-zone"}
+]}
+FIXTURE
+cat >"$STUB_FIXTURES/scores-c8a.8xlarge.json" <<'FIXTURE'
+{"SpotPlacementScores":[{"Region":"us-west-2","Score":8},{"Region":"eu-west-1","Score":4}]}
+FIXTURE
+cat >"$STUB_FIXTURES/pricing-c8a.8xlarge.json" <<'FIXTURE'
+{"PriceList":["{\"terms\":{\"OnDemand\":{\"X\":{\"priceDimensions\":{\"Y\":{\"pricePerUnit\":{\"USD\":\"1.8240000000\"}}}}}}}"]}
+FIXTURE
+cat >"$STUB_FIXTURES/eu-west-1/pricing-c8a.8xlarge.json" <<'FIXTURE'
+{"PriceList":["{\"terms\":{\"OnDemand\":{\"X\":{\"priceDimensions\":{\"Y\":{\"pricePerUnit\":{\"USD\":\"1.9500000000\"}}}}}}}"]}
+FIXTURE
 
 # eu-west-1 offers none of the classes' and ad-hoc types above, so every existing
 # case keeps its call list; it offers g4dn.xlarge in three zones, unsorted.
@@ -921,7 +945,10 @@ expect_out '128 vCPU' "help states the warden vCPU cap"
 expect_out 'fleet-max-hours' "help states the warden age rule"
 expect_out 'ec2 up <class>' "help lists up <class>"
 expect_out 'ec2 up --type' "help lists up --type"
+expect_out 'ec2 up <class> \[--type <t>\]' "help lists up <class> with --type"
+expect_out '^  --type <t> +EC2 instance type for an ad-hoc box; for a class' "help describes --type for a class"
 expect_out '--spot' "help lists --spot"
+expect_out '--spot-only' "help lists --spot-only"
 expect_out '--override-input <input> <flake-url>' "help lists --override-input"
 expect_out 'ec2 ls' "help lists ls"
 expect_out 'ec2 down <name>' "help lists down"
@@ -1057,12 +1084,17 @@ export EC2_FLEET_TS_ENV_FILE=$TS_ENV_FILE
 unset EC2_FLEET_READY_TIMEOUT
 for args in "" "--type c8a.large" "--type c8a.large --disk 0" "--type c8a.large --disk 20x" \
   "commonframe-gate --spot" "commonframe-gate extra" "--type c8a.large --disk 20 commonframe-gate" \
+  "commonframe-gate --type c8a.large --disk 20" "commonframe-gate --type c8a.large --spot" \
   "commonframe-gate --override-input halmasuit" "commonframe-gate --override-input" \
   "--type c8a.large --disk 20 --override-input halmasuit git+file:///fixture/halmasuit"; do
   run up $args
   expect_nonzero "up $args"
   expect_no_log '^(aws|curl|ssh) |nix build' "up $args calls no AWS, Tailscale, ssh or nix build"
 done
+
+run up commonframe-gate --type ""
+expect_nonzero "up commonframe-gate with an empty --type"
+expect_no_log '^(aws|curl|ssh) |nix build' "up commonframe-gate with an empty --type calls no AWS, Tailscale, ssh or nix build"
 
 run up commonframe-gate --override-input halmasuit ""
 expect_nonzero "up with an empty override URL"
@@ -1273,6 +1305,27 @@ while IFS= read -r call; do
 done <<<"$mux_calls"
 expect_no_fixed "terminate-instances" "up commonframe-gate terminates nothing on success"
 
+# up commonframe-gate --type c8a.8xlarge: the class's box on another type. The type's
+# zones, scores and prices are read, and run-instances launches it; the name,
+# fleet-class tag, fleet-max-hours and volume size stay the class's.
+use_images images-full images-registered-only
+run up commonframe-gate --type c8a.8xlarge
+expect_status 0 "up commonframe-gate --type c8a.8xlarge"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up commonframe-gate --type prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+expect_log 'describe-instance-type-offerings .*Values=c8a\.8xlarge' "up --type lists the zones offering the type"
+expect_region "up --type lists the zones in us-west-2" us-west-2 "describe-instance-type-offerings" "Values=c8a.8xlarge"
+expect_region "up --type lists the zones in eu-west-1" eu-west-1 "describe-instance-type-offerings" "Values=c8a.8xlarge"
+expect_log 'get-spot-placement-scores .*--instance-types c8a\.8xlarge' "up --type scores the spot regions for the type"
+expect_log 'Field=instanceType,Value=c8a\.8xlarge' "up --type prices the type on demand"
+expect_region "up --type launches in us-west-2" us-west-2 "run-instances" "--instance-type c8a.8xlarge" "--placement AvailabilityZone=us-west-2a"
+expect_no_log 'c8a\.4xlarge' "up --type calls nothing for the class's own type"
+expect_fixed "--block-device-mappings DeviceName=/dev/xvda,Ebs={VolumeSize=80,VolumeType=gp3,DeleteOnTermination=true}" "up --type keeps the class volume size"
+expect_fixed "ResourceType=instance,Tags=[{Key=Name,Value=$name},{Key=fleet,Value=ec2},{Key=fleet-class,Value=commonframe-gate},{Key=fleet-max-hours,Value=24}]" "up --type keeps the class tags"
+expect_out '^market spot us-west-2a$' "up --type prints the spot market line"
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up commonframe-gate --type: the ready line is not the last stdout line"
+expect_no_fixed "terminate-instances" "up commonframe-gate --type terminates nothing on success"
+
 # up commonframe-gate with overrides: each pair reaches the class toplevel build
 # as separate argv words, in order and verbatim. The ec2Classes eval and the base
 # build carry no override.
@@ -1335,6 +1388,60 @@ expect_run_count "up with every zone out of capacity" 7
 expect_err 'no on-demand capacity for c8a\.4xlarge in us-west-2c$' "up with every zone out of capacity names the on-demand zone skipped"
 expect_userdata "up with every zone out of capacity" "$name"
 expect_no_fixed "terminate-instances" "up with every zone out of capacity terminates nothing on success"
+clear_faults
+
+# up --spot-only: every spot zone out of capacity fails the launch with no
+# on-demand attempt, and the failure names spot. The spot zones run in sorted order.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+: >"$STUB_FIXTURES/no-capacity-us-west-2c"
+run up commonframe-gate --spot-only
+expect_nonzero "up commonframe-gate --spot-only with every spot zone out of capacity"
+expect_placements "up commonframe-gate --spot-only with every spot zone out of capacity" \
+  "zone us-west-2a spot" "zone us-west-2b spot" "zone us-west-2c spot"
+expect_run_count "up commonframe-gate --spot-only with every spot zone out of capacity" 3
+expect_err 'no region could launch c8a\.4xlarge as spot; nothing was launched' "up commonframe-gate --spot-only with every spot zone out of capacity names spot"
+expect_no_out '^market ' "up commonframe-gate --spot-only with every spot zone out of capacity prints no market line"
+clear_faults
+
+# up --spot-only placing on the first try: the spot market line and the ready line.
+run up commonframe-gate --spot-only
+expect_status 0 "up commonframe-gate --spot-only placing first try"
+expect_out '^market spot us-west-2a$' "up commonframe-gate --spot-only placing first try prints the spot market line"
+expect_out '^commonframe-gate-[a-z0-9]{3} ready$' "up commonframe-gate --spot-only placing first try prints the ready line"
+name=$(sed -n 's/ ready$//p' "$OUT")
+[ "$(tail -n 1 "$OUT")" = "$name ready" ] || fail "up commonframe-gate --spot-only placing first try does not end with the ready line"
+expect_placements "up commonframe-gate --spot-only placing first try" "zone us-west-2a spot"
+expect_run_count "up commonframe-gate --spot-only placing first try" 1
+expect_userdata "up commonframe-gate --spot-only placing first try" "$name"
+expect_no_fixed "terminate-instances" "up commonframe-gate --spot-only placing first try terminates nothing"
+clear_faults
+
+# up --spot-only on a spot-false class is refused before any AWS, Tailscale, ssh or
+# nix build call.
+run up muniment-runner --spot-only
+expect_nonzero "up muniment-runner --spot-only"
+expect_err 'not a spot class' "up muniment-runner --spot-only names the refusal"
+expect_no_log '^(aws|curl|ssh) |nix build' "up muniment-runner --spot-only calls no AWS, Tailscale, ssh or nix build"
+
+# Ad-hoc --spot-only implies --spot: every spot zone out of capacity fails the launch
+# with no on-demand attempt, and the failure names spot.
+: >"$STUB_FIXTURES/no-capacity-us-west-2a"
+: >"$STUB_FIXTURES/no-capacity-us-west-2b"
+run up --type c8a.large --disk 40 --spot-only
+expect_nonzero "ad-hoc up --spot-only with every spot zone out of capacity"
+expect_placements "ad-hoc up --spot-only with every spot zone out of capacity" \
+  "zone us-west-2a spot" "zone us-west-2b spot"
+expect_run_count "ad-hoc up --spot-only with every spot zone out of capacity" 2
+expect_err 'no region could launch c8a\.large as spot; nothing was launched' "ad-hoc up --spot-only with every spot zone out of capacity names spot"
+expect_no_out '^market on-demand$' "ad-hoc up --spot-only with every spot zone out of capacity prints no on-demand market line"
+clear_faults
+
+# Ad-hoc --spot-only placing on the first try requests spot.
+run up --type c8a.large --disk 40 --spot-only
+expect_status 0 "ad-hoc up --spot-only placing first try"
+expect_out '^market spot us-west-2a$' "ad-hoc up --spot-only placing first try prints the spot market line"
+expect_placements "ad-hoc up --spot-only placing first try" "zone us-west-2a spot"
 clear_faults
 
 # A non-capacity error in a zone stops the launch: no further zone, no

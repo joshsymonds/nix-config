@@ -130,6 +130,16 @@ case "$2" in
       cat "$rdir/instances.json"
     fi
     ;;
+  describe-instance-types)
+    # The type's default vCPU count comes from its fixture, the same in both regions.
+    prev=
+    itype=
+    for a in "$@"; do
+      if [ "$prev" = --instance-types ]; then itype=$a; fi
+      prev=$a
+    done
+    cat "$STUB_FIXTURES/instance-types-$itype.json"
+    ;;
   describe-spot-price-history)
     prev=
     itype=
@@ -453,15 +463,21 @@ BOOT_AFTER="e9a4f607-1c2b-4d5e-8f70-3a6b9c8d2e14"
 printf '%s\n' "$BOOT_BEFORE" >"$STUB_FIXTURES/boot-id-before"
 printf '%s\n' "$BOOT_AFTER" >"$STUB_FIXTURES/boot-id-after"
 
+# The default vCPU count of each type the cases launch, read by the launcher's
+# pre-flight in the first region offering the type.
+for spec in c8a.4xlarge:16 c8a.large:2 c8a.8xlarge:32 m8a.2xlarge:8 m8a.large:2 g4dn.xlarge:4 g6.xlarge:4; do
+  itype=${spec%:*}
+  printf '{"InstanceTypes":[{"InstanceType":"%s","VCpuInfo":{"DefaultVCpus":%s}}]}\n' "$itype" "${spec#*:}" >"$STUB_FIXTURES/instance-types-$itype.json"
+done
 t_running=$(date -u -d '210 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
 t_pending=$(date -u -d '5 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
 t_old=$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)
 cat >"$STUB_FIXTURES/instances.json" <<FIXTURE
 {"Reservations":[{"Instances":[
-  {"InstanceId":"i-0fixture00000001","InstanceType":"c8a.4xlarge","State":{"Name":"running"},"LaunchTime":"$t_running","InstanceLifecycle":"spot","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"commonframe-gate-a1b"},{"Key":"fleet","Value":"ec2"},{"Key":"fleet-class","Value":"commonframe-gate"}]},
-  {"InstanceId":"i-0fixture00000002","InstanceType":"m8a.large","State":{"Name":"pending"},"LaunchTime":"$t_pending","Placement":{"AvailabilityZone":"us-west-2b"},"Tags":[{"Key":"Name","Value":"ec2-x9z"},{"Key":"fleet","Value":"ec2"},{"Key":"fleet-class","Value":"adhoc"}]},
-  {"InstanceId":"i-0fixture00000003","InstanceType":"c8a.2xlarge","State":{"Name":"terminated"},"LaunchTime":"$t_old","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"old-box"},{"Key":"fleet","Value":"ec2"}]},
-  {"InstanceId":"i-0fixture00000004","InstanceType":"t3.micro","State":{"Name":"running"},"LaunchTime":"$t_running","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"unrelated"}]}
+  {"InstanceId":"i-0fixture00000001","InstanceType":"c8a.4xlarge","CpuOptions":{"CoreCount":8,"ThreadsPerCore":2},"State":{"Name":"running"},"LaunchTime":"$t_running","InstanceLifecycle":"spot","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"commonframe-gate-a1b"},{"Key":"fleet","Value":"ec2"},{"Key":"fleet-class","Value":"commonframe-gate"}]},
+  {"InstanceId":"i-0fixture00000002","InstanceType":"m8a.large","CpuOptions":{"CoreCount":1,"ThreadsPerCore":2},"State":{"Name":"pending"},"LaunchTime":"$t_pending","Placement":{"AvailabilityZone":"us-west-2b"},"Tags":[{"Key":"Name","Value":"ec2-x9z"},{"Key":"fleet","Value":"ec2"},{"Key":"fleet-class","Value":"adhoc"}]},
+  {"InstanceId":"i-0fixture00000003","InstanceType":"c8a.2xlarge","CpuOptions":{"CoreCount":4,"ThreadsPerCore":2},"State":{"Name":"terminated"},"LaunchTime":"$t_old","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"old-box"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0fixture00000004","InstanceType":"t3.micro","CpuOptions":{"CoreCount":1,"ThreadsPerCore":2},"State":{"Name":"running"},"LaunchTime":"$t_running","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"unrelated"}]}
 ]}]}
 FIXTURE
 
@@ -568,7 +584,7 @@ FIXTURE
 t_irl=$(date -u -d '70 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
 cat >"$STUB_FIXTURES/eu-west-1/instances.json" <<FIXTURE
 {"Reservations":[{"Instances":[
-  {"InstanceId":"i-0ireland0000001","InstanceType":"m8a.large","State":{"Name":"running"},"LaunchTime":"$t_irl","Placement":{"AvailabilityZone":"eu-west-1b"},"Tags":[{"Key":"Name","Value":"ec2-irl7k"},{"Key":"fleet","Value":"ec2"},{"Key":"fleet-class","Value":"adhoc"}]}
+  {"InstanceId":"i-0ireland0000001","InstanceType":"m8a.large","CpuOptions":{"CoreCount":1,"ThreadsPerCore":2},"State":{"Name":"running"},"LaunchTime":"$t_irl","Placement":{"AvailabilityZone":"eu-west-1b"},"Tags":[{"Key":"Name","Value":"ec2-irl7k"},{"Key":"fleet","Value":"ec2"},{"Key":"fleet-class","Value":"adhoc"}]}
 ]}]}
 FIXTURE
 # Ireland prices m8a.large differently from Oregon, so a row priced in the wrong
@@ -956,6 +972,7 @@ expect_out 'load average' "help states the load rule"
 expect_out 'ssh session' "help states the ssh rule"
 expect_out 'busyCommand' "help states the busyCommand rule"
 expect_out '128 vCPU' "help states the warden vCPU cap"
+expect_out '`ec2 up` refuses a launch that would pass the 128 vCPU cap' "help names the up refusal at the warden cap"
 expect_out 'fleet-max-hours' "help states the warden age rule"
 expect_out 'ec2 up <class>' "help lists up <class>"
 expect_out 'ec2 up --type' "help lists up --type"
@@ -1071,7 +1088,7 @@ expect_no_region "down of the Oregon box terminates nothing in eu-west-1" eu-wes
 cp "$STUB_FIXTURES/eu-west-1/instances.json" "$work/ireland-instances.json"
 cat >"$STUB_FIXTURES/eu-west-1/instances.json" <<FIXTURE
 {"Reservations":[{"Instances":[
-  {"InstanceId":"i-0ireland0000002","InstanceType":"c8a.large","State":{"Name":"running"},"LaunchTime":"$t_irl","Placement":{"AvailabilityZone":"eu-west-1a"},"Tags":[{"Key":"Name","Value":"commonframe-gate-a1b"},{"Key":"fleet","Value":"ec2"},{"Key":"fleet-class","Value":"commonframe-gate"}]}
+  {"InstanceId":"i-0ireland0000002","InstanceType":"c8a.large","CpuOptions":{"CoreCount":1,"ThreadsPerCore":2},"State":{"Name":"running"},"LaunchTime":"$t_irl","Placement":{"AvailabilityZone":"eu-west-1a"},"Tags":[{"Key":"Name","Value":"commonframe-gate-a1b"},{"Key":"fleet","Value":"ec2"},{"Key":"fleet-class","Value":"commonframe-gate"}]}
 ]}]}
 FIXTURE
 run down commonframe-gate-a1b
@@ -1624,7 +1641,7 @@ clear_faults
 : >"$STUB_FIXTURES/no-capacity-us-west-2a"
 run up commonframe-gate
 expect_status 0 "up commonframe-gate after a capacity refusal"
-expect_no_fixed "describe-instances" "up after a capacity refusal and a launch looks up no token"
+expect_no_fixed "Name=client-token" "up after a capacity refusal and a launch looks up no token"
 clear_faults
 
 # The walk's failed attempt is the fourth, in Ireland: each attempt carries its own
@@ -1832,7 +1849,9 @@ expect_out '^ec2-[a-z0-9]{3} ready$' "on-demand up of a type only Oregon offers 
 expect_placements "on-demand up of a type only Oregon offers" "zone us-west-2a"
 expect_region "Ireland is asked which zones offer the type" eu-west-1 \
   "ec2 describe-instance-type-offerings" "Values=g6.xlarge"
-[ "$(grep -c '^eu-west-1 ' "$STUB_REGION_LOG")" -eq 1 ] || fail "on-demand up of a type only Oregon offers made more than the offering lookup in eu-west-1"
+[ "$(grep -c '^eu-west-1 ec2 describe-instance-type-offerings ' "$STUB_REGION_LOG")" -eq 1 ] || fail "on-demand up of a type only Oregon offers: want one offering lookup in eu-west-1"
+[ "$(grep -c '^eu-west-1 ec2 describe-instances ' "$STUB_REGION_LOG")" -eq 1 ] || fail "on-demand up of a type only Oregon offers: want one fleet describe-instances in eu-west-1"
+[ "$(grep -c '^eu-west-1 ' "$STUB_REGION_LOG")" -eq 2 ] || fail "on-demand up of a type only Oregon offers made calls in eu-west-1 other than the offering lookup and the fleet describe"
 expect_no_log 'pricing get-products' "on-demand up of a type only Oregon offers looks up no price"
 
 # A type neither region offers: the launch stops before the base AMI, Tailscale or run-instances.
@@ -2493,6 +2512,117 @@ uploads=$(grep -c '^coldsnap ' "$STUB_LOG")
 [ "$uploads" -eq 1 ] || fail "concurrent up commonframe-gate uploaded $uploads images, want 1"
 reused=$(grep -c '^aws ec2 run-instances .*--image-id ami-registered0000004' "$STUB_LOG")
 [ "$reused" -eq 2 ] || fail "concurrent up commonframe-gate launched from the registered AMI $reused times, want 2"
+
+# expect_cap_refusal <desc>: the last up stopped at the vCPU cap for the 120-vCPU
+# fleet, naming the fleet, the box and the cap, before any Tailscale or image call.
+expect_cap_refusal() {
+  expect_err 'fleet at 120 vCPU; a c8a\.4xlarge box \(16 vCPU\) would pass the warden.s 128 vCPU cap' "$1 names the fleet total, the box and the cap"
+  expect_no_log '^curl ' "$1 calls no Tailscale API"
+  expect_no_log '^coldsnap ' "$1 uploads no image"
+  expect_no_fixed 'ec2-base-image' "$1 builds no base image"
+  expect_no_fixed 'describe-images' "$1 looks up no AMI"
+}
+
+# Up past the warden's 128 vCPU cap: the fleet holds 64 + 32 + 16 in Oregon and 8 in
+# Ireland (120); a commonframe-gate box (c8a.4xlarge, 16) would make 136. The refusal
+# comes before any launch work, for a class and for an ad-hoc box alike.
+cp "$STUB_FIXTURES/instances.json" "$work/oregon-instances.json"
+cp "$STUB_FIXTURES/eu-west-1/instances.json" "$work/ireland-instances-cap.json"
+t_cap=$(date -u -d '30 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+cat >"$STUB_FIXTURES/instances.json" <<FIXTURE
+{"Reservations":[{"Instances":[
+  {"InstanceId":"i-0cap0000000000001","InstanceType":"c8a.16xlarge","State":{"Name":"running"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":32,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"cap-a"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0cap0000000000002","InstanceType":"m8a.8xlarge","State":{"Name":"running"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":16,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2b"},"Tags":[{"Key":"Name","Value":"cap-b"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0cap0000000000003","InstanceType":"c8a.4xlarge","State":{"Name":"pending"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":8,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2c"},"Tags":[{"Key":"Name","Value":"cap-c"},{"Key":"fleet","Value":"ec2"}]}
+]}]}
+FIXTURE
+cat >"$STUB_FIXTURES/eu-west-1/instances.json" <<FIXTURE
+{"Reservations":[{"Instances":[
+  {"InstanceId":"i-0cap0000000000004","InstanceType":"m8a.2xlarge","State":{"Name":"running"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":4,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"eu-west-1a"},"Tags":[{"Key":"Name","Value":"cap-d"},{"Key":"fleet","Value":"ec2"}]}
+]}]}
+FIXTURE
+use_images images-full images-registered-only
+run up commonframe-gate
+expect_nonzero "up past the 128 vCPU cap"
+expect_run_count "up past the 128 vCPU cap launches nothing" 0
+expect_err '128' "up past the 128 vCPU cap names the cap"
+expect_cap_refusal "up past the 128 vCPU cap"
+run up --type c8a.4xlarge --disk 20
+expect_nonzero "up --type past the 128 vCPU cap"
+expect_run_count "up --type past the 128 vCPU cap launches nothing" 0
+expect_cap_refusal "up --type past the 128 vCPU cap"
+cp "$work/oregon-instances.json" "$STUB_FIXTURES/instances.json"
+cp "$work/ireland-instances-cap.json" "$STUB_FIXTURES/eu-west-1/instances.json"
+
+# Every live state counts: running 64 and pending 32 and shutting-down 8 in Oregon,
+# stopping 2 and stopped 8 in Ireland, 114 in all. A commonframe-gate box (16) makes
+# 130. Each state holds at least 2 vCPU, so dropping any one of them lets the launch pass.
+cat >"$STUB_FIXTURES/instances.json" <<FIXTURE
+{"Reservations":[{"Instances":[
+  {"InstanceId":"i-0state0000000001","InstanceType":"c8a.16xlarge","State":{"Name":"running"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":32,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"live-a"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0state0000000002","InstanceType":"m8a.8xlarge","State":{"Name":"pending"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":16,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2b"},"Tags":[{"Key":"Name","Value":"live-b"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0state0000000003","InstanceType":"c8a.2xlarge","State":{"Name":"shutting-down"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":4,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2c"},"Tags":[{"Key":"Name","Value":"live-c"},{"Key":"fleet","Value":"ec2"}]}
+]}]}
+FIXTURE
+cat >"$STUB_FIXTURES/eu-west-1/instances.json" <<FIXTURE
+{"Reservations":[{"Instances":[
+  {"InstanceId":"i-0state0000000004","InstanceType":"c8a.large","State":{"Name":"stopping"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":1,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"eu-west-1a"},"Tags":[{"Key":"Name","Value":"live-d"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0state0000000005","InstanceType":"c8a.2xlarge","State":{"Name":"stopped"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":4,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"eu-west-1b"},"Tags":[{"Key":"Name","Value":"live-e"},{"Key":"fleet","Value":"ec2"}]}
+]}]}
+FIXTURE
+run up commonframe-gate
+expect_nonzero "up with the fleet in every live state at 114 vCPU"
+expect_run_count "up with the fleet in every live state at 114 vCPU launches nothing" 0
+expect_err 'fleet at 114 vCPU; a c8a\.4xlarge box \(16 vCPU\) would pass the warden.s 128 vCPU cap' "up with the fleet in every live state at 114 vCPU names the fleet total"
+cp "$work/oregon-instances.json" "$STUB_FIXTURES/instances.json"
+cp "$work/ireland-instances-cap.json" "$STUB_FIXTURES/eu-west-1/instances.json"
+
+# Up at exactly 128 vCPU: running and pending boxes of 104 vCPU and a stopped 8-vCPU
+# box make 112 counted; a terminated 64-vCPU box and an untagged running 64-vCPU box do
+# not count. A commonframe-gate box (16) makes exactly 128, and it launches.
+cat >"$STUB_FIXTURES/instances.json" <<FIXTURE
+{"Reservations":[{"Instances":[
+  {"InstanceId":"i-0exact000000000001","InstanceType":"c8a.16xlarge","State":{"Name":"running"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":32,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"exact-a"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0exact000000000002","InstanceType":"m8a.8xlarge","State":{"Name":"pending"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":16,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2b"},"Tags":[{"Key":"Name","Value":"exact-b"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0exact000000000003","InstanceType":"c8a.2xlarge","State":{"Name":"running"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":4,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2c"},"Tags":[{"Key":"Name","Value":"exact-c"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0exact000000000004","InstanceType":"c8a.2xlarge","State":{"Name":"stopped"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":4,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"exact-d"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0exact000000000005","InstanceType":"c8a.16xlarge","State":{"Name":"terminated"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":32,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"exact-e"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0exact000000000006","InstanceType":"c8a.16xlarge","State":{"Name":"running"},"LaunchTime":"$t_cap","CpuOptions":{"CoreCount":32,"ThreadsPerCore":2},"Placement":{"AvailabilityZone":"us-west-2b"},"Tags":[{"Key":"Name","Value":"exact-f"}]}
+]}]}
+FIXTURE
+echo '{"Reservations":[]}' >"$STUB_FIXTURES/eu-west-1/instances.json"
+use_images images-full images-registered-only
+run up commonframe-gate
+expect_status 0 "up at exactly 128 vCPU"
+expect_run_count "up at exactly 128 vCPU" 1
+tail -n 1 "$OUT" | grep -E -q '^commonframe-gate-[a-z0-9]{3} ready$' || fail "up at exactly 128 vCPU: the ready line is not the last stdout line"
+cp "$work/oregon-instances.json" "$STUB_FIXTURES/instances.json"
+cp "$work/ireland-instances-cap.json" "$STUB_FIXTURES/eu-west-1/instances.json"
+
+# Up when the fleet's instances or the type's vCPU count cannot be read: the launch
+# stops before any Tailscale call, image or run-instances.
+inject us-west-2-ec2-describe-instances
+run up commonframe-gate
+expect_nonzero "up with us-west-2 describe-instances failing"
+expect_err "cannot describe the fleet's instances in us-west-2" "up with us-west-2 describe-instances failing names the call and region"
+expect_run_count "up with us-west-2 describe-instances failing" 0
+expect_no_log '^curl ' "up with us-west-2 describe-instances failing calls no Tailscale API"
+clear_faults
+
+inject eu-west-1-ec2-describe-instances
+run up commonframe-gate
+expect_nonzero "up with eu-west-1 describe-instances failing"
+expect_err "cannot describe the fleet's instances in eu-west-1" "up with eu-west-1 describe-instances failing names the call and region"
+expect_run_count "up with eu-west-1 describe-instances failing" 0
+clear_faults
+
+inject us-west-2-ec2-describe-instance-types
+run up commonframe-gate
+expect_nonzero "up with describe-instance-types failing"
+expect_err 'cannot describe c8a\.4xlarge in us-west-2' "up with describe-instance-types failing names the call and region"
+expect_run_count "up with describe-instance-types failing" 0
+expect_no_log '^curl ' "up with describe-instance-types failing calls no Tailscale API"
+clear_faults
 
 if [ "$failures" -ne 0 ]; then
   echo "ec2 stubbed test: $failures check(s) failed" >&2

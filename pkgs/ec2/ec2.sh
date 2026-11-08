@@ -5,6 +5,9 @@
 
 regions=(us-west-2 eu-west-1)
 flake=${EC2_FLEET_FLAKE:-$HOME/nix-config}
+# warden_vcpu_cap is the vCPU the warden lets the fleet hold (CAP_VCPU in
+# infra/aws/warden/handler.py).
+warden_vcpu_cap=128
 
 # launched is the instance cmd_up started and has not finished deploying;
 # launched_region is the region it runs in; userdata is the temp file holding
@@ -447,6 +450,35 @@ create_userdata() {
     die "cannot write the user-data file"
 }
 
+# check_vcpu_cap <type> <region>: dies when a box of the type, launched in the region,
+# would take the fleet past the warden's vCPU cap. The fleet is every fleet box in a
+# live state in each region, counted as cores times threads as the warden counts it.
+# The type's default vCPU count is read in the region.
+check_vcpu_cap() {
+  local itype=$1 region=$2 described box r vcpu fleet=0
+  described=$(ec2_in "$region" describe-instance-types --output json --instance-types "$itype") ||
+    die "cannot describe $itype in $region"
+  box=$(jq -r '.InstanceTypes[0].VCpuInfo.DefaultVCpus' <<<"$described") &&
+    [[ $box =~ ^[1-9][0-9]*$ ]] || die "cannot read the vCPU count of $itype in $region"
+  for r in "${regions[@]}"; do
+    described=$(ec2_in "$r" describe-instances --output json \
+      --filters 'Name=tag:fleet,Values=ec2' \
+      'Name=instance-state-name,Values=pending,running,shutting-down,stopping,stopped') ||
+      die "cannot describe the fleet's instances in $r"
+    vcpu=$(jq -r '
+      def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
+      [.Reservations[].Instances[]
+      | select(.State.Name | IN("pending", "running", "shutting-down", "stopping", "stopped"))
+      | select(tag("fleet") == "ec2")
+      | .CpuOptions.CoreCount * .CpuOptions.ThreadsPerCore]
+      | add // 0' <<<"$described") || die "cannot read the fleet's instances in $r"
+    fleet=$((fleet + vcpu))
+  done
+  if [ $((fleet + box)) -gt "$warden_vcpu_cap" ]; then
+    die "fleet at $fleet vCPU; a $itype box ($box vCPU) would pass the warden's $warden_vcpu_cap vCPU cap"
+  fi
+}
+
 # cmd_up <class> [--type <t>] [--override-input <input> <flake-url>]... | --type <t>
 # --disk <gb> [--spot] [--spot-only]: launches a box, waits for ssh on the tailnet, and
 # for a class deploys its toplevel built with each input override. --type runs a class's
@@ -579,6 +611,7 @@ cmd_up() {
     region_zones[$r]=$zone_list
   done
   [ ${#offering[@]} -gt 0 ] || die "no region offers $itype"
+  check_vcpu_cap "$itype" "${offering[0]}"
   if [ "$spot_req" = yes ]; then
     spot_ranked=$(rank_spot_regions "$itype" "${offering[@]}") || die "cannot order the regions offering $itype for spot"
     readarray -t spot_regions <<<"$spot_ranked"
@@ -810,6 +843,7 @@ as busy while an ssh session is open, the 1-minute load average is at least
 
 Warden: terminates fleet boxes, newest first, while fleet boxes total more than
 128 vCPU, and any fleet box up past fleet-max-hours (default 24).
+`ec2 up` refuses a launch that would pass the 128 vCPU cap.
 
 USAGE
   printf 'Classes (from %s):\n' "$flake"

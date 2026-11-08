@@ -42,7 +42,9 @@ hosts with its AWS credentials.
   <t>` puts it on type t with the class's name, tags, disk and toplevel; the
   class's module must suit t. `ec2 up --type <t> --disk <gb> [--spot |
   --spot-only]` starts an ad-hoc box; `--disk` is at most 512. `ec2 help` lists
-  the classes. A class takes no `--disk` or `--spot`.
+  the classes. A class takes no `--disk` or `--spot`. `ec2 up` refuses, before
+  any launch work, a launch that would take the fleet past the warden's 128 vCPU
+  cap; the refusal names the fleet total and the box.
 - `ec2 up <class> [--override-input <input> <flake-url>]...` builds the class
   toplevel with those flake input overrides. The flag repeats and works only
   for class launches.
@@ -70,9 +72,10 @@ hosts with its AWS credentials.
   `maxHours`. Defaults are 60 minutes idle and 24 hours max.
 - The warden terminates the newest boxes while fleet boxes total more than 128
   vCPU, and any box up past its `fleet-max-hours` tag (default 24; a tag above
-  48 counts as 24). It also terminates a box whose volumes are not one gp3 root
-  volume of at most 512 GB, at 3000 IOPS and 125 MB/s, with DeleteOnTermination
-  true. It deletes unattached fleet volumes.
+  48 counts as 24). `ec2 up` refuses a launch that would pass the cap. It also
+  terminates a box whose volumes are not one gp3 root volume of at most 512 GB,
+  at 3000 IOPS and 125 MB/s, with DeleteOnTermination true. It deletes
+  unattached fleet volumes.
 - Budget is $200/month. At 100%, RunInstances and snapshot creation are denied.
 - Boxes carry tag:ec2 and cannot reach ultraviolet, the NAS, or the home LAN.
   They hold no agenix secrets. Boxes of a class with `cache = true` carry IAM

@@ -1169,6 +1169,26 @@ expect_status 0 "ad-hoc up on a toplevel mismatch"
 expect_rebuilt "ad-hoc up on a toplevel mismatch" fixture-toplevel-base
 expect_no_fixed "nix copy" "ad-hoc up on a mismatch copies nothing"
 
+# A rebuild keeps every base AMI created within the last 24 hours. Three recent
+# AMIs carry other toplevels, so none is one of the newest two once the new AMI
+# is registered; the prune must still leave all of them and their snapshots.
+t_recent1=$(date -u -d '3 hours ago' +%Y-%m-%dT%H:%M:%S.000Z)
+t_recent2=$(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%S.000Z)
+t_recent3=$(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S.000Z)
+t_registered=$(date -u +%Y-%m-%dT%H:%M:%S.000Z)
+recent_rows='{"ImageId":"ami-recent00000001","State":"available","CreationDate":"'$t_recent1'","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-middle"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000021"}}]},
+{"ImageId":"ami-recent00000002","State":"available","CreationDate":"'$t_recent2'","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-latest"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000022"}}]},
+{"ImageId":"ami-recent00000003","State":"available","CreationDate":"'$t_recent3'","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-other"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0a1d00000000023"}}]}'
+printf '{"Images":[\n%s\n]}\n' "$recent_rows" >"$STUB_FIXTURES/images-recent.json"
+printf '{"Images":[\n%s,\n%s\n]}\n' "$recent_rows" \
+  '{"ImageId":"ami-registered0000004","State":"available","CreationDate":"'$t_registered'","Tags":[{"Key":"fleet","Value":"ec2-base"},{"Key":"fleet-toplevel","Value":"fixture-toplevel-base"}],"BlockDeviceMappings":[{"DeviceName":"/dev/xvda","Ebs":{"SnapshotId":"snap-0feed00000000001"}}]}' \
+  >"$STUB_FIXTURES/images-recent-registered.json"
+use_images images-recent images-recent-registered
+rebuild_run up commonframe-gate
+expect_status 0 "up with three base AMIs made in the last 24 hours"
+expect_no_fixed "deregister-image" "up with recent base AMIs deregisters no base AMI made in the last 24 hours"
+expect_no_fixed "delete-snapshot" "up with recent base AMIs deletes no snapshot of a base AMI made in the last 24 hours"
+
 # A newest base AMI that is still pending is never launched. Here the newest
 # available AMI carries another toplevel, so the image is rebuilt instead.
 use_images images-pending-newest images-registered-only

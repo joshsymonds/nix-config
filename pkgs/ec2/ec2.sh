@@ -314,10 +314,11 @@ exit_if_signalled() {
 
 # build_base_image <region> <toplevel basename>: builds the raw base image, uploads
 # it in the region as a fleet=ec2-base snapshot, registers an AMI tagged with the
-# toplevel, waits for it, and prunes all but the newest two of the region's base
-# AMIs and their snapshots. Sets base_ami to the new AMI.
+# toplevel, waits for it, and prunes the region's base AMIs and their snapshots,
+# keeping the newest two and every AMI created within the last 24 hours. Sets
+# base_ami to the new AMI.
 build_base_image() {
-  local r=$1 tl=$2 image_out image_file snap stamp reg described prune_rows
+  local r=$1 tl=$2 image_out image_file snap stamp reg described prune_rows cutoff
   local -a fields
   local old_snap
   image_out=$(nix build --no-link --print-out-paths "$flake#ec2-base-image") ||
@@ -355,8 +356,10 @@ build_base_image() {
 
   described=$(ec2_in "$r" describe-images --owners self --output json \
     --filters 'Name=tag:fleet,Values=ec2-base') || die "describe-images failed before pruning"
-  prune_rows=$(jq -r '
+  cutoff=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%S) || die "cannot read the clock"
+  prune_rows=$(jq -r --arg cutoff "$cutoff" '
     .Images | sort_by(.CreationDate) | reverse | .[2:][]
+    | select(.CreationDate[0:19] < $cutoff)
     | [.ImageId] + [.BlockDeviceMappings[]?.Ebs.SnapshotId // empty]
     | @tsv' <<<"$described") || die "cannot read the base AMIs to prune"
   if [ -n "$prune_rows" ]; then

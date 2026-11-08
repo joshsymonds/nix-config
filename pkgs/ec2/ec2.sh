@@ -620,8 +620,9 @@ cmd_up() {
     set_exit_traps
     if [ "$run_status" -eq 0 ]; then
       id=$reply
-      launched=$id
+      # The region is recorded first, so on_exit never sees an id without its region.
       launched_region=$aregion
+      launched=$id
       cat -- "$runerr" >&2
       exit_if_signalled
       [ -n "$id" ] || die "run-instances returned no instance id; check for a new fleet=ec2 box"

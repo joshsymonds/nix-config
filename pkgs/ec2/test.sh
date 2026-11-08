@@ -2285,6 +2285,21 @@ done_count=$(grep -c -x 'i-0launched00000001' "$STUB_FIXTURES/terminated" 2>/dev
 [ "$done_count" -ge 1 ] || fail "up commonframe-gate with SIG TERM during the terminate of a box whose running wait failed: no terminate of i-0launched00000001 completed"
 rm -f "$STUB_FIXTURES/terminated"
 
+# A TERM at the first command after the launcher records the box's id still ends
+# the box in its own region. BASH_ENV gives the launcher a DEBUG trap that sends the
+# signal the moment launched is set, before anything else the launcher does.
+cat >"$work/term-after-id.bash" <<'BASHENV'
+set -T
+trap 'if [ -n "${launched:-}" ] && [ -z "${term_after_id_sent:-}" ]; then term_after_id_sent=1; kill -s TERM "$$"; fi' DEBUG
+BASHENV
+export BASH_ENV="$work/term-after-id.bash"
+run up commonframe-gate
+unset BASH_ENV
+expect_nonzero "up commonframe-gate with SIG TERM right after the box id is recorded"
+expect_terminated "up commonframe-gate with SIG TERM right after the box id is recorded"
+grep -q -F -x 'us-west-2 ec2 terminate-instances --instance-ids i-0launched00000001' "$STUB_REGION_LOG" ||
+  fail "up commonframe-gate with SIG TERM right after the box id is recorded: no terminate of i-0launched00000001 in us-west-2"
+
 if [ "$failures" -ne 0 ]; then
   echo "ec2 stubbed test: $failures check(s) failed" >&2
   exit 1

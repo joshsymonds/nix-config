@@ -122,37 +122,35 @@ To add a new package:
 
 ## Dev Contexts
 
-The dev context system unifies the metadata that describes where a shell is running. Every session exports `DEV_CONTEXT`, `DEV_CONTEXT_KIND`, and an optional `DEV_CONTEXT_ICON`, and all UI surfaces read from those variables. Starship prompts, Kitty tab titles, tmux status lines, and mobile notifications now stay in sync regardless of whether the context came from tmux, Coder, or a plain host shell.
+Long-lived shells run in tmux sessions managed by orrery. The `p` launcher attaches a session for a project directory, the tmux plugin adds the orrery tree and a shell popup, and orreryd posts ntfy notifications for Claude Code hook events. The full workflow is in [docs/devspaces.md](docs/devspaces.md).
 
-### How contexts are created
-- `tmux-devspace` wraps `tmux new-session`/`attach` and immediately sets `DEV_CONTEXT`, `DEV_CONTEXT_KIND=tmux`, plus whatever `DEV_CONTEXT_ICON` value the caller provides via `--icon`. Legacy `TMUX_DEVSPACE` variables still exist for older scripts but should be treated as compatibility shims.
-- `t` (defined in `home-manager/zsh/default.nix`) is the main entry point. Running `t` with no arguments creates an auto-named context. `t feature-login ☾` sanitizes the label, records the icon, and spawns/attaches to `feature-login`. Use `t feature-login -- cargo watch` to skip the icon while forwarding a command after `--`.
-- Planetary aliases (`mercury`, `venus`, `earth`, `mars`, `jupiter`) remain for muscle memory on both the servers and macOS clients. Each alias now calls `t <planet> <icon>` (or `tmux-devspace attach --icon ...` on macOS), so the icon travels with the context from the moment it is created.
-- On Coder, `CODER_WORKSPACE_NAME` seeds `DEV_CONTEXT` with `DEV_CONTEXT_KIND=coder`, so prompts stay labeled even when tmux is not involved.
+### Launching sessions
+`p` is orrery's launcher. On vermissian it runs `orrery open`, and these forms work there:
 
-### Quick commands
 ```
-t                          # Create/switch to an auto-named context
-t feature-login ☾          # Spawn or attach to feature-login with a moon icon
-t feature-login -- cargo watch  # Run a command without setting an icon
-earth                      # Attach to the earth planetary context (via t earth ♁)
-mars status                # Invoke helper subcommands inside that context
-devspace-status            # List sessions on the current host (alias: ds)
-dsl                        # Detailed tmux session listing
+p                 attach the most recently active session, then open the tree
+p .               the session for the current directory, else the picker
+p WORD            a session named WORD, else a zoxide match, else the picker
+p new NAME        create project directory NAME and a session for it
+p WORDS...        open the picker with WORDS as the intent
 ```
 
-### Shell and prompt integration
-- During shell init we import tmux-provided context variables (when inside tmux), fall back to `CODER_WORKSPACE_NAME`, and finally to the system hostname (`DEV_CONTEXT_KIND=host`).
-- Starship replaced the older devspace segment with a context-aware block that shows the icon and `DEV_CONTEXT`. Coder contexts default to ``, tmux planetary contexts get their astronomical glyphs (`☿♀♁♂♃`), and non-planetary sessions display as `● <label>`.
-- Tmux titles now use the per-session option `@dev_context` so Kitty tabs, native terminal windows, and the macOS tab bar all render the same label.
-- The Codex `ntfy` notifier includes the context string (and icon when present), so phone alerts point to the exact session that completed.
+On gnomon, ninuan and shrike, `p` runs `orrery open --remote` on vermissian over ssh. Kitty's `kitty_mod+p` opens a tab running `p`.
 
-### Why contexts?
-- Consistent naming flows through tmux, prompts, tab titles, and notification hooks.
-- No reliance on tmux-only variables; any tool can opt-in by exporting `DEV_CONTEXT` and friends.
-- Icons become optional metadata that travels with the session, enabling richer UI hints without heuristics.
+### tmux
+- prefix `Space` opens the orrery tree.
+- prefix `s` opens a shell for the current pane's directory.
+- The plugin appends orrery's status segment to the status line.
+- Window titles are `#S:#W` (session:window).
 
-Compatibility aliases and historical docs still reference “devspaces”, but new code and copy should prefer the “dev context” terminology.
+### Shell prompt
+Starship's context chip shows the Coder workspace name on Coder and the hostname everywhere else.
+
+### Help
+`orrery help` prints the cheatsheet. vermissian serves it on the tailnet only, at https://vermissian.tail82223.ts.net:10003/.
+
+### Notifications
+orreryd runs on vermissian, gnomon and ultraviolet. It posts ntfy notifications from `orrery hook` events and reads the ntfy secrets from agenix by path at runtime.
 
 ## Remote Link Opening
 

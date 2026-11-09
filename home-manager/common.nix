@@ -15,6 +15,7 @@
     ./helix
     ./kitty
     ./tmux
+    ./terminal-memory-cap
     ./git
     ./gws
     ./gpg

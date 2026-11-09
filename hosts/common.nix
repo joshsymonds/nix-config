@@ -88,7 +88,8 @@ in {
     # Keep user systemd manager alive across SSH disconnects so tmux.service
     # (and its tmux-spawn-*.scope panes) survive when the last login session
     # ends. Without this, a transient SSH drop tears down tmux and every
-    # process inside it.
+    # process inside it. home-manager/terminal-memory-cap caps each of
+    # those scopes' memory.
     linger = true;
   };
 

@@ -6,6 +6,7 @@
     ./ssh-config # SSH configuration
     ./starship # Keep starship for nice prompt
     ./tmux # Keep tmux for persistent sessions
+    ./terminal-memory-cap # Cap each tmux pane's memory
   ];
 
   home = {

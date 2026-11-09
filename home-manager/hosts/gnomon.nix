@@ -48,6 +48,7 @@
   services.parlor.enable = true;
   programs.parlor-score.enable = true;
   programs.joshify.enable = true;
+  programs.orrery.remoteHost = "vermissian";
 
   home.packages = with pkgs; [
     # Gaming auxiliaries (Steam itself is system-level via programs.steam)

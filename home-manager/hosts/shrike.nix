@@ -43,6 +43,7 @@ in {
     ../starship
     ../tmux
     ../zsh
+    inputs.orrery.homeManagerModules.default
   ];
 
   home = {
@@ -92,6 +93,10 @@ in {
   };
 
   programs.helix.enable = true;
+  programs.orrery = {
+    enable = true;
+    remoteHost = "vermissian";
+  };
 
   # No GPG key on the phone; the ssh identity (registered with GitHub)
   # handles auth, but signing would fail.

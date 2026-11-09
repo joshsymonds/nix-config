@@ -34,4 +34,5 @@ in {
   ];
 
   programs.go.enable = true;
+  programs.orrery.remoteHost = "vermissian";
 }

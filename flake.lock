@@ -2068,6 +2068,27 @@
         "type": "github"
       }
     },
+    "home-manager_3": {
+      "inputs": {
+        "nixpkgs": [
+          "orrery",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1793979366,
+        "narHash": "sha256-7OoWDsYO9teiPxl0QdlS5lYE20Pue8/5mpscSL32FUA=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "2c0c1f01521469cf0271180c453c79782d53c2f6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
     "impermanence": {
       "inputs": {
         "home-manager": "home-manager_2",
@@ -3282,6 +3303,28 @@
         "type": "github"
       }
     },
+    "orrery": {
+      "inputs": {
+        "home-manager": "home-manager_3",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1794209087,
+        "narHash": "sha256-TaA7INBeE5mvpzLKQLPzvPXFzORU9CkO8PfaudBRFU4=",
+        "owner": "joshsymonds",
+        "repo": "orrery",
+        "rev": "46f924ec6325b1ff9fa33d514a2fce517e0f6840",
+        "type": "github"
+      },
+      "original": {
+        "owner": "joshsymonds",
+        "ref": "v0.2.1",
+        "repo": "orrery",
+        "type": "github"
+      }
+    },
     "parlor": {
       "inputs": {
         "nixpkgs": [
@@ -3522,6 +3565,7 @@
         "nixpkgs-inference": "nixpkgs-inference",
         "nixpkgs-open-webui": "nixpkgs-open-webui",
         "openai-plugins": "openai-plugins",
+        "orrery": "orrery",
         "parlor": "parlor",
         "patchbay": "patchbay",
         "redlib-fork": "redlib-fork",

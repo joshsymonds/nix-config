@@ -29,9 +29,12 @@ in {
     ./starship
     ./statusline-aliases
     ./steward
+    inputs.orrery.homeManagerModules.default
   ];
 
   config = {
+    programs.orrery.enable = true;
+
     home = {
       enableNixpkgsReleaseCheck = false;
       username = "joshsymonds";

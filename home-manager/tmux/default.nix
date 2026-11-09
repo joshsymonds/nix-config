@@ -17,6 +17,13 @@ with lib; let
     text = builtins.readFile ./scripts/tmux-status.sh;
   };
 in {
+  options.programs.tmux-status.package = mkOption {
+    type = types.package;
+    readOnly = true;
+    default = tmuxStatus;
+    description = "The tmux-status system-monitor widget that the tmux status-right line runs.";
+  };
+
   config = {
     programs.tmux = {
       enable = true;

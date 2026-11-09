@@ -7,6 +7,7 @@
     ../claude-code/transcript-sync.nix
     ../ec2-fleet
     ../go
+    ../orrery
     ../parlor
     ../patchbay
     ../patchbay/singularity.nix

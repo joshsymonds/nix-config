@@ -16,6 +16,7 @@
     ../claude-code/aggregator.nix
     ../ec2-fleet
     ../ntfy-notify
+    ../orrery
     ../savecraftd
     ../patchbay
     ../parlor

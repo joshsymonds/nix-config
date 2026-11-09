@@ -17,11 +17,6 @@
   pkgs,
   ...
 }: let
-  # `t` in the zsh module shells out to tmux-devspace; on other hosts
-  # common.nix provides it. Same definition here.
-  tmuxDevspaceHelper =
-    pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ../tmux/scripts/tmux-devspace.sh);
-
   # stdin → Android clipboard via OSC 52, which the Termux-family
   # terminal implements (no Termux:API needed). Inside tmux the escape
   # rides a passthrough DCS. `cat file | clip`.
@@ -36,7 +31,6 @@
 in {
   imports = [
     ../atuin
-    ../devspaces-client
     ../git
     ../lazygit
     ../ssh-config
@@ -67,7 +61,6 @@ in {
       gnugrep
       gnused
       ripgrep
-      tmuxDevspaceHelper
       vivid
       wget
       # zsh's shared init sources `zoxide init` output, whose chpwd hook

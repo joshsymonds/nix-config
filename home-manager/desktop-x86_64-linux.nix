@@ -19,7 +19,6 @@
 in {
   imports = [
     ./common.nix
-    ./devspaces-client
     ./direnv-prewarm
     ./firefox
     ./vpn-exit/firefox.nix

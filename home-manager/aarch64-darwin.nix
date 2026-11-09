@@ -19,7 +19,6 @@ in {
   imports = [
     ./common.nix
     ./aerospace
-    ./devspaces-client
     ./go
     ./ssh-hosts
     ./ssh-config

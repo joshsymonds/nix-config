@@ -61,6 +61,15 @@
             "command": "~/.claude/hooks/gambit-dispatch-guard.py"
           }
         ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "orrery hook"
+          }
+        ]
       }
     ],
     "Stop": [
@@ -73,8 +82,7 @@
           },
           {
             "type": "command",
-            "command": "steward notify --harness claude-code",
-            "timeout": 90
+            "command": "orrery hook"
           }
         ]
       }
@@ -85,7 +93,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "steward notify --harness claude-code",
+            "command": "orrery hook",
             "timeout": 90
           }
         ]
@@ -108,7 +116,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "steward notify --harness claude-code"
+            "command": "orrery hook"
           }
         ]
       }
@@ -120,6 +128,48 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/aws-profile-mirror.sh"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "orrery hook"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "orrery hook"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "orrery hook"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "orrery hook"
           }
         ]
       }

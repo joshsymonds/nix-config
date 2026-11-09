@@ -10,7 +10,10 @@
     Service = {
       ExecStart = "${config.programs.orrery.package}/bin/orrery serve --listen 127.0.0.1:8489 --allow-login josh@joshsymonds.com --push-host ntfy.sh";
       Restart = "always";
-      Environment = ["PATH=${lib.makeBinPath [pkgs.tmux]}"];
+      Environment = [
+        "TMUX_TMPDIR=%t"
+        "PATH=${lib.makeBinPath [pkgs.tmux]}"
+      ];
     };
     Install.WantedBy = ["default.target"];
   };

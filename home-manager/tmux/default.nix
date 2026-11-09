@@ -32,7 +32,10 @@ in {
         yank
       ];
 
-      extraConfig = ''
+      # mkBefore keeps this ahead of orrery's `source-file`, which is set at
+      # default priority, so orrery's `set -ga status-right` appends after the
+      # system-monitor `set -g status-right` below instead of being replaced.
+      extraConfig = mkBefore ''
         # Enable true color support
         set -ga terminal-overrides ",tmux-256color:Tc"
         set -ga terminal-overrides ",xterm-256color:Tc"
@@ -138,8 +141,7 @@ in {
         bind-key -n M-2 select-window -t 2
         bind-key -n M-3 select-window -t 3
         bind-key -n M-4 select-window -t 4
-        bind-key -n M-5 select-window -t 5
-      '';
+        bind-key -n M-5 select-window -t 5'';
     };
 
     # systemd user service to keep tmux server running (Linux only).

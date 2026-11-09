@@ -7,8 +7,6 @@
 with lib; let
   zshPackage = config.programs.zsh.package or pkgs.zsh;
   defaultShell = "${zshPackage}/bin/zsh";
-  tmuxDevspaceHelper =
-    pkgs.writeShellScriptBin "tmux-devspace" (builtins.readFile ./scripts/tmux-devspace.sh);
   # Combined system-monitor widget. Reads /proc directly (no iostat sample)
   # for cpu/ram/net/disk, plus systemctl for failed units, and emits the full
   # styled status-right string. Replaces five separate `#(...)` shell-outs.
@@ -76,8 +74,8 @@ in {
         setw -g allow-rename on
         set -g automatic-rename-format '#{pane_current_command}'
 
-        # Terminal title: DEV_CONTEXT option (fallback to hostname) + command + compressed path
-        set -g set-titles-string '#{?@dev_context,#{@dev_context},#H}*#{pane_current_command}*#(${tmuxDevspaceHelper}/bin/tmux-devspace title-path #{q:pane_current_path})'
+        # Terminal title: session name and window name
+        set -g set-titles-string '#S:#W'
 
         # Status line configuration. Catppuccin Mocha palette throughout.
         set -g status-style "fg=#cdd6f4,bg=default"
@@ -156,7 +154,7 @@ in {
         # Never tear down a running tmux server during home-manager activation.
         # ExecStop runs `kill-server`, which terminates every session — so a
         # benign unit-definition change would kill the user's live work
-        # (incident 2026-05-05: lost mars+mercury during `update`).
+        # (incident 2026-05-05: lost two live sessions during `update`).
         X-RestartIfChanged = "false";
         X-StopIfChanged = "false";
         X-StopOnRemoval = "false";

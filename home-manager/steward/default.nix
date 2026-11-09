@@ -40,31 +40,5 @@ in {
           PATCHBAY_CALLER_KEY_FILE = "/run/agenix/patchbay-caller-key";
         };
     };
-
-    systemd.user.services.steward-notifyd = {
-      Unit = {
-        Description = "Steward notification daemon";
-        After = ["default.target"];
-      };
-      Service = {
-        ExecStart = pkgs.writeShellScript "steward-notifyd-start" ''
-          set -eu
-          STEWARD_NTFY_URL="$(cat "${config.age.secrets."ntfy-url".path}")"
-          STEWARD_NTFY_TOKEN="$(cat "${config.age.secrets."ntfy-token".path}")"
-          export STEWARD_NTFY_URL STEWARD_NTFY_TOKEN
-          export STEWARD_HELPER_BIN=${lib.escapeShellArg config.home.sessionVariables.STEWARD_HELPER_BIN}
-          export STEWARD_MODEL_PROVIDER=${lib.escapeShellArg config.home.sessionVariables.STEWARD_MODEL_PROVIDER}
-          export STEWARD_MODEL_ID=${lib.escapeShellArg config.home.sessionVariables.STEWARD_MODEL_ID}
-          export STEWARD_MODEL_THINKING=${lib.escapeShellArg config.home.sessionVariables.STEWARD_MODEL_THINKING}
-          exec ${steward}/bin/steward notifyd
-        '';
-        Restart = "on-failure";
-        RestartSec = 5;
-        Environment = [
-          "PATH=${lib.makeBinPath [steward pkgs.tmux pkgs.git pkgs.coreutils]}"
-        ];
-      };
-      Install.WantedBy = ["default.target"];
-    };
   };
 }

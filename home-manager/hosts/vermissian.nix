@@ -8,6 +8,7 @@
     ../ec2-fleet
     ../go
     ../orrery
+    ../orrery/serve.nix
     ../parlor
     ../patchbay
     ../patchbay/singularity.nix

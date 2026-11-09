@@ -47,6 +47,13 @@
       id = "com.termux.api";
       label = "Termux:API";
     }
+    # UnifiedPush distributor for the orrery app, which pushes via ntfy.sh.
+    # Not subscribed to orrery's ntfy topic: a subscription here would
+    # deliver every push a second time.
+    {
+      id = "io.heckel.ntfy";
+      label = "ntfy";
+    }
   ];
 
   obtainium = [

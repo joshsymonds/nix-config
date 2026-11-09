@@ -21,6 +21,7 @@ in
       ./hardware-configuration.nix
       ./vpn-exit.nix
       ./services/marvin-blackbox-reap.nix
+      ./services/orrery-cheatsheet.nix
       inputs.lanzaboote.nixosModules.lanzaboote
 
       # Headless-server hardening (BT module blacklist on top of fleet-wide)

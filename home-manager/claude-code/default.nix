@@ -74,11 +74,6 @@
   codexUpstream = config.services.patchbay.codexUpstream.enable or false;
   codexExhausted = config.services.patchbay.codexUpstream.exhausted or false;
 
-  # The chatgpt/* selectors patchbay publishes on those hosts. Same file the
-  # Gambit model profiles and their compatibility-named check import, so a selector named here, in
-  # modelRegistry, or in settings.json has exactly one place it can be spelled.
-  chatgptModels = import ../patchbay/chatgpt-models.nix;
-
   # Generate settings.json with the local marketplaces' entries injected at
   # build time, pointing at their Nix store paths. Keeps a single source of
   # truth between settings.json's extraKnownMarketplaces and the runtime
@@ -108,29 +103,56 @@
   # `or false` keeps hosts that never import home-manager/patchbay — darwin
   # (ninuan), echelon — evaluating, and null there means "no local gateway",
   # leaving the vendor endpoint in place.
+  #
+  # The prefix-less base URL selects patchbay's personal context. A project
+  # that bills elsewhere selects its context with a /ctx/<name> base URL in
+  # its own .claude/settings.json — activation.claudeAttainContext below
+  # stamps the Attain repos.
   patchbayBaseUrl =
     if (config.services.patchbay.enable or false)
     then "http://127.0.0.1:${toString config.services.patchbay.port}"
     else null;
 
-  # The prefix-less base URL selects patchbay's personal context. A project
-  # that bills elsewhere selects its context with a /ctx/<name> base URL in
-  # its own .claude/settings.json — activation.claudeAttainContext below
-  # stamps the Attain repos.
+  # Per-model effort, rendered into settings.json as modelSettings. Claude
+  # Code 2.1.321 treats a user-level top-level effortLevel as legacy: it
+  # applies only to a hardcoded list of older models (through opus-5,
+  # fable-5-1, mythos-5-1) and to ids its parser does not recognise. Every
+  # newer model (fable-5-2, opus-5-5, sonnet-5-5, haiku-5-5) reads
+  # modelSettings.<model>.effortLevel and otherwise runs at the model's
+  # built-in default — observed 2026-11-09 as a fable-5-2 session starting at
+  # medium under effortLevel "high" (see CZe and gEo in the binary).
   #
-  # settings.json is deployed fleet-wide, but a chatgpt/* default model is
-  # only served where the Codex upstream runs. Elsewhere it would 404 on
-  # every request — patchbay forwards an unclaimed model to Anthropic, and a
-  # host with no patchbay sends it straight there — so those hosts fall back
-  # to the registry's Claude default. cmswitch stays the one switch: it edits
-  # settings.json, and this overlay decides per host whether the choice can
-  # be honored.
-  defaultModelIsChatgpt = lib.hasPrefix "chatgpt/" settingsJsonBase.model;
-  chatgptDefaultKnown =
-    !defaultModelIsChatgpt
-    || chatgptModels ? ${settingsJsonBase.model}
-    || throw "claude-code: settings.json model '${settingsJsonBase.model}' is not a route home-manager/patchbay/chatgpt-models.nix publishes";
-  claudeFallback = modelRegistry."fable-5-2";
+  # Each model in the registry gets its defaultEffort, and the session model
+  # gets the effort settings.json names, so cmswitch's `.model`/`.effortLevel`
+  # pair stays the one switch.
+  modelEffortSettings =
+    lib.mapAttrs' (_: entry: lib.nameValuePair entry.model {effortLevel = entry.defaultEffort;})
+    modelRegistry
+    // {
+      ${settingsJsonBase.model} = {inherit (settingsJsonBase) effortLevel;};
+    };
+
+  # The rows of the /model picker: the registry entry that owns each family
+  # alias, most capable first, selected by exact id so a row names the same
+  # model whatever Claude Code or the server resolves the alias to. Older
+  # registry entries stay reachable through `--model` and cmswitch.
+  pickerRows = let
+    capitalize = s: lib.toUpper (lib.substring 0 1 s) + lib.substring 1 (-1) s;
+    row = family: let
+      owners = lib.filterAttrs (_: entry: lib.elem family entry.aliases) modelRegistry;
+      name =
+        if lib.length (lib.attrNames owners) == 1
+        then lib.head (lib.attrNames owners)
+        else throw "claude-code: exactly one modelRegistry entry must own the '${family}' alias";
+      entry = owners.${name};
+      version = lib.concatStringsSep "." (lib.tail (lib.splitString "-" name));
+    in {
+      inherit (entry) model;
+      label = capitalize family;
+      description = "${capitalize family} ${version} · ${modelEffortSettings.${entry.model}.effortLevel} effort by default";
+    };
+  in
+    map row ["fable" "opus" "sonnet" "haiku"];
 
   # What a ~/Work/attain session runs: the registry's Fable 5.1 at its
   # default effort, stamped into each Attain repo's project settings by
@@ -162,56 +184,47 @@
       else "1";
   };
 
-  settingsJson = assert chatgptDefaultKnown;
-    mkSettingsJson "base" (
-      # One env attrset: the overlays below are joined with `//`, which is a
-      # shallow merge, so two overlays each carrying an `env` key would keep
-      # only the last one and leave the __GAMBIT_VALIDATE_DISPATCH__
-      # placeholder unsubstituted (observed 2026-09-15 on vermissian: the
-      # dispatch guard denied every Implementer launch).
-      {
-        env =
-          {
-            GAMBIT_VALIDATE_DISPATCH = "${gambitSrc}/skills/executing-plans/scripts/validate_dispatch.py";
-          }
-          // lib.optionalAttrs (patchbayBaseUrl != null) {
-            ANTHROPIC_BASE_URL = patchbayBaseUrl;
-            # Report each subagent's agent type in x-claude-code-agent-type,
-            # which patchbay's subagents.agent_types policy routes on: the
-            # built-in Explore inherits its session's model, so the model alone
-            # cannot send it to the small-model Seat.
-            CLAUDE_CODE_GATEWAY_HINT_HEADERS = "1";
-            # Message Threads (beta message-threads-2026-08-12): send only the
-            # new messages each turn against a server-held thread, for TTFT on
-            # long contexts. Claude Code gates it off behind any base URL that
-            # is not api.anthropic.com before consulting its rollout flag
-            # (verified 2026-11-06, CC 2.1.314); this forces it on. The
-            # anthropic forward Seat relays the body and header unchanged.
-            CLAUDE_CODE_TETHER_LIVE = "1";
-          };
-      }
-      // lib.optionalAttrs (defaultModelIsChatgpt && !codexUpstream) {
-        model = claudeFallback.model;
-        effortLevel = claudeFallback.defaultEffort;
-      }
-      # CC 2.1.257 refuses to start a session on a model id its catalog does
-      # not describe. A /model picker row with behavesAs adopts a known
-      # model's client-side profile for the foreign id (probed 2026-09-05:
-      # opus-5 gives the 64k output ceiling and xhigh default; the assumed
-      # context window stays 200k regardless). One row per published route,
-      # generated here rather than written into settings.json so hosts
-      # without the routes never offer them.
-      // lib.optionalAttrs codexUpstream {
-        modelPicker.options =
-          lib.mapAttrsToList (selector: route: {
-            model = selector;
-            label = route.model;
-            description = "ChatGPT subscription via patchbay";
-            behavesAs = "claude-opus-5";
-          })
-          chatgptModels;
-      }
-    );
+  settingsJson = mkSettingsJson "base" (
+    # One env attrset: the overlays below are joined with `//`, which is a
+    # shallow merge, so two overlays each carrying an `env` key would keep
+    # only the last one and leave the __GAMBIT_VALIDATE_DISPATCH__
+    # placeholder unsubstituted (observed 2026-09-15 on vermissian: the
+    # dispatch guard denied every Implementer launch).
+    {
+      env =
+        {
+          GAMBIT_VALIDATE_DISPATCH = "${gambitSrc}/skills/executing-plans/scripts/validate_dispatch.py";
+        }
+        // lib.optionalAttrs (patchbayBaseUrl != null) {
+          ANTHROPIC_BASE_URL = patchbayBaseUrl;
+          # Report each subagent's agent type in x-claude-code-agent-type,
+          # which patchbay's subagents.agent_types policy routes on: the
+          # built-in Explore inherits its session's model, so the model alone
+          # cannot send it to the small-model Seat.
+          CLAUDE_CODE_GATEWAY_HINT_HEADERS = "1";
+          # Message Threads (beta message-threads-2026-08-12): send only the
+          # new messages each turn against a server-held thread, for TTFT on
+          # long contexts. Claude Code gates it off behind any base URL that
+          # is not api.anthropic.com before consulting its rollout flag
+          # (verified 2026-11-06, CC 2.1.314); this forces it on. The
+          # anthropic forward Seat relays the body and header unchanged.
+          CLAUDE_CODE_TETHER_LIVE = "1";
+        };
+    }
+    # The /model picker lineup, replacing Claude Code's own. Its built-in
+    # Fable row gives way to a server-supplied one, and on 2026-11-09 the
+    # bootstrap response still offered `claude-fable-5-1[1m]` there to a
+    # 2.1.321 client, so the picker could not select Fable 5.2 at all.
+    # replaceBuiltInOptions hides the built-in and server-supplied rows
+    # (probed the same day) and leaves the Default row plus these.
+    // {
+      modelSettings = modelEffortSettings;
+      modelPicker = {
+        replaceBuiltInOptions = true;
+        options = pickerRows;
+      };
+    }
+  );
 
   # ccrender — render the real ~/.claude/settings.json from the HM-deployed
   # settings.base.json, merging in the patchbay caller-key header.
@@ -269,25 +282,14 @@
 
   # ── Model registry ──────────────────────────────────────────────────────
   # Single source of truth for every Claude Code model this fleet adopts.
-  # Drives cmswitch's alias resolution (below) and the generated
-  # per-model unpin<Model>LaunchEffort check/assignment in
+  # Drives cmswitch's alias resolution (below), the per-model effort table
+  # rendered into settings.json (modelEffortSettings, above) and the
+  # generated per-model unpin<Model>LaunchEffort check/assignment in
   # activation.claudeEffortUnpin (further down). Adding a model here is the
-  # only step needed for cmswitch to recognise it and — if unpinKey is
-  # non-null — for activation to clear its launch-default effort pin.
-  #
-  # Foreign models enter as their patchbay selector: the model string is a
-  # chatgpt/* route key, served only on Codex-upstream hosts (the settings
-  # overlay above falls back to fable-5-2 everywhere else).
+  # only step needed for cmswitch to recognise it, for sessions on it to
+  # start at its defaultEffort and — if unpinKey is non-null — for
+  # activation to clear its launch-default effort pin.
   modelRegistry = {
-    "astra" = {
-      # GPT-6 Astra over the ChatGPT subscription. Effort reaches Codex as
-      # the Responses reasoning effort, so the four levels mean what they
-      # mean for Claude.
-      model = "chatgpt/astra";
-      defaultEffort = "xhigh";
-      unpinKey = null;
-      aliases = ["gpt-6-astra"];
-    };
     "fable-5-2" = {
       # `fable` follows Claude Code's own alias: CC 2.1.321 resolves the bare
       # name to claude-fable-5-2 (native 1M window). No unpinKey: 2.1.321
@@ -299,8 +301,7 @@
     };
     "fable-5-1" = {
       # No unpinKey: CC 2.1.257 pins launch effort only for opus-4-7/4-8 and
-      # fable-5 (see unpin<Model>LaunchEffort in the binary); fable-5-1 honors
-      # settings.json effortLevel directly.
+      # fable-5 (see unpin<Model>LaunchEffort in the binary).
       model = "claude-fable-5-1";
       defaultEffort = "high";
       unpinKey = null;
@@ -319,29 +320,9 @@
       # name to claude-opus-5-5 (native 1M window, 128k output), so cmswitch
       # opus and a `--model opus` session name the same model.
       model = "claude-opus-5-5";
-      defaultEffort = "xhigh";
+      defaultEffort = "high";
       unpinKey = null;
       aliases = ["opus"];
-    };
-    "opus-5" = {
-      model = "claude-opus-5";
-      defaultEffort = "xhigh";
-      # CC 2.1.257 dropped unpinOpus5LaunchEffort (only opus-4-7/4-8 and
-      # fable-5 keys remain in the binary), so there is no pin to clear.
-      unpinKey = null;
-      aliases = [];
-    };
-    "opus-4-8" = {
-      model = "claude-opus-4-8";
-      defaultEffort = "xhigh";
-      unpinKey = "unpinOpus48LaunchEffort";
-      aliases = [];
-    };
-    "opus-4-7" = {
-      model = "claude-opus-4-7";
-      defaultEffort = "xhigh";
-      unpinKey = "unpinOpus47LaunchEffort";
-      aliases = [];
     };
     "sonnet-5-5" = {
       # `sonnet` follows Claude Code's own alias: CC 2.1.284 resolves the bare
@@ -378,8 +359,8 @@
   # underscores/dashes, then strip a leading "claude" prefix. Mirrored
   # exactly in cmswitch's bash `normalize()` (below) so Nix-side
   # alias-table construction and runtime CLI parsing agree on what counts
-  # as "the same name" — e.g. normalize "Claude Opus 4.8" == normalize
-  # "opus-4-8" == "opus48".
+  # as "the same name" — e.g. normalize "Claude Opus 5.5" == normalize
+  # "opus-5-5" == "opus55".
   normalize = s: let
     lower = lib.toLower s;
     noSeparators = lib.concatStrings (

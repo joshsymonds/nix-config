@@ -10,6 +10,10 @@
 # or red (crit) under load. Severity is the worst of the card's own metric
 # threshold and (where applicable) a PSI "some avg10" threshold — there is no
 # separate pressure card, PSI only feeds per-card coloring.
+#
+# `tmux-status --json` prints the same five readings as the JSON array orrery's
+# host-status command reads. It measures fresh on every call and leaves the
+# status-bar cache alone.
 
 set -euo pipefail
 
@@ -60,14 +64,27 @@ serve_if_fresh() {
   return 1
 }
 
-serve_if_fresh && exit 0
-
-exec 9>"$lock"
-if ! flock -n 9; then
-  [[ -f $cache ]] && cat "$cache"
-  exit 0
+json_mode=0
+if [[ ${1:-} == --json ]]; then
+  json_mode=1
 fi
-serve_if_fresh && exit 0
+
+# --json measures on every call and never touches the status-bar cache, so it
+# always takes the lock (waiting out a bar refresh) instead of serving or
+# skipping on it.
+if (( json_mode )); then
+  exec 9>"$lock"
+  flock 9
+else
+  serve_if_fresh && exit 0
+
+  exec 9>"$lock"
+  if ! flock -n 9; then
+    [[ -f $cache ]] && cat "$cache"
+    exit 0
+  fi
+  serve_if_fresh && exit 0
+fi
 
 # ---------- raw counter readers (no state I/O, no timestamps) ----------
 
@@ -349,6 +366,15 @@ accent_for() {
   esac
 }
 
+level_name() {
+  # $1 = severity (0/1/2) -> orrery host-status level.
+  case $1 in
+    2) printf 'crit' ;;
+    1) printf 'warn' ;;
+    *) printf 'ok' ;;
+  esac
+}
+
 # ---------- format ----------
 # U+E0B6 (powerline rounded-left). Right side is just trailing space drawn in
 # the dark bg color, which produces a flat right edge — same visual as the
@@ -387,20 +413,42 @@ build_status() {
     "$load1" "$nproc_n" "$used_pct" "$disk_pct" \
     "$psi_base/cpu" "$psi_base/memory" "$psi_base/io")
 
-  local net_str disk_io_str failed
+  local net_str disk_io_str failed cpu_str ram_str disk_str
   net_str=$(printf '↓%s ↑%s' "$(human "$NET_RX_RATE")" "$(human "$NET_TX_RATE")")
   disk_io_str=$(printf '↓%s ↑%s' "$(human "$DISK_RD_RATE")" "$(human "$DISK_WR_RATE")")
-  failed=$(read_failed_units)
+  cpu_str="${CPU_PCT}% ${load_round}/${nproc_n}"
+  ram_str=$(human "$used_bytes")
+  disk_str="${disk_pct}%"
 
+  if (( json_mode )); then
+    # Values are built only from digits, letters, arrows, % / and spaces, so
+    # they need no JSON escaping.
+    printf '[{"label":"net","value":"%s","level":"ok"},' "$net_str"
+    printf '{"label":"cpu","value":"%s","level":"%s","percent":%d},' \
+      "$cpu_str" "$(level_name "$sev_cpu")" "$CPU_PCT"
+    printf '{"label":"ram","value":"%s","level":"%s","percent":%d},' \
+      "$ram_str" "$(level_name "$sev_ram")" "$used_pct"
+    printf '{"label":"disk io","value":"%s","level":"%s"},' \
+      "$disk_io_str" "$(level_name "$sev_disk_io")"
+    printf '{"label":"disk","value":"%s","level":"%s","percent":%d}]\n' \
+      "$disk_str" "$(level_name "$sev_disk_usage")" "$disk_pct"
+    return
+  fi
+
+  failed=$(read_failed_units)
   pill '#94e2d5' '󰈀' "$net_str"
-  pill "$(accent_for '#f9e2af' "$sev_cpu")" '' "${CPU_PCT}% ${load_round}/${nproc_n}"
-  pill "$(accent_for '#cba6f7' "$sev_ram")" '' "$(human "$used_bytes")"
+  pill "$(accent_for '#f9e2af' "$sev_cpu")" '' "$cpu_str"
+  pill "$(accent_for '#cba6f7' "$sev_ram")" '' "$ram_str"
   pill "$(accent_for '#89dceb' "$sev_disk_io")" '󰓅' "$disk_io_str"
-  pill "$(accent_for '#89b4fa' "$sev_disk_usage")" '󰋊' "${disk_pct}%"
+  pill "$(accent_for '#89b4fa' "$sev_disk_usage")" '󰋊' "$disk_str"
   if (( failed > 0 )); then
     pill '#fab387' '󰀦' "$failed"
   fi
 }
 
-build_status > "$cache.tmp" && mv "$cache.tmp" "$cache"
-cat "$cache"
+if (( json_mode )); then
+  build_status
+else
+  build_status > "$cache.tmp" && mv "$cache.tmp" "$cache"
+  cat "$cache"
+fi

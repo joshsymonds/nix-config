@@ -109,8 +109,13 @@ update
 
 ## 5. SSH: outbound is the product, inbound is a debug tool
 
-The phone's daily job is outbound: `earth` / `mars` / etc. drop into
-tmux devspaces on vermissian (devspaces-client module), `ssh <host>`
+The phone's daily job is outbound. `p` is orrery's launcher: on shrike it
+runs `orrery open --remote` on vermissian over ssh, so `p`, `p WORD`,
+`p new NAME` and `p WORDS...` open sessions there (on vermissian itself,
+`p` runs `orrery open` locally). The tmux plugin binds prefix `Space` to
+the orrery tree and prefix `s` to a directory shell, and tmux titles are
+`#S:#W`. `orrery help` prints the cheatsheet, which vermissian serves
+tailnet-only at https://vermissian.tail82223.ts.net:10003/. `ssh <host>`
 works fleet-wide with the phone's own key.
 
 Inbound sshd exists but is started BY HAND when wanted:

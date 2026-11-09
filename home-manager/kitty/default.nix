@@ -74,6 +74,8 @@ in {
         "kitty_mod+l" = "clear_terminal scrollback active";
         "kitty_mod+h" = "show_scrollback";
         "kitty_mod+g" = "show_last_non_empty_command_output";
+        # Opens a new tab running `p`, the orrery PATH executable.
+        "kitty_mod+p" = "launch --type=tab p";
       }
       # Cmd+Shift+[/] tab cycling. On macOS that's the literal chord; on Linux
       # keyd's [cmdterm] turns Cmd+[/] into Ctrl+Shift+[/], which kitty cycles.

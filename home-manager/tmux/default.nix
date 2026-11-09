@@ -112,6 +112,18 @@ in {
         set -g pane-border-style "fg=#313244"
         set -g pane-active-border-style "fg=#89b4fa"
 
+        # Mode, copy-mode, menu, and pane-number highlights — Catppuccin Mocha colors
+        set -g mode-style "bg=#45475a,fg=#cdd6f4"
+        set -g copy-mode-match-style "bg=#f9e2af,fg=#11111b"
+        set -g copy-mode-current-match-style "bg=#fab387,fg=#11111b"
+        set -g copy-mode-mark-style "bg=#cba6f7,fg=#11111b"
+        set -g menu-style "bg=#1e1e2e,fg=#cdd6f4"
+        set -g menu-selected-style "bg=#45475a"
+        set -g menu-border-style "fg=#b4befe"
+        set -g display-panes-colour "#6c7086"
+        set -g display-panes-active-colour "#89b4fa"
+        set -g clock-mode-colour "#89b4fa"
+
         # Window and pane styles - ensure no background is set
         set -g window-style 'default'
         set -g window-active-style 'default'

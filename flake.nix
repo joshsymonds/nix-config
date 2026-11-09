@@ -173,7 +173,7 @@
     };
 
     # Steward - shared coding-agent runtime, statusline, and notifications
-    steward.url = "github:joshsymonds/steward/f26cdde8f8ce7dc079896bcae7a8747151158778";
+    steward.url = "github:joshsymonds/steward/933958ab536066822a93ae79ffb5d78df698caa1";
     steward.inputs.nixpkgs.follows = "nixpkgs";
 
     # Orrery - Claude Code session launcher, pinned to the v0.2.1 release tag.

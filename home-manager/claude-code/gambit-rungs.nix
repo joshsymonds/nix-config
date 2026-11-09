@@ -89,10 +89,10 @@
       route = "chatgpt/sol";
       effort = "xhigh";
     };
-    # Steelman profile: Fable 5.1 on Claude Code, Astra on Pi. Fable is
+    # Steelman profile: Fable 5.2 on Claude Code, Astra on Pi. Fable is
     # reserved for this role alone (its weekly sub-limit is small).
     "fable-high" = {
-      claudeModel = "claude-fable-5-1";
+      claudeModel = "claude-fable-5-2";
       route = "chatgpt/astra";
       effort = "high";
     };

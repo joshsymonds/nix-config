@@ -130,13 +130,15 @@
     !defaultModelIsChatgpt
     || chatgptModels ? ${settingsJsonBase.model}
     || throw "claude-code: settings.json model '${settingsJsonBase.model}' is not a route home-manager/patchbay/chatgpt-models.nix publishes";
-  claudeFallback = modelRegistry."fable-5-1";
+  claudeFallback = modelRegistry."fable-5-2";
 
   # What a ~/Work/attain session runs: the registry's Fable 5.1 at its
   # default effort, stamped into each Attain repo's project settings by
   # activation.claudeAttainContext (below), where it beats the user-level
   # default in settings.json. Works on either side of patchbay's
-  # attainBedrock toggle — the model id is Anthropic-side both ways.
+  # attainBedrock toggle — the model id is Anthropic-side both ways. Fable
+  # 5.1 rather than 5.2: the Attain Bedrock model map has no Fable 5.2
+  # inference profile, so 5.2 would fail on the Bedrock Seat.
   #
   # [1m]: behind any base URL that is not api.anthropic.com Claude Code
   # believes the Claude 5 models are 200k whatever the catalog says (verified
@@ -275,7 +277,7 @@
   #
   # Foreign models enter as their patchbay selector: the model string is a
   # chatgpt/* route key, served only on Codex-upstream hosts (the settings
-  # overlay above falls back to fable-5-1 everywhere else).
+  # overlay above falls back to fable-5-2 everywhere else).
   modelRegistry = {
     "astra" = {
       # GPT-6 Astra over the ChatGPT subscription. Effort reaches Codex as
@@ -286,6 +288,15 @@
       unpinKey = null;
       aliases = ["gpt-6-astra"];
     };
+    "fable-5-2" = {
+      # `fable` follows Claude Code's own alias: CC 2.1.321 resolves the bare
+      # name to claude-fable-5-2 (native 1M window). No unpinKey: 2.1.321
+      # still pins launch effort only for opus-4-7/4-8 and fable-5.
+      model = "claude-fable-5-2";
+      defaultEffort = "high";
+      unpinKey = null;
+      aliases = ["fable"];
+    };
     "fable-5-1" = {
       # No unpinKey: CC 2.1.257 pins launch effort only for opus-4-7/4-8 and
       # fable-5 (see unpin<Model>LaunchEffort in the binary); fable-5-1 honors
@@ -293,7 +304,7 @@
       model = "claude-fable-5-1";
       defaultEffort = "high";
       unpinKey = null;
-      aliases = ["fable"];
+      aliases = [];
     };
     "fable-5" = {
       # Plain id since CC 2.1.257: its static model table has native_1m for

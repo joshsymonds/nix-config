@@ -212,6 +212,9 @@
     # The Bedrock map is keyed by the Seat's pinned model when it has one, so
     # this resolves through the claude-sonnet-5-5 entry like a caller's own.
     attain-bedrock-sonnet55 = attainBedrockSeat // {model = "claude-sonnet-5-5";};
+    # The Attain map has no Fable 5.2 profile, and CC 2.1.321 resolves the bare
+    # `fable` alias to claude-fable-5-2, so attain's Fable subagents run 5.1.
+    attain-bedrock-fable51 = attainBedrockSeat // {model = "claude-fable-5-1";};
     # Opus subagents on the anthropic forward with the one-hour prompt-cache
     # lifetime. Claude Code writes five-minute markers for every subagent (the
     # main session already gets one-hour ones), and a Gambit orchestrator runs
@@ -251,7 +254,8 @@
   # anthropic-beta header" — so strip_betas names every flag Claude Code can
   # send that Bedrock rejects. The list is every dated beta string in the CC
   # 2.1.269 binary probed one at a time against us-east-2 (2026-09-17) plus
-  # the four 2.1.280 added, probed the same way (2026-09-22) — not the flags
+  # the four 2.1.280 added, probed the same way (2026-09-22), and the four
+  # 2.1.321 added (2026-11-09) — not the flags
   # one session happened to send: print mode, OAuth login and interactive
   # mode each add flags the others do not. When a CC upgrade adds a flag
   # Bedrock lacks, the 400 names it and this list is the fix.
@@ -271,6 +275,7 @@
       "cache-diagnosis-2026-04-07"
       "ccr-byoc-2025-07-29"
       "ccr-triggers-2026-01-30"
+      "claude-code-side-query-2026-09-29"
       "context-hint-2026-04-09"
       "dangerous-tool-use-2026-09-03"
       "dreaming-2026-04-21"
@@ -286,13 +291,16 @@
       "message-threads-2026-08-12"
       "oauth-2025-04-20"
       "oidc-federation-2026-04-01"
+      "program-use-case-ids-2026-09-17"
       "prompt-caching-evict-2026-05-12"
       "prompt-caching-scope-2026-01-05"
       "redact-thinking-2026-02-12"
+      "request-tags-2026-08-21"
       "server-side-fallback-2026-07-01"
       "skills-2025-10-02"
       "thinking-resumption-2026-07-17"
       "timing-2026-09-09"
+      "tool-provenance-2026-10-26"
       "user-profiles-2026-03-24"
     ];
   };
@@ -319,7 +327,7 @@
   #     so each id is pinned.
   #
   # On Attain Bedrock the small-model Seat is Sonnet 5.5, so a Haiku dispatch
-  # or an Explore there runs Sonnet.
+  # or an Explore there runs Sonnet, and a Fable 5.2 dispatch runs Fable 5.1.
   bindings = lib.mapAttrs (selector: _: seatID selector) subscriptionSeats;
   mkContext = claudeSeat: smallSeat: opusSeat: {
     default_seat = claudeSeat;
@@ -339,7 +347,10 @@
   context = mkContext "anthropic" "anthropic-haiku55" "anthropic-opus-1h";
   attainContext =
     if cfg.attainBedrock.enable
-    then mkContext "attain-bedrock" "attain-bedrock-sonnet55" "attain-bedrock"
+    then
+      lib.recursiveUpdate
+      (mkContext "attain-bedrock" "attain-bedrock-sonnet55" "attain-bedrock")
+      {subagents.models."claude-fable-5-2" = "attain-bedrock-fable51";}
     else context;
 
   # The tiltyard Seats get their own ID space rather than the selector-derived

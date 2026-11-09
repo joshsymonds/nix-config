@@ -16,7 +16,7 @@
 # An entry with `seat` names a Seat the registry already publishes and adds none;
 # the rest become Seats of their own under `tiltyard-<selector>`.
 {
-  # The six Claude candidates ride the caller's own OAuth credential on
+  # The seven Claude candidates ride the caller's own OAuth credential on
   # forward Seats — the subscription already pays for them, so a judgment run
   # spends nothing extra. `model` is the whole point of the Seat: a forward Seat
   # without it would serve whatever model the request already named.
@@ -24,6 +24,14 @@
     upstream = "https://api.anthropic.com";
     auth_mode = "forward";
     model = "claude-fable-5-1";
+  };
+  # Publishes Fable 5.2's native 1M window, for the same reason as haiku55
+  # below.
+  fable52 = {
+    upstream = "https://api.anthropic.com";
+    auth_mode = "forward";
+    model = "claude-fable-5-2";
+    max_input_tokens = 1000000;
   };
   opus5 = {
     upstream = "https://api.anthropic.com";

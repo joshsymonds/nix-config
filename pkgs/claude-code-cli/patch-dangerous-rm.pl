@@ -14,8 +14,10 @@
 # only matters in auto mode and goes with them so the breaker is inert
 # everywhere. 2.1.314 added waivableInBypass (true here); it is only read on
 # the permission-check error fallback, together with bypassImmune, so it is
-# left as is. Default/acceptEdits modes still prompt: the safetyCheck ask
-# itself is untouched.
+# left as is. 2.1.321 added hostPersonOnly, localProjectionOnly and
+# servedUnplaceable, all false here and each only restricting when true.
+# Default/acceptEdits modes still prompt: the safetyCheck ask itself is
+# untouched.
 #
 # Safety model (identical to patch-context-window.pl): the anchor is verified
 # BEFORE any edit; on drift nothing is applied and the stock binary ships with

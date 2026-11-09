@@ -3866,17 +3866,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1790624282,
-        "narHash": "sha256-K0T/IGaNQUNpbpsdM9Vrsb1Qf5u0Pol/fZhY1eo2eGo=",
+        "lastModified": 1794252325,
+        "narHash": "sha256-pPkLn7gvQ8IK3L5pDK+IIFaxS2KCXcEHkKy31BIiJtc=",
         "owner": "joshsymonds",
         "repo": "steward",
-        "rev": "f26cdde8f8ce7dc079896bcae7a8747151158778",
+        "rev": "933958ab536066822a93ae79ffb5d78df698caa1",
         "type": "github"
       },
       "original": {
         "owner": "joshsymonds",
         "repo": "steward",
-        "rev": "f26cdde8f8ce7dc079896bcae7a8747151158778",
+        "rev": "933958ab536066822a93ae79ffb5d78df698caa1",
         "type": "github"
       }
     },

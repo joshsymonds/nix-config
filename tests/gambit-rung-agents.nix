@@ -120,21 +120,21 @@ in
       and .["chatgpt/sol-fast"].model == .["chatgpt/sol"].model
     ' ${routeModelsJson} >/dev/null
 
-    # The tiltyard roster is exactly the eleven judgment selectors. A missing
+    # The tiltyard roster is exactly the twelve judgment selectors. A missing
     # one silently drops a candidate from a comparison; an extra one adds a
     # model nothing measured.
     jq -e '
       (keys | sort)
-      == ["dsv41flash", "fable51", "glm53", "haiku55", "kimik3", "opus5", "opus55", "qwen38", "sol", "sonnet5", "sonnet55"]
+      == ["dsv41flash", "fable51", "fable52", "glm53", "haiku55", "kimik3", "opus5", "opus55", "qwen38", "sol", "sonnet5", "sonnet55"]
     ' ${tiltyardJson} >/dev/null
 
-    # The six Claude candidates ride the caller's own credential on forward
+    # The seven Claude candidates ride the caller's own credential on forward
     # Seats: no billing class to declare, and the model pin is the only thing
     # that makes each one a distinct candidate, so it must be there. The counts
     # keep these from passing vacuously on a roster that declares no such Seat.
     jq -e '
       [.[] | select(.auth_mode == "forward")] as $forward
-      | ($forward | length) == 6
+      | ($forward | length) == 7
       and all($forward[];
         (.model | type) == "string" and (.model | length) > 0
         and (has("billing") | not))
@@ -153,6 +153,7 @@ in
     # the RunPod pod patchbay already publishes rather than a second Seat.
     jq -e '
       .fable51.model == "claude-fable-5-1"
+      and .fable52.model == "claude-fable-5-2"
       and .opus5.model == "claude-opus-5"
       and .opus55.model == "claude-opus-5-5"
       and .sonnet5.model == "claude-sonnet-5"
@@ -199,7 +200,7 @@ in
       and .["sonnet-low"] == {"claudeModel":"claude-sonnet-5-5","route":"chatgpt/luna","effort":"low"}
       and .["opus-high"] == {"claudeModel":"claude-opus-5-5","route":"chatgpt/sol","effort":"high"}
       and .["opus-xhigh"] == {"claudeModel":"claude-opus-5-5","route":"chatgpt/sol","effort":"xhigh"}
-      and .["fable-high"] == {"claudeModel":"claude-fable-5-1","route":"chatgpt/astra","effort":"high"}
+      and .["fable-high"] == {"claudeModel":"claude-fable-5-2","route":"chatgpt/astra","effort":"high"}
     ' ${profilesJson} >/dev/null
 
     # Every profile names a Claude model: none dispatches a Codex or

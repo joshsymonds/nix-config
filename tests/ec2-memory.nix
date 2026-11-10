@@ -67,7 +67,7 @@
     echo $$ > /tmp/oom-shell.pid
     trap 'exit 0' TERM
     ${hog}/bin/hog "$1" >/dev/null 2>&1 &
-    sleep 1000 &
+    sleep 60 &
     wait
   '';
 
@@ -228,9 +228,9 @@ in
         # R5: a user scope with no OOMPolicy property takes the user manager's
         # default. oom-scope traps SIGTERM and exits 0 while hog overruns the
         # bound. Under kill the kernel takes the whole scope, the shell with it,
-        # and systemd-run exits 137. Under stop systemd does not signal the
-        # scope while its sleep runs, so the shell exits 0 only when the sleep
-        # ends.
+        # and systemd-run exits 137. Under stop the shell exits 0 either way:
+        # systemd stops the scope after the kill and the shell traps the
+        # SIGTERM, or it leaves the scope until the 60 second sleep ends.
         def oom_scope_run(node, bytes_):
             node.succeed(f"{SSH} 'rm -f /tmp/oom-shell.pid'")
             rc = node.succeed(

@@ -821,6 +821,12 @@
               text = builtins.readFile ./pkgs/hexrain-wallpaper/release.sh;
             });
           };
+
+          # Builds and signs shrike's Tailscale APK; see pkgs/tailscale-android-shrike/release.sh.
+          tailscale-android-shrike = {
+            type = "app";
+            program = lib.getExe (pkgs.callPackage ./pkgs/tailscale-android-shrike {});
+          };
         };
 
         treefmt = {

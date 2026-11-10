@@ -70,6 +70,7 @@ in {
           "--region ${cfg.region}"
           "--cache /var/cache/ec2-s3-cache"
           "--max-cache-size 61440"
+          "--memory-target 2048"
           cfg.bucket
           cfg.path
         ];

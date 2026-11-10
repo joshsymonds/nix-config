@@ -136,7 +136,7 @@ in
       unit = refused.succeed("systemctl cat ec2-s3-cache.service")
       exec_start = re.search(
           r"^ExecStart=.*mount-s3 --uid 1001 --gid 100 --allow-other --allow-overwrite --allow-delete"
-          r" --prefix commonframe/ --region us-west-2 --cache (/\S+) --max-cache-size 61440"
+          r" --prefix commonframe/ --region us-west-2 --cache (/\S+) --max-cache-size 61440 --memory-target 2048"
           r" joshsymonds-ec2-fleet-cache--usw2-az1--x-s3 /home/cf/\.cache/commonframe$",
           unit,
           re.M,

@@ -53,6 +53,10 @@
     block = b"\x01" * int(sys.argv[1])
     print("allocated", len(block))
   '';
+
+  # Holds anonymous memory and refaults disk-backed file pages from several
+  # readers; see tests/ec2-memory-thrash.py.
+  thrash = pkgs.writers.writePython3Bin "ec2-memory-thrash" {} (builtins.readFile ./ec2-memory-thrash.py);
 in
   if lib.all memoryMaxPercentAccepted [1 85 99] && lib.all (value: !memoryMaxPercentAccepted value) [0 100 "1G"]
   then
@@ -66,6 +70,20 @@ in
         defaults = fleetBox {environment.systemPackages = [hog];};
 
         half = fleetBox {ec2Fleet.memoryMaxPercent = 50;};
+
+        # The pressure node lowers the bound to 50 percent, oomd's limit to 1
+        # percent and its duration to 10 seconds, so the thrash workload holds
+        # user.slice above the limit long enough for oomd to act within the
+        # test. The defaults node keeps the production values.
+        pressure = fleetBox {
+          ec2Fleet.memoryMaxPercent = 50;
+          virtualisation.diskSize = 4096;
+          environment.systemPackages = [thrash];
+          systemd.slices.user.sliceConfig = {
+            ManagedOOMMemoryPressureLimit = lib.mkForce "1%";
+            ManagedOOMMemoryPressureDurationSec = "10s";
+          };
+        };
       };
 
       testScript = ''
@@ -92,6 +110,7 @@ in
 
         defaults.wait_for_unit("multi-user.target")
         half.wait_for_unit("multi-user.target")
+        pressure.wait_for_unit("multi-user.target")
         defaults.wait_for_unit("sshd.service")
         defaults.wait_for_unit("ec2-idle-guard.service")
         defaults.wait_for_unit("tailscaled.service")
@@ -99,6 +118,13 @@ in
         # R1: the bound is a percentage of RAM, at the default and at 50.
         expect_percent_of_ram(defaults, 85)
         expect_percent_of_ram(half, 50)
+
+        # R3: production pressure kill on user.slice: kill at a 60 percent
+        # limit, oomd's default 30 second duration. systemctl renders the limit
+        # as a uint32 fraction of UINT32_MAX: 60% is 2576980377.
+        for prop, value in [("ManagedOOMMemoryPressure", "kill"), ("ManagedOOMMemoryPressureLimit", "2576980377")]:
+            got = defaults.succeed(f"systemctl show user.slice -p {prop} --value").strip()
+            assert got == value, f"user.slice {prop} is {got!r}, expected {value!r}"
 
         # R1: nix-daemon is socket-activated; the first client connection
         # starts it in user.slice.
@@ -144,6 +170,54 @@ in
             for line in defaults.succeed("cat /sys/fs/cgroup/system.slice/memory.events").splitlines()
         )
         assert int(system_events["oom_kill"]) == 0, f"system.slice oom_kill is {system_events['oom_kill']}"
+
+        # R3: on the pressure node, an idle ssh session holds the box open while
+        # a thrash unit in user.slice stalls on memory and oomd kills it.
+        pressure.succeed("install -m 0600 ${keys.snakeOilEd25519PrivateKey} /run/mem-key")
+        pressure.wait_until_succeeds(f"{SSH} true", timeout=60)
+        pressure.succeed(f"{SSH} 'sleep 900' >/dev/null 2>&1 & echo $! > /run/pressure-ssh.pid")
+        pressure.wait_until_succeeds("ss -Htn state established '( sport = :22 )' | grep -q .", timeout=60)
+
+        def user_slice_oom(node):
+            events = dict(
+                line.split()
+                for line in node.succeed("cat /sys/fs/cgroup/user.slice/memory.events.local").splitlines()
+            )
+            return int(events["oom"])
+
+        oom_before = user_slice_oom(pressure)
+        pressure.succeed(
+            f"{SSH} 'systemd-run --user --unit=ec2-memory-thrash ${thrash}/bin/ec2-memory-thrash "
+            f"${toString (900 * 1024 * 1024)} /var/tmp/ec2-memory-thrash.dat ${toString (1024 * 1024 * 1024)} 4'"
+        )
+        # Logs user.slice's memory.pressure every few seconds until oomd kills
+        # the thrash unit, so the log shows the pressure oomd acted on.
+        thrash_killed = f"{SSH} 'systemctl --user show -p Result --value ec2-memory-thrash.service' | grep -qx oom-kill"
+        for _ in range(120):
+            if pressure.execute(thrash_killed)[0] == 0:
+                break
+            pressure.log(
+                "user.slice memory.pressure: "
+                + pressure.succeed("cat /sys/fs/cgroup/user.slice/memory.pressure").replace("\n", " | ")
+                + " memory.current: " + pressure.succeed("cat /sys/fs/cgroup/user.slice/memory.current").strip()
+                + " memory.events: " + pressure.succeed("cat /sys/fs/cgroup/user.slice/memory.events").replace("\n", " ")
+            )
+            pressure.succeed("sleep 5")
+        else:
+            pressure.log(pressure.execute("oomctl dump; journalctl -b -u systemd-oomd --no-pager | tail -60")[1])
+            raise AssertionError("oomd did not kill the thrash unit within 600 seconds")
+
+        # R3: the kill is systemd-oomd's, not the kernel's: user.slice's
+        # memory.events.local oom did not rise across it.
+        oom_after = user_slice_oom(pressure)
+        assert oom_after == oom_before, f"user.slice memory.events.local oom rose from {oom_before} to {oom_after}"
+
+        # R3: the systemd-oomd kill journal entry names the thrash unit.
+        journal = pressure.succeed("journalctl -b -o cat MESSAGE_ID=d989611b15e44c9dbf31e3c81256e4ed")
+        assert "ec2-memory-thrash.service" in journal, f"no systemd-oomd kill of the thrash unit in the journal:\n{journal}"
+
+        # R3: the idle ssh session stayed open through the kill.
+        pressure.succeed("kill -0 $(cat /run/pressure-ssh.pid) && ss -Htn state established '( sport = :22 )' | grep -q .")
       '';
     }
   else throw "ec2Fleet.memoryMaxPercent must accept 1, 85 and 99 and reject 0, 100 and \"1G\""

@@ -155,7 +155,13 @@ in {
 
     # Sessions, user units and Nix builds share one bound. nix-daemon is
     # socket-activated, so it joins user.slice when a client first connects.
-    systemd.slices.user.sliceConfig.MemoryMax = "${toString cfg.memoryMaxPercent}%";
+    # systemd-oomd kills the heaviest unit in user.slice once memory pressure
+    # stalls it 60 percent of the time for 30 seconds (oomd's default duration).
+    systemd.slices.user.sliceConfig = {
+      MemoryMax = "${toString cfg.memoryMaxPercent}%";
+      ManagedOOMMemoryPressure = "kill";
+      ManagedOOMMemoryPressureLimit = "60%";
+    };
     systemd.services.nix-daemon.serviceConfig.Slice = "user.slice";
 
     # tailscaled registers the node under the hostname it starts with, so it

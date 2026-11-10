@@ -116,7 +116,7 @@ in
       # cf's writes go on.
       blackholed.wait_for_unit("sshd.service")
       blackholed.wait_until_succeeds("systemctl is-failed ec2-s3-cache.service", timeout=300)
-      blackholed.succeed("systemctl is-active multi-user.target")
+      blackholed.wait_for_unit("multi-user.target")
       blackholed.succeed("systemctl is-active sshd.service")
       blackholed.succeed("test \"$(stat -c %U /home/cf/.cache)\" = cf")
       blackholed.succeed("test \"$(stat -c %U /home/cf/.cache/commonframe)\" = cf")
@@ -126,7 +126,7 @@ in
       # cf's writes go on.
       refused.wait_for_unit("sshd.service")
       refused.wait_until_succeeds("systemctl is-failed ec2-s3-cache.service", timeout=300)
-      refused.succeed("systemctl is-active multi-user.target")
+      refused.wait_for_unit("multi-user.target")
       refused.succeed("systemctl is-active sshd.service")
       refused.succeed("test \"$(stat -c %U /home/cf/.cache)\" = cf")
       refused.succeed("test \"$(stat -c %U /home/cf/.cache/commonframe)\" = cf")

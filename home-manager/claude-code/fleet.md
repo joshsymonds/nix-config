@@ -93,7 +93,7 @@ hosts with its AWS credentials.
   own session scope killed. Read the kill file.
 - A `systemd-run --wait` unit that fails with result oom-kill was killed for
   memory. Read the kill file.
-- A Nix daemon error means the daemon and its builds were killed.
+- A Nix daemon error can mean the daemon and its builds were memory-killed.
   Read the kill file.
 - The warden terminates the newest boxes while fleet boxes total more than 128
   vCPU, and any box up past its `fleet-max-hours` tag (default 24; a tag above

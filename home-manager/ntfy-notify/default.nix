@@ -24,20 +24,20 @@
   sounds = pkgs.claude-notify-sounds;
 
   # ntfy runs this per message with $event/$title/$message/$tags/... in
-  # the environment. The hook sets the `question` tag when Claude is
+  # the environment. orreryd sets the `question` tag when Claude is
   # parked waiting on the user (priority 5) and `white_check_mark` when
-  # it just finished (priority 3) — branch the chime + libnotify urgency
-  # on that. notify-send reaches DMS over the session bus the user
-  # service already has (same path morgen-notifier uses).
+  # it just finished (priority 4) — branch the libnotify urgency on that.
+  # Both play the same tick. notify-send reaches DMS over the session bus
+  # the user service already has (same path morgen-notifier uses).
   handler = pkgs.writeShellScript "ntfy-notify-handler" ''
     set -u
     [ "''${event:-message}" = message ] || exit 0
     case ",''${tags:-}," in
-      *,question,*) sound=needs-you; urgency=critical ;;
-      *)            sound=done;      urgency=normal   ;;
+      *,question,*) urgency=critical ;;
+      *)            urgency=normal   ;;
     esac
-    echo "ntfy-notify: $sound urgency=$urgency tags=''${tags:-} title=''${title:-}" >&2
-    # suppress-sound: we play our own classified chime below, so tell DMS
+    echo "ntfy-notify: urgency=$urgency tags=''${tags:-} title=''${title:-}" >&2
+    # suppress-sound: we play our own tick below, so tell DMS
     # not to also play its generic notification sound. DMS honors this
     # freedesktop hint as of the josh/notif-suppress-sound patch on the
     # dank-material-shell integration branch — without that patch DMS
@@ -45,7 +45,7 @@
     ${pkgs.libnotify}/bin/notify-send -a "Coding Agent" -u "$urgency" \
       -h boolean:suppress-sound:true -- \
       "''${title:-Coding Agent}" "''${message:-}"
-    exec ${pkgs.pipewire}/bin/pw-play "${sounds}/$sound.wav"
+    exec ${pkgs.pipewire}/bin/pw-play "${sounds}/tick.wav"
   '';
 
   # Literal agenix-hm path; the string contains "''${XDG_RUNTIME_DIR}"

@@ -1,7 +1,7 @@
 {
   "companyAnnouncements": [],
   "viewMode": "default",
-  "model": "claude-fable-5-2",
+  "model": "claude-opus-5-5",
   "effortLevel": "high",
   "preferredNotifChannel": "notifications_disabled",
   "permissions": {
@@ -20,6 +20,7 @@
   "env": {
     "BASH_DEFAULT_TIMEOUT_MS": "300000",
     "BASH_MAX_TIMEOUT_MS": "600000",
+    "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
     "DISABLE_AUTOUPDATER": "1",
     "GAMBIT_VALIDATE_DISPATCH": "__GAMBIT_VALIDATE_DISPATCH__"
   },

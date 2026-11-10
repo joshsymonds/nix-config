@@ -1,10 +1,16 @@
 # Behavioural check for `tmux-status --json`. The script is built the way
-# home-manager/tmux/default.nix builds it. Every run points TMUX_STATUS_DIR at a
-# scratch directory, so the status bar's live state is never touched.
+# home-manager/tmux/default.nix builds it, except that a recording `sleep` sits
+# first on PATH: it appends to $SLEEP_LOG and then runs coreutils' sleep. That
+# is the only difference. Every run points TMUX_STATUS_DIR at a scratch
+# directory, so the status bar's live state is never touched.
 {pkgs}: let
+  sleepRecorder = pkgs.writeShellScriptBin "sleep" ''
+    echo called >> "$SLEEP_LOG"
+    exec ${pkgs.coreutils}/bin/sleep "$@"
+  '';
   tmuxStatus = pkgs.writeShellApplication {
     name = "tmux-status";
-    runtimeInputs = with pkgs; [coreutils gawk systemd util-linux];
+    runtimeInputs = [sleepRecorder] ++ (with pkgs; [coreutils gawk systemd util-linux]);
     text = builtins.readFile ../home-manager/tmux/scripts/tmux-status.sh;
   };
 in
@@ -21,6 +27,7 @@ in
 
     bin=${tmuxStatus}/bin/tmux-status
     export TMUX_STATUS_PSI=$PWD/no-psi
+    export SLEEP_LOG=$PWD/sleep.log
 
     # The four files the status bar owns: its cache and its three baselines.
     bar_files="tmux-status.cache tmux-status.cpu.state tmux-status.net.state tmux-status.disk.state"
@@ -50,14 +57,19 @@ in
     check_json_shape json1.txt "--json output has the wrong shape"
 
     CASE=bar-window
-    # The bar's baselines still hold run 1's timestamp t1 (checked above). Run 2
-    # reads them as its window start unless they are 15 s old, so a t2 under
-    # t1 + 15 s means run 2 measured over exactly [t1, t2].
+    # Run 2 reuses the baselines run 1 left (timestamp t1, checked above) when
+    # they are under 15 s old. Reuse does not sleep; only the rebaseline path
+    # sleeps. The empty-directory run is the control: it must sleep, which shows
+    # the recorder is live. Only then does run 2 count as having reused run 1.
+    TMUX_STATUS_DIR=$PWD/case2 "$bin" > /dev/null || fail "bar run on an empty directory failed"
+    [[ -s $SLEEP_LOG ]] || fail "the sleep recorder logged nothing on an empty directory"
     read -r t1 _ < before/tmux-status.cpu.state
     touch -d @0 "$TMUX_STATUS_DIR/tmux-status.cache"
+    : > "$SLEEP_LOG"
     "$bin" > bar2.txt || fail "bar run 2 failed"
     read -r t2 _ < "$TMUX_STATUS_DIR/tmux-status.cpu.state"
-    (( t2 > t1 && t2 - t1 < 15000000000 )) || fail "bar run 2 did not continue run 1's window ($t1 -> $t2)"
+    (( t2 > t1 )) || fail "bar run 2 wrote no new baseline ($t1 -> $t2)"
+    [[ ! -s $SLEEP_LOG ]] || fail "bar run 2 rebaselined instead of reusing run 1's window"
 
     CASE=json-empty-dir
     export TMUX_STATUS_DIR=$PWD/case3

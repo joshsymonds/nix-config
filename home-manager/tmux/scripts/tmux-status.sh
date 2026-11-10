@@ -12,8 +12,9 @@
 # separate pressure card, PSI only feeds per-card coloring.
 #
 # `tmux-status --json` prints the same five readings as the JSON array orrery's
-# host-status command reads. It measures fresh on every call and leaves the
-# status-bar cache alone.
+# host-status command reads. It measures on every call, keeps its own lock and
+# rate baselines (tmux-status.json.*), and leaves the status-bar cache, lock and
+# baselines alone.
 
 set -euo pipefail
 
@@ -42,11 +43,23 @@ fi
 psi_base=${TMUX_STATUS_PSI:-/proc/pressure}
 
 cache=$dir/tmux-status.cache
-lock=$dir/tmux-status.lock
-state_cpu=$dir/tmux-status.cpu.state
-state_net=$dir/tmux-status.net.state
-state_disk=$dir/tmux-status.disk.state
 ttl=4
+
+json_mode=0
+if [[ ${1:-} == --json ]]; then
+  json_mode=1
+fi
+
+# --json keeps its own lock and rate baselines, so its runs never move the
+# bar's window. The bar's names are unchanged.
+state_prefix=tmux-status
+if (( json_mode )); then
+  state_prefix=tmux-status.json
+fi
+lock=$dir/$state_prefix.lock
+state_cpu=$dir/$state_prefix.cpu.state
+state_net=$dir/$state_prefix.net.state
+state_disk=$dir/$state_prefix.disk.state
 
 # Delta-metric state files go stale after this many nanoseconds (15s). A
 # stale or missing baseline is rebaselined and resampled over ~1s instead of
@@ -64,14 +77,9 @@ serve_if_fresh() {
   return 1
 }
 
-json_mode=0
-if [[ ${1:-} == --json ]]; then
-  json_mode=1
-fi
-
-# --json measures on every call and never touches the status-bar cache, so it
-# always takes the lock (waiting out a bar refresh) instead of serving or
-# skipping on it.
+# --json measures on every call and never touches the status-bar cache or the
+# bar's lock and baselines, so it always takes its own lock (waiting out another
+# --json run) instead of serving or skipping on it.
 if (( json_mode )); then
   exec 9>"$lock"
   flock 9

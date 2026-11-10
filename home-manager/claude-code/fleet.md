@@ -70,6 +70,31 @@ hosts with its AWS credentials.
   server), or a dotnet MSBuild node (dotnet with MSBuild.dll and /nodemode: in
   its command line); a plain dotnet process still counts. It also terminates at
   `maxHours`. Defaults are 60 minutes idle and 24 hours max.
+- A memory bound caps user.slice at 85% of the box's RAM. Ssh sessions, user
+  units (`systemd-run --user`) and Nix builds share it; sshd, tailscaled and
+  the idle guard sit outside it. A class sets another percentage with
+  `ec2Fleet.memoryMaxPercent` (an integer from 1 to 99). Past the bound the
+  kernel OOM-kills inside the slice. Boxes have no swap or zram.
+- systemd-oomd also kills the heaviest-reclaiming unit under user.slice when
+  memory pressure stalls it 60% of the time for 30 seconds. User managers
+  default to OOMPolicy=kill, so a scope or service that loses a process to a
+  memory kill is stopped and never exits 0.
+- Each memory kill appends one line per killed unit to
+  `/run/ec2-memory-kills`, readable by any user and cleared at boot. A line is
+  `<ISO-8601 UTC time to the second> <unit> <kernel|oomd>`, with single
+  spaces, for example `2026-11-10T22:24:15Z ec2-memory-thrash.service oomd`.
+  `kernel` is the kernel's OOM killer; `oomd` is the pressure kill. The unit
+  is the one killed: a bare process in an ssh session names that session's
+  scope (`session-5.scope`), a user unit its unit name, and app.slice can
+  appear for kills under it.
+- A job that exits with status 137 may have been memory-killed.
+  Read the kill file.
+- A command over ssh that exits 255 on a box that answers a new ssh had its
+  own session scope killed. Read the kill file.
+- A `systemd-run --wait` unit that fails with result oom-kill was killed for
+  memory. Read the kill file.
+- A Nix daemon error means the daemon and its builds were killed.
+  Read the kill file.
 - The warden terminates the newest boxes while fleet boxes total more than 128
   vCPU, and any box up past its `fleet-max-hours` tag (default 24; a tag above
   48 counts as 24). It also terminates a box whose volumes are not one gp3 root

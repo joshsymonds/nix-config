@@ -35,6 +35,12 @@ in {
   # certificate is pinned in pkgs/hexrain-wallpaper/signer.sha256 — a new
   # key can't update the installed app in place.
   "secrets/user/hexrain-wallpaper-keystore.age".publicKeys = keys.joshsymonds;
+  # PKCS#12 keystore (store/key password "tailscale-android-shrike"; age is
+  # what protects it) signing shrike's Tailscale Android APK. Read only by
+  # `nix run .#tailscale-android-shrike`; never enters the Nix store. Its
+  # certificate is pinned in pkgs/tailscale-android-shrike/signer.sha256 — a
+  # new key can't update the installed app in place.
+  "secrets/user/tailscale-android-shrike-keystore.age".publicKeys = keys.joshsymonds;
   # UniFi gateway (172.31.0.1) local View Only admin, env-style
   # UNIFI_HOST/UNIFI_USERNAME/UNIFI_PASSWORD (+ optional UNIFI_API_KEY), for
   # read-only network observation from the CLI.

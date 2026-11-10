@@ -23,7 +23,10 @@ in {
     Service = {
       ExecStart = "${orreryd-start}";
       Restart = "always";
-      Environment = ["PATH=${lib.makeBinPath [pkgs.tmux pkgs.claudeCodeCli]}"];
+      Environment = [
+        "TMUX_TMPDIR=%t"
+        "PATH=${lib.makeBinPath [pkgs.tmux pkgs.claudeCodeCli]}"
+      ];
     };
     Install.WantedBy = ["default.target"];
   };

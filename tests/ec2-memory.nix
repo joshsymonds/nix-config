@@ -1,0 +1,149 @@
+# tests/ec2-memory.nix
+#
+# nixosTest for the fleet base's memory bound (hosts/ec2/base.nix,
+# ec2Fleet.memoryMaxPercent). user.slice carries MemoryMax as a percentage of
+# RAM, and nix-daemon.service runs in user.slice, so ssh sessions, user units
+# and Nix builds share one bound. Every node has 2 GiB. The defaults node keeps
+# the production default of 85 percent; the half node sets 50.
+{
+  pkgs,
+  inputs,
+  outputs,
+}: let
+  inherit (pkgs) lib;
+  keys = import "${pkgs.path}/nixos/tests/ssh-keys.nix" pkgs;
+
+  fleetBox = extra: {
+    imports = [../hosts/ec2/base.nix extra];
+    networking.hostName = lib.mkForce "ec2-memory";
+    # amazon-image enables the serial console; the test driver owns it.
+    systemd.services."serial-getty@ttyS0".enable = lib.mkForce false;
+    users.users.joshsymonds.openssh.authorizedKeys.keys = [keys.snakeOilEd25519PublicKey];
+    # A lingering user keeps a user manager running, so systemd-run --user
+    # has a user@UID.service to start units under.
+    users.users.joshsymonds.linger = true;
+    virtualisation.memorySize = 2048;
+    # The VM test driver sets vm.panic_on_oom = 2 (testing/test-instrumentation.nix),
+    # which turns a cgroup OOM into a kernel panic. The box keeps the kernel
+    # default of 0, so a process past the bound is killed, not the VM.
+    boot.kernel.sysctl."vm.panic_on_oom" = 0;
+  };
+
+  # Evaluates the real base module with one memoryMaxPercent value and reports
+  # whether the option type accepts it. builtins.tryEval turns the type error
+  # into a boolean.
+  memoryMaxPercentAccepted = value:
+    (builtins.tryEval (builtins.deepSeq
+        (import "${inputs.nixpkgs}/nixos/lib/eval-config.nix" {
+          system = pkgs.stdenv.hostPlatform.system;
+          specialArgs = {inherit inputs outputs;};
+          modules = [
+            ../hosts/ec2/base.nix
+            {ec2Fleet.memoryMaxPercent = value;}
+          ];
+        })
+    .config.ec2Fleet.memoryMaxPercent
+        true)).success;
+
+  # Allocates and writes the number of bytes it is given, so every page is
+  # resident before the process exits. A process past the bound is killed by
+  # the kernel with SIGKILL.
+  hog = pkgs.writers.writePython3Bin "hog" {} ''
+    import sys
+    block = b"\x01" * int(sys.argv[1])
+    print("allocated", len(block))
+  '';
+in
+  if lib.all memoryMaxPercentAccepted [1 85 99] && lib.all (value: !memoryMaxPercentAccepted value) [0 100 "1G"]
+  then
+    pkgs.testers.runNixOSTest {
+      name = "ec2-memory";
+
+      node.specialArgs = {inherit inputs outputs;};
+      node.pkgsReadOnly = false;
+
+      nodes = {
+        defaults = fleetBox {environment.systemPackages = [hog];};
+
+        half = fleetBox {ec2Fleet.memoryMaxPercent = 50;};
+      };
+
+      testScript = ''
+        SSH = "ssh -n -i /run/mem-key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null joshsymonds@localhost"
+
+        def mem_total(node):
+            return int(node.succeed("awk '/^MemTotal:/{print $2*1024}' /proc/meminfo").strip())
+
+        def user_slice_bound(node):
+            return int(node.succeed("systemctl show user.slice -p MemoryMax --value").strip())
+
+        def main_pid(node, unit):
+            return node.succeed(f"systemctl show -p MainPID --value {unit}").strip()
+
+        def expect_percent_of_ram(node, percent):
+            total = mem_total(node)
+            expected = total * percent // 100
+            bound = user_slice_bound(node)
+            assert abs(bound - expected) < 4096, (
+                f"user.slice MemoryMax {bound} is not {percent}% of MemTotal {total} ({expected})"
+            )
+
+        start_all()
+
+        defaults.wait_for_unit("multi-user.target")
+        half.wait_for_unit("multi-user.target")
+        defaults.wait_for_unit("sshd.service")
+        defaults.wait_for_unit("ec2-idle-guard.service")
+        defaults.wait_for_unit("tailscaled.service")
+
+        # R1: the bound is a percentage of RAM, at the default and at 50.
+        expect_percent_of_ram(defaults, 85)
+        expect_percent_of_ram(half, 50)
+
+        # R1: nix-daemon is socket-activated; the first client connection
+        # starts it in user.slice.
+        defaults.succeed("NIX_REMOTE=daemon nix-store -q --references /run/current-system >/dev/null")
+        daemon_pid = main_pid(defaults, "nix-daemon.service")
+        assert daemon_pid != "0", "nix-daemon.service has no MainPID after a client connected"
+        defaults.succeed(f"grep -qx '0::/user.slice/nix-daemon.service' /proc/{daemon_pid}/cgroup")
+
+        # R1: an unprivileged user's transient unit and an ssh session both sit
+        # under user.slice.
+        defaults.succeed("install -m 0600 ${keys.snakeOilEd25519PrivateKey} /run/mem-key")
+        defaults.wait_until_succeeds(f"{SSH} true", timeout=60)
+        defaults.succeed(f"{SSH} 'systemd-run --user --scope cat /proc/self/cgroup' | grep -q '/user.slice/'")
+        defaults.succeed(f"{SSH} 'cat /proc/self/cgroup' | grep -q '/user.slice/'")
+
+        # R2: remember the processes that must survive the bound.
+        survivors = ["sshd.service", "tailscaled.service", "ec2-idle-guard.service"]
+        before = {unit: main_pid(defaults, unit) for unit in survivors}
+        for unit, pid in before.items():
+            assert pid != "0", f"{unit} has no MainPID before the test"
+
+        # R2: an unprivileged process that touches more memory than the bound
+        # is killed with 137. It is asked for all of RAM, which is above 85
+        # percent of it.
+        total = mem_total(defaults)
+        rc = defaults.succeed(f"{SSH} 'hog {total} >/dev/null 2>&1; echo rc=$?'").strip()
+        assert rc == "rc=137", f"hog exited with {rc}, expected rc=137"
+
+        # R2: the kill came from the bound, not the box-wide killer.
+        events = dict(
+            line.split()
+            for line in defaults.succeed("cat /sys/fs/cgroup/user.slice/memory.events.local").splitlines()
+        )
+        assert int(events["oom"]) >= 1, f"user.slice memory.events.local oom is {events['oom']}"
+
+        # R2: sshd, tailscaled and the guard stay up with the same MainPID, and
+        # the system slice saw no OOM kill.
+        for unit, pid in before.items():
+            defaults.succeed(f"systemctl is-active {unit}")
+            assert main_pid(defaults, unit) == pid, f"{unit} MainPID changed from {pid}"
+        system_events = dict(
+            line.split()
+            for line in defaults.succeed("cat /sys/fs/cgroup/system.slice/memory.events").splitlines()
+        )
+        assert int(system_events["oom_kill"]) == 0, f"system.slice oom_kill is {system_events['oom_kill']}"
+      '';
+    }
+  else throw "ec2Fleet.memoryMaxPercent must accept 1, 85 and 99 and reject 0, 100 and \"1G\""

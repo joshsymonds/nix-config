@@ -82,6 +82,11 @@ in {
       default = null;
       description = "Shell command; while it exits 0 the box counts as busy.";
     };
+    memoryMaxPercent = lib.mkOption {
+      type = lib.types.ints.between 1 99;
+      default = 85;
+      description = "Percent of the box's RAM that user.slice (ssh sessions, user units and Nix builds) may use. Past it the kernel OOM-kills inside the slice.";
+    };
   };
 
   imports = [
@@ -147,6 +152,11 @@ in {
         ExecStart = "${idleGuard}";
       };
     };
+
+    # Sessions, user units and Nix builds share one bound. nix-daemon is
+    # socket-activated, so it joins user.slice when a client first connects.
+    systemd.slices.user.sliceConfig.MemoryMax = "${toString cfg.memoryMaxPercent}%";
+    systemd.services.nix-daemon.serviceConfig.Slice = "user.slice";
 
     # tailscaled registers the node under the hostname it starts with, so it
     # starts only after the fleet hostname is set.

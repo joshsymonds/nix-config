@@ -171,6 +171,7 @@
       echo "warning: pm not usable from this sandbox — can't detect drift."
       echo "Declared app set:"
       "$JQ" -r '(.fdroid[], .obtainium[], .play[]) | "  \(.label) (\(.id))"' "$APPS"
+      "$JQ" -r '.sideload[] | "  \(.label) (\(.id)) — rebuild: \(.rebuild)"' "$APPS"
       exit 0
     fi
 
@@ -187,6 +188,9 @@
     done
     "$JQ" -r '.play[] | [.id, .label] | @tsv' "$APPS" | while IFS="$(printf '\t')" read -r id label; do
       is_installed "$id" || echo "  missing: $label ($id) — install from the Play Store"
+    done
+    "$JQ" -r '.sideload[] | [.id, .label, .rebuild] | @tsv' "$APPS" | while IFS="$(printf '\t')" read -r id label rebuild; do
+      is_installed "$id" || echo "  missing: $label ($id) — build with $rebuild, then install over adb"
     done
 
     echo "==> shrike converged"

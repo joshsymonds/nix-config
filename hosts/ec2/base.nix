@@ -65,6 +65,29 @@
       fi
     done
   '';
+
+  # systemd's kill messages, by MESSAGE_ID: the kernel's OOM kill of a unit,
+  # and systemd-oomd's kill of a unit under pressure.
+  kernelKillId = "fe6faa94e7774663a0da52717891d8ef";
+  oomdKillId = "d989611b15e44c9dbf31e3c81256e4ed";
+  killRecord = "/run/ec2-memory-kills";
+
+  # Appends one line per unit per kill event, `<time> <unit> <kernel|oomd>`,
+  # from the journal's structured fields alone. A unit under user@*.service is
+  # dropped: the system manager repeats the kernel message there for every kill
+  # under a user manager.
+  memoryKills = pkgs.writeShellScript "ec2-memory-kills" ''
+    set -eo pipefail
+    touch ${killRecord}
+    chmod 0644 ${killRecord}
+    journalctl -f -n 0 -o json --no-pager MESSAGE_ID=${kernelKillId} MESSAGE_ID=${oomdKillId} \
+      | jq -r --unbuffered '
+          select(.MESSAGE_ID == "${kernelKillId}" or .MESSAGE_ID == "${oomdKillId}")
+          | (.UNIT // .USER_UNIT) as $unit
+          | select($unit != null and ($unit | test("^user@.*[.]service$") | not))
+          | "\(.__REALTIME_TIMESTAMP | tonumber / 1000000 | strftime("%Y-%m-%dT%H:%M:%SZ")) \($unit) \(if .MESSAGE_ID == "${kernelKillId}" then "kernel" else "oomd" end)"
+        ' >> ${killRecord}
+  '';
 in {
   options.ec2Fleet = {
     idleMinutes = lib.mkOption {
@@ -168,6 +191,17 @@ in {
     # loses a process to a memory kill is torn down whole, so it never exits 0
     # as if it had finished.
     systemd.user.settings.Manager.DefaultOOMPolicy = "kill";
+
+    # Each memory kill leaves a line in /run/ec2-memory-kills that any user can read.
+    systemd.services.ec2-memory-kills = {
+      description = "Record each memory kill in /run/ec2-memory-kills";
+      wantedBy = ["multi-user.target"];
+      path = [pkgs.coreutils pkgs.jq pkgs.systemd];
+      serviceConfig = {
+        Type = "simple";
+        ExecStart = "${memoryKills}";
+      };
+    };
 
     # tailscaled registers the node under the hostname it starts with, so it
     # starts only after the fleet hostname is set.

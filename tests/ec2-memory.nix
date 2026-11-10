@@ -22,6 +22,12 @@
     # A lingering user keeps a user manager running, so systemd-run --user
     # has a user@UID.service to start units under.
     users.users.joshsymonds.linger = true;
+    # Reads /run/ec2-memory-kills without privilege; its only group is its own.
+    users.users.memreader = {
+      isSystemUser = true;
+      group = "memreader";
+    };
+    users.groups.memreader = {};
     virtualisation.memorySize = 2048;
     # The VM test driver sets vm.panic_on_oom = 2 (testing/test-instrumentation.nix),
     # which turns a cgroup OOM into a kernel panic. The box keeps the kernel
@@ -105,7 +111,26 @@ in
       };
 
       testScript = ''
+        import re
+
         SSH = "ssh -n -i /run/mem-key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null joshsymonds@localhost"
+
+        # Reads /run/ec2-memory-kills as memreader, which has no group
+        # memberships, and returns its (unit, kind) pairs. Each line must be
+        # `<ISO-8601 UTC time> <unit> <kernel|oomd>` with single spaces.
+        def read_kill_records(node):
+            mode = node.succeed("stat -c %a /run/ec2-memory-kills").strip()
+            assert mode == "644", f"/run/ec2-memory-kills mode is {mode}, expected 644"
+            groups = node.succeed("id -Gn memreader").strip()
+            assert groups == "memreader", f"memreader groups are {groups!r}"
+            text = node.succeed("runuser -u memreader -- cat /run/ec2-memory-kills")
+            node.log(f"/run/ec2-memory-kills as memreader:\n{text}")
+            records = []
+            for line in text.splitlines():
+                assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z \S+ (kernel|oomd)", line), f"malformed kill record: {line!r}"
+                _, unit, kind = line.split(" ")
+                records.append((unit, kind))
+            return records
 
         def mem_total(node):
             return int(node.succeed("awk '/^MemTotal:/{print $2*1024}' /proc/meminfo").strip())
@@ -168,7 +193,12 @@ in
         # is killed with 137. It is asked for all of RAM, which is above 85
         # percent of it.
         total = mem_total(defaults)
-        rc = defaults.succeed(f"{SSH} 'hog {total} >/dev/null 2>&1; echo rc=$?'").strip()
+        # The session's own cgroup is printed first, from the same ssh session
+        # that runs hog, so the scope is the one hog is killed in.
+        out = defaults.succeed(f"{SSH} 'cat /proc/self/cgroup; hog {total} >/dev/null 2>&1; echo rc=$?'").strip().splitlines()
+        assert len(out) == 2, f"unexpected output from the hog session: {out}"
+        session_scope = out[0].split("/")[-1]
+        rc = out[1]
         assert rc == "rc=137", f"hog exited with {rc}, expected rc=137"
 
         # R2: the kill came from the bound, not the box-wide killer.
@@ -188,6 +218,12 @@ in
             for line in defaults.succeed("cat /sys/fs/cgroup/system.slice/memory.events").splitlines()
         )
         assert int(system_events["oom_kill"]) == 0, f"system.slice oom_kill is {system_events['oom_kill']}"
+
+        # R4: the R2 kill is recorded once, as the kernel's kill of the session
+        # scope the hog ran in. No user@ line.
+        defaults.wait_until_succeeds("runuser -u memreader -- grep -q ' kernel$' /run/ec2-memory-kills", timeout=60)
+        records = read_kill_records(defaults)
+        assert records == [(session_scope, "kernel")], f"defaults kill records are {records}, expected [({session_scope!r}, 'kernel')]"
 
         # R5: a user scope with no OOMPolicy property takes the user manager's
         # default. oom-scope traps SIGTERM and exits 0 while hog overruns the
@@ -258,6 +294,11 @@ in
         # R3: the systemd-oomd kill journal entry names the thrash unit.
         journal = pressure.succeed("journalctl -b -o cat MESSAGE_ID=d989611b15e44c9dbf31e3c81256e4ed")
         assert "ec2-memory-thrash.service" in journal, f"no systemd-oomd kill of the thrash unit in the journal:\n{journal}"
+
+        # R4 and R3: the record names the thrash unit once, as systemd-oomd's kill.
+        pressure.wait_until_succeeds("runuser -u memreader -- grep -q ' oomd$' /run/ec2-memory-kills", timeout=60)
+        records = read_kill_records(pressure)
+        assert records == [("ec2-memory-thrash.service", "oomd")], f"pressure kill records are {records}, expected the thrash unit as oomd"
 
         # R3: the idle ssh session stayed open through the kill.
         pressure.succeed("kill -0 $(cat /run/pressure-ssh.pid) && ss -Htn state established '( sport = :22 )' | grep -q .")

@@ -118,6 +118,7 @@
     echo "==> checking declared Android app set"
     JQ=${pkgs.jq}/bin/jq
     GIT=${pkgs.git}/bin/git
+    CURL=${pkgs.curl}/bin/curl
     APPS=${appsJson}
 
     installed=""
@@ -140,6 +141,24 @@
       local url="$1"
       termux-open-url "$url"
       read -r -p "     press enter once installed... " _ || true
+    }
+
+    # Sideload apps that carry an upstream pull request: one anonymous,
+    # bounded GET per entry (-q skips any curl config file, no credentials).
+    # A failed or unparseable answer prints "could not check" and never
+    # changes update's exit status.
+    report_upstream() {
+      local id label repo pr body merged
+      while IFS="$(printf '\t')" read -r id label repo pr <&3; do
+        body="$("$CURL" -q -fsS --max-time 10 -A update-check \
+          "https://api.github.com/repos/$repo/pulls/$pr" 2>/dev/null)" || body=""
+        merged="$(printf '%s' "$body" | "$JQ" -r '.merged' 2>/dev/null)" || merged=""
+        case "$merged" in
+          true) echo "  $label ($id): PR $repo#$pr is merged upstream — uninstall ours, install from the Play Store, sign in" ;;
+          false) echo "  $label ($id): PR $repo#$pr is not merged upstream — staying on our build" ;;
+          *) echo "  $label ($id): could not check whether PR $repo#$pr is merged upstream" ;;
+        esac
+      done 3< <("$JQ" -r '.sideload[] | select(.upstream != null) | [.id, .label, .upstream.repo, (.upstream.pr | tostring)] | @tsv' "$APPS")
     }
 
     # Our own APKs (committed in this repo): offered when the APK differs
@@ -172,6 +191,7 @@
       echo "Declared app set:"
       "$JQ" -r '(.fdroid[], .obtainium[], .play[]) | "  \(.label) (\(.id))"' "$APPS"
       "$JQ" -r '.sideload[] | "  \(.label) (\(.id)) — rebuild: \(.rebuild)"' "$APPS"
+      report_upstream
       exit 0
     fi
 
@@ -192,6 +212,7 @@
     "$JQ" -r '.sideload[] | [.id, .label, .rebuild] | @tsv' "$APPS" | while IFS="$(printf '\t')" read -r id label rebuild; do
       is_installed "$id" || echo "  missing: $label ($id) — build with $rebuild, then install over adb"
     done
+    report_upstream
 
     echo "==> shrike converged"
   '';

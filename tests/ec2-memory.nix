@@ -54,6 +54,17 @@
     print("allocated", len(block))
   '';
 
+  # The user scope's main process. It traps SIGTERM and exits 0, then waits on
+  # a background sleep while hog overruns the bound in the background. Its pid
+  # goes to /tmp so the test can see whether it survived the kill.
+  oomScope = pkgs.writers.writeBashBin "oom-scope" ''
+    echo $$ > /tmp/oom-shell.pid
+    trap 'exit 0' TERM
+    ${hog}/bin/hog "$1" >/dev/null 2>&1 &
+    sleep 1000 &
+    wait
+  '';
+
   # Holds anonymous memory and refaults disk-backed file pages from several
   # readers; see tests/ec2-memory-thrash.py.
   thrash = pkgs.writers.writePython3Bin "ec2-memory-thrash" {} (builtins.readFile ./ec2-memory-thrash.py);
@@ -67,9 +78,16 @@ in
       node.pkgsReadOnly = false;
 
       nodes = {
-        defaults = fleetBox {environment.systemPackages = [hog];};
+        defaults = fleetBox {environment.systemPackages = [hog oomScope];};
 
         half = fleetBox {ec2Fleet.memoryMaxPercent = 50;};
+
+        # The stop node forces the user manager's default back to systemd's
+        # built-in stop, so the same scope shows what the default closes.
+        stop = fleetBox {
+          systemd.user.settings.Manager.DefaultOOMPolicy = lib.mkForce "stop";
+          environment.systemPackages = [hog oomScope];
+        };
 
         # The pressure node lowers the bound to 50 percent, oomd's limit to 1
         # percent and its duration to 10 seconds, so the thrash workload holds
@@ -170,6 +188,31 @@ in
             for line in defaults.succeed("cat /sys/fs/cgroup/system.slice/memory.events").splitlines()
         )
         assert int(system_events["oom_kill"]) == 0, f"system.slice oom_kill is {system_events['oom_kill']}"
+
+        # R5: a user scope with no OOMPolicy property takes the user manager's
+        # default. oom-scope traps SIGTERM and exits 0 while hog overruns the
+        # bound. Under kill the kernel takes the whole scope, the shell with it,
+        # and systemd-run exits 137. Under stop systemd does not signal the
+        # scope while its sleep runs, so the shell exits 0 only when the sleep
+        # ends.
+        def oom_scope_run(node, bytes_):
+            node.succeed(f"{SSH} 'rm -f /tmp/oom-shell.pid'")
+            rc = node.succeed(
+                f"{SSH} 'systemd-run --user --scope oom-scope {bytes_} >/dev/null 2>&1; echo rc=$?'"
+            ).strip()
+            shell = node.succeed(f"{SSH} 'cat /tmp/oom-shell.pid'").strip()
+            alive = node.execute(f"{SSH} 'kill -0 {shell}'")[0] == 0
+            return rc, alive
+
+        rc, alive = oom_scope_run(defaults, total)
+        assert rc == "rc=137", f"oom-scope on the defaults node exited with {rc}, expected rc=137"
+        assert not alive, "oom-scope shell survived the memory kill on the defaults node"
+
+        stop.wait_for_unit("sshd.service")
+        stop.succeed("install -m 0600 ${keys.snakeOilEd25519PrivateKey} /run/mem-key")
+        stop.wait_until_succeeds(f"{SSH} true", timeout=60)
+        rc, _ = oom_scope_run(stop, mem_total(stop))
+        assert rc == "rc=0", f"oom-scope on the stop node exited with {rc}, expected rc=0"
 
         # R3: on the pressure node, an idle ssh session holds the box open while
         # a thrash unit in user.slice stalls on memory and oomd kills it.

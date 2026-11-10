@@ -164,6 +164,11 @@ in {
     };
     systemd.services.nix-daemon.serviceConfig.Slice = "user.slice";
 
+    # User managers default to OOMPolicy=kill: a user scope or service that
+    # loses a process to a memory kill is torn down whole, so it never exits 0
+    # as if it had finished.
+    systemd.user.settings.Manager.DefaultOOMPolicy = "kill";
+
     # tailscaled registers the node under the hostname it starts with, so it
     # starts only after the fleet hostname is set.
     systemd.services.tailscaled.after = ["ec2-fleet-identity.service"];

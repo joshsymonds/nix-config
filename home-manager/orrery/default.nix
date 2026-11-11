@@ -15,10 +15,12 @@
     set -eu
     export ORRERY_NTFY_URL_FILE="${ntfyUrlFile}"
     export ORRERY_NTFY_TOKEN_FILE="${ntfyTokenFile}"
-    exec ${config.programs.orrery.package}/bin/orreryd
+    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString config.services.orreryd.sessions " --sessions"}
   '';
 in {
-  systemd.user.services.orreryd = {
+  options.services.orreryd.sessions = lib.mkEnableOption "orreryd's headless engine session service";
+
+  config.systemd.user.services.orreryd = {
     Unit.Description = "orrery daemon";
     Service = {
       ExecStart = "${orreryd-start}";

@@ -58,6 +58,13 @@
   };
   services.parlor-backup.enable = true;
 
+  programs.orrery.roots = [
+    {
+      path = "Work";
+      depth = 2;
+    }
+  ];
+
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
 
   # Codex quota is available; use the full Gambit role registry.

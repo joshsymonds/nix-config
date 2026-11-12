@@ -1427,11 +1427,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1794451162,
-        "narHash": "sha256-4nsRsmup83nigoIXyA3ZfrSn7dk3T+kupkM/usdFT9E=",
+        "lastModified": 1794451952,
+        "narHash": "sha256-itcUu4MMtNIb5/q6GM/LDfayJeU89rLBEJhPDVDEKh8=",
         "owner": "joshsymonds",
         "repo": "gambit",
-        "rev": "b89b40ec74fe08c616567484716686e995eccee4",
+        "rev": "6111f5ada37759183eb31c6622074a8d805af25c",
         "type": "github"
       },
       "original": {

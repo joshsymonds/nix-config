@@ -49,9 +49,14 @@ tailnet only, at https://vermissian.tail82223.ts.net:10003/.
 
 ## Notifications
 
-`orreryd` runs on vermissian, gnomon, and ultraviolet. It posts ntfy
-notifications from `orrery hook` events on the `waiting` and `done` transitions.
+`orreryd` runs on vermissian, gnomon, and ultraviolet. On each `waiting` and
+`done` transition of a pane, it routes the notice to the desk stream, to Web
+Push, to both, or to neither (orrery `docs/contract.md`, "Notice routing"). With
+the desk at hand, the notice goes to the desk stream and reaches the phone only
+if it stays unseen for 5 minutes. With the desk away, it goes to both at once.
 
-The ntfy topic URL and access token are agenix secrets. orreryd reads them at
-runtime from the paths in `ORRERY_NTFY_URL_FILE` and `ORRERY_NTFY_TOKEN_FILE`, so
-neither value appears in the nix-config tree.
+Each host's desk stream is read by `orrery notices`. On gnomon, the
+`orrery-desk` user unit (`home-manager/orrery/desk.nix`) reads gnomon's stream,
+and vermissian's and ultraviolet's over ssh, and shows each notice as a desktop
+popup. A `waiting` notice is a critical popup. Web Push is relayed through
+`ntfy.sh` by default, as named by `--push-host`.

@@ -14,10 +14,11 @@ Claude wires `orrery hook` on its eight events in `../settings.json`:
 separately at the root TUI `agent_settled` event; there is no Codex
 integration.
 
-`orreryd` (on vermissian, gnomon, and ultraviolet) posts ntfy notifications
-from `orrery hook` events. ntfy is enabled only when `ORRERY_NTFY_URL_FILE` is
-set. `orreryd` reads the topic URL from that file and the access token from
-the file named by `ORRERY_NTFY_TOKEN_FILE`. Both are agenix secret paths read
-at runtime, so no topic or token lives in the tree. The subscriber contract in
-`home-manager/ntfy-notify/` remains: blocked = priority 5 + `question`, while
-done/info = priority 4/3 + `white_check_mark`.
+`orreryd` (on vermissian, gnomon, and ultraviolet) routes each pane notice from
+`orrery hook` events, a transition to `waiting` or `done`, to the desk stream,
+to Web Push, to both, or to neither (orrery `docs/contract.md`, "Notice
+routing"). Each host's desk stream is read by `orrery notices`. gnomon's
+`orrery-desk` user unit (`home-manager/orrery/desk.nix`) reads gnomon's stream
+and those of vermissian and ultraviolet over ssh, and shows each notice as a
+desktop popup with the tick. A `waiting` notice is a critical popup. Web Push
+reaches the phone through the relay named by `--push-host`, `ntfy.sh` by default.

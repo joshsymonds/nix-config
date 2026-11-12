@@ -122,7 +122,7 @@ To add a new package:
 
 ## Dev Contexts
 
-Long-lived shells run in tmux sessions managed by orrery. The `p` launcher attaches a session for a project directory, the tmux plugin adds the orrery tree and a shell popup, and orreryd posts ntfy notifications for Claude Code hook events. The full workflow is in [docs/devspaces.md](docs/devspaces.md).
+Long-lived shells run in tmux sessions managed by orrery. The `p` launcher attaches a session for a project directory, the tmux plugin adds the orrery tree and a shell popup, and orreryd routes Claude Code `waiting` and `done` notices to the desk stream and to Web Push. The full workflow is in [docs/devspaces.md](docs/devspaces.md).
 
 ### Launching sessions
 `p` is orrery's launcher. On vermissian it runs `orrery open`, and these forms work there:
@@ -150,7 +150,7 @@ Starship's context chip shows the Coder workspace name on Coder and the hostname
 `orrery help` prints the cheatsheet. vermissian serves it on the tailnet only, at https://vermissian.tail82223.ts.net:10003/.
 
 ### Notifications
-orreryd runs on vermissian, gnomon and ultraviolet. It posts ntfy notifications from `orrery hook` events and reads the ntfy secrets from agenix by path at runtime.
+orreryd runs on vermissian, gnomon and ultraviolet. It routes each pane notice from `orrery hook` events to the desk stream, to Web Push, to both, or to neither. gnomon's `orrery-desk` unit reads the desk streams of gnomon, vermissian and ultraviolet (the last two over ssh, via `orrery notices`) and shows each notice as a desktop popup. Web Push reaches the phone through the `ntfy.sh` relay.
 
 ## Remote Link Opening
 

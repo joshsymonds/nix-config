@@ -90,12 +90,13 @@ in {
     # notificationTimeoutCritical to 0, which it treats as "never auto-
     # dismiss" (NotificationService.qml:725 timer + _initWrapperPersistence),
     # so Critical popups otherwise sit on screen until manually cleared.
-    # Both the ntfy "needs-you" popups (sent -u critical) and the T-2-min
-    # morgen-notifier meeting alert (also -u critical) ride this. Low/
-    # normal already auto-dismiss at the 5 s default. The notification
-    # still goes to the notification center; this only bounds on-screen
-    # dwell. Global to all Critical notifications, but effectively only
-    # those two sources send Critical here.
+    # Both the orrery desk popups for waiting notices (notify-send -u
+    # critical) and the T-2-min morgen-notifier meeting alert (also -u
+    # critical) ride this. Low/normal already auto-dismiss at the 5 s
+    # default. The notification still goes to the notification center;
+    # this only bounds on-screen dwell. Global to all Critical
+    # notifications, but effectively only those two sources send Critical
+    # here.
     settings.notificationTimeoutCritical = 15000;
 
     # Compositor-driven background blur. Master toggle for the

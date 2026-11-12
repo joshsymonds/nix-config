@@ -215,6 +215,20 @@ data "aws_iam_policy_document" "launcher" {
     }
   }
 
+  # Read the console output of fleet=ec2 instances only.
+  statement {
+    sid       = "GetFleetConsoleOutput"
+    effect    = "Allow"
+    actions   = ["ec2:GetConsoleOutput"]
+    resources = [for r in local.fleet_regions : "arn:aws:ec2:${r}:${data.aws_caller_identity.current.account_id}:instance/*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ec2:ResourceTag/fleet"
+      values   = ["ec2"]
+    }
+  }
+
   # Pass the cache role to EC2 only.
   statement {
     sid       = "PassFleetCacheRole"

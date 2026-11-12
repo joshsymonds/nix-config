@@ -89,6 +89,14 @@ resource "aws_iam_role_policy" "warden" {
       },
       {
         Effect   = "Allow"
+        Action   = "ec2:GetConsoleOutput"
+        Resource = [for r in local.fleet_regions : "arn:aws:ec2:${r}:${data.aws_caller_identity.current.account_id}:instance/*"]
+        Condition = {
+          StringEquals = { "ec2:ResourceTag/fleet" = "ec2" }
+        }
+      },
+      {
+        Effect   = "Allow"
         Action   = "ec2:DescribeVolumes"
         Resource = "*"
       },

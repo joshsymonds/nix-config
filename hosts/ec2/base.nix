@@ -13,6 +13,22 @@
     if ${pkgs.runtimeShell} -c ${lib.escapeShellArg cfg.busyCommand}; then busy=1; fi
   '';
 
+  # The default reachableCommand. Exits 0 only when tailscaled is Running and
+  # either sees the node online or can reach a DERP relay (so a control-server
+  # outage alone does not fail it), sshd listens on port 22, and a transient
+  # unit starts and exits 0 in user.slice within 10 seconds.
+  reachableProbe = pkgs.writeShellScript "ec2-fleet-reachable" ''
+    status=$(${config.services.tailscale.package}/bin/tailscale status --json) || exit 1
+    jq -e '.BackendState == "Running"' <<< "$status" > /dev/null || exit 1
+    if ! jq -e '.Self.Online == true' <<< "$status" > /dev/null; then
+      ${config.services.tailscale.package}/bin/tailscale netcheck --format=json \
+        | jq -e '(.PreferredDERP // 0) != 0' > /dev/null || exit 1
+    fi
+    systemctl is-active --quiet sshd.service || exit 1
+    ss -Htln '( sport = :22 )' | grep -q . || exit 1
+    timeout 10 systemd-run --quiet --wait --collect --slice=user.slice ${pkgs.coreutils}/bin/true
+  '';
+
   # Checked every 30 seconds. Uptime past MAX_SECONDS powers off regardless of
   # activity; otherwise the box powers off once it has been idle for
   # IDLE_SECONDS. A refused poweroff (e.g. a block inhibitor) is retried on
@@ -44,6 +60,7 @@
       return 1
     }
     last_busy=$(date +%s)
+    last_reachable=$last_busy
     while true; do
       sleep 30
       now=$(date +%s)
@@ -54,6 +71,17 @@
       up=$(cut -d. -f1 <<< "$up")
       if [ "$up" -ge "$MAX_SECONDS" ]; then
         echo "uptime $up s reached the $MAX_SECONDS s lifetime; powering off"
+        systemctl --no-block poweroff && exit 0
+      fi
+      # The probe runs under a bound shorter than the pass, so a hung probe
+      # is a failed pass and the loop keeps its cadence. Failing for the whole
+      # UNREACHABLE_SECONDS window powers off even a busy box.
+      if timeout 20 ${pkgs.runtimeShell} -c ${lib.escapeShellArg cfg.reachableCommand}; then
+        last_reachable=$now
+      elif [ $((now - last_reachable)) -ge "$UNREACHABLE_SECONDS" ]; then
+        reason="ec2-fleet-unreachable reachableCommand failed for $((now - last_reachable)) s"
+        echo "$reason; powering off"
+        printf '%s\n' "$reason" | timeout 10 tee /dev/ttyS0 > /dev/null 2>&1
         systemctl --no-block poweroff && exit 0
       fi
       busy=0
@@ -107,6 +135,11 @@ in {
       type = lib.types.nullOr lib.types.str;
       default = null;
       description = "Shell command; while it exits 0 the box counts as busy.";
+    };
+    reachableCommand = lib.mkOption {
+      type = lib.types.str;
+      default = "${reachableProbe}";
+      description = "Shell command the guard runs each pass under a time bound; the box is unreachable while it does not exit 0.";
     };
     memoryMaxPercent = lib.mkOption {
       type = lib.types.ints.between 1 99;
@@ -168,10 +201,11 @@ in {
     systemd.services.ec2-idle-guard = {
       description = "Power off the fleet box when idle or past its lifetime";
       wantedBy = ["multi-user.target"];
-      path = [pkgs.coreutils pkgs.gnugrep pkgs.gawk pkgs.iproute2 pkgs.systemd];
+      path = [pkgs.coreutils pkgs.gnugrep pkgs.gawk pkgs.iproute2 pkgs.jq pkgs.systemd];
       environment = {
         IDLE_SECONDS = toString (cfg.idleMinutes * 60);
         MAX_SECONDS = toString (cfg.maxHours * 3600);
+        UNREACHABLE_SECONDS = "1800";
       };
       serviceConfig = {
         Type = "simple";

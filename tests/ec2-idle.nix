@@ -36,6 +36,16 @@
     import signal
     signal.pause()
   '';
+
+  # Stands in for the tailscale CLI on the probe nodes. BackendState, Self.Online
+  # and the DERP relay come from files under /run/ts-stub, which each case sets.
+  tailscaleStub = (pkgs.writeShellScriptBin "tailscale" ''
+    case "$1" in
+      status) printf '{"BackendState":"%s","Self":{"Online":%s}}\n' "$(cat /run/ts-stub/backend)" "$(cat /run/ts-stub/online)" ;;
+      netcheck) printf '{"PreferredDERP":%s}\n' "$(cat /run/ts-stub/derp)" ;;
+      *) exit 2 ;;
+    esac
+  '').overrideAttrs (_: {meta.mainProgram = "tailscale";});
 in
   pkgs.testers.runNixOSTest {
     name = "ec2-idle";
@@ -97,9 +107,43 @@ in
           serviceConfig.BindPaths = ["/run/blocked-ttyS0:/dev/ttyS0"];
         };
       };
+
+      # The probe fails from boot and the box is busy throughout. The guard
+      # powers off after the 120 s unreachable window anyway.
+      unreachable = fleetBox {
+        ec2Fleet.busyCommand = "true";
+        ec2Fleet.reachableCommand = "false";
+        systemd.services.ec2-idle-guard.environment.UNREACHABLE_SECONDS = lib.mkForce "120";
+      };
+
+      reachable = fleetBox {
+        ec2Fleet.reachableCommand = "true";
+        systemd.services.ec2-idle-guard.environment.UNREACHABLE_SECONDS = lib.mkForce "120";
+      };
+
+      # Passes once the box has been up 120 s. The guard starts within the
+      # first minute, so the probe fails for about 90 s, less than the 120 s
+      # window, and then passes; a shorter window would power the box off.
+      flapping = fleetBox {
+        ec2Fleet.reachableCommand = "test \"$(cut -d. -f1 /proc/uptime)\" -ge 120";
+        systemd.services.ec2-idle-guard.environment.UNREACHABLE_SECONDS = lib.mkForce "120";
+      };
+
+      # The default reachableCommand, with a stub tailscale and the real sshd
+      # and user.slice.
+      probe = fleetBox {
+        services.tailscale.package = tailscaleStub;
+      };
+
+      # The same probe with user.slice disabled, so a transient unit cannot
+      # start in it.
+      noUserSlice = fleetBox {
+        services.tailscale.package = tailscaleStub;
+        systemd.slices.user.enable = lib.mkForce false;
+      };
     };
 
-    testScript = ''
+    testScript = {nodes, ...}: ''
       import datetime
       import re
       import time
@@ -130,7 +174,7 @@ in
       # The ssh session and the busy file go up before the idle threshold can
       # expire, so each one is what holds its box up.
       sshSession.succeed("install -m 0600 ${keys.snakeOilEd25519PrivateKey} /run/idle-key")
-      sshSession.succeed("ssh -n -i /run/idle-key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null joshsymonds@localhost 'sleep 600' >/dev/null 2>&1 & echo $! > /run/idle-ssh.pid")
+      sshSession.succeed("ssh -n -i /run/idle-key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null joshsymonds@localhost 'sleep 1800' >/dev/null 2>&1 & echo $! > /run/idle-ssh.pid")
       sshSession.wait_until_succeeds("ss -Htn state established '( sport = :22 )' | grep -q .", timeout=60)
       busyGate.succeed("touch /run/ec2-busy")
 
@@ -170,6 +214,65 @@ in
       muxClient.succeed(f"ssh -n -i /run/mux-key -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ControlMaster=auto -o ControlPath=/run/mux-ctl -o ControlPersist=2h joshsymonds@{mux_ip} true >/dev/null 2>&1")
       muxClient.succeed(f"ssh -O check -o ControlPath=/run/mux-ctl joshsymonds@{mux_ip}")
       muxBox.wait_until_succeeds("ss -Htn state established '( sport = :22 )' | grep -q .", timeout=60)
+
+      # The flapping probe passes once its box is 120 s up. The reachable box
+      # passes from boot. Both stay up after twice the 120 s window. The guard
+      # starts within the first minute, so an uptime of 300 s is past twice the window.
+      for node in (flapping, reachable):
+          node.wait_for_unit("ec2-idle-guard.service")
+          node.wait_until_succeeds("test \"$(cut -d. -f1 /proc/uptime)\" -ge 300", timeout=400)
+          node.succeed("systemctl is-active ec2-idle-guard.service")
+
+      # The default probe, run as the guard runs it: on the guard's PATH, with
+      # the stub tailscale answering from the state each case sets.
+      def guard_path(node):
+          env = node.succeed("systemctl show -p Environment --value ec2-idle-guard.service")
+          return next(v[len("PATH="):] for v in env.split() if v.startswith("PATH="))
+
+      def reachable_as_guard(node):
+          return f"env PATH={guard_path(node)} ${nodes.probe.config.ec2Fleet.reachableCommand}"
+
+      def set_ts(node, backend, online, derp):
+          node.succeed(
+              "mkdir -p /run/ts-stub"
+              f" && printf %s '{backend}' > /run/ts-stub/backend"
+              f" && printf %s {online} > /run/ts-stub/online"
+              f" && printf %s {derp} > /run/ts-stub/derp"
+          )
+
+      probe.wait_for_unit("sshd.service")
+      noUserSlice.wait_for_unit("ec2-idle-guard.service")
+
+      # Exits 0 with BackendState Running and Self.Online true, sshd running,
+      # and user.slice able to start a unit.
+      set_ts(probe, "Running", "true", 0)
+      probe.succeed(reachable_as_guard(probe))
+
+      # Exits 0 with Self.Online false when netcheck finds a relay.
+      set_ts(probe, "Running", "false", 1)
+      probe.succeed(reachable_as_guard(probe))
+
+      # Exits nonzero with Self.Online false when netcheck finds no relay.
+      set_ts(probe, "Running", "false", 0)
+      probe.fail(reachable_as_guard(probe))
+
+      # Exits nonzero with BackendState NeedsLogin, even with Self.Online true.
+      set_ts(probe, "NeedsLogin", "true", 1)
+      probe.fail(reachable_as_guard(probe))
+
+      # Exits nonzero with sshd stopped, and exits 0 again once it is back.
+      set_ts(probe, "Running", "true", 1)
+      probe.succeed("systemctl stop sshd.service")
+      probe.fail(reachable_as_guard(probe))
+      probe.succeed("systemctl start sshd.service")
+      probe.wait_for_unit("sshd.service")
+      probe.succeed(reachable_as_guard(probe))
+
+      # Exits nonzero when a unit cannot start in user.slice. Every other
+      # answer is good here, so the slice is the only failure.
+      set_ts(noUserSlice, "Running", "true", 1)
+      noUserSlice.fail(reachable_as_guard(noUserSlice))
+
       muxBox.wait_for_shutdown(timeout=datetime.timedelta(seconds=300))
 
       # Uptime past the lifetime threshold powers off. Idle stays at its
@@ -187,6 +290,7 @@ in
       defaults.wait_for_unit("multi-user.target")
       defaults.succeed("systemctl show -p Environment --value ec2-idle-guard.service | grep -Fw IDLE_SECONDS=3600")
       defaults.succeed("systemctl show -p Environment --value ec2-idle-guard.service | grep -Fw MAX_SECONDS=86400")
+      defaults.succeed("systemctl show -p Environment --value ec2-idle-guard.service | grep -Fw UNREACHABLE_SECONDS=1800")
 
       # Load must settle so that only the session or busy file holds the box.
       sshSession.wait_until_succeeds("awk '{exit !($1 < 0.5)}' /proc/loadavg", timeout=300)
@@ -220,6 +324,14 @@ in
       idle_off = re.search(r"\[\s*(\d+)\.\d+\] [^\n]*idle for 480 s; powering off", blockedSerial.get_console_log())
       assert idle_off is not None, "the blocked node's guard never logged its idle power-off"
       assert int(idle_off.group(1)) <= 600, f"the blocked node powered off at uptime {idle_off.group(1)} s, past its 480 s idle threshold"
+
+      # The unreachable node is busy the whole time, yet its guard powers it
+      # off after the 120 s window, within one pass of it. Its console holds
+      # the bare reason line with the failing span.
+      unreachable.wait_for_shutdown(timeout=datetime.timedelta(seconds=600))
+      unreachable_line = re.search(r"(?m)^ec2-fleet-unreachable reachableCommand failed for (\d+) s\r?$", unreachable.get_console_log())
+      assert unreachable_line is not None, "the unreachable node's guard never wrote its unreachable line"
+      assert 120 <= int(unreachable_line.group(1)) <= 160, f"the unreachable node powered off after {unreachable_line.group(1)} s, not at its 120 s window"
 
       # The heartbeat node stays up with default thresholds, so its console
       # holds every pass since boot. The first pass lands within 90 seconds of

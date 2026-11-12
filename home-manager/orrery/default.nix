@@ -4,13 +4,6 @@
   pkgs,
   ...
 }: let
-  # Literal agenix-hm paths; the strings contain "${XDG_RUNTIME_DIR}" verbatim
-  # (home-manager agenix doesn't pre-resolve it). systemd Environment= won't
-  # expand that, but the wrapper's shell will, and XDG_RUNTIME_DIR is always in
-  # the user-service environment.
-  ntfyUrlFile = config.age.secrets."ntfy-url".path;
-  ntfyTokenFile = config.age.secrets."ntfy-token".path;
-
   sessions = config.services.orreryd.sessions;
 
   # Sessions get three gate locks in orreryd's own runtime dir, which systemd
@@ -20,8 +13,6 @@
 
   orreryd-start = pkgs.writeShellScript "orreryd-start" ''
     set -eu
-    export ORRERY_NTFY_URL_FILE="${ntfyUrlFile}"
-    export ORRERY_NTFY_TOKEN_FILE="${ntfyTokenFile}"
     exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --step-cap 16${gateLocks}"}
   '';
 

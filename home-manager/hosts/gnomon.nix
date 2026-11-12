@@ -15,8 +15,8 @@
     ../claude-code/transcript-sync.nix
     ../claude-code/aggregator.nix
     ../ec2-fleet
-    ../ntfy-notify
     ../orrery
+    ../orrery/desk.nix
     ../savecraftd
     ../patchbay
     ../parlor

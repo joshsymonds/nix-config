@@ -209,6 +209,13 @@
           # (verified 2026-11-06, CC 2.1.314); this forces it on. The
           # anthropic forward Seat relays the body and header unchanged.
           CLAUDE_CODE_TETHER_LIVE = "1";
+        }
+        // lib.optionalAttrs (config.services.orreryd.sessions or false) {
+          # On hosts running orreryd --sessions, Claude Code calls orrery's
+          # step tools over MCP. An interactive session moves an MCP call
+          # still running after 120 seconds to the background unless this is
+          # 0, and a step caller must wait in the foreground for its step.
+          CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS = "0";
         };
     }
     # The /model picker lineup, replacing Claude Code's own. Its built-in
@@ -1064,6 +1071,39 @@ in {
           "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
       fi
     '';
+
+    # Orrery's MCP server (`orrery mcp`, default socket, no arguments) beside
+    # the other user-scope servers, on hosts running orreryd --sessions. Same
+    # merge discipline as shimmer and mentat, with two differences: a missing
+    # .claude.json is created inside the umask-077 subshell so it is 0600 from
+    # its first byte (the file carries OAuth state), and the rewrite uses the
+    # codex cleanup's careful temp-file pattern (below).
+    activation.claudeOrreryMcp = lib.mkIf (config.services.orreryd.sessions or false) (lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
+      set -euo pipefail
+      ORRERY_MCP='{"type":"stdio","command":"${config.programs.orrery.package}/bin/orrery","args":["mcp"]}'
+      prefs="$HOME/.claude.json"
+      if [ ! -f "$prefs" ] || ! ${pkgs.jq}/bin/jq -e --argjson s "$ORRERY_MCP" \
+          '.mcpServers.orrery == $s' "$prefs" >/dev/null 2>&1; then
+        (
+          tmp="$prefs.orrery-mcp.$$"
+          trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+          (
+            umask 077
+            if [ -f "$prefs" ]; then
+              ${pkgs.jq}/bin/jq --argjson s "$ORRERY_MCP" \
+                '.mcpServers = ((.mcpServers // {}) + {orrery: $s})' "$prefs"
+            else
+              echo '{}' | ${pkgs.jq}/bin/jq --argjson s "$ORRERY_MCP" \
+                '.mcpServers = ((.mcpServers // {}) + {orrery: $s})'
+            fi > "$tmp"
+          )
+          if [ -f "$prefs" ]; then
+            ${pkgs.coreutils}/bin/chmod --reference="$prefs" "$tmp"
+          fi
+          mv "$tmp" "$prefs"
+        )
+      fi
+    '');
 
     # Retire the Codex MCP server from the runtime prefs. Gambit's
     # non-Claude model profiles are subagent definitions now (see the profile

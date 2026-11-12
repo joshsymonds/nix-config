@@ -62,6 +62,9 @@ hosts with its AWS credentials.
   With no zone placing a box, the launch fails naming spot. A `spot = false`
   class refuses it. Ad hoc, it implies `--spot`.
 - `ec2 ls` lists pending and running boxes. `ec2 down <name>` terminates one.
+  `ec2 console <name>` prints a box's serial console. It reads the live box with
+  that name, or with none live the newest terminated one. It works for up to an
+  hour after the box ends.
 - Names are `<class>-xxx`, or `ec2-xxx` for ad-hoc boxes. Connect with
   `ssh joshsymonds@<name>`. A box keeps its name on the tailnet across reboots.
 - A box powers off and terminates after `idleMinutes` with no ssh session, load
@@ -70,6 +73,9 @@ hosts with its AWS credentials.
   server), or a dotnet MSBuild node (dotnet with MSBuild.dll and /nodemode: in
   its command line); a plain dotnet process still counts. It also terminates at
   `maxHours`. Defaults are 60 minutes idle and 24 hours max.
+- The idle guard writes `ec2-fleet-heartbeat <epoch>` to the serial console
+  every 30 seconds. The guard powers off a box unreachable (tailnet, sshd) or
+  unable to start work (a user.slice unit) for 30 minutes.
 - A memory bound caps user.slice at 85% of the box's RAM. Ssh sessions, user
   units (`systemd-run --user`) and Nix builds share it; sshd, tailscaled and
   the idle guard sit outside it. A class sets another percentage with
@@ -101,6 +107,9 @@ hosts with its AWS credentials.
   volume of at most 512 GB, at 3000 IOPS and 125 MB/s, with DeleteOnTermination
   true. It deletes unattached fleet volumes. `ec2 up` refuses a launch that
   would pass the cap.
+- The warden terminates a running box at least 15 minutes up whose newest
+  heartbeat is over 15 minutes old, so stopping or crashing the guard ends the
+  box.
 - Budget is $600/month (budget `ec2-fleet`). AWS emails at 50%, 80% and 100%;
   at 100% RunInstances and snapshot creation are denied. The launcher can
   read the budget (`budgets:ViewBudget`); its spend figure lags by hours.

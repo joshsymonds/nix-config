@@ -245,6 +245,73 @@ cmd_down() {
   echo "terminating $ids ($name)"
 }
 
+# console_text <region> <instance id> [--latest]: prints the box's console text.
+# A box with no output prints nothing and succeeds.
+console_text() {
+  local out
+  out=$(ec2_in "$1" get-console-output --instance-id "$2" "${@:3}" --query Output --output text) || return 1
+  if [ "$out" = None ]; then
+    return 0
+  fi
+  printf '%s\n' "$out"
+}
+
+cmd_console() {
+  local name region id state launch newest text matches="" described rows
+  local -a live=() ended=()
+  [ $# -eq 1 ] || die "usage: ec2 console <name>"
+  name=$1
+  load_aws_env
+  # Each match is one "<region> <instance id> <state> <launch time>" line, collected
+  # across both regions, terminated boxes included.
+  for region in "${regions[@]}"; do
+    described=$(ec2_in "$region" describe-instances --output json \
+      --filters "Name=tag:Name,Values=$name" 'Name=tag:fleet,Values=ec2') ||
+      die "cannot describe fleet boxes named $name in $region"
+    rows=$(jq -r --arg name "$name" --arg region "$region" '
+      def tag($k): [.Tags[]? | select(.Key == $k) | .Value][0] // "";
+      .Reservations[].Instances[]
+      | select(tag("fleet") == "ec2" and tag("Name") == $name)
+      | "\($region) \(.InstanceId) \(.State.Name) \(.LaunchTime)"' <<<"$described") ||
+      die "cannot read fleet boxes named $name in $region"
+    if [ -n "$rows" ]; then
+      matches+="$rows"$'\n'
+    fi
+  done
+  if [ -z "$matches" ]; then
+    die "no fleet box named $name"
+  fi
+  matches=${matches%$'\n'}
+  while read -r region id state launch; do
+    if [ "$state" = terminated ]; then
+      ended+=("$launch $region $id")
+    else
+      live+=("$region $id")
+    fi
+  done <<<"$matches"
+  if [ "${#live[@]}" -gt 1 ]; then
+    die "more than one fleet box named $name"
+  fi
+  if [ "${#live[@]}" -eq 1 ]; then
+    read -r region id <<<"${live[0]}"
+    text=$(console_text "$region" "$id" --latest) ||
+      die "cannot read the console of $name ($id) in $region"
+  else
+    # No live box: the newest terminated one, whose --latest call may fail or
+    # print nothing; a call without --latest then reads its console.
+    newest=$(printf '%s\n' "${ended[@]}" | sort -r | head -n 1)
+    read -r launch region id <<<"$newest"
+    text=$(console_text "$region" "$id" --latest) || text=
+    if [ -z "$text" ]; then
+      text=$(console_text "$region" "$id") ||
+        die "cannot read the console of $name ($id) in $region"
+    fi
+  fi
+  if [ -n "$text" ]; then
+    printf '%s\n' "$text"
+  fi
+}
+
 # lookup_client_token <region> <token>: finds the instances run-instances started
 # under the client token in the region and terminates them. A failed call may
 # still be landing its box, so it looks up to six times, lookup_interval seconds
@@ -823,6 +890,7 @@ Usage:
   ec2 up --type <t> --disk <gb> [--spot]  start an ad-hoc box
   ec2 ls                                  list pending and running fleet boxes
   ec2 down <name>                         terminate a fleet box
+  ec2 console <name>                      print a fleet box's serial console
   ec2 help                                show this help
 
 Flags:
@@ -845,6 +913,14 @@ Warden: terminates fleet boxes, newest first, while fleet boxes total more than
 128 vCPU, and any fleet box up past fleet-max-hours (default 24).
 `ec2 up` refuses a launch that would pass the 128 vCPU cap.
 
+Heartbeat: the idle guard writes `ec2-fleet-heartbeat <epoch>` to the serial
+console every 30 seconds. The warden terminates a running box at least 15
+minutes up whose newest heartbeat is over 15 minutes old, so stopping or
+crashing the guard ends the box. The guard powers off a box unreachable
+(tailnet, sshd) or unable to start work (a user.slice unit) for 30 minutes.
+`ec2 console <name>` prints a box's serial console and works for up to an hour
+after the box ends.
+
 USAGE
   printf 'Classes (from %s):\n' "$flake"
   jq -r 'to_entries[] | "  \(.key)  \(.value.instanceType)  disk \(.value.diskGb) GB  spot \(if .value.spot then "yes" else "no" end)  idle \(.value.idleMinutes) min  max \(.value.maxHours) h"' <<<"$classes"
@@ -858,6 +934,7 @@ case "${1:-help}" in
   help) cmd_help ;;
   ls) cmd_ls ;;
   down) cmd_down "${@:2}" ;;
+  console) cmd_console "${@:2}" ;;
   up) cmd_up "${@:2}" ;;
   *) die "unknown command: $1 (see: ec2 help)" ;;
 esac

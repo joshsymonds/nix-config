@@ -175,6 +175,28 @@ case "$2" in
     fi
     ;;
   describe-security-groups) cat "$rdir/security-groups.json" ;;
+  get-console-output)
+    # A box's console text is its console-<id> fixture; a --latest call reads
+    # console-<id>.latest instead. console-<id>.latest-fail makes a --latest call
+    # fail. A missing fixture prints None, as AWS does for a box with no output.
+    id=
+    suffix=
+    prev=
+    for a in "$@"; do
+      if [ "$prev" = --instance-id ]; then id=$a; fi
+      if [ "$a" = --latest ]; then suffix=.latest; fi
+      prev=$a
+    done
+    if [ -n "$suffix" ] && [ -e "$rdir/console-$id.latest-fail" ]; then
+      echo "An error occurred (InvalidInstanceID.NotFound) when calling the GetConsoleOutput operation: The instance $id does not exist." >&2
+      exit 255
+    fi
+    if [ -e "$rdir/console-$id$suffix" ]; then
+      cat "$rdir/console-$id$suffix"
+    else
+      echo None
+    fi
+    ;;
   run-instances)
     # hold-run-instances keeps the call running until the release file exists, so a
     # signal can arrive during it.
@@ -785,6 +807,11 @@ expect_no_out() {
 expect_err() {
   grep -E -q -- "$1" "$ERR" || fail "$2: stderr has no line matching /$1/"
 }
+# expect_text <file> <desc> <phrase>: the file has the literal phrase, where its
+# line breaks read as spaces, so a sentence may wrap.
+expect_text() {
+  tr -s '[:space:]' ' ' <"$1" | grep -F -q -- "$3" || fail "$2: no text: $3"
+}
 expect_log() {
   grep -E -q -- "$1" "$STUB_LOG" || fail "$2: no stub call matching /$1/"
 }
@@ -985,6 +1012,18 @@ expect_out 'ec2 ls' "help lists ls"
 expect_out 'ec2 down <name>' "help lists down"
 expect_out 'ec2 help' "help lists help"
 expect_log 'nix eval --json /fixture/flake#ec2Classes' "help reads classes from the flake"
+expect_out '^  ec2 console <name> +print a fleet box' "help lists console <name>"
+# The heartbeat facts the help states, each as one sentence.
+r8_facts=(
+  "writes \`ec2-fleet-heartbeat <epoch>\` to the serial console every 30 seconds"
+  'terminates a running box at least 15 minutes up whose newest heartbeat is over 15 minutes old'
+  'stopping or crashing the guard ends the box'
+  'powers off a box unreachable (tailnet, sshd) or unable to start work (a user.slice unit) for 30 minutes'
+  'works for up to an hour after the box ends'
+)
+for fact in "${r8_facts[@]}"; do
+  expect_text "$OUT" "help states a heartbeat fact" "$fact"
+done
 
 # ls: every pending/running fleet=ec2 box, one row each, with prices.
 export EC2_FLEET_AWS_ENV_FILE=$ENV_FILE
@@ -1108,6 +1147,130 @@ run down ec2-irl7k
 expect_nonzero "down with us-west-2 describe-instances failing"
 expect_no_log 'terminate-instances' "down with us-west-2 describe-instances failing terminates nothing"
 clear_faults
+
+# console: prints a fleet box's serial console. The name is looked up in both
+# regions, terminated boxes included. A live match is read with --latest. With no
+# live match the newest terminated box is read, and a call without --latest follows
+# when the --latest call errors or prints no text.
+cp "$STUB_FIXTURES/instances.json" "$work/console-oregon.json"
+cp "$STUB_FIXTURES/eu-west-1/instances.json" "$work/console-ireland.json"
+cat >"$STUB_FIXTURES/instances.json" <<FIXTURE
+{"Reservations":[{"Instances":[
+  {"InstanceId":"i-0console000000001","State":{"Name":"running"},"LaunchTime":"$t_running","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"live-box"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0console000000002","State":{"Name":"terminated"},"LaunchTime":"$t_running","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"ended-box"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0console000000003","State":{"Name":"terminated"},"LaunchTime":"$t_old","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"gone-box"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0console000000005","State":{"Name":"running"},"LaunchTime":"$t_running","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"twice-box"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0console000000006","State":{"Name":"terminated"},"LaunchTime":"$t_running","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"ghost-box"},{"Key":"fleet","Value":"other"}]},
+  {"InstanceId":"i-0console000000008","State":{"Name":"running"},"LaunchTime":"$t_running","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"mixed-box"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0console000000010","State":{"Name":"terminated"},"LaunchTime":"$t_running","Placement":{"AvailabilityZone":"us-west-2a"},"Tags":[{"Key":"Name","Value":"fresh-ended"},{"Key":"fleet","Value":"ec2"}]}
+]}]}
+FIXTURE
+cat >"$STUB_FIXTURES/eu-west-1/instances.json" <<FIXTURE
+{"Reservations":[{"Instances":[
+  {"InstanceId":"i-0console000000004","State":{"Name":"terminated"},"LaunchTime":"$t_irl","Placement":{"AvailabilityZone":"eu-west-1b"},"Tags":[{"Key":"Name","Value":"gone-box"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0console000000007","State":{"Name":"running"},"LaunchTime":"$t_running","Placement":{"AvailabilityZone":"eu-west-1b"},"Tags":[{"Key":"Name","Value":"twice-box"},{"Key":"fleet","Value":"ec2"}]},
+  {"InstanceId":"i-0console000000009","State":{"Name":"terminated"},"LaunchTime":"$t_irl","Placement":{"AvailabilityZone":"eu-west-1b"},"Tags":[{"Key":"Name","Value":"mixed-box"},{"Key":"fleet","Value":"ec2"}]}
+]}]}
+FIXTURE
+printf 'LIVE-OREGON-CONSOLE\n' >"$STUB_FIXTURES/console-i-0console000000001.latest"
+: >"$STUB_FIXTURES/console-i-0console000000002.latest-fail"
+printf 'ENDED-BOX-PLAIN-CONSOLE\n' >"$STUB_FIXTURES/console-i-0console000000002"
+printf 'GONE-IRELAND-PLAIN-CONSOLE\n' >"$STUB_FIXTURES/eu-west-1/console-i-0console000000004"
+printf 'MIXED-LIVE-CONSOLE\n' >"$STUB_FIXTURES/console-i-0console000000008.latest"
+printf 'MIXED-ENDED-CONSOLE\n' >"$STUB_FIXTURES/eu-west-1/console-i-0console000000009.latest"
+printf 'FRESH-ENDED-LATEST-CONSOLE\n' >"$STUB_FIXTURES/console-i-0console000000010.latest"
+printf 'FRESH-ENDED-PLAIN-CONSOLE\n' >"$STUB_FIXTURES/console-i-0console000000010"
+
+export EC2_FLEET_AWS_ENV_FILE=$ENV_FILE
+run console live-box
+expect_status 0 "console of a live box"
+expect_out '^LIVE-OREGON-CONSOLE$' "console of a live box prints its console text"
+expect_region "console of a live box reads it with --latest in its region" us-west-2 \
+  "get-console-output --instance-id i-0console000000001 --latest"
+expect_no_log 'get-console-output --instance-id i-0console000000001 --query' "console of a live box makes no call without --latest"
+
+run console ended-box
+expect_status 0 "console of a terminated box"
+expect_out '^ENDED-BOX-PLAIN-CONSOLE$' "console of a terminated box prints the call without --latest when --latest errors"
+expect_order "console of a terminated box asks with --latest before without it" \
+  "get-console-output --instance-id i-0console000000002 --latest" \
+  "get-console-output --instance-id i-0console000000002 --query"
+expect_region "console of a terminated box asks without --latest in its region" us-west-2 \
+  "get-console-output --instance-id i-0console000000002 --query"
+
+run console gone-box
+expect_status 0 "console of the newest terminated box"
+expect_out '^GONE-IRELAND-PLAIN-CONSOLE$' "console of a terminated box prints the call without --latest when --latest prints no text"
+expect_no_out 'None' "console of a terminated box prints no None"
+expect_region "console of the newest terminated box reads the Ireland box with --latest" eu-west-1 \
+  "get-console-output --instance-id i-0console000000004 --latest"
+expect_region "console of the newest terminated box reads the Ireland box without --latest" eu-west-1 \
+  "get-console-output --instance-id i-0console000000004 --query"
+expect_no_log 'get-console-output --instance-id i-0console000000003' "console of the newest terminated box reads no older box"
+
+# A live box wins over a newer terminated box of the same name.
+run console mixed-box
+expect_status 0 "console of a name held by a live box and a newer terminated box"
+expect_out '^MIXED-LIVE-CONSOLE$' "console of a name held by a live and a terminated box prints the live box's console"
+expect_region "console of a name held by a live and a terminated box reads the live box with --latest" us-west-2 \
+  "get-console-output --instance-id i-0console000000008 --latest"
+expect_no_log 'get-console-output --instance-id i-0console000000009' "console of a name held by a live and a terminated box reads no terminated box"
+
+# A terminated box whose --latest call prints text needs no second call.
+run console fresh-ended
+expect_status 0 "console of a terminated box whose --latest call prints text"
+expect_out '^FRESH-ENDED-LATEST-CONSOLE$' "console of a terminated box prints its --latest text"
+expect_no_out 'FRESH-ENDED-PLAIN-CONSOLE' "console of a terminated box whose --latest call prints text prints no other text"
+expect_no_log 'get-console-output --instance-id i-0console000000010 --query' "console of a terminated box whose --latest call prints text makes no call without --latest"
+
+run console twice-box
+expect_nonzero "console of a name held by two live boxes"
+expect_err 'more than one fleet box named twice-box' "console of a name held by two live boxes names the box"
+expect_no_log 'get-console-output' "console of a name held by two live boxes reads no console"
+
+run console ghost-box
+expect_nonzero "console of a name with no fleet box"
+expect_err 'no fleet box named ghost-box' "console of a name with no fleet box names the box"
+expect_no_log 'get-console-output' "console of a name with no fleet box reads no console"
+
+run console
+expect_nonzero "console without a name"
+expect_err 'usage: ec2 console <name>' "console without a name prints the usage"
+expect_no_log '.' "console without a name makes no stub call"
+
+inject us-west-2-ec2-describe-instances
+run console live-box
+expect_nonzero "console with us-west-2 describe-instances failing"
+expect_no_log 'get-console-output' "console with us-west-2 describe-instances failing reads no console"
+clear_faults
+
+inject eu-west-1-ec2-describe-instances
+run console gone-box
+expect_nonzero "console of the newest box with eu-west-1 describe-instances failing"
+expect_no_log 'get-console-output' "console with eu-west-1 describe-instances failing reads no older box"
+clear_faults
+
+: >"$STUB_FIXTURES/console-i-0console000000001.latest-fail"
+run console live-box
+expect_nonzero "console of a live box whose --latest call fails"
+expect_no_log 'get-console-output --instance-id i-0console000000001 --query' "console of a live box whose --latest call fails makes no call without --latest"
+rm -f "$STUB_FIXTURES/console-i-0console000000001.latest-fail"
+
+inject us-west-2-ec2-get-console-output
+run console ended-box
+expect_nonzero "console of a terminated box whose both calls fail"
+expect_log 'get-console-output --instance-id i-0console000000002 --query' "console of a terminated box whose both calls fail still asks without --latest"
+clear_faults
+
+unset EC2_FLEET_AWS_ENV_FILE
+run console live-box
+expect_nonzero "console without EC2_FLEET_AWS_ENV_FILE"
+expect_no_log '.' "console without EC2_FLEET_AWS_ENV_FILE makes no stub call"
+export EC2_FLEET_AWS_ENV_FILE=$ENV_FILE
+
+rm -f "$STUB_FIXTURES"/console-*
+cp "$work/console-oregon.json" "$STUB_FIXTURES/instances.json"
+cp "$work/console-ireland.json" "$STUB_FIXTURES/eu-west-1/instances.json"
 
 # up: bad arguments are refused before any AWS, Tailscale, ssh or nix build call.
 export EC2_FLEET_AWS_ENV_FILE=$ENV_FILE

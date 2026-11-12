@@ -721,6 +721,10 @@
           };
           transcript-sync = import ./tests/transcript-sync.nix {pkgs = checkPkgs;};
           tmux-status = import ./tests/tmux-status.nix {pkgs = checkPkgs;};
+          claude-trust-roots = import ./tests/claude-trust-roots.nix {
+            pkgs = checkPkgs;
+            vermissian = self.nixosConfigurations.vermissian.config;
+          };
           claude-dispatch-guard-hook = import ./tests/claude-dispatch-guard-hook.nix {
             pkgs = checkPkgs;
             renderedSettings = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home.file.".claude/settings.base.json".source;

@@ -65,6 +65,17 @@
     }
   ];
 
+  programs.claudeCode.trustRoots = [
+    {
+      path = "Work";
+      depth = 2;
+    }
+    {
+      path = "Personal";
+      depth = 1;
+    }
+  ];
+
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
 
   # Codex quota is available; use the full Gambit role registry.

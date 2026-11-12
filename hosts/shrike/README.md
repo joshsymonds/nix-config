@@ -94,7 +94,10 @@ update
 - F-Droid apps: `update` downloads each missing APK and fires the system
   install prompt — one confirmation tap per app.
 - Play / Obtainium apps: `update` prints what's missing; install those by
-  hand (Tailscale from Play, Obtainium from its GitHub releases APK).
+  hand (Obtainium from its GitHub releases APK).
+- Sideload apps (Tailscale, our tailscale-android build): `update` prints
+  the rebuild command for each one. Run it from the flake, then install the
+  APK over adb; the APK is kept on vermissian and is not committed.
 
 ## 4. The rest of the fleet glue (manual, once)
 
@@ -164,7 +167,7 @@ Written before the phone existed; check on first run:
 
 - `pm list packages` is NOT usable from inside the sandbox (checked on
   the device): `update` installs local APKs on the strength of the
-  confirmation and only prints the declared F-Droid / Obtainium / Play
-  checklist.
+  confirmation and only prints the declared F-Droid / Obtainium / Play /
+  sideload checklist.
 - `system.stateVersion "24.05"` is the newest the docs list; bump when
   upstream adds newer.

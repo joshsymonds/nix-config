@@ -176,8 +176,8 @@
     steward.url = "github:joshsymonds/steward/933958ab536066822a93ae79ffb5d78df698caa1";
     steward.inputs.nixpkgs.follows = "nixpkgs";
 
-    # Orrery - Claude Code session launcher, pinned to the v0.7.2 release tag.
-    orrery.url = "github:joshsymonds/orrery/v0.7.2";
+    # Orrery - Claude Code session launcher, pinned to the v0.14.0 release tag.
+    orrery.url = "github:joshsymonds/orrery/v0.16.1";
     orrery.inputs.nixpkgs.follows = "nixpkgs";
 
     # dms-claudecode — DMS plugin showing Claude Code subscription usage
@@ -721,6 +721,10 @@
           };
           transcript-sync = import ./tests/transcript-sync.nix {pkgs = checkPkgs;};
           tmux-status = import ./tests/tmux-status.nix {pkgs = checkPkgs;};
+          claude-trust-roots = import ./tests/claude-trust-roots.nix {
+            pkgs = checkPkgs;
+            vermissian = self.nixosConfigurations.vermissian.config;
+          };
           claude-dispatch-guard-hook = import ./tests/claude-dispatch-guard-hook.nix {
             pkgs = checkPkgs;
             renderedSettings = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home.file.".claude/settings.base.json".source;

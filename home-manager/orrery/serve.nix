@@ -10,6 +10,9 @@
     exec ${config.programs.tmux-status.package}/bin/tmux-status --json
   '';
 in {
+  # serve drives the headless sessions, so the host that runs it runs them.
+  services.orreryd.sessions = true;
+
   # Loopback listener only. Any exposure is configured elsewhere, never here.
   systemd.user.services.orrery-serve = {
     Unit.Description = "orrery serve";
@@ -18,7 +21,7 @@ in {
       Restart = "always";
       Environment = [
         "TMUX_TMPDIR=%t"
-        "PATH=${lib.makeBinPath [pkgs.tmux]}"
+        "PATH=${lib.makeBinPath [pkgs.tmux pkgs.zoxide pkgs.claudeCodeCli]}"
       ];
     };
     Install.WantedBy = ["default.target"];

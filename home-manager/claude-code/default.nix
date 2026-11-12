@@ -209,6 +209,13 @@
           # (verified 2026-11-06, CC 2.1.314); this forces it on. The
           # anthropic forward Seat relays the body and header unchanged.
           CLAUDE_CODE_TETHER_LIVE = "1";
+        }
+        // lib.optionalAttrs (config.services.orreryd.sessions or false) {
+          # On hosts running orreryd --sessions, Claude Code calls orrery's
+          # step tools over MCP. An interactive session moves an MCP call
+          # still running after 120 seconds to the background unless this is
+          # 0, and a step caller must wait in the foreground for its step.
+          CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS = "0";
         };
     }
     # The /model picker lineup, replacing Claude Code's own. Its built-in
@@ -708,6 +715,28 @@ in {
     '';
   };
 
+  options.programs.claudeCode.trustRoots = lib.mkOption {
+    type = lib.types.listOf (lib.types.submodule {
+      options = {
+        path = lib.mkOption {
+          type = lib.types.str;
+          description = "Folder relative to the home directory.";
+        };
+        depth = lib.mkOption {
+          type = lib.types.ints.positive;
+          description = "Levels below the folder whose git roots are trusted too.";
+        };
+      };
+    });
+    default = [];
+    description = ''
+      Folders whose Claude Code projects are trusted in ~/.claude.json, so the
+      trust dialog is skipped. Each folder is trusted, and so is each git root
+      (a directory holding .git) at levels 1 to depth below it. Applied by the
+      claudeTrustRoots activation, which only adds the trust key.
+    '';
+  };
+
   config.home = {
     # Install Node.js to enable npm
     packages =
@@ -1065,6 +1094,39 @@ in {
       fi
     '';
 
+    # Orrery's MCP server (`orrery mcp`, default socket, no arguments) beside
+    # the other user-scope servers, on hosts running orreryd --sessions. Same
+    # merge discipline as shimmer and mentat, with two differences: a missing
+    # .claude.json is created inside the umask-077 subshell so it is 0600 from
+    # its first byte (the file carries OAuth state), and the rewrite uses the
+    # codex cleanup's careful temp-file pattern (below).
+    activation.claudeOrreryMcp = lib.mkIf (config.services.orreryd.sessions or false) (lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
+      set -euo pipefail
+      ORRERY_MCP='{"type":"stdio","command":"${config.programs.orrery.package}/bin/orrery","args":["mcp"]}'
+      prefs="$HOME/.claude.json"
+      if [ ! -f "$prefs" ] || ! ${pkgs.jq}/bin/jq -e --argjson s "$ORRERY_MCP" \
+          '.mcpServers.orrery == $s' "$prefs" >/dev/null 2>&1; then
+        (
+          tmp="$prefs.orrery-mcp.$$"
+          trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+          (
+            umask 077
+            if [ -f "$prefs" ]; then
+              ${pkgs.jq}/bin/jq --argjson s "$ORRERY_MCP" \
+                '.mcpServers = ((.mcpServers // {}) + {orrery: $s})' "$prefs"
+            else
+              echo '{}' | ${pkgs.jq}/bin/jq --argjson s "$ORRERY_MCP" \
+                '.mcpServers = ((.mcpServers // {}) + {orrery: $s})'
+            fi > "$tmp"
+          )
+          if [ -f "$prefs" ]; then
+            ${pkgs.coreutils}/bin/chmod --reference="$prefs" "$tmp"
+          fi
+          mv "$tmp" "$prefs"
+        )
+      fi
+    '');
+
     # Retire the Codex MCP server from the runtime prefs. Gambit's
     # non-Claude model profiles are subagent definitions now (see the profile
     # agent block above), so nothing dispatches through mcp__codex__* any more.
@@ -1125,6 +1187,51 @@ in {
           "$prefs" > "$prefs.tmp" && mv "$prefs.tmp" "$prefs"
       fi
     '';
+
+    # Mark the folders in programs.claudeCode.trustRoots as trusted, and each git
+    # root within their depth, so Claude Code skips the trust dialog there.
+    # Trust is keyed by absolute path in ~/.claude.json, which is runtime-mutable,
+    # so only the hasTrustDialogAccepted key is merged, and the file is rewritten
+    # only when a key would change. The rewrite follows claudeCodexMcpCleanup:
+    # a temp file created under umask 077, the original's mode copied to it, then
+    # an atomic rename. Invalid JSON is left alone with a warning. The rewrite
+    # sits on the left of `||`, where bash ignores set -e, so its steps are
+    # chained with && to stop at the first failure before the rename. Hosts that
+    # list no folders get no entry at all.
+    activation.claudeTrustRoots = lib.mkIf (cfg.trustRoots != []) (
+      lib.hm.dag.entryAfter ["claudeMentatMcp" "claudeCodexMcpCleanup" "claudeEffortUnpin"] ''
+        prefs="$HOME/.claude.json"
+        if [ ! -f "$prefs" ]; then
+          : # Claude Code has not written its prefs yet; nothing to trust.
+        elif ! ${pkgs.jq}/bin/jq empty "$prefs" >/dev/null 2>&1; then
+          echo "claudeTrustRoots: $prefs is not valid JSON; leaving it unchanged." >&2
+        else
+          dirs=()
+          while read -r depth rel; do
+            base="$HOME/$rel"
+            [ -d "$base" ] || continue
+            dirs+=("$base")
+            # A git root is a .git directory, or a .git file for a worktree.
+            # Levels 1 to depth below the folder are -mindepth 2 to depth + 1.
+            while IFS= read -r dotgit; do
+              dirs+=("''${dotgit%/.git}")
+            done < <(${pkgs.findutils}/bin/find "$base" -mindepth 2 -maxdepth "$((depth + 1))" \( -type d -o -type f \) -name .git -not -path '*/.git/*')
+          done < <(printf '%s' ${lib.escapeShellArg (builtins.toJSON cfg.trustRoots)} | ${pkgs.jq}/bin/jq -r '.[] | "\(.depth) \(.path)"')
+          dirs_json=$(${pkgs.jq}/bin/jq -n '$ARGS.positional' --args "''${dirs[@]}")
+          if ! ${pkgs.jq}/bin/jq -e --argjson d "$dirs_json" \
+              '[$d[] as $p | .projects[$p].hasTrustDialogAccepted == true] | all' "$prefs" >/dev/null 2>&1; then
+            (
+              tmp="$prefs.trust-roots.$$"
+              trap '${pkgs.coreutils}/bin/rm -f "$tmp"' EXIT
+              (umask 077; ${pkgs.jq}/bin/jq --argjson d "$dirs_json" \
+                'reduce $d[] as $p (.; .projects[$p].hasTrustDialogAccepted = true)' "$prefs" > "$tmp") &&
+                ${pkgs.coreutils}/bin/chmod --reference="$prefs" "$tmp" &&
+                mv "$tmp" "$prefs"
+            ) || echo "claudeTrustRoots: could not update $prefs; leaving it unchanged." >&2
+          fi
+        fi
+      ''
+    );
 
     # Declaratively install the localMarketplaces plugins. Rather than shell
     # out to `claude plugin install` (which wants to modify settings.json —

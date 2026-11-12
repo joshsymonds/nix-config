@@ -9,6 +9,7 @@
     ../go
     ../orrery
     ../orrery/serve.nix
+    ../orrery/backup.nix
     ../parlor
     ../patchbay
     ../patchbay/singularity.nix
@@ -57,6 +58,24 @@
     host = "gnomon";
   };
   services.parlor-backup.enable = true;
+
+  programs.orrery.roots = [
+    {
+      path = "Work";
+      depth = 2;
+    }
+  ];
+
+  programs.claudeCode.trustRoots = [
+    {
+      path = "Work";
+      depth = 2;
+    }
+    {
+      path = "Personal";
+      depth = 1;
+    }
+  ];
 
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
 

@@ -16,6 +16,10 @@
 #               on-device. `update` only reports these missing.
 #   play      — Play Store only; no programmatic path exists. `update`
 #               reports these missing. This list IS the rebuild checklist.
+#   sideload  — built from this repo by a script (`rebuild`), installed by
+#               hand over adb; the APK is not committed. `update` reports
+#               these missing with the rebuild command. `upstream` is the
+#               tailscale-android PR this build carries.
 {
   local = [
     # DMS's hexrain wallpaper as a live wallpaper (home + lock) — see
@@ -66,16 +70,29 @@
   ];
 
   play = [
-    {
-      id = "com.tailscale.ipn";
-      label = "Tailscale";
-    }
     # UnifiedPush distributor for the orrery app, which pushes via ntfy.sh.
     # Not subscribed to orrery's ntfy topic: a subscription here would
     # deliver every push a second time.
     {
       id = "io.heckel.ntfy";
       label = "ntfy";
+    }
+  ];
+
+  sideload = [
+    # Our tailscale-android build with PR 901 applied (pkgs/tailscale-android-shrike).
+    {
+      id = "com.tailscale.ipn";
+      label = "Tailscale";
+      version = "1.104.5-t788384763-g63ea6414d";
+      sha256 = "ae038e5fde94200b6f0026f7bb0f4c81bb90dd9c50343f9d44d0bf804c944a4a";
+      signer = "480a1879280503fc14f56272a69d5bd54167d696d32f9841eca1846fde6e3b21";
+      rebuild = "nix run .#tailscale-android-shrike";
+      kept = "~/.local/state/tailscale-android-shrike on vermissian";
+      upstream = {
+        repo = "tailscale/tailscale-android";
+        pr = 901;
+      };
     }
   ];
 }

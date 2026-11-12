@@ -117,4 +117,19 @@
     `--enable-gdrive-access` means that account needs a gcloud re-login.
     Wrapper and account mapping: home-manager/gws/default.nix.
   '';
+
+  # app.slice holds every user unit and scope on vermissian (orreryd, tmux
+  # panes, kitty). These limits were set by hand with `systemctl --user
+  # set-property` in Oct 2026; they live here now, with a swap cap added: on
+  # 2026-11-12 the slice sat at MemoryHigh while one runaway filled all 47 GB
+  # of swap, so the kernel throttled instead of killing and the host hung.
+  # systemd-oomd kills inside the slice at 80% memory pressure.
+  xdg.configFile."systemd/user/app.slice.d/memory.conf".text = ''
+    [Slice]
+    MemoryHigh=50G
+    MemoryMax=54G
+    MemorySwapMax=8G
+    ManagedOOMMemoryPressure=kill
+    ManagedOOMMemoryPressureLimit=80%
+  '';
 }

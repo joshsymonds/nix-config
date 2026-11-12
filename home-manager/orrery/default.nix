@@ -36,6 +36,17 @@ in {
       {
         ExecStart = "${orreryd-start}";
         Restart = "always";
+        # orreryd runs every headless agent and its gates as plain children
+        # in this unit, so nothing else capped them: on 2026-11-12 one agent's
+        # node test grew to 48 GB resident plus 43 GB swap on vermissian and
+        # hung the host three times. At MemoryMax the kernel kills the largest
+        # process inside the unit; OOMPolicy=continue keeps orreryd and the
+        # other agents running (the default, stop, would end them all).
+        # MemorySwapMax stops a runaway from grinding through swap first.
+        MemoryHigh = "60%";
+        MemoryMax = "66%";
+        MemorySwapMax = "4G";
+        OOMPolicy = "continue";
         Environment = [
           "TMUX_TMPDIR=%t"
           "PATH=${path}"

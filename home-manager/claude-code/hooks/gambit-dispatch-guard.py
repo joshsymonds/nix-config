@@ -135,12 +135,6 @@ def main() -> None:
     if agent not in agents:
         allow()
 
-    if tool_name == STEP_START_TOOL:
-        deny(
-            "Gambit Implementer step_start is blocked because implementers "
-            "dispatch through the Agent tool until O1d-g2."
-        )
-
     brief = prompt_path(tool_input.get("prompt"), "Brief")
     workspace = prompt_path(tool_input.get("prompt"), "Workspace")
     record = prompt_path(tool_input.get("prompt"), "Record")

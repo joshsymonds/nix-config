@@ -81,23 +81,57 @@ in
         out=$(run_hook Agent test-runner-agent "no marker")
         test -z "$out" || fail "test-runner profile was denied: $out"
 
-        # orrery's step_start names its agent in tool_input.agent. A writing
-        # Implementer is refused until implementers dispatch as steps, while the
-        # read-only pair and other agents pass.
+        # orrery's step_start names its agent in tool_input.agent and carries the
+        # dispatch prompt in tool_input.prompt. A writing Implementer step is
+        # validated exactly as an Agent dispatch; read-only and unrelated agents
+        # pass without validation.
         step_start_json() {
-          ${pkgs.jq}/bin/jq -cn --arg agent "$1" \
-            '{tool_name:"mcp__orrery__step_start",tool_input:{agent:$agent}}'
+          ${pkgs.jq}/bin/jq -cn --arg agent "$1" --arg prompt "$2" \
+            '{tool_name:"mcp__orrery__step_start",tool_input:{agent:$agent,prompt:$prompt}}'
         }
+        step_expected="$(printf '%s\n' \
+          --brief "$PWD/brief.md" \
+          --workspace "$PWD/workspace" \
+          --record "$PWD/state.json" \
+          --task task-123 \
+          --entry-profile implementer-profile)"
+
+        # A writing Implementer step with all four lines and a passing validator
+        # is allowed, and the validator receives the same argv as an Agent dispatch.
+        unset FAIL
         rm -f "$MARKER"
-        out=$(step_start_json implementer-agent | ${pkgs.python3}/bin/python3 ${hook})
+        out=$(step_start_json implementer-agent "$prompt" | ${pkgs.python3}/bin/python3 ${hook})
+        test -z "$out" || fail "passing step_start validation was denied: $out"
+        test -f "$MARKER" || fail "validator was not invoked for step_start"
+        test "$(cat "$MARKER")" = "$step_expected" \
+          || fail "step_start validator argv mismatch: $(cat "$MARKER")"
+
+        # A writing Implementer step missing a line is denied naming that line,
+        # and the validator never runs.
+        missing_step_prompt="Brief: $PWD/brief.md
+    Workspace: $PWD/workspace
+    Task: task-123"
+        rm -f "$MARKER"
+        out=$(step_start_json implementer-agent "$missing_step_prompt" | ${pkgs.python3}/bin/python3 ${hook})
         printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
           .hookSpecificOutput.permissionDecision == "deny"
-          and (.hookSpecificOutput.permissionDecisionReason | contains("O1d-g2"))
-        ' >/dev/null || fail "step_start with a writing Implementer was not denied: $out"
-        test ! -e "$MARKER" || fail "validator ran for step_start"
-        out=$(step_start_json implementer-agent-ro | ${pkgs.python3}/bin/python3 ${hook})
+          and (.hookSpecificOutput.permissionDecisionReason | contains("Record"))
+        ' >/dev/null || fail "step_start missing Record line was not denied: $out"
+        test ! -e "$MARKER" || fail "validator ran for step_start without Record"
+
+        # A writing Implementer step whose validator fails is denied with the
+        # validator's diagnostic.
+        export FAIL=1
+        out=$(step_start_json implementer-agent "$prompt" | ${pkgs.python3}/bin/python3 ${hook})
+        printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
+          .hookSpecificOutput.permissionDecision == "deny"
+          and (.hookSpecificOutput.permissionDecisionReason | contains("stub validator rejected dispatch"))
+        ' >/dev/null || fail "step_start validator failure was not denied with its message: $out"
+        unset FAIL
+
+        out=$(step_start_json implementer-agent-ro "" | ${pkgs.python3}/bin/python3 ${hook})
         test -z "$out" || fail "step_start with a read-only Implementer was denied: $out"
-        out=$(step_start_json other-agent | ${pkgs.python3}/bin/python3 ${hook})
+        out=$(step_start_json other-agent "" | ${pkgs.python3}/bin/python3 ${hook})
         test -z "$out" || fail "step_start with an unrelated agent was denied: $out"
 
         # Implementer dispatches must carry the full dispatch context.
@@ -207,7 +241,7 @@ in
         ' >/dev/null || fail "malformed registry allowed profile dispatch: $out"
         out=$(run_hook Agent general-purpose "$prompt")
         test -z "$out" || fail "malformed registry denied unrelated agent: $out"
-        out=$(step_start_json some-profile-high | ${pkgs.python3}/bin/python3 ${hook})
+        out=$(step_start_json some-profile-high "$prompt" | ${pkgs.python3}/bin/python3 ${hook})
         printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
           .hookSpecificOutput.permissionDecision == "deny"
           and (.hookSpecificOutput.permissionDecisionReason | contains("GAMBIT_MODELS"))

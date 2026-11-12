@@ -81,6 +81,25 @@ in
         out=$(run_hook Agent test-runner-agent "no marker")
         test -z "$out" || fail "test-runner profile was denied: $out"
 
+        # orrery's step_start names its agent in tool_input.agent. A writing
+        # Implementer is refused until implementers dispatch as steps, while the
+        # read-only pair and other agents pass.
+        step_start_json() {
+          ${pkgs.jq}/bin/jq -cn --arg agent "$1" \
+            '{tool_name:"mcp__orrery__step_start",tool_input:{agent:$agent}}'
+        }
+        rm -f "$MARKER"
+        out=$(step_start_json implementer-agent | ${pkgs.python3}/bin/python3 ${hook})
+        printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
+          .hookSpecificOutput.permissionDecision == "deny"
+          and (.hookSpecificOutput.permissionDecisionReason | contains("O1d-g2"))
+        ' >/dev/null || fail "step_start with a writing Implementer was not denied: $out"
+        test ! -e "$MARKER" || fail "validator ran for step_start"
+        out=$(step_start_json implementer-agent-ro | ${pkgs.python3}/bin/python3 ${hook})
+        test -z "$out" || fail "step_start with a read-only Implementer was denied: $out"
+        out=$(step_start_json other-agent | ${pkgs.python3}/bin/python3 ${hook})
+        test -z "$out" || fail "step_start with an unrelated agent was denied: $out"
+
         # Implementer dispatches must carry the full dispatch context.
         out=$(run_hook Agent implementer-agent "Workspace: $PWD/workspace")
         printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
@@ -188,6 +207,11 @@ in
         ' >/dev/null || fail "malformed registry allowed profile dispatch: $out"
         out=$(run_hook Agent general-purpose "$prompt")
         test -z "$out" || fail "malformed registry denied unrelated agent: $out"
+        out=$(step_start_json some-profile-high | ${pkgs.python3}/bin/python3 ${hook})
+        printf '%s' "$out" | ${pkgs.jq}/bin/jq -e '
+          .hookSpecificOutput.permissionDecision == "deny"
+          and (.hookSpecificOutput.permissionDecisionReason | contains("GAMBIT_MODELS"))
+        ' >/dev/null || fail "malformed registry allowed step_start profile: $out"
 
         # A missing registry denies a read-only profile-shaped agent as well.
         export GAMBIT_MODELS="$PWD/missing-models.json"
@@ -211,7 +235,7 @@ in
         # the module overlays the installed Gambit validator path at evaluation.
         ${pkgs.jq}/bin/jq -e '
           .hooks.PreToolUse[]
-          | select(.matcher == "Agent|Task")
+          | select(.matcher == "Agent|Task|mcp__orrery__step_start")
           | .hooks[]
           | select(.command == "~/.claude/hooks/gambit-dispatch-guard.py")
         ' ${settingsJson} >/dev/null || fail "settings do not register dispatch guard"

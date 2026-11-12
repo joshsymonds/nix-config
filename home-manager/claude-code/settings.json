@@ -55,7 +55,7 @@
         ]
       },
       {
-        "matcher": "Agent|Task",
+        "matcher": "Agent|Task|mcp__orrery__step_start",
         "hooks": [
           {
             "type": "command",

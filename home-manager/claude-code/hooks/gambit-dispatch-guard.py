@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PreToolUse:Agent|Task guard for Gambit Implementer dispatches.
+"""PreToolUse guard for Gambit Implementer dispatches.
 
 The Implementer's brief is the source of truth for each dispatch. This hook
 runs the validator for the writing agent named by the Implementer role's entry
@@ -16,6 +16,7 @@ from typing import Any
 MODELS_ENV = "GAMBIT_MODELS"
 VALIDATOR_ENV = "GAMBIT_VALIDATE_DISPATCH"
 DEFAULT_MODELS = "~/.claude/gambit/models.json"
+STEP_START_TOOL = "mcp__orrery__step_start"
 
 
 def allow() -> None:
@@ -108,13 +109,17 @@ def main() -> None:
     except (json.JSONDecodeError, OSError, TypeError, ValueError):
         allow()
 
-    if event.get("tool_name") not in {"Agent", "Task"}:
+    tool_name = event.get("tool_name")
+    if tool_name not in {"Agent", "Task", STEP_START_TOOL}:
         allow()
     tool_input = event.get("tool_input")
     if not isinstance(tool_input, dict):
         allow()
 
-    agent = tool_input.get("subagent_type")
+    if tool_name == STEP_START_TOOL:
+        agent = tool_input.get("agent")
+    else:
+        agent = tool_input.get("subagent_type")
     registry_path = os.path.expanduser(os.environ.get(MODELS_ENV, DEFAULT_MODELS))
     try:
         agents, entry = implementer_dispatch(registry_path)
@@ -129,6 +134,12 @@ def main() -> None:
 
     if agent not in agents:
         allow()
+
+    if tool_name == STEP_START_TOOL:
+        deny(
+            "Gambit Implementer step_start is blocked because implementers "
+            "dispatch through the Agent tool until O1d-g2."
+        )
 
     brief = prompt_path(tool_input.get("prompt"), "Brief")
     workspace = prompt_path(tool_input.get("prompt"), "Workspace")

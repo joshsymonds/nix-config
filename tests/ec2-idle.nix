@@ -80,12 +80,41 @@ in
         // {
           environment.systemPackages = [dotnet];
         });
+
+      # Every guard pass writes its heartbeat to /dev/ttyS0; the default
+      # thresholds keep this node up for the whole run.
+      heartbeat = fleetBox {};
+
+      # The guard sees a FIFO with no reader as /dev/ttyS0, so each heartbeat
+      # write blocks. The bind is local to the guard's unit: the test driver's
+      # backdoor shell keeps the real port. The guard must still power off at
+      # its idle threshold. The window is long so the node's own checks, which
+      # run after the other sessions are set up, still find it up.
+      blockedSerial = fleetBox {
+        systemd.tmpfiles.rules = ["p /run/blocked-ttyS0 0600 root root -"];
+        systemd.services.ec2-idle-guard = {
+          environment.IDLE_SECONDS = lib.mkForce "480";
+          serviceConfig.BindPaths = ["/run/blocked-ttyS0:/dev/ttyS0"];
+        };
+      };
     };
 
     testScript = ''
       import datetime
+      import re
+      import time
 
       start_all()
+
+      # A bare heartbeat line at the start of a serial line. The tty turns
+      # newlines into CRLF, hence the optional CR.
+      heartbeat_line = re.compile(r"(?m)^ec2-fleet-heartbeat (\d+)\r?$")
+
+      def heartbeats(node):
+          return [int(e) for e in heartbeat_line.findall(node.get_console_log())]
+
+      heartbeat.wait_for_unit("ec2-idle-guard.service")
+      blockedSerial.wait_for_unit("ec2-idle-guard.service")
 
       idleOnly.wait_for_unit("ec2-idle-guard.service")
       lifetime.wait_for_unit("ec2-idle-guard.service")
@@ -124,6 +153,11 @@ in
       plainDotnet.succeed("test \"$(cat /proc/$(pgrep -x dotnet)/comm)\" = dotnet")
       plainDotnet.succeed("! grep -qaF /nodemode: /proc/$(pgrep -x dotnet)/cmdline")
       plainDotnet.wait_until_succeeds("ss -Htn state established '( sport = :22 )' | grep -q .", timeout=60)
+
+      # The blocked node's guard attempts each heartbeat write into the FIFO,
+      # where it sits in open(). The pattern avoids matching this command's text.
+      blockedSerial.succeed("test -p /run/blocked-ttyS0")
+      blockedSerial.wait_until_succeeds("pgrep -f 'heartbea[t]' >/dev/null", timeout=90)
 
       # A ControlPersist master left open after a command holds an established
       # :22 connection but no session. The box must still power off once idle
@@ -178,5 +212,30 @@ in
       # Ending the plain dotnet process closes its session; the box powers off.
       plainDotnet.succeed("pkill -x dotnet")
       plainDotnet.wait_for_shutdown(timeout=datetime.timedelta(seconds=300))
+
+      # The blocked serial write does not stop the idle rule, nor delay it: the
+      # guard's journal line, forwarded to the console with the uptime, comes
+      # within boot plus one pass of the 480 s threshold.
+      blockedSerial.wait_for_shutdown(timeout=datetime.timedelta(seconds=900))
+      idle_off = re.search(r"\[\s*(\d+)\.\d+\] [^\n]*idle for 480 s; powering off", blockedSerial.get_console_log())
+      assert idle_off is not None, "the blocked node's guard never logged its idle power-off"
+      assert int(idle_off.group(1)) <= 600, f"the blocked node powered off at uptime {idle_off.group(1)} s, past its 480 s idle threshold"
+
+      # The heartbeat node stays up with default thresholds, so its console
+      # holds every pass since boot. The first pass lands within 90 seconds of
+      # guard start; the newest is within 60 seconds of the VM clock; another
+      # pass adds a line with a later epoch.
+      guard_started = int(heartbeat.succeed('date -d "$(systemctl show -p ActiveEnterTimestamp --value ec2-idle-guard.service)" +%s').strip())
+      deadline = time.monotonic() + 90
+      while not heartbeats(heartbeat):
+          assert time.monotonic() < deadline, "no heartbeat line on the serial console within 90 seconds"
+          time.sleep(1)
+      seen = heartbeats(heartbeat)
+      assert seen[0] <= guard_started + 90, f"first heartbeat {seen[0]} is more than 90s after guard start {guard_started}"
+      vm_now = int(heartbeat.succeed("date +%s").strip())
+      assert abs(vm_now - seen[-1]) <= 60, f"heartbeat epoch {seen[-1]} is more than 60s from VM time {vm_now}"
+      heartbeat.sleep(35)
+      later = heartbeats(heartbeat)
+      assert len(later) > len(seen) and later[-1] > seen[-1], f"no later heartbeat after another pass: {later}"
     '';
   }

@@ -47,6 +47,9 @@
     while true; do
       sleep 30
       now=$(date +%s)
+      # The heartbeat write runs in the background under a timeout, so a
+      # blocked or failing /dev/ttyS0 neither stalls the loop nor ends the guard.
+      timeout 10 ${pkgs.runtimeShell} -c "echo ec2-fleet-heartbeat $now > /dev/ttyS0" 2>/dev/null &
       read -r up _ < /proc/uptime
       up=$(cut -d. -f1 <<< "$up")
       if [ "$up" -ge "$MAX_SECONDS" ]; then

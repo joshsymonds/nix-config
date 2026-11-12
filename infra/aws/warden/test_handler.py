@@ -51,6 +51,8 @@ class StubEC2:
         failing_volumes=(),
         volume_errors=None,
         failing_terminate=False,
+        consoles=None,
+        failing_consoles=(),
     ):
         # Without an explicit volume list, every instance gets one compliant root volume.
         self._instances = instances
@@ -64,10 +66,14 @@ class StubEC2:
         self._failing_volumes = set(failing_volumes)
         self._volume_errors = dict(volume_errors or {})
         self._failing_terminate = failing_terminate
+        self._consoles = dict(consoles or {})
+        self._failing_consoles = set(failing_consoles)
         self.describe_calls = []
         self.terminate_calls = []
         self.volume_describe_calls = []
         self.delete_calls = []
+        self.console_calls = []
+        self.events = []
 
     def describe_instances(self, Filters=None, NextToken=None):
         self.describe_calls.append({"Filters": Filters, "NextToken": NextToken})
@@ -83,6 +89,7 @@ class StubEC2:
 
     def terminate_instances(self, InstanceIds):
         self.terminate_calls.append({"InstanceIds": list(InstanceIds)})
+        self.events.append(("terminate", list(InstanceIds)))
         if self._failing_terminate:
             raise RuntimeError(f"UnauthorizedOperation terminating {list(InstanceIds)}")
         return {"TerminatingInstances": []}
@@ -99,10 +106,22 @@ class StubEC2:
 
     def delete_volume(self, VolumeId):
         self.delete_calls.append(VolumeId)
+        self.events.append(("delete", VolumeId))
         if VolumeId in self._failing_volumes:
             raise RuntimeError(f"UnauthorizedOperation deleting {VolumeId}")
         if VolumeId in self._volume_errors:
             raise self._volume_errors[VolumeId]
+
+    def get_console_output(self, InstanceId, Latest=False):
+        self.console_calls.append({"InstanceId": InstanceId, "Latest": Latest})
+        self.events.append(("console", InstanceId))
+        if InstanceId in self._failing_consoles:
+            raise RuntimeError(f"UnauthorizedOperation reading console of {InstanceId}")
+        # boto3 omits Output entirely when the console is empty.
+        response = {"InstanceId": InstanceId}
+        if InstanceId in self._consoles:
+            response["Output"] = self._consoles[InstanceId]
+        return response
 
 
 def volume(volume_id, minutes_old, *, state="available", fleet=True):
@@ -636,3 +655,194 @@ def test_in_use_volume_describe_filters_fleet_tag_and_in_use_status_across_pages
         ],
     ] * 3
     assert [c["NextToken"] for c in in_use_calls] == [None, "2", "4"]
+
+
+def fleet_box(instance_id, launched_minutes_ago, *, state="running"):
+    return {
+        **box(instance_id, 0, state=state),
+        "LaunchTime": NOW - timedelta(minutes=launched_minutes_ago),
+    }
+
+
+def epoch_minutes_ago(minutes):
+    return int((NOW - timedelta(minutes=minutes)).timestamp())
+
+
+def heartbeat_line(epoch):
+    # The guard writes the heartbeat through a serial tty, so lines end in CRLF.
+    return f"ec2-fleet-heartbeat {epoch}\r\n"
+
+
+def test_stale_heartbeat_on_box_launched_20_minutes_ago_terminates():
+    client = StubEC2(
+        [fleet_box("stale", 20)],
+        consoles={"stale": heartbeat_line(epoch_minutes_ago(16))},
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["stale"]
+    assert client.terminate_calls == [{"InstanceIds": ["stale"]}]
+    assert client.console_calls == [{"InstanceId": "stale", "Latest": True}]
+
+
+def test_heartbeat_under_15_minutes_old_is_spared():
+    client = StubEC2(
+        [fleet_box("control", 20), fleet_box("fresh", 20)],
+        consoles={
+            "control": heartbeat_line(epoch_minutes_ago(16)),
+            "fresh": heartbeat_line(epoch_minutes_ago(14)),
+        },
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["control"]
+    assert client.terminate_calls == [{"InstanceIds": ["control"]}]
+
+
+def test_newest_of_several_heartbeat_lines_decides():
+    # A console carries one line per guard pass; an old line before a fresh one spares the box.
+    client = StubEC2(
+        [fleet_box("control", 40), fleet_box("fresh", 40)],
+        consoles={
+            "control": heartbeat_line(epoch_minutes_ago(30)) + heartbeat_line(epoch_minutes_ago(16)),
+            "fresh": heartbeat_line(epoch_minutes_ago(30)) + heartbeat_line(epoch_minutes_ago(1)),
+        },
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["control"]
+    assert client.terminate_calls == [{"InstanceIds": ["control"]}]
+
+
+def test_box_launched_14_minutes_ago_with_stale_heartbeat_is_spared():
+    client = StubEC2(
+        [fleet_box("control", 20), fleet_box("young", 14)],
+        consoles={
+            "control": heartbeat_line(epoch_minutes_ago(16)),
+            "young": heartbeat_line(epoch_minutes_ago(16)),
+        },
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["control"]
+    assert client.terminate_calls == [{"InstanceIds": ["control"]}]
+
+
+def test_pending_box_with_stale_heartbeat_is_spared_and_never_read():
+    client = StubEC2(
+        [fleet_box("control", 20), fleet_box("pending", 20, state="pending")],
+        consoles={
+            "control": heartbeat_line(epoch_minutes_ago(16)),
+            "pending": heartbeat_line(epoch_minutes_ago(16)),
+        },
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["control"]
+    assert client.terminate_calls == [{"InstanceIds": ["control"]}]
+    assert [c["InstanceId"] for c in client.console_calls] == ["control"]
+
+
+def test_console_with_output_but_no_heartbeat_line_is_spared():
+    client = StubEC2(
+        [fleet_box("control", 20), fleet_box("quiet", 20)],
+        consoles={
+            "control": heartbeat_line(epoch_minutes_ago(16)),
+            "quiet": "Linux version 6.1.0\r\nsystemd[1]: Started guard.\r\n",
+        },
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["control"]
+    assert client.terminate_calls == [{"InstanceIds": ["control"]}]
+
+
+def test_empty_console_is_spared():
+    client = StubEC2([fleet_box("control", 20), fleet_box("empty", 20)], consoles={
+        "control": heartbeat_line(epoch_minutes_ago(16)),
+    })
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["control"]
+    assert client.terminate_calls == [{"InstanceIds": ["control"]}]
+    assert [c["InstanceId"] for c in client.console_calls] == ["control", "empty"]
+
+
+def test_failed_console_read_is_spared_and_sweep_completes():
+    client = StubEC2(
+        [fleet_box("unreadable", 20), fleet_box("control", 20)],
+        consoles={"control": heartbeat_line(epoch_minutes_ago(16))},
+        failing_consoles=["unreadable"],
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["control"]
+    assert client.terminate_calls == [{"InstanceIds": ["control"]}]
+
+
+def test_heartbeat_epoch_before_launch_is_ignored_as_bad_clock():
+    # 30 minutes old would be stale, but it predates the box's LaunchTime.
+    client = StubEC2(
+        [fleet_box("control", 20), fleet_box("bad-clock", 20)],
+        consoles={
+            "control": heartbeat_line(epoch_minutes_ago(16)),
+            "bad-clock": heartbeat_line(epoch_minutes_ago(30)),
+        },
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["control"]
+    assert client.terminate_calls == [{"InstanceIds": ["control"]}]
+
+
+def test_cut_off_last_heartbeat_line_uses_previous_complete_line():
+    # The final heartbeat is fresh but has no line end, so it is not a complete line.
+    client = StubEC2(
+        [fleet_box("cut", 20)],
+        consoles={
+            "cut": heartbeat_line(epoch_minutes_ago(16))
+            + f"ec2-fleet-heartbeat {epoch_minutes_ago(1)}",
+        },
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["cut"]
+    assert client.terminate_calls == [{"InstanceIds": ["cut"]}]
+
+
+@pytest.mark.parametrize("fresh_line", [
+    "guard: ec2-fleet-heartbeat {epoch}\r\n",
+    "ec2-fleet-heartbeat {epoch} extra\r\n",
+])
+def test_heartbeat_counts_only_as_the_whole_line(fresh_line):
+    client = StubEC2(
+        [fleet_box("partial", 20)],
+        consoles={
+            "partial": heartbeat_line(epoch_minutes_ago(16))
+            + fresh_line.format(epoch=epoch_minutes_ago(1)),
+        },
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["partial"]
+    assert client.terminate_calls == [{"InstanceIds": ["partial"]}]
+
+
+def test_failed_heartbeat_terminate_is_reported():
+    client = StubEC2(
+        [fleet_box("stale", 20)],
+        consoles={"stale": heartbeat_line(epoch_minutes_ago(16))},
+        failing_terminate=True,
+    )
+
+    with pytest.raises(RuntimeError, match="stale"):
+        handler.sweep({"us-west-2": client}, NOW)
+
+
+def test_terminations_and_orphan_deletes_precede_console_reads():
+    client = StubEC2(
+        [box("expired", 25), fleet_box("stale", 20)],
+        volumes=[
+            in_use_volume("vol-expired", "expired"),
+            in_use_volume("vol-stale", "stale"),
+            volume("vol-orphan", 30),
+        ],
+        consoles={"stale": heartbeat_line(epoch_minutes_ago(16))},
+    )
+
+    assert handler.sweep({"us-west-2": client}, NOW) == ["expired", "stale"]
+    assert client.events == [
+        ("terminate", ["expired"]),
+        ("delete", "vol-orphan"),
+        ("console", "stale"),
+        ("terminate", ["stale"]),
+    ]

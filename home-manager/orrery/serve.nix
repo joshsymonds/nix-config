@@ -21,7 +21,7 @@ in {
       Restart = "always";
       Environment = [
         "TMUX_TMPDIR=%t"
-        "PATH=${lib.makeBinPath [pkgs.tmux pkgs.zoxide pkgs.claudeCodeCli]}"
+        "PATH=${lib.makeBinPath [pkgs.tmux pkgs.claudeCodeCli]}"
       ];
     };
     Install.WantedBy = ["default.target"];

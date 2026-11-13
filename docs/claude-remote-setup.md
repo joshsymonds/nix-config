@@ -14,7 +14,7 @@ ssh, and the arguments pass through unchanged:
 | --- | --- |
 | `p` | Attach the most recently active session, then open the tree |
 | `p .` | The session for the current directory, else the picker. Exits 2 on a remote client: `.` is local only, so run it on vermissian |
-| `p WORD` | The session named `WORD`, else a zoxide match, else the picker |
+| `p WORD` | The session named `WORD`, else the known directory named `WORD` (several: choose one), else the picker |
 | `p new NAME` | Create project directory `NAME` and a session for it (`--root DIR` sets the parent) |
 | `p WORDS...` | Open the picker with `WORDS` as the intent |
 

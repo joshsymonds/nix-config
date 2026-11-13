@@ -130,7 +130,7 @@ Long-lived shells run in tmux sessions managed by orrery. The `p` launcher attac
 ```
 p                 attach the most recently active session, then open the tree
 p .               the session for the current directory, else the picker
-p WORD            a session named WORD, else a zoxide match, else the picker
+p WORD            a session named WORD, else the known directory named WORD (several: choose one), else the picker
 p new NAME        create project directory NAME and a session for it
 p WORDS...        open the picker with WORDS as the intent
 ```

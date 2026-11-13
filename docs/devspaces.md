@@ -1,6 +1,6 @@
 # Dev Contexts
 
-Long-lived shells run in tmux sessions managed by orrery v0.2.1. You start or attach a session with the `p` launcher, move around with the tmux bindings, and get ntfy notifications from Claude Code hook events through orreryd.
+Long-lived shells run in tmux sessions managed by orrery v0.2.1. You start or attach a session with the `p` launcher, move around with the tmux bindings, and get Claude Code hook notices through orreryd.
 
 ## Components
 1. **orrery** (installed by `programs.orrery` from orrery v0.2.1's home-manager module)
@@ -9,8 +9,8 @@ Long-lived shells run in tmux sessions managed by orrery v0.2.1. You start or at
    - `orrery help` prints the cheatsheet
    - `orrery hook` is the Claude Code hook command
 2. **orreryd** (vermissian, gnomon, ultraviolet)
-   - Posts ntfy notifications from `orrery hook` events
-   - Reads the ntfy secrets from agenix by path at runtime
+   - Routes each pane notice from `orrery hook` events (a transition to `waiting` or `done`) to the desk stream, to Web Push, to both, or to neither
+   - gnomon's `orrery-desk` unit shows desk notices as desktop popups; Web Push reaches the phone through the relay named by `--push-host`
 3. **`p` launcher**
    - On vermissian it runs `orrery open`
    - On gnomon, ninuan and shrike it runs `orrery open --remote` on vermissian over ssh

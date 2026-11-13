@@ -208,6 +208,7 @@
       upstream = "https://api.anthropic.com";
       auth_mode = "forward";
       model = "claude-haiku-5-5";
+      strict_structured_output = true;
     };
     # The Bedrock map is keyed by the Seat's pinned model when it has one, so
     # this resolves through the claude-sonnet-5-5 entry like a caller's own.
@@ -228,6 +229,7 @@
       upstream = "https://api.anthropic.com";
       auth_mode = "forward";
       cache_ttl = "1h";
+      strict_structured_output = true;
     };
   };
 
@@ -267,6 +269,7 @@
     aws_region = "us-east-2";
     model_map_env_file = "PATCHBAY_BEDROCK_MODEL_MAP_FILE";
     max_input_tokens = 1000000;
+    strict_structured_output = true;
     strip_betas = [
       "advanced-tool-use-2025-11-20"
       "advisor-tool-2026-03-01"
@@ -382,9 +385,13 @@
     default_context = "personal";
     seats =
       {
+        # Claude Code's StructuredOutput tool is held to its schema on the Claude
+        # Seats, which set strict_structured_output. Non-Claude upstreams are
+        # unprobed, so their Seats leave it off.
         anthropic = {
           upstream = "https://api.anthropic.com";
           auth_mode = "forward";
+          strict_structured_output = true;
         };
         attain-bedrock = attainBedrockSeat;
       }

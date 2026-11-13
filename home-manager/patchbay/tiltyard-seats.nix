@@ -20,10 +20,14 @@
   # forward Seats — the subscription already pays for them, so a judgment run
   # spends nothing extra. `model` is the whole point of the Seat: a forward Seat
   # without it would serve whatever model the request already named.
+  # They also set strict_structured_output: Claude Code's StructuredOutput tool
+  # is held to its schema on these Seats. The non-Claude candidates below are
+  # unprobed, so their Seats leave it off.
   fable51 = {
     upstream = "https://api.anthropic.com";
     auth_mode = "forward";
     model = "claude-fable-5-1";
+    strict_structured_output = true;
   };
   # Publishes Fable 5.2's native 1M window, for the same reason as haiku55
   # below.
@@ -32,26 +36,31 @@
     auth_mode = "forward";
     model = "claude-fable-5-2";
     max_input_tokens = 1000000;
+    strict_structured_output = true;
   };
   opus5 = {
     upstream = "https://api.anthropic.com";
     auth_mode = "forward";
     model = "claude-opus-5";
+    strict_structured_output = true;
   };
   opus55 = {
     upstream = "https://api.anthropic.com";
     auth_mode = "forward";
     model = "claude-opus-5-5";
+    strict_structured_output = true;
   };
   sonnet5 = {
     upstream = "https://api.anthropic.com";
     auth_mode = "forward";
     model = "claude-sonnet-5";
+    strict_structured_output = true;
   };
   sonnet55 = {
     upstream = "https://api.anthropic.com";
     auth_mode = "forward";
     model = "claude-sonnet-5-5";
+    strict_structured_output = true;
   };
   # max_input_tokens publishes Haiku 5.5's native 1M window on /v1/models,
   # which the patched Claude Code reads at startup for a selector it does not
@@ -62,6 +71,7 @@
     auth_mode = "forward";
     model = "claude-haiku-5-5";
     max_input_tokens = 1000000;
+    strict_structured_output = true;
   };
 
   # The open-weight candidates, billed per token to the household OpenRouter key

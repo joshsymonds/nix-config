@@ -1,8 +1,11 @@
-# Memory cap for the systemd scopes that terminals run their panes in.
+# Memory cap for the systemd scopes that terminals run their panes in, and
+# the holder scopes orrery runs its sessions in.
 #
 # tmux starts every pane in its own tmux-spawn-<uuid>.scope and kitty starts
 # every window in kitty-<pid>-<n>.scope, both under the user manager's
 # app.slice. A coding agent and everything it spawns share one such scope.
+# orreryd started with --holder-scope runs each session's holder (agents and
+# gates) in a transient orrery-hold-<session>.scope under app.slice.
 # Nothing limited those scopes, so one runaway child could take the whole
 # host: on 2026-11-09 a zsh glob over 5.3M directories grew to 100 GB on
 # vermissian (52 GB resident, 47 GB swap) and stalled it for 12 minutes.
@@ -33,6 +36,6 @@
   };
 in {
   xdg.configFile = lib.mkIf pkgs.stdenv.hostPlatform.isLinux (
-    builtins.listToAttrs (map dropIn ["tmux-spawn" "kitty"])
+    builtins.listToAttrs (map dropIn ["tmux-spawn" "kitty" "orrery-hold"])
   );
 }

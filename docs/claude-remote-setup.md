@@ -59,4 +59,5 @@ Each host's desk stream is read by `orrery notices`. On gnomon, the
 `orrery-desk` user unit (`home-manager/orrery/desk.nix`) reads gnomon's stream,
 and vermissian's and ultraviolet's over ssh, and shows each notice as a desktop
 popup. A `waiting` notice is a critical popup. Web Push is relayed through
-`ntfy.sh` by default, as named by `--push-host`.
+vermissian's ntfy relay, `https://vermissian.tail82223.ts.net:8491`, which
+vermissian's `--push-host` names.

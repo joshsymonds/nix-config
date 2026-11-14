@@ -150,7 +150,7 @@ Starship's context chip shows the Coder workspace name on Coder and the hostname
 `orrery help` prints the cheatsheet. vermissian serves it on the tailnet only, at https://vermissian.tail82223.ts.net:10003/.
 
 ### Notifications
-orreryd runs on vermissian, gnomon and ultraviolet. It routes each pane notice from `orrery hook` events to the desk stream, to Web Push, to both, or to neither. gnomon's `orrery-desk` unit reads the desk streams of gnomon, vermissian and ultraviolet (the last two over ssh, via `orrery notices`) and shows each notice as a desktop popup. Web Push reaches the phone through the `ntfy.sh` relay.
+orreryd runs on vermissian, gnomon and ultraviolet. It routes each pane notice from `orrery hook` events to the desk stream, to Web Push, to both, or to neither. gnomon's `orrery-desk` unit reads the desk streams of gnomon, vermissian and ultraviolet (the last two over ssh, via `orrery notices`) and shows each notice as a desktop popup. Web Push reaches the phone through vermissian's ntfy relay, `https://vermissian.tail82223.ts.net:8491`.
 
 ## Remote Link Opening
 

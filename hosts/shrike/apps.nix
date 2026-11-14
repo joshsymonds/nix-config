@@ -70,7 +70,8 @@
   ];
 
   play = [
-    # UnifiedPush distributor for the orrery app, which pushes via ntfy.sh.
+    # UnifiedPush distributor for the orrery app, which pushes via
+    # vermissian's ntfy relay, https://vermissian.tail82223.ts.net:8491.
     # Not subscribed to orrery's ntfy topic: a subscription here would
     # deliver every push a second time.
     {

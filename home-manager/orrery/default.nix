@@ -6,10 +6,12 @@
   ...
 }: let
   sessions = config.services.orreryd.sessions;
+  pushHost = config.services.orreryd.pushHost;
+  pushArgs = lib.optionalString (pushHost != null) " --push-host ${pushHost}";
 
   orreryd-start = pkgs.writeShellScript "orreryd-start" ''
     set -eu
-    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --step-cap 16 --holder-scope /run/current-system/sw/bin/systemd-run"}
+    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --step-cap 16 --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}
   '';
 
   # The gate pool's three members bound gate runs on this host. Their member
@@ -41,6 +43,13 @@
     else toolPath;
 in {
   options.services.orreryd.sessions = lib.mkEnableOption "orreryd's headless engine session service";
+
+  # Passed to orreryd as --push-host. Null leaves orreryd's default, ntfy.sh.
+  options.services.orreryd.pushHost = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = null;
+    description = "Push host orreryd accepts, passed as --push-host. Null keeps orreryd's default, ntfy.sh.";
+  };
 
   config.xdg.configFile = lib.optionalAttrs sessions {
     "orrery/pools.toml".text = poolsFile;

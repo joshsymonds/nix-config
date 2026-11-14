@@ -51,8 +51,10 @@ in {
     Service = {
       ExecStart = "${orreryd-start}";
       # orreryd sends READY=1 once sessions.sock listens (or once its store
-      # opens without sessions). 900 s covers up to 36 holders re-adopted at
-      # 30 s worst each, plus the store open.
+      # opens without sessions). 900 s is a chosen ceiling, not a worst case:
+      # 36 holders at 30 s each to re-adopt would take 1080 s. A timed-out
+      # start is retried; holders keep running in their own scopes, so the
+      # retry has fewer to re-adopt.
       Type = "notify";
       TimeoutStartSec = 900;
       Restart = "always";

@@ -9,7 +9,7 @@
 
   orreryd-start = pkgs.writeShellScript "orreryd-start" ''
     set -eu
-    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --step-cap 16"}
+    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --step-cap 16 --holder-scope /run/current-system/sw/bin/systemd-run"}
   '';
 
   # The gate pool's three members bound gate runs on this host. Their member
@@ -50,14 +50,22 @@ in {
     Unit.Description = "orrery daemon";
     Service = {
       ExecStart = "${orreryd-start}";
+      # orreryd sends READY=1 once sessions.sock listens (or once its store
+      # opens without sessions). 900 s covers up to 36 holders re-adopted at
+      # 30 s worst each, plus the store open.
+      Type = "notify";
+      TimeoutStartSec = 900;
       Restart = "always";
-      # orreryd runs every headless agent and its gates as plain children
-      # in this unit, so nothing else capped them: on 2026-11-12 one agent's
+      # orreryd's headless agents and gates used to run as plain children in
+      # this unit, so nothing else capped them: on 2026-11-12 one agent's
       # node test grew to 48 GB resident plus 43 GB swap on vermissian and
-      # hung the host three times. At MemoryMax the kernel kills the largest
-      # process inside the unit; OOMPolicy=continue keeps orreryd and the
-      # other agents running (the default, stop, would end them all).
-      # MemorySwapMax stops a runaway from grinding through swap first.
+      # hung the host three times. Where sessions run, each session's holder
+      # now runs in its own orrery-hold-<session>.scope under app.slice,
+      # capped per scope by home-manager/terminal-memory-cap. This cap bounds
+      # orreryd and whatever stays in the unit. At MemoryMax the kernel kills
+      # the largest process inside the unit; OOMPolicy=continue keeps orreryd
+      # and the rest of the unit running (the default, stop, would end them
+      # all). MemorySwapMax stops a runaway from grinding through swap first.
       MemoryHigh = "60%";
       MemoryMax = "66%";
       MemorySwapMax = "4G";

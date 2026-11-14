@@ -720,6 +720,7 @@
             pkgs = checkPkgs;
           };
           transcript-sync = import ./tests/transcript-sync.nix {pkgs = checkPkgs;};
+          orrery-store-backup = import ./tests/orrery-store-backup.nix {pkgs = checkPkgs;};
           tmux-status = import ./tests/tmux-status.nix {pkgs = checkPkgs;};
           claude-trust-roots = import ./tests/claude-trust-roots.nix {
             pkgs = checkPkgs;

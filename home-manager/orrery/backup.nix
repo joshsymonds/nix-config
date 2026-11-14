@@ -2,7 +2,11 @@
 # takes a consistent copy while orreryd keeps writing; the copy is checked with
 # integrity_check before it goes to the NAS. Copies older than 14 days in the
 # backup directory are removed; nothing else on the NAS is touched.
-{pkgs, ...}: let
+{
+  pkgs,
+  hostname,
+  ...
+}: let
   orreryBackup = pkgs.writeShellApplication {
     name = "orrery-backup";
     runtimeInputs = with pkgs; [coreutils findutils sqlite util-linux];
@@ -42,6 +46,35 @@
       echo "orrery-backup: $dest/$name ($(stat -c %s "$dest/$name") bytes)"
     '';
   };
+  # Continuous replication of the store to the NAS as a Litestream file replica.
+  # A negative truncate-page-n skips TRUNCATE checkpoints; 0 would mean
+  # Litestream's default, not off.
+  litestreamConfig = (pkgs.formats.yaml {}).generate "orrery-litestream.yml" {
+    snapshot.retention = "336h";
+    dbs = [
+      {
+        path = "$HOME/.local/state/orrery/orrery.db";
+        truncate-page-n = -1;
+        replica = {
+          type = "file";
+          path = "/mnt/claude/${hostname}/orrery-litestream";
+        };
+      }
+    ];
+  };
+  # Refuse to start unless the NAS is mounted, so the replica never lands on the
+  # local disk. Same mount check as orrery-backup.
+  requireNas = pkgs.writeShellApplication {
+    name = "orrery-litestream-require-nas";
+    runtimeInputs = with pkgs; [coreutils util-linux];
+    text = ''
+      ls /mnt/claude >/dev/null 2>&1 || true
+      if ! findmnt -n -t nfs,nfs4 /mnt/claude >/dev/null 2>&1; then
+        echo "orrery-litestream: /mnt/claude is not mounted (NAS down?)" >&2
+        exit 1
+      fi
+    '';
+  };
 in {
   home.packages = [orreryBackup];
 
@@ -54,6 +87,22 @@ in {
       Type = "oneshot";
       ExecStart = "${orreryBackup}/bin/orrery-backup";
     };
+  };
+
+  systemd.user.services.orrery-litestream = {
+    Unit = {
+      Description = "Replicate the orrery store to the NAS with Litestream";
+      After = ["network-online.target"];
+      # Restarts continue across a NAS outage; 0 disables the start-rate limit.
+      StartLimitIntervalSec = 0;
+    };
+    Service = {
+      ExecStartPre = "${requireNas}/bin/orrery-litestream-require-nas";
+      ExecStart = "${pkgs.litestream}/bin/litestream replicate -config ${litestreamConfig}";
+      Restart = "always";
+      RestartSec = "60s";
+    };
+    Install.WantedBy = ["default.target"];
   };
 
   systemd.user.timers.orrery-backup = {

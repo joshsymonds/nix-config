@@ -1,9 +1,9 @@
 # Dev Contexts
 
-Long-lived shells run in tmux sessions managed by orrery v0.2.1. You start or attach a session with the `p` launcher, move around with the tmux bindings, and get Claude Code hook notices through orreryd.
+Long-lived shells run in tmux sessions managed by orrery. You start or attach a session with the `p` launcher, move around with the tmux bindings, and get Claude Code hook notices through orreryd.
 
 ## Components
-1. **orrery** (installed by `programs.orrery` from orrery v0.2.1's home-manager module)
+1. **orrery** (installed by `programs.orrery` from orrery's home-manager module)
    - `orrery open` attaches or starts a project session
    - `orrery tree` shows the orrery tree of panes
    - `orrery help` prints the cheatsheet

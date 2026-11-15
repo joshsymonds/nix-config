@@ -42,40 +42,21 @@ in
       exit 1
     }
 
-    # has_listen <addr> <file>: <file> carries --metrics-listen <addr> as one
-    # whole argument. The dots in addr match only dots, not any character.
-    has_listen() {
-      local re=''${1//./[.]}
-      grep -Eq -- "(^|[[:space:]])--metrics-listen ''${re}([[:space:]]|$)" "$2"
-    }
-
     # has_arg <regex> <file>: <regex> matches one whole argument in <file>.
     has_arg() {
       grep -Eq -- "(^|[[:space:]])$1([[:space:]]|$)" "$2"
     }
 
-    CASE=matcher
-    printf '%s\n' 'exec orreryd --sessions --metrics-listen 127.0.0.1:9464' > ok.txt
-    printf '%s\n' 'exec orreryd --sessions' > missing.txt
-    printf '%s\n' 'exec orreryd --metrics-listen 0.0.0.0:9464' > wildcard.txt
-    printf '%s\n' 'exec orreryd --metrics-listen 127.0.0.1:9465' > port.txt
-    printf '%s\n' 'exec orreryd --metrics-listen 127x0x0x1:9464' > unescaped.txt
-    has_listen 127.0.0.1:9464 ok.txt || fail "a loopback flag with the expected address did not match"
-    ! has_listen 127.0.0.1:9464 missing.txt || fail "a file without the flag matched"
-    ! has_listen 127.0.0.1:9464 wildcard.txt || fail "a wildcard host matched"
-    ! has_listen 127.0.0.1:9464 port.txt || fail "a different port matched"
-    ! has_listen 127.0.0.1:9464 unescaped.txt || fail "an unescaped dot matched a non-dot"
-
     # orreryd's ExecStart is the store path of the orreryd-start script, which
     # holds the orreryd command line.
     CASE=orreryd
-    has_listen 127.0.0.1:9464 "$orreryExecStart" || fail "orreryd-start lacks --metrics-listen 127.0.0.1:9464"
     orreryd_addr=$(grep -oE -- '--metrics-listen [^[:space:]]+' "$orreryExecStart" | cut -d' ' -f2) || fail "orreryd-start has no --metrics-listen address"
+    [ "$orreryd_addr" = '127.0.0.1:9464' ] || fail "orreryd-start listens on $orreryd_addr, not 127.0.0.1:9464"
 
     CASE=orrery-serve
     printf '%s\n' "$serveExecStart" > serve-exec-start.txt
-    has_listen 127.0.0.1:9465 serve-exec-start.txt || fail "orrery serve lacks --metrics-listen 127.0.0.1:9465"
     serve_addr=$(grep -oE -- '--metrics-listen [^[:space:]]+' serve-exec-start.txt | cut -d' ' -f2) || fail "orrery serve has no --metrics-listen address"
+    [ "$serve_addr" = '127.0.0.1:9465' ] || fail "orrery serve listens on $serve_addr, not 127.0.0.1:9465"
 
     # Prometheus: loopback listener, the promtool-checked config it names, and
     # that config's scrape targets, rules and Alertmanager.

@@ -178,7 +178,7 @@
     steward.inputs.nixpkgs.follows = "nixpkgs";
 
     # Orrery - Claude Code session launcher, pinned to the v0.41.0 release tag.
-    orrery.url = "github:joshsymonds/orrery/v0.47.0";
+    orrery.url = "github:joshsymonds/orrery/v0.53.0";
     orrery.inputs.nixpkgs.follows = "nixpkgs";
 
     # dms-claudecode — DMS plugin showing Claude Code subscription usage

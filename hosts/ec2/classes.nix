@@ -16,6 +16,16 @@
     module = ./classes/commonframe-gate.nix;
   };
 
+  orrery-gate = {
+    instanceType = "c8a.8xlarge";
+    diskGb = 200;
+    spot = true;
+    cache = true;
+    idleMinutes = 10;
+    maxHours = 24;
+    module = ./classes/orrery-gate.nix;
+  };
+
   halmasuit-lab = {
     instanceType = "g4dn.xlarge";
     diskGb = 100;

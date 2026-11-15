@@ -161,7 +161,6 @@ in {
     # Rollback @root to @root-blank in initrd, before sysroot.mount.
     # Requires a one-time @root-blank snapshot taken manually at install:
     # `btrfs subvolume snapshot -r /mnt/@root /mnt/@root-blank`.
-    boot.initrd.systemd.enable = true;
     boot.initrd.systemd.services.rollback-root = lib.mkIf cfg.rollback.enable {
       description = "Roll @root back to @root-blank";
       wantedBy = ["initrd.target"];

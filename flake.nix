@@ -89,9 +89,10 @@
     };
 
     # Ephemeral root + selective persistence (paired with disko).
-    # PINNED to the post-bindfs-migration HEAD (real systemd bind mounts).
+    # PINNED past the bindfs migration (real systemd bind mounts) at the
+    # commit that stops reading the removed boot.initrd.systemd.enable.
     # Explicit rev so the input can't silently float and re-regress.
-    impermanence.url = "github:nix-community/impermanence/936ced36ecd25fcbd9b4789184b88aa2e4c2a901";
+    impermanence.url = "github:nix-community/impermanence/fa627f4c8b8e92f58f58a73d99ee4e1304e64eb2";
 
     # Declarative Flatpak management. Adds `services.flatpak.packages` so the
     # system's Flatpak install set is reconciled on activation (install missing,

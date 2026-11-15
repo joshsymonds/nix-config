@@ -592,11 +592,11 @@ in {
     # Custom components (like Nest Protect)
     customComponents = with pkgs.home-assistant-custom-components; [
       nest_protect
-    ];
-
-    # Custom Lovelace cards
-    customLovelaceModules = with pkgs.home-assistant-custom-lovelace-modules; [
-      card-mod # CSS styling for cards
+      # UIX, card-mod's successor: the dashboards' `card_mod:` styling runs on
+      # it. It serves and registers its own frontend script (/uix/uix.js) once
+      # its config entry exists (config-flow only, added once in the UI), and
+      # that flow refuses to start while a card-mod.js resource is listed.
+      uix
     ];
 
     extraComponents = [
@@ -805,10 +805,6 @@ in {
           }
           {
             url = "/hacsfiles/lovelace-auto-entities/auto-entities.js";
-            type = "module";
-          }
-          {
-            url = "/local/nixos-lovelace-modules/card-mod.js";
             type = "module";
           }
         ];

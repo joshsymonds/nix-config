@@ -8,10 +8,12 @@
   sessions = config.services.orreryd.sessions;
   pushHost = config.services.orreryd.pushHost;
   pushArgs = lib.optionalString (pushHost != null) " --push-host ${pushHost}";
+  metricsListen = config.services.orreryd.metricsListen;
+  metricsArgs = lib.optionalString (metricsListen != null) " --metrics-listen ${metricsListen}";
 
   orreryd-start = pkgs.writeShellScript "orreryd-start" ''
     set -eu
-    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --step-cap 16 --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}
+    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --step-cap 16 --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}${metricsArgs}
   '';
 
   # The gate pool's three members bound gate runs on this host. Their member
@@ -49,6 +51,14 @@ in {
     type = lib.types.nullOr lib.types.str;
     default = null;
     description = "Push host orreryd accepts, passed as --push-host. Null keeps orreryd's default, ntfy.sh.";
+  };
+
+  # Passed to orreryd as --metrics-listen, a loopback IP literal with a port.
+  # Null leaves orreryd's default, which serves no metrics.
+  options.services.orreryd.metricsListen = lib.mkOption {
+    type = lib.types.nullOr lib.types.str;
+    default = null;
+    description = "Loopback address orreryd serves /metrics on, passed as --metrics-listen. Null keeps orreryd's default, which serves no metrics.";
   };
 
   config.xdg.configFile = lib.optionalAttrs sessions {

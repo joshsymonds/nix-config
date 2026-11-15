@@ -22,6 +22,7 @@ in
       ./vpn-exit.nix
       ./services/marvin-blackbox-reap.nix
       ./services/ntfy.nix
+      ./services/orrery-alerts.nix
       ./services/orrery-cheatsheet.nix
       ./services/orrery-serve.nix
       inputs.lanzaboote.nixosModules.lanzaboote

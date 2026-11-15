@@ -392,8 +392,8 @@
   # measured lowest-passing profiles from a completed evaluation campaign.
   # Keep deployment deferred until Gambit's consumers and this registry can
   # switch together. The intended flow places task-reviewer and
-  # finding-verifier at task gates, runs conformance-reviewer and
-  # integration-reviewer as the final passes, and sends every final finding to
+  # finding-verifier at task gates, runs conformance-reviewer,
+  # integration-reviewer and test-parsimony-reviewer as the final passes, and sends every final finding to
   # finding-verifier.
   gambitModelsFull = {
     profiles =
@@ -438,6 +438,10 @@
         readonly = true;
       };
       "integration-reviewer" = {
+        entry = "sonnet-high";
+        readonly = true;
+      };
+      "test-parsimony-reviewer" = {
         entry = "sonnet-high";
         readonly = true;
       };
@@ -486,6 +490,10 @@
         readonly = true;
       };
       "integration-reviewer" = {
+        entry = "fable";
+        readonly = true;
+      };
+      "test-parsimony-reviewer" = {
         entry = "fable";
         readonly = true;
       };

@@ -72,7 +72,7 @@ in
     # Gambit's loading session performs the effort itself.
     jq -e '
       (.roles | keys | sort)
-      == ["asset-critic", "asset-implementer", "conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "orchestrator", "scout", "steelman", "task-reviewer", "test-runner"]
+      == ["asset-critic", "asset-implementer", "conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "orchestrator", "scout", "steelman", "task-reviewer", "test-parsimony-reviewer", "test-runner"]
       and .roles.implementer == {"entry":"haiku-medium"}
       and .roles."asset-implementer" == {"entry":"opus-high"}
       and .roles."asset-critic" == {"entry":"opus-high","readonly":true}
@@ -83,13 +83,14 @@ in
       and .roles."finding-verifier" == {"entry":"sonnet-high","readonly":true}
       and .roles."conformance-reviewer" == {"entry":"sonnet-high","readonly":true}
       and .roles."integration-reviewer" == {"entry":"sonnet-high","readonly":true}
+      and .roles."test-parsimony-reviewer" == {"entry":"sonnet-high","readonly":true}
       and .roles.orchestrator.entry == "opus-high"
       and (.roles.orchestrator | has("readonly") | not)
       and (.roles as $roles | ["worker", "finder", "verifier", "reviewer"] | all(. as $old | ($roles | has($old) | not)))
     ' ${fullJson} >/dev/null
     jq -e '
       (.roles | keys | sort)
-      == ["asset-critic", "asset-implementer", "conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "scout", "steelman", "task-reviewer", "test-runner"]
+      == ["asset-critic", "asset-implementer", "conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "scout", "steelman", "task-reviewer", "test-parsimony-reviewer", "test-runner"]
       and .roles.implementer == {"entry":"opus"}
       and .roles."asset-implementer" == {"entry":"opus"}
       and .roles."asset-critic" == {"entry":"opus","readonly":true}
@@ -97,6 +98,7 @@ in
       and .roles."finding-verifier" == {"entry":"fable","readonly":true}
       and .roles."conformance-reviewer" == {"entry":"fable","readonly":true}
       and .roles."integration-reviewer" == {"entry":"fable","readonly":true}
+      and .roles."test-parsimony-reviewer" == {"entry":"fable","readonly":true}
       and (.roles as $roles | ["worker", "finder", "verifier", "reviewer"] | all(. as $old | ($roles | has($old) | not)))
     ' ${claudeOnlyJson} >/dev/null
     for map in ${fullJson} ${claudeOnlyJson}; do

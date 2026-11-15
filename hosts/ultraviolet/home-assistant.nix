@@ -759,12 +759,6 @@ in {
         };
       };
 
-      # Z-Wave JS configuration to connect to bluedesert
-      zwave_js = {
-        # This will be configured through the UI
-        # URL: ws://bluedesert:3000 or ws://172.31.0.201:3000
-      };
-
       # Frontend themes
       frontend = {
         themes = "!include_dir_merge_named themes";

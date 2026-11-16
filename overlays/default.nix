@@ -197,6 +197,14 @@
       # priority sort) is always the source event. Result: merged
       # block shows the source calendar's color and title, mirrors
       # contribute busy-block visibility without polluting the view.
+      #
+      # Anchors are minified names and move with every Morgen release.
+      # 4.1.0: (1) is `fl&&eu.app.…` (`fl` = neither macOS nor Windows);
+      # (2) is `C.map(t=>b.calendarById$[t]?.mtColor)` in the event
+      # block's color memo, where `E` is the sorted merged events,
+      # `L=E[0]` the source and `C` their calendar ids. 4.1.0 also forces
+      # `--ozone-platform=x11` on Linux unless that switch is set, so
+      # Morgen now runs under XWayland.
       morgen = prev.morgen.overrideAttrs (oldAttrs: {
         installPhase =
           builtins.replaceStrings
@@ -204,9 +212,9 @@
           [
             ''
               substituteInPlace $TMP/work/dist/main.js \
-                --replace-fail "hy&&ed.app.disableHardwareAcceleration()" "void 0"
+                --replace-fail "fl&&eu.app.disableHardwareAcceleration()" "void 0"
               substituteInPlace $TMP/work/dist/app.js \
-                --replace-fail "N.map(e=>A.calendarById\$[e]?.mtColor)" "[A.calendarById\$[D?.mtCalendarId]?.mtColor]"
+                --replace-fail "C.map(t=>b.calendarById\$[t]?.mtColor)" "[b.calendarById\$[L?.mtCalendarId]?.mtColor]"
               asar pack --unpack='{*.node,*.ftz,rect-overlay}' "$TMP/work" $out/opt/Morgen/resources/app.asar
             ''
           ]

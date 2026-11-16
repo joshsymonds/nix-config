@@ -66,6 +66,17 @@
     }
   ];
 
+  # The agent each orreryd epic role runs under, mirroring the gambit registry
+  # (~/.claude/gambit/models.json): haiku-medium implements, sonnet-high-ro
+  # verifies and judges, opus plans and releases.
+  programs.orrery.roles = {
+    planner = "opus-high-ro";
+    implementer = "haiku-medium";
+    verifier = "sonnet-high-ro";
+    judge = "sonnet-high-ro";
+    release = "opus-high";
+  };
+
   programs.claudeCode.trustRoots = [
     {
       path = "Work";

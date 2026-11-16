@@ -13,7 +13,7 @@
 
   orreryd-start = pkgs.writeShellScript "orreryd-start" ''
     set -eu
-    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --step-cap 16 --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}${metricsArgs}
+    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --step-cap 24 --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}${metricsArgs}
   '';
 
   # The gate pool's three members bound gate runs on this host. Their member

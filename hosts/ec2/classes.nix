@@ -17,7 +17,7 @@
   };
 
   orrery-gate = {
-    instanceType = "c8a.8xlarge";
+    instanceType = "c8a.16xlarge";
     diskGb = 200;
     spot = true;
     cache = true;

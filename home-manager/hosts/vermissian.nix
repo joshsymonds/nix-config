@@ -75,6 +75,7 @@
     verifier = "sonnet-high-ro";
     judge = "sonnet-high-ro";
     release = "opus-high";
+    integrator = "opus-high";
   };
 
   programs.claudeCode.trustRoots = [

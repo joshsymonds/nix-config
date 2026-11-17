@@ -51,6 +51,17 @@
       id = "com.termux.api";
       label = "Termux:API";
     }
+    # Caffeine quick-settings tile: tap sets the screen timeout to never,
+    # tap again restores the old value. Needs "modify system settings"
+    # (adb: appops set com.elasticrock.keepscreenon WRITE_SETTINGS allow).
+    # Chosen over Caff (cc.goll.caff), whose tile holds a wake lock from a
+    # plain background process: Android's cached-app freezer froze it
+    # ~90 s after the shade closed, its lock went DISABLED, and the screen
+    # timed out anyway (shrike, Nov 16 2026).
+    {
+      id = "com.elasticrock.keepscreenon";
+      label = "Keep Screen On";
+    }
   ];
 
   obtainium = [

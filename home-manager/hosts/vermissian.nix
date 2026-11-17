@@ -76,6 +76,7 @@
     judge = "sonnet-high-ro";
     release = "opus-high";
     integrator = "opus-high";
+    orchestrator = "opus-high-ro";
   };
 
   programs.claudeCode.trustRoots = [

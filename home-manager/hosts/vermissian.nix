@@ -133,13 +133,19 @@
 
   # app.slice holds every user unit and scope on vermissian (orreryd, tmux
   # panes, kitty). These limits were set by hand with `systemctl --user
-  # set-property` in Oct 2026; they live here now, with a swap cap added: on
-  # 2026-11-12 the slice sat at MemoryHigh while one runaway filled all 47 GB
-  # of swap, so the kernel throttled instead of killing and the host hung.
-  # systemd-oomd kills inside the slice at 80% memory pressure.
+  # set-property` in Oct 2026; they live here now.
+  #
+  # There is no MemoryHigh. Above MemoryHigh the kernel throttles and reclaims
+  # instead of killing, and a slice held there never reaches MemoryMax. On
+  # 2026-11-12 one runaway filled all 47 GB of swap that way. On 2026-11-17,
+  # with swap capped, two orrery gate test runs (~21 GB each, under their
+  # per-scope caps) held the slice at MemoryHigh=50G; reclaim thrashed the
+  # page cache at 80% IO pressure and the host hung, while memory pressure
+  # stayed near 9% so systemd-oomd never fired. With only MemoryMax the
+  # kernel OOM-kills the largest process in the slice, which is the runaway.
+  # systemd-oomd still kills inside the slice at 80% memory pressure.
   xdg.configFile."systemd/user/app.slice.d/memory.conf".text = ''
     [Slice]
-    MemoryHigh=50G
     MemoryMax=54G
     MemorySwapMax=8G
     ManagedOOMMemoryPressure=kill

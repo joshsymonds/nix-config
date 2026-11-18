@@ -145,8 +145,12 @@
     # programs/wayland/niri.nix (auto-disabled). DMS's home-manager niri module
     # integrates with this via its `includes` mechanism (config-file merging).
     #
-    # We override niri-unstable to point at our fork at ~/Personal/niri (branch
-    # josh/integration). dms-niri.nix consumes niri-unstable explicitly. niri-
+    # We override niri-unstable to point at our fork at ~/Personal/niri, built
+    # from its private tier (josh/integration-private in the private
+    # niri-private repo: josh/integration plus private patches). It's fetched
+    # over ssh, so whoever evaluates needs GitHub access to that repo: `nh os
+    # switch` evaluates as the user, a plain `sudo nixos-rebuild` would not.
+    # dms-niri.nix consumes niri-unstable explicitly. niri-
     # flake's `make-niri` callPackage wraps this source, so all of its packaging
     # machinery (config validator, niri-session systemd unit, xwayland-satellite
     # integration) flows from one source of truth — critical for the validator
@@ -155,7 +159,7 @@
     niri-flake = {
       url = "github:sodiboo/niri-flake";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.niri-unstable.url = "github:joshsymonds/niri/josh/integration";
+      inputs.niri-unstable.url = "git+ssh://git@github.com/joshsymonds/niri-private?ref=josh/integration-private";
     };
 
     # niri-float-sticky — Go daemon that pins floating windows across

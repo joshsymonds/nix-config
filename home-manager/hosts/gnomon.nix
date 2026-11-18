@@ -1,4 +1,5 @@
 {
+  config,
   inputs,
   lib,
   pkgs,
@@ -21,6 +22,18 @@
     ../patchbay
     ../parlor
   ];
+
+  # Private niri config: binds and window rules for features of the private
+  # niri build, kept out of this public repo. Appended to the config.kdl that
+  # home-manager/niri writes; `optional` keeps niri loading if the secret
+  # hasn't been decrypted. This file isn't checked by niri-flake's validator.
+  age.secrets."niri-private" = {
+    file = ../../secrets/user/niri-private.age;
+    path = "${config.home.homeDirectory}/.config/niri/private.kdl";
+  };
+  xdg.configFile."niri/config.kdl".text = lib.mkAfter ''
+    include optional=true "private.kdl"
+  '';
 
   # Do not install the standalone qBittorrent app here: it bypasses the VPN.
   # Use the system's VPN-isolated instance at http://localhost:8080 instead.

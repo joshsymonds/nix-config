@@ -58,6 +58,9 @@ in {
   "secrets/user/git-conditional-config.age".publicKeys = keys.joshsymonds;
   "secrets/user/git-conditional-key-gnomon.age".publicKeys = keys.joshsymonds;
   "secrets/user/git-conditional-key-vermissian.age".publicKeys = keys.joshsymonds;
+  # Gnomon's private niri config fragment (home-manager/hosts/gnomon.nix),
+  # for features of the private niri build.
+  "secrets/user/niri-private.age".publicKeys = keys.joshsymonds;
   # OpenTofu state/plan encryption passphrase for infra/aws.
   "secrets/user/ec2-fleet-tofu-passphrase.age".publicKeys = keys.joshsymonds;
 

@@ -96,6 +96,22 @@ problem.
 - Don't comment on context length or suggest /clear. If your own output starts
   degrading, say so directly.
 
+# Tests
+
+- Tests never wait on the wall clock. Testing in real time is boring, useless waiting.
+  - Code that depends on time takes a clock (or another seam), and its tests advance a
+    fake one.
+  - No sleeps or polling loops in tests, no real timeouts expected to elapse, and no
+    assertions on elapsed time.
+  - To check that something isn't slow, count its work (steps, calls, scans), not
+    milliseconds.
+  - Concurrency tests may use real threads, but they wait only on signals. The only
+    duration allowed is a hang guard that never elapses in a passing run.
+- No screenshot goldens and no screenshots in tests. A test never captures, stores,
+  decodes, or asserts on pixels; it checks behavior through state, events, and the
+  DOM or node tree. Looks are judged by my eye, so don't burn time driving a headless
+  browser to look at a page for me either; tell me what to look at.
+
 # Code changes
 
 - Delete replaced code completely. No _v2 suffixes, no compatibility shims, no adapter

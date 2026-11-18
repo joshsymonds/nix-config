@@ -75,8 +75,11 @@ nix build .#nixOnDroidConfigurations.shrike.activationPackage \
   --extra-substituters https://nix-on-droid.cachix.org \
   --extra-trusted-public-keys 'nix-on-droid.cachix.org-1:56snoMJTXmDRC1Ei24CmKoUqvHJ9XCp+nidK7qkMQrU='
 # then push that path's closure with attic push (post-build hooks only
-# cover locally-BUILT paths; substituted deps need an explicit push):
-attic push h:nix-config <generation-path>
+# cover locally-BUILT paths; substituted deps need an explicit push).
+# The server name is your interactive ~/.config/attic/config.toml's
+# (`household` on vermissian); the hook's `h` lives in a config only
+# the post-build hook reads.
+attic push household:nix-config <generation-path>
 ```
 
 First switch downloads the closure from cache.nixos.org — do it on wifi.

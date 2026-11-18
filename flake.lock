@@ -2281,11 +2281,11 @@
     "niri-unstable_2": {
       "flake": false,
       "locked": {
-        "lastModified": 1795030479,
-        "narHash": "sha256-EsXYyyFGhsZzgBTLqe6mS+hvn6vOVNpar9p7UCJ/KYU=",
+        "lastModified": 1795035462,
+        "narHash": "sha256-MBB+Gxxx9fkXo2QHg/ZhZj7fwG469CAfh2GXpbN/+FU=",
         "ref": "josh/integration-private",
-        "rev": "e03985e49b4b15ad0bcd075ded8dbb6c86175306",
-        "revCount": 3155,
+        "rev": "283e47d58759e4189f50da3bcce130e9d03b7663",
+        "revCount": 3160,
         "type": "git",
         "url": "ssh://git@github.com/joshsymonds/niri-private"
       },

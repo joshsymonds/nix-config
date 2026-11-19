@@ -16,14 +16,17 @@
     exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --step-cap 24 --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}${metricsArgs}
   '';
 
-  # The gate pool's three members bound gate runs on this host. Their member
-  # commands are `true`, so wake, status and admit do nothing.
+  # The gate pool never bounds gate runs: hardware does. Remote gates queue on
+  # the orrery-gate box for its own slots (nproc/20 full checks, nproc/8 light),
+  # and orreryd's --step-cap bounds what runs here. 64 members sits above both.
+  # Their member commands are `true`, so wake, status and admit do nothing.
   trueBin = "${pkgs.coreutils}/bin/true";
+  gateMembers = 64;
   poolsFile = ''
     [pools.gate]
     host = "${hostname}"
-    cap = 3
-    members = ["gate-1", "gate-2", "gate-3"]
+    cap = ${toString gateMembers}
+    members = [${lib.concatMapStringsSep ", " (i: "\"gate-${toString i}\"") (lib.range 1 gateMembers)}]
     wake = ["${trueBin}"]
     wake_limit = 5
     status = ["${trueBin}"]

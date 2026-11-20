@@ -84,13 +84,27 @@ in {
     systemd.user.services.xdg-desktop-portal-gnome.unitConfig.After = ["niri.service"];
 
     # The xdg-desktop-portal frontend caches the GNOME backend's ScreenCast
-    # properties. When a rebuild restarts xdg-desktop-portal-gnome alone,
-    # the frontend keeps reporting AvailableCursorModes=0 and
-    # AvailableSourceTypes=0, and rejects every screencast request with
+    # properties. When the backend goes away and comes back while the
+    # frontend stays up, the frontend keeps reporting AvailableCursorModes=0
+    # and AvailableSourceTypes=0, and rejects every screencast request with
     # "Unavailable cursor mode" until it restarts too (seen 2026-11-01:
-    # Steam Remote Play's picker stopped appearing). PartOf propagates the
-    # backend's restarts to the frontend.
-    systemd.user.services.xdg-desktop-portal.unitConfig.PartOf = ["xdg-desktop-portal-gnome.service"];
+    # Steam Remote Play's picker stopped appearing; 2026-11-20: Zoom could
+    # not share at all).
+    #
+    # PartOf alone was not enough. It carries only stops and restarts that
+    # systemd itself performs, and on 2026-11-19 a rebuild restarted
+    # niri.service: the backend was not stopped but exited on its own ("Lost
+    # connection to Wayland compositor", status 1), D-Bus started a new one,
+    # and graphical-session.target never stopped, so the frontend from two
+    # days earlier kept its stale view. BindsTo stops the frontend whenever
+    # the backend becomes inactive or fails, however that happens, and
+    # PartOf niri.service takes it down with every compositor restart. The
+    # frontend is D-Bus activated, so the next portal call starts a fresh
+    # one, which reads the backend's properties anew.
+    systemd.user.services.xdg-desktop-portal.unitConfig = {
+      BindsTo = ["xdg-desktop-portal-gnome.service"];
+      PartOf = ["xdg-desktop-portal-gnome.service" "niri.service"];
+    };
 
     services.pipewire = {
       enable = true;

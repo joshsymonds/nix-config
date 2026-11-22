@@ -13,12 +13,12 @@
 
   orreryd-start = pkgs.writeShellScript "orreryd-start" ''
     set -eu
-    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --step-cap 24 --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}${metricsArgs}
+    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}${metricsArgs}
   '';
 
   # The gate pool never bounds gate runs: hardware does. Remote gates queue on
-  # the orrery-gate box for its own slots (nproc/20 full checks, nproc/8 light),
-  # and orreryd's --step-cap bounds what runs here. 64 members sits above both.
+  # the orrery-gate box for its own slots (nproc/20 full checks, nproc/8 light).
+  # 64 members sits above what runs here at once.
   # Their member commands are `true`, so wake, status and admit do nothing.
   trueBin = "${pkgs.coreutils}/bin/true";
   gateMembers = 64;

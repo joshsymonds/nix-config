@@ -721,6 +721,7 @@
             chatgptDesktop = checkPkgs.chatgpt-desktop;
             chatgptDesktopUnwrapped = checkPkgs.chatgpt-desktop-unwrapped;
           };
+          gemini-web = import ./tests/gemini-web.nix {pkgs = checkPkgs;};
           claude-session-start-hook = import ./tests/claude-session-start-hook.nix {
             pkgs = checkPkgs;
           };

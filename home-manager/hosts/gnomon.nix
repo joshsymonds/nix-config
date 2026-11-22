@@ -120,6 +120,11 @@
     # lives in pkgs/chatgpt-desktop/ and is wired in overlays/default.nix.
     chatgpt-desktop
 
+    # Gemini: Google ships no Linux desktop app, so pkgs/gemini-web/ runs
+    # the web app in a dedicated Chromium --app window (own profile, own
+    # desktop entry and window class).
+    gemini-web
+
     # Obsidian — Markdown notes / vaults. The headless flavor on
     # ultraviolet (hosts/ultraviolet/services/obsidian.nix) is a
     # separate, Xvfb-driven daemon for Sync; this is the native

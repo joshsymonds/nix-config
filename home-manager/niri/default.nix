@@ -524,6 +524,11 @@ in {
       hotkey-overlay.title = "Focus or Launch ChatGPT";
       action.spawn = ["focus-or-spawn" "--desktop" "chatgpt" "--tray-comm" "ChatGPT"];
     };
+    # B = Bard, Gemini's old name (G is ChatGPT).
+    "${mod}+B" = {
+      hotkey-overlay.title = "Focus or Launch Gemini";
+      action.spawn = ["focus-or-spawn" "--desktop" "gemini-web"];
+    };
     "${mod}+O" = {
       hotkey-overlay.title = "Focus or Launch Claude";
       action.spawn = ["focus-or-spawn" "--desktop" "com.anthropic.Claude"];

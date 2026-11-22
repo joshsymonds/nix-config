@@ -234,6 +234,10 @@
       chatgpt-desktop-unwrapped = final.callPackage ../pkgs/chatgpt-desktop {};
       chatgpt-desktop = final.callPackage ../pkgs/chatgpt-desktop/fhs.nix {};
 
+      # Gemini: Google ships no Linux desktop app, so this is the web app in
+      # a dedicated Chromium --app window. See pkgs/gemini-web/.
+      gemini-web = final.callPackage ../pkgs/gemini-web {};
+
       # Claude Desktop (the chat app — not Claude Code): Anthropic's official
       # native-Linux build, packaged locally from their apt repo. See
       # pkgs/claude-desktop/. The niri scroll-anchoring fix and the Wayland

@@ -47,6 +47,7 @@
     in {
       inherit claude-desktop-unwrapped;
       claude-desktop = pkgs.callPackage ./claude-desktop/fhs.nix {inherit claude-desktop-unwrapped;};
+      gemini-web = pkgs.callPackage ./gemini-web {};
     }
     else {};
 in

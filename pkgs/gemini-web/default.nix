@@ -30,9 +30,13 @@
 
   # --ozone-platform-hint=auto keeps the window on Wayland even when
   # NIXOS_OZONE_WL is unset; under XWayland the window class differs and
-  # StartupWMClass would no longer match. ScrollAnchoring is disabled for the
-  # same niri focus-change re-latch that overlays/default.nix fixes in the
-  # Electron chat apps.
+  # StartupWMClass would no longer match.
+  #
+  # No --disable-blink-features=ScrollAnchoring, unlike the Electron chat
+  # apps in overlays/default.nix: in Chromium 157 it no longer disables
+  # scroll anchoring (a headless probe still shifts scrollY by the inserted
+  # height; CSS overflow-anchor:none does stop it), and Chromium shows an
+  # "unsupported command-line flag" bar for it.
   launcher = writeShellApplication {
     name = "gemini-web";
     text = ''
@@ -41,7 +45,6 @@
         --no-first-run \
         --no-default-browser-check \
         --ozone-platform-hint=auto \
-        --disable-blink-features=ScrollAnchoring \
         --app=${url} \
         "$@"
     '';

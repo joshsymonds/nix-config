@@ -32,7 +32,11 @@ in
     grep -Fx -- '--app=https://gemini.google.com/app' "$ARGV_OUT"
     grep -Fx -- '--user-data-dir=/data/gemini-web' "$ARGV_OUT"
     grep -Fx -- '--ozone-platform-hint=auto' "$ARGV_OUT"
-    grep -Fx -- '--disable-blink-features=ScrollAnchoring' "$ARGV_OUT"
+    # Chromium flags this as unsupported with a warning bar on every launch.
+    if grep -F -- '--disable-blink-features' "$ARGV_OUT"; then
+      echo "ASSERT FAIL: launcher passes --disable-blink-features" >&2
+      exit 1
+    fi
     grep -Fx -- '--no-first-run' "$ARGV_OUT"
     test "$(tail -n1 "$ARGV_OUT")" = --extra
 

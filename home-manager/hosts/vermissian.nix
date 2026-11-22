@@ -144,13 +144,19 @@
   # stayed near 9% so systemd-oomd never fired. With only MemoryMax the
   # kernel OOM-kills the largest process in the slice, which is the runaway.
   #
+  # MemoryMax sits below the host's 61.7 GiB with room for everything outside
+  # the slice. At 54G it did not: on 2026-11-20 several runaways at once took
+  # the host past its RAM first, and the kernel's global OOM killer fired five
+  # times before the slice's cap was reached. At 48G the slice's cap is reached
+  # first, and its kill stays inside the slice.
+  #
   # systemd-oomd does not watch the slice. At 80% memory pressure it killed a
   # whole cgroup, and in its two kills here (2026-11-17, 2026-11-22) it took a
   # bystander each time: a whole tmux pane of 189 processes, then orreryd
   # itself at 34 MB.
   xdg.configFile."systemd/user/app.slice.d/memory.conf".text = ''
     [Slice]
-    MemoryMax=54G
+    MemoryMax=48G
     MemorySwapMax=8G
   '';
 }

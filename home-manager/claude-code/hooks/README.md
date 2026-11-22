@@ -7,15 +7,11 @@ by `../default.nix` (`mkClaudeFiles`), wired up in `../settings.json`:
 
 ## Notifications live in orrery
 
-Claude wires `orrery hook` on its eight events in `../settings.json`:
-`UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`,
-`PermissionRequest`, `Notification`, `Stop`, and `SessionEnd`. The existing
-`usage-summary-refresh.sh` Stop hook runs beside them. Pi integrates
-separately at the root TUI `agent_settled` event; there is no Codex
-integration.
+Pi integrates separately at the root TUI `agent_settled` event; there is no
+Codex integration.
 
-`orreryd` (on vermissian, gnomon, and ultraviolet) routes each pane notice from
-`orrery hook` events, a transition to `waiting` or `done`, to the desk stream,
+`orreryd` (on vermissian, gnomon, and ultraviolet) routes each pane notice, a
+transition to `waiting` or `done`, to the desk stream,
 to Web Push, to both, or to neither (orrery `docs/contract.md`, "Notice
 routing"). Each host's desk stream is read by `orrery notices`. gnomon's
 `orrery-desk` user unit (`home-manager/orrery/desk.nix`) reads gnomon's stream

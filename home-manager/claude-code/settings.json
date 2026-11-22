@@ -62,15 +62,6 @@
             "command": "~/.claude/hooks/gambit-dispatch-guard.py"
           }
         ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "orrery hook"
-          }
-        ]
       }
     ],
     "Stop": [
@@ -80,22 +71,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/usage-summary-refresh.sh"
-          },
-          {
-            "type": "command",
-            "command": "orrery hook"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "permission_prompt|agent_needs_input|elicitation_dialog|elicitation_url_dialog",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "orrery hook",
-            "timeout": 90
           }
         ]
       }
@@ -111,17 +86,6 @@
         ]
       }
     ],
-    "SessionEnd": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "orrery hook"
-          }
-        ]
-      }
-    ],
     "PostToolUse": [
       {
         "matcher": "Bash",
@@ -129,48 +93,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/aws-profile-mirror.sh"
-          }
-        ]
-      },
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "orrery hook"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "orrery hook"
-          }
-        ]
-      }
-    ],
-    "PostToolUseFailure": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "orrery hook"
-          }
-        ]
-      }
-    ],
-    "PermissionRequest": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "orrery hook"
           }
         ]
       }

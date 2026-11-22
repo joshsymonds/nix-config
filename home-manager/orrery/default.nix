@@ -80,19 +80,11 @@ in {
       Type = "notify";
       TimeoutStartSec = 900;
       Restart = "always";
-      # orreryd's headless agents and gates used to run as plain children in
-      # this unit, so nothing else capped them: on 2026-11-12 one agent's
-      # node test grew to 48 GB resident plus 43 GB swap on vermissian and
-      # hung the host three times. Where sessions run, each session's holder
-      # now runs in its own orrery-hold-<session>.scope under app.slice,
-      # capped per scope by home-manager/terminal-memory-cap. This cap bounds
-      # orreryd and whatever stays in the unit. At MemoryMax the kernel kills
-      # the largest process inside the unit; OOMPolicy=continue keeps orreryd
-      # and the rest of the unit running (the default, stop, would end them
-      # all). MemorySwapMax stops a runaway from grinding through swap first.
-      MemoryHigh = "60%";
-      MemoryMax = "66%";
-      MemorySwapMax = "4G";
+      # Each session's holder, with its agents and gates, runs in its own
+      # orrery-hold-<session>.scope under app.slice, so orreryd's unit holds
+      # orreryd alone and needs no memory cap of its own. OOMPolicy=continue
+      # keeps the unit running if the kernel kills a process in it (the
+      # default, stop, would end the unit).
       OOMPolicy = "continue";
       Environment = [
         "TMUX_TMPDIR=%t"

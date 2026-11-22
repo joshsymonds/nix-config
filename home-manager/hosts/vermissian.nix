@@ -143,12 +143,14 @@
   # page cache at 80% IO pressure and the host hung, while memory pressure
   # stayed near 9% so systemd-oomd never fired. With only MemoryMax the
   # kernel OOM-kills the largest process in the slice, which is the runaway.
-  # systemd-oomd still kills inside the slice at 80% memory pressure.
+  #
+  # systemd-oomd does not watch the slice. At 80% memory pressure it killed a
+  # whole cgroup, and in its two kills here (2026-11-17, 2026-11-22) it took a
+  # bystander each time: a whole tmux pane of 189 processes, then orreryd
+  # itself at 34 MB.
   xdg.configFile."systemd/user/app.slice.d/memory.conf".text = ''
     [Slice]
     MemoryMax=54G
     MemorySwapMax=8G
-    ManagedOOMMemoryPressure=kill
-    ManagedOOMMemoryPressureLimit=80%
   '';
 }

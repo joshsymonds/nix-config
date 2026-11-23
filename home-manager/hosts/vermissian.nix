@@ -77,6 +77,8 @@
     release = "opus-high";
     integrator = "opus-high";
     orchestrator = "opus-high-ro";
+    attempt = "opus-high";
+    test_runner = "sonnet-low";
   };
 
   programs.claudeCode.trustRoots = [

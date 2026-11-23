@@ -100,16 +100,20 @@
       lib.recursiveUpdate settingsJsonWithMarketplaces overlay
     ));
 
-  # `or false` keeps hosts that never import home-manager/patchbay — darwin
-  # (ninuan), echelon — evaluating, and null there means "no local gateway",
-  # leaving the vendor endpoint in place.
+  # The local gateway Claude Code talks to: orrery's gateway when
+  # services.orreryGateway.serveClaude is on, else patchbay. `or false` keeps
+  # hosts that never import home-manager/orrery/gateway.nix or
+  # home-manager/patchbay — darwin (ninuan), echelon — evaluating, and null
+  # there means "no local gateway", leaving the vendor endpoint in place.
   #
-  # The prefix-less base URL selects patchbay's personal context. A project
-  # that bills elsewhere selects its context with a /ctx/<name> base URL in
-  # its own .claude/settings.json — activation.claudeAttainContext below
-  # stamps the Attain repos.
-  patchbayBaseUrl =
-    if (config.services.patchbay.enable or false)
+  # The prefix-less base URL selects the personal context on either gateway.
+  # A project that bills elsewhere selects its context with a /ctx/<name>
+  # base URL in its own .claude/settings.json — activation.claudeAttainContext
+  # below stamps the Attain repos.
+  claudeBaseUrl =
+    if (config.services.orreryGateway.serveClaude or false)
+    then "http://127.0.0.1:${toString config.services.orreryGateway.port}"
+    else if (config.services.patchbay.enable or false)
     then "http://127.0.0.1:${toString config.services.patchbay.port}"
     else null;
 
@@ -177,7 +181,7 @@
   # context rides the Bedrock Seat. The stamp only ever merges keys in, so it
   # writes the value both ways: a stale "0" would outlive turning Bedrock off.
   attainEnv = {
-    ANTHROPIC_BASE_URL = "${patchbayBaseUrl}/ctx/attain";
+    ANTHROPIC_BASE_URL = "${claudeBaseUrl}/ctx/attain";
     CLAUDE_CODE_TETHER_LIVE =
       if (config.services.patchbay.attainBedrock.enable or false)
       then "0"
@@ -195,8 +199,8 @@
         {
           GAMBIT_VALIDATE_DISPATCH = "${gambitSrc}/skills/executing-plans/scripts/validate_dispatch.py";
         }
-        // lib.optionalAttrs (patchbayBaseUrl != null) {
-          ANTHROPIC_BASE_URL = patchbayBaseUrl;
+        // lib.optionalAttrs (claudeBaseUrl != null) {
+          ANTHROPIC_BASE_URL = claudeBaseUrl;
           # Report each subagent's agent type in x-claude-code-agent-type,
           # which patchbay's subagents.agent_types policy routes on: the
           # built-in Explore inherits its session's model, so the model alone
@@ -262,11 +266,12 @@
         exit 1
       fi
 
-      # Merged only on hosts that run a local patchbay: with no gateway the
-      # request goes straight to api.anthropic.com and the key must never
-      # ride along.
+      # Merged only on hosts that run a local gateway, orrery's or patchbay's
+      # (whichever claudeBaseUrl points at): both check X-Patchbay-Key from
+      # the same secret. With no gateway the request goes straight to
+      # api.anthropic.com and the key must never ride along.
       caller_key=""
-      ${lib.optionalString (patchbayBaseUrl != null) ''
+      ${lib.optionalString (claudeBaseUrl != null) ''
         key_file=/run/agenix/patchbay-caller-key
         if [ -r "$key_file" ]; then
           caller_key=$(cat "$key_file")
@@ -1005,7 +1010,7 @@ in {
     # into any existing file, preserving everything else; the file stays
     # untracked in the employer repos.
     activation.claudeAttainContext = lib.hm.dag.entryAfter ["writeBoundary"] (
-      lib.optionalString (patchbayBaseUrl != null) ''
+      lib.optionalString (claudeBaseUrl != null) ''
         attain_root="$HOME/Work/attain"
         attain_stamp=${lib.escapeShellArg (builtins.toJSON (attainSettings // {env = attainEnv;}))}
         if [ -d "$attain_root" ]; then

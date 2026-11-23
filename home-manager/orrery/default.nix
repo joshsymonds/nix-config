@@ -10,10 +10,14 @@
   pushArgs = lib.optionalString (pushHost != null) " --push-host ${pushHost}";
   metricsListen = config.services.orreryd.metricsListen;
   metricsArgs = lib.optionalString (metricsListen != null) " --metrics-listen ${metricsListen}";
+  # The gateway orreryd sends Claude traffic through, on the same host as
+  # claude-code's claudeBaseUrl. `or false` keeps hosts without gateway.nix
+  # evaluating as they do today.
+  gatewayArgs = lib.optionalString (config.services.orreryGateway.serveClaude or false) " --gateway http://127.0.0.1:${toString config.services.orreryGateway.port}";
 
   orreryd-start = pkgs.writeShellScript "orreryd-start" ''
     set -eu
-    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}${metricsArgs}
+    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}${metricsArgs}${gatewayArgs}
   '';
 
   # The gate pool never bounds gate runs: hardware does. Remote gates queue on

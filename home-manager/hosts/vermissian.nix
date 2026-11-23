@@ -96,9 +96,10 @@
   # Codex quota is available; use the full Gambit role registry.
   services.patchbay.codexUpstream.exhausted = false;
 
-  # ~/Work/attain sessions bill the employer's Bedrock account through the
-  # attain-bedrock Seat (signed from the `attain` AWS profile). Flip to
-  # false to put attain back on the personal Anthropic subscription.
+  # The flag shapes patchbay's routes.json and the attain stamp's
+  # CLAUDE_CODE_TETHER_LIVE. While the orrery gateway serves Claude
+  # (serveClaude), attain's routing is its context in orrery's store, so
+  # this flag alone does not move attain's billing.
   services.patchbay.attainBedrock.enable = true;
 
   programs.claudeCode.hostContext = ''

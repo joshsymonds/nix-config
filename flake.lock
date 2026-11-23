@@ -3311,16 +3311,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1795395996,
-        "narHash": "sha256-OFp2FSXlJwea8R4hZmP/k/b9jDZjnSxNwvKaN2CKlOs=",
+        "lastModified": 1795398736,
+        "narHash": "sha256-/oxAd/y7Fv/AI245Ud4hoMUvob+ABv7Q6YRJcSEA9MQ=",
         "owner": "joshsymonds",
         "repo": "orrery",
-        "rev": "388b0bf5facfc423dbe6eea4e9c3fdae4031a3b2",
+        "rev": "d6a11fcf89e51c39c0ee452acb2ebd8e36084870",
         "type": "github"
       },
       "original": {
         "owner": "joshsymonds",
-        "ref": "v0.86.159",
+        "ref": "v0.86.160",
         "repo": "orrery",
         "type": "github"
       }

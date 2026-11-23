@@ -245,11 +245,12 @@ in {
         # $OUT_PATHS is intentionally word-split inside the inner shell.
         # RuntimeMaxSec caps the unit so a worker hung on DB contention
         # (or any other reason) can't sit forever holding a token-bearing
-        # tmpdir; SIGTERM at the cap fires bash's EXIT trap → cleanup.
+        # tmpdir; SIGTERM at the cap fires bash's EXIT trap → cleanup. The
+        # cap covers the wait for the push lock below, so it allows a queue.
         exec ${pkgs.systemd}/bin/systemd-run \
           --no-block --collect \
           --unit="attic-push-$$" \
-          --property=RuntimeMaxSec=300 \
+          --property=RuntimeMaxSec=1800 \
           --setenv=ATTIC_TOKEN_FILE=${lib.escapeShellArg cfg.publisher.tokenFile} \
           --setenv=ATTIC_ENDPOINT=${lib.escapeShellArg endpoint} \
           --setenv=ATTIC_CACHE_NAME=${lib.escapeShellArg cacheName} \
@@ -287,7 +288,16 @@ in {
             # --no-closure: every locally-built path fires its own hook, so
             # walking the closure here is pure redundant work and the source
             # of the per-process memory blow-up.
+            #
+            # One push at a time per host: atticd keeps its metadata in SQLite,
+            # which takes one writer at a time, and a build firing a hook per
+            # path ran dozens of pushes at once. Those queued on the atticd
+            # database lock and connection pool until requests failed with
+            # 500 ("database is locked", "pool timed out"), substitution reads
+            # included: 3,945 of them in the week to 2026-11-22. A waiting unit
+            # holds the lock file only, not an attic-client.
             XDG_CONFIG_HOME="$CFG" \
+              ${pkgs.util-linux}/bin/flock /run/attic-push.lock \
               ${pkgs.attic-client}/bin/attic push --no-closure \
                 "h:$ATTIC_CACHE_NAME" $TO_PUSH
           '

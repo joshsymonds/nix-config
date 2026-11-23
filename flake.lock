@@ -1427,11 +1427,11 @@
         "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1795392343,
-        "narHash": "sha256-9nYsPbcrzpD04dwFjKA+UYl7G5yziRxvabFeW1dQofo=",
+        "lastModified": 1795416239,
+        "narHash": "sha256-Ud16jh4VRFpzWZ7htMENABbQI9O+KoqtRHSxlWLv+CU=",
         "owner": "joshsymonds",
         "repo": "gambit",
-        "rev": "fff960002dd613b819bd8013c24b5776d8f5abf7",
+        "rev": "0d374a2e6c91c228b3917567801fc6fc3c51c2cc",
         "type": "github"
       },
       "original": {
@@ -3311,16 +3311,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1795406192,
-        "narHash": "sha256-VLiFXlQf2y76RaSVMUtWbYHI1XLZIg0b8aAReaghpnU=",
+        "lastModified": 1795416256,
+        "narHash": "sha256-VFrirIjcaHPx+2TcRRTkTdpd5LmgkGRcAzmogapl12M=",
         "owner": "joshsymonds",
         "repo": "orrery",
-        "rev": "70e96ae7a45f3e43a5c65880bdd62d3756637a5f",
+        "rev": "15671818c6147c50f6a8218fc63dc0be3a489d2e",
         "type": "github"
       },
       "original": {
         "owner": "joshsymonds",
-        "ref": "v0.86.162",
+        "ref": "v0.86.163",
         "repo": "orrery",
         "type": "github"
       }

@@ -10,6 +10,7 @@
     ../orrery
     ../orrery/serve.nix
     ../orrery/backup.nix
+    ../orrery/gateway.nix
     ../parlor
     ../patchbay
     ../patchbay/singularity.nix

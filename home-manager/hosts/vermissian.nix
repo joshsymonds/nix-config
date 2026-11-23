@@ -79,6 +79,8 @@
     orchestrator = "opus-high-ro";
     attempt = "opus-high";
     test_runner = "sonnet-low";
+    scout = "haiku-high-ro";
+    steelman = "fable-high-ro";
   };
 
   programs.claudeCode.trustRoots = [

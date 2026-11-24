@@ -68,11 +68,10 @@
   ];
 
   # Whether this host runs the ChatGPT/Codex upstream, and therefore whether
-  # patchbay publishes the chatgpt/* routes Gambit model-profile agents use.
+  # patchbay publishes the chatgpt/* routes model-profile agents use.
   # `or false` keeps hosts that never import home-manager/patchbay — darwin
   # (ninuan), echelon — evaluating.
   codexUpstream = config.services.patchbay.codexUpstream.enable or false;
-  codexExhausted = config.services.patchbay.codexUpstream.exhausted or false;
 
   # Generate settings.json with the local marketplaces' entries injected at
   # build time, pointing at their Nix store paths. Keeps a single source of
@@ -599,10 +598,9 @@
     '';
   };
 
-  # ── Gambit model profiles ───────────────────────────────────────────────
-  # The model-profile definitions, subagent renderer, and both profile/role
-  # maps live in the compatibility-named ./gambit-rungs.nix so the stable
-  # gambit-rung-agents check can import the same data this module installs.
+  # ── Model profiles ─────────────────────────────────────────────────────────
+  # The model-profile definitions and subagent renderer live in ./role-agents.nix
+  # so the role-agents check can import the same data this module installs.
   #
   # On the -ro variants: "read-only" here is a denylist plus a prompt-level
   # directive, and that is strictly weaker than the OS-level
@@ -614,10 +612,8 @@
   # still talk Bash into writing; the destructive-guard hook is what backstops
   # the worst of that.
   inherit
-    (import ./gambit-rungs.nix {inherit lib pkgs;})
+    (import ./role-agents.nix {inherit lib pkgs;})
     profileAgentEntries
-    gambitModelsFull
-    gambitModelsClaudeOnly
     ;
 
   # Agents dir as a linkFarm, mirroring skillsDir: the checked-in ./agents
@@ -639,12 +635,6 @@
         staticAgents)
       ++ lib.optionals codexUpstream profileAgentEntries
     );
-
-  gambitModelsJson = builtins.toJSON (
-    if codexUpstream && !codexExhausted
-    then gambitModelsFull
-    else gambitModelsClaudeOnly
-  );
 
   # Skills dir as a linkFarm derivation: nix-managed skills + the
   # team-status skill at an out-of-store writable path so iteration
@@ -848,10 +838,6 @@ in {
           ".claude/.keep".text = "";
           ".claude/statsig/.keep".text = "";
           ".claude/commands/.keep".text = "";
-          # The profile/role map Gambit dispatches from: GPT profiles wherever
-          # the Codex upstream runs with allowance left, Claude-only elsewhere.
-          # See gambitModelsFull above.
-          ".claude/gambit/models.json".text = gambitModelsJson;
         }
       ];
 
@@ -1127,8 +1113,8 @@ in {
       fi
     '');
 
-    # Retire the Codex MCP server from the runtime prefs. Gambit's
-    # non-Claude model profiles are subagent definitions now (see the profile
+    # Retire the Codex MCP server from the runtime prefs. The non-Claude
+    # model profiles are subagent definitions now (see the profile
     # agent block above), so nothing dispatches through mcp__codex__* any more.
     # But the activation that used to live here MERGED the server into
     # ~/.claude.json — runtime-mutable user prefs Nix never regenerates.

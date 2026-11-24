@@ -43,14 +43,14 @@
   '';
 
   inherit
-    (import ../claude-code/gambit-rungs.nix {
+    (import ../claude-code/role-agents.nix {
       inherit lib pkgs;
       orchestratorProcessExtension = "${workflowTools}/orchestrator-processes/index.ts";
     })
     piProfileAgentEntries
     ;
 
-  piProfileAgents = pkgs.linkFarm "pi-gambit-profile-agents" piProfileAgentEntries;
+  piProfileAgents = pkgs.linkFarm "pi-role-agents" piProfileAgentEntries;
   workflowTools = import ./tool-packages {inherit lib pkgs;};
   browser = import ./agent-browser.nix {inherit lib pkgs;};
 in {
@@ -74,7 +74,7 @@ in {
     package = stewardPackage;
 
     # Merge GPT-6 Sol and Luna into the built-in openai-codex provider: the
-    # pinned pi predates them, and the gambit rungs' Pi twins name the model
+    # pinned pi predates them, and the role agents' Pi twins name the model
     # id their patchbay route carries (chatgpt-models.nix). Cloned from pi's
     # own gpt-5.6-sol/luna entries; pricing from openrouter.ai/api/v1/models
     # 2026-09-22 (2x input / 1.5x output above 272K input). Drop these once

@@ -32,12 +32,12 @@
   codexPort = 8317;
   codexListenerKey = "patchbay-local";
   # Public selector -> upstream model id for the ChatGPT/Codex subscription.
-  # Its own file because the gambit rung agents name these selectors and a
-  # check asserts they agree (home-manager/claude-code/gambit-rungs.nix).
+  # Its own file because the role agents name these selectors and a check
+  # asserts they agree (home-manager/claude-code/role-agents.nix).
   chatgptModels = import ./chatgpt-models.nix;
   # The tiltyard judgment roster: selector -> the Seat that selector names in
   # the `tiltyard` context below. Its own file for the same reason, and
-  # tests/gambit-rung-agents.nix asserts the roster there.
+  # tests/role-agents.nix asserts the roster there.
   tiltyardSeats = import ./tiltyard-seats.nix;
 
   # A Seat ID from a public selector: same name, spelled in the ID grammar
@@ -112,7 +112,7 @@
       max_input_tokens = 1048576;
     };
     # DeepSeek V4.1 Flash, the model the tiltyard roster pins as dsv41flash,
-    # published as a public selector so an evaluation run (the gambit trials)
+    # published as a public selector so an evaluation run (the trials)
     # can name it as a subject outside the tiltyard context. Same window as
     # the V4 Flash Seat above: 1048576 is what top_provider serves.
     "openrouter/deepseek-v4.1-flash" = {
@@ -218,7 +218,7 @@
     attain-bedrock-fable51 = attainBedrockSeat // {model = "claude-fable-5-1";};
     # Opus subagents on the anthropic forward with the one-hour prompt-cache
     # lifetime. Claude Code writes five-minute markers for every subagent (the
-    # main session already gets one-hour ones), and a Gambit orchestrator runs
+    # main session already gets one-hour ones), and an orchestrator runs
     # on Opus and idles on its children longer than five minutes, so each wake
     # rewrote its whole context into the cache: in playroom, all 82 waits of
     # 5–60 minutes did. Short-lived Opus subagents pay the 2x write instead of
@@ -326,7 +326,7 @@
   #     its session's model, so only the agent type tells it apart.
   #   * Every Haiku id: CC 2.1.293 resolves the bare `haiku` alias to
   #     claude-haiku-5-5, both Haiku 4.5 spellings still appear on the wire,
-  #     and Gambit's Haiku profiles name claude-haiku-5-5. Bindings are exact,
+  #     and the role agents' Haiku profiles name claude-haiku-5-5. Bindings are exact,
   #     so each id is pinned.
   #
   # On Attain Bedrock the small-model Seat is Sonnet 5.5, so a Haiku dispatch
@@ -682,13 +682,6 @@ in {
       profile and metered there. Off, attain rides the anthropic forward Seat
       like every other context. The Seat and its model-map secret ship
       either way, so flipping this is the whole switch
-    '';
-
-    codexUpstream.exhausted = lib.mkEnableOption ''
-      treating the Codex subscription's usage allowance as spent: the
-      chatgpt/* routes stay published for anyone who names one, and gambit
-      dispatches from the Claude-only rung map. Set when the allowance runs
-      out; clear when it refills
     '';
   };
 

@@ -21,8 +21,7 @@
     "BASH_DEFAULT_TIMEOUT_MS": "300000",
     "BASH_MAX_TIMEOUT_MS": "600000",
     "CLAUDE_CODE_DISABLE_FEEDBACK_SURVEY": "1",
-    "DISABLE_AUTOUPDATER": "1",
-    "GAMBIT_VALIDATE_DISPATCH": "__GAMBIT_VALIDATE_DISPATCH__"
+    "DISABLE_AUTOUPDATER": "1"
   },
   "statusLine": {
     "type": "command",
@@ -53,15 +52,6 @@
             "command": "~/.claude/hooks/private-store-guard.py"
           }
         ]
-      },
-      {
-        "matcher": "Agent|Task|mcp__orrery__step_start",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/gambit-dispatch-guard.py"
-          }
-        ]
       }
     ],
     "Stop": [
@@ -71,17 +61,6 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/usage-summary-refresh.sh"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "matcher": "compact|resume",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "~/.claude/hooks/gambit-record-context.sh"
           }
         ]
       }
@@ -100,7 +79,6 @@
   },
   "extraKnownMarketplaces": {},
   "enabledPlugins": {
-    "gambit@gambit": true,
     "frontend-design@claude-plugins-official": true,
     "feature-dev@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,

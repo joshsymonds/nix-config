@@ -768,6 +768,10 @@
           role-agents = import ./tests/role-agents.nix {
             pkgs = checkPkgs;
           };
+          orrery-role-agents = import ./tests/orrery-role-agents.nix {
+            pkgs = checkPkgs;
+            homeFiles = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home-files;
+          };
           installer-kit-fixture = import ./tests/installer-kit-fixture.nix {
             inherit pkgs;
             flakeSource = self.outPath;

@@ -9,11 +9,9 @@ in
     test ${pkgs.lib.escapeShellArg roles.escalation.model} = gpt-6-sol
     test ${pkgs.lib.escapeShellArg roles.escalation.reasoningEffort} = high
     for forbidden in \
-      '"plugins/gambit"' \
-      '".codex/plugins/cache/personal/gambit"' \
       '".agents/plugins/marketplace.json"'; do
       if ${pkgs.gnugrep}/bin/grep -Fq "$forbidden" ${codexModule}; then
-        echo "Codex module still installs Gambit plugin path: $forbidden" >&2
+        echo "Codex module still installs retired plugin path: $forbidden" >&2
         exit 1
       fi
     done

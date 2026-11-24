@@ -26,7 +26,7 @@
     sandboxMode = "read-only";
   };
   scout = {
-    description = "Perform bounded read-only discovery for a Gambit workflow with file and line evidence.";
+    description = "Perform bounded read-only discovery with file and line evidence.";
     instructions = "Read and follow the referenced scout contract before investigating. Do not edit files. Return file:line evidence or an explicit NOT FOUND result.";
     model = "gpt-5.6-terra";
     reasoningEffort = "medium";

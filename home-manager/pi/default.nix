@@ -159,7 +159,6 @@ in {
       defaultModel = "gpt-6-astra";
       defaultThinkingLevel = "high";
       enableSkillCommands = true;
-      skills = ["~/Personal/gambit/skills"];
       packages = [
         "${piTasks}"
         "${stewardRuntime.extensionRoot}"
@@ -222,7 +221,7 @@ in {
     };
     # Reuse language servers already installed by home-manager/helix. This
     # explicit map replaces upstream defaults (which use ty/biome instead).
-    # Gambit leaf agents keep extensions off except the writing fast-tier hook.
+    # Leaf agents keep extensions off except the writing fast-tier hook.
     # Orchestrators explicitly load task/process tools; LSP stays available to
     # the parent, not silently injected into read-only/isolated workers.
     ".pi/agent/pi-lsp.json".text = builtins.toJSON {
@@ -258,7 +257,7 @@ in {
     };
     ".pi/agent/pi-goal.json".text = builtins.toJSON {
       rpc.enabled = false;
-      # Finite limits are gambit's documented Pi safety exception: the pause
+      # Finite limits are the documented Pi safety exception: the pause
       # asks only for /goal continuation of the same run and is not a terminal.
       continuationLimits = {
         automaticTurns = 25;

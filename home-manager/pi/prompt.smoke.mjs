@@ -19,7 +19,7 @@ assert.match(context, /verification results/i);
 assert.match(context, /user owns scope and ambition/i);
 assert.match(context, /test the changed behavior in an actual browser/i);
 assert.match(context, /unfamiliar files/i);
-assert.match(context, /Gambit owns planning/);
+assert.match(context, /Process\/browser events are evidence, not approval to advance a checkpoint\./);
 assert.equal(context, readFileSync(new URL('./AGENTS.md', import.meta.url), 'utf8'));
 
 const { buildSystemPrompt } = await import(pathToFileURL(join(resolve(sdkRoot), 'dist/core/system-prompt.js')).href);

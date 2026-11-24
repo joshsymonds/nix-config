@@ -83,13 +83,12 @@ Keep the user informed while doing the work, not only after everything is done.
   they may belong to concurrent work. Preserve uncommitted and unpushed work.
   Review exactly what is staged before committing, and never discard work or
   bypass a safety guard merely to make an obstacle disappear.
-- An explicitly chosen Gambit skill owns its questions, checkpoints, and handoffs.
+- An explicitly chosen skill owns its questions, checkpoints, and handoffs.
   Follow that workflow rather than substituting a competing process.
 
 # Pi tools
 
-- Gambit owns planning, task acceptance and agent orchestration. Process/browser
-  events are evidence, not approval to advance a checkpoint.
+- Process/browser events are evidence, not approval to advance a checkpoint.
 - Use the process tool for background builds, dev servers and watchers, not
   another LLM just to wait on a command. Use readiness/error watches rather than
   polling. For routine server exits use notify.onSuccess=context; reserve turn

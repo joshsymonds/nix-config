@@ -66,9 +66,8 @@
     }
   ];
 
-  # The agent each orreryd epic role runs under, mirroring the gambit registry
-  # (~/.claude/gambit/models.json): haiku-medium implements, sonnet-high-ro
-  # verifies and judges, opus plans and releases.
+  # The agent each orreryd epic role runs under: haiku-medium implements,
+  # sonnet-high-ro verifies and judges, opus plans and releases.
   programs.orrery.roles = {
     planner = "opus-high-ro";
     implementer = "haiku-medium";
@@ -95,9 +94,6 @@
   ];
 
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
-
-  # Codex quota is available; use the full Gambit role registry.
-  services.patchbay.codexUpstream.exhausted = false;
 
   # ~/Work/attain sessions bill the employer's Bedrock account through the
   # attain-bedrock Seat (signed from the `attain` AWS profile). Flip to

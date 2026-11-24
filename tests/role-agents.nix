@@ -1,26 +1,23 @@
-# Consistency check over Gambit model profiles: the profile definitions, the
-# two profile/role maps written to <profile>/gambit/models.json, the rendered
-# subagent files, and the patchbay routes they point at. The compatibility
-# filename and check attribute remain stable for callers.
+# Consistency check over the role agents' model profiles: the profile
+# definitions, the rendered subagent files, and the patchbay routes and tiltyard
+# seats they point at.
 {pkgs}: let
   inherit (pkgs) lib;
 
   workflowTools = import ../home-manager/pi/tool-packages {inherit lib pkgs;};
   orchestratorProcessExtension = "${workflowTools}/orchestrator-processes/index.ts";
-  modelProfileData = import ../home-manager/claude-code/gambit-rungs.nix {
+  modelProfileData = import ../home-manager/claude-code/role-agents.nix {
     inherit lib pkgs orchestratorProcessExtension;
   };
   inherit
     (modelProfileData)
-    gambitProfiles
+    roleProfiles
     profileAgentEntries
     piProfileAgentEntries
     omakasePiProfiles
-    gambitModelsFull
-    gambitModelsClaudeOnly
     ;
 
-  # Spelled out here rather than imported from gambit-rungs.nix: importing the
+  # Spelled out here rather than imported from role-agents.nix: importing the
   # constant would make the assertion tautological — it would prove the file
   # says whatever the module says, not that the module denies the right tools.
   # Edit/Write/NotebookEdit are the file mutators, mcp__* removes every MCP
@@ -48,68 +45,22 @@
   tiltyardSeats = import ../home-manager/patchbay/tiltyard-seats.nix;
   tiltyardJson = pkgs.writeText "patchbay-tiltyard-seats.json" (builtins.toJSON tiltyardSeats);
 
-  profilesJson = pkgs.writeText "gambit-model-profiles.json" (builtins.toJSON gambitProfiles);
-  fullJson = pkgs.writeText "gambit-models-full.json" (builtins.toJSON gambitModelsFull);
-  claudeOnlyJson = pkgs.writeText "gambit-models-claude-only.json" (builtins.toJSON gambitModelsClaudeOnly);
+  profilesJson = pkgs.writeText "role-agent-profiles.json" (builtins.toJSON roleProfiles);
   routesJson = pkgs.writeText "patchbay-chatgpt-routes.json" (builtins.toJSON chatgptRoutes);
-  omakaseJson = pkgs.writeText "gambit-omakase-pi-profiles.json" (builtins.toJSON omakasePiProfiles);
+  omakaseJson = pkgs.writeText "role-agent-omakase-pi-profiles.json" (builtins.toJSON omakasePiProfiles);
 
   # The same entries home-manager links into <profile>/agents, rendered here so
   # the frontmatter can be read back off disk.
-  agentsDir = pkgs.linkFarm "gambit-profile-agents-check-dir" profileAgentEntries;
-  piAgentsDir = pkgs.linkFarm "gambit-pi-profile-agents-check-dir" piProfileAgentEntries;
+  agentsDir = pkgs.linkFarm "role-agents-check-dir" profileAgentEntries;
+  piAgentsDir = pkgs.linkFarm "pi-role-agents-check-dir" piProfileAgentEntries;
 in
-  pkgs.runCommand "gambit-rung-agents-check" {
+  pkgs.runCommand "role-agents-check" {
     nativeBuildInputs = [pkgs.jq];
   } ''
     set -euo pipefail
 
     # Guard against the whole file passing vacuously on an empty profile set.
     jq -e 'length > 0' ${profilesJson} >/dev/null
-
-    # Both maps expose exactly the explicit roles Gambit dispatches. The
-    # orchestrator is seated only where a Codex route exists; without it,
-    # Gambit's loading session performs the effort itself.
-    jq -e '
-      (.roles | keys | sort)
-      == ["asset-critic", "asset-implementer", "conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "orchestrator", "scout", "steelman", "task-reviewer", "test-parsimony-reviewer", "test-runner"]
-      and .roles.implementer == {"entry":"haiku-medium"}
-      and .roles."asset-implementer" == {"entry":"opus-high"}
-      and .roles."asset-critic" == {"entry":"opus-high","readonly":true}
-      and .roles."test-runner" == {"entry":"sonnet-low"}
-      and .roles.scout == {"entry":"haiku-high","readonly":true}
-      and .roles.steelman == {"entry":"fable-high","readonly":true}
-      and .roles."task-reviewer" == {"entry":"sonnet-high","readonly":true}
-      and .roles."finding-verifier" == {"entry":"sonnet-high","readonly":true}
-      and .roles."conformance-reviewer" == {"entry":"sonnet-high","readonly":true}
-      and .roles."integration-reviewer" == {"entry":"sonnet-high","readonly":true}
-      and .roles."test-parsimony-reviewer" == {"entry":"sonnet-high","readonly":true}
-      and .roles.orchestrator.entry == "opus-high"
-      and (.roles.orchestrator | has("readonly") | not)
-      and (.roles as $roles | ["worker", "finder", "verifier", "reviewer"] | all(. as $old | ($roles | has($old) | not)))
-    ' ${fullJson} >/dev/null
-    jq -e '
-      (.roles | keys | sort)
-      == ["asset-critic", "asset-implementer", "conformance-reviewer", "finding-verifier", "implementer", "integration-reviewer", "scout", "steelman", "task-reviewer", "test-parsimony-reviewer", "test-runner"]
-      and .roles.implementer == {"entry":"opus"}
-      and .roles."asset-implementer" == {"entry":"opus"}
-      and .roles."asset-critic" == {"entry":"opus","readonly":true}
-      and .roles."task-reviewer" == {"entry":"fable","readonly":true}
-      and .roles."finding-verifier" == {"entry":"fable","readonly":true}
-      and .roles."conformance-reviewer" == {"entry":"fable","readonly":true}
-      and .roles."integration-reviewer" == {"entry":"fable","readonly":true}
-      and .roles."test-parsimony-reviewer" == {"entry":"fable","readonly":true}
-      and (.roles as $roles | ["worker", "finder", "verifier", "reviewer"] | all(. as $old | ($roles | has($old) | not)))
-    ' ${claudeOnlyJson} >/dev/null
-    for map in ${fullJson} ${claudeOnlyJson}; do
-      # Every role entry names a model profile the same map declares.
-      jq -e '
-        (.profiles | keys) as $declared
-        | [.roles[].entry] as $used
-        | all($used[]; . as $profile | ($declared | index($profile)) != null)
-        and (. | has("rungs") | not)
-      ' "$map" >/dev/null
-    done
 
     # The fast policy, pinned independently of the route file: Luna and Terra
     # are always fast, Sol is fast only on its own fast route, Astra never.
@@ -168,20 +119,6 @@ in
       and .sol.seat == "chatgpt-sol"
     ' ${tiltyardJson} >/dev/null
 
-    # The agent profiles of the full map are exactly the declared Gambit model
-    # profiles, and each follows the <profile> / <profile>-ro naming contract.
-    jq -e --argjson declared "$(cat ${profilesJson})" '
-      ([.profiles | to_entries[] | select(.value | has("agent")) | .key] | sort)
-        == ($declared | keys | sort)
-      and all(
-        .profiles | to_entries[] | select(.value | has("agent"));
-        .value.agent == .key and .value.readonly_agent == (.key + "-ro")
-      )
-    ' ${fullJson} >/dev/null
-
-    # The Claude-only map carries no GPT profile — only enum-model profiles.
-    jq -e 'all(.profiles[]; (has("agent") | not) and has("model"))' ${claudeOnlyJson} >/dev/null
-
     # No profile may name a route patchbay does not publish under
     # codexUpstream; such a profile would dispatch at a port nothing listens on.
     jq -e --argjson routes "$(cat ${routesJson})" '
@@ -224,8 +161,8 @@ in
       for f in "$plain" "$ro"; do
         grep -qxF "model: $claude_model" "$f"
         grep -qxF "effort: $effort" "$f"
-        grep -qF "Gambit model profile:" "$f"
-        if grep -qF "Gambit rung" "$f"; then
+        grep -qF "Model profile:" "$f"
+        if grep -qF "rung" "$f"; then
           echo "generated profile $f retains rung wording" >&2
           exit 1
         fi
@@ -237,7 +174,7 @@ in
 
       if [ "$profile" = opus-high ]; then
         grep -qxF 'disallowedTools: SendMessage, ListAgents' "$plain"
-        grep -qF "You are a Gambit Orchestrator." "$plain"
+        grep -qF "You are an Orchestrator." "$plain"
         grep -qF "reaches the Director when you finish" "$plain"
         grep -qF 'same-thread continuation as a fresh dispatch' "$plain"
         if grep -qF 'Continue a child by sending' "$plain"; then
@@ -246,7 +183,7 @@ in
         fi
       else
         grep -qxF ${lib.escapeShellArg expectedLeafDenylist} "$plain"
-        if grep -qF "Gambit Orchestrator" "$plain"; then
+        if grep -qF "You are an Orchestrator." "$plain"; then
           echo "leaf variant $profile.md carries the Orchestrator directive" >&2
           exit 1
         fi
@@ -268,7 +205,7 @@ in
         grep -qxF "model: $pi_model" "$f"
         grep -qxF "thinking: $effort" "$f"
         grep -qxF "skills: false" "$f"
-        grep -qF "Gambit model profile:" "$f"
+        grep -qF "Model profile:" "$f"
         if grep -qF "disallowedTools:" "$f"; then
           echo "Pi profile $f leaked Claude-only frontmatter" >&2
           exit 1

@@ -5,7 +5,7 @@
 # for.
 #
 # Split out of home-manager/patchbay/default.nix so the roster has one home and
-# stays free of `config` and `lib`: tests/gambit-rung-agents.nix imports this
+# stays free of `config` and `lib`: tests/role-agents.nix imports this
 # file directly to assert the roster's shape without evaluating a host, the same
 # arrangement chatgpt-models.nix has.
 #

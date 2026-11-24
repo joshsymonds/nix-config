@@ -1,21 +1,21 @@
-# Gambit's profile/role data — the single source of truth for which non-Claude
-# model profiles exist, what each one is named, how it is rendered as a Claude
-# Code subagent, and how roles map onto profiles.
+# The model-profile data for role agents: which non-Claude model profiles exist,
+# what each one is named, and how it is rendered as a Claude Code subagent (and
+# as its Pi twin).
 #
-# Imported by home-manager/claude-code/default.nix (which installs the agents
-# and writes <profile>/gambit/models.json) and by tests/gambit-rung-agents.nix
-# (which checks the two stay consistent). Nothing here reads `config`, so the
-# check can import it without evaluating a host.
+# Imported by home-manager/claude-code/default.nix (which installs the agents),
+# by home-manager/pi/default.nix (which installs the Pi twins), and by
+# tests/role-agents.nix (which checks the rendered output). Nothing here reads
+# `config`, so the check can import it without evaluating a host.
 {
   lib,
   pkgs,
   orchestratorProcessExtension ? "${import ../pi/tool-packages {inherit lib pkgs;}}/orchestrator-processes/index.ts",
 }: rec {
-  # ── Gambit profile agents ──────────────────────────────────────────────────
-  # Gambit's model profiles ship as Claude Code SUBAGENT DEFINITIONS, not as
-  # model parameters. The Agent tool's `model:` argument is enum-locked
+  # ── Profile agents ─────────────────────────────────────────────────────────
+  # The model profiles ship as Claude Code SUBAGENT DEFINITIONS, not as model
+  # parameters. The Agent tool's `model:` argument is enum-locked
   # (sonnet/opus/haiku/fable/inherit), so a profile's model and effort reach
-  # the wire only through a subagent's frontmatter. Gambit dispatches a
+  # the wire only through a subagent's frontmatter. The dispatcher dispatches a
   # profile by subagent_type and passes the real contract by path in the
   # prompt, so these bodies stay deliberately generic and minimal.
   #
@@ -29,7 +29,7 @@
   #
   # The Implementer role is entry-only, at the effort the tiltyard screen
   # measured to close the corpus.
-  gambitProfiles = {
+  roleProfiles = {
     # Implementer entry profile: Haiku 5.5 at medium effort on Claude Code,
     # Luna at medium effort on Pi. Tiltyard's Haiku screen (2026-10-07,
     # ops/haiku55-screen, the same 56 scenarios x 2) measured Haiku first-try
@@ -72,7 +72,7 @@
       effort = "low";
     };
     # Orchestrator profile: Opus 5.5 at high effort on Claude Code, Sol at high
-    # effort on Pi. Tiltyard's Gambit 2.7 comparison (47 items, 3 replicates)
+    # effort on Pi. Tiltyard's 2.7 comparison (47 items, 3 replicates)
     # scored Opus 5.5 0.907-0.909 against Sol's 0.927-0.935, a difference not
     # significant at n=47.
     "opus-high" = {
@@ -112,14 +112,14 @@
   # store path from the profile frontmatter, so only fast profiles ever load it.
   codexFastExtension = ../pi/codex-fast.ts;
 
-  # The naming contract models.json depends on: a profile's writing agent is the
-  # profile name, its advisory agent is the profile name plus "-ro".
+  # The naming contract: a profile's writing agent is the profile name, its
+  # advisory agent is the profile name plus "-ro".
   profileAgentName = profile: readonly: profile + lib.optionalString readonly "-ro";
 
   # The tools a leaf never needs: a leaf returns its result to the agent that
   # dispatched it and nothing else. With these present, workers messaged the
   # Director (`main`/`team-lead`) instead of returning, stopped other tasks,
-  # and loaded skills — including gambit's own orchestration stages — on
+  # and loaded skills — including the dispatcher's own orchestration stages — on
   # every dispatch (mentat session b9a95fb7, 2026-09-25..29: ~520 worker
   # SendMessages to the Director, 258 Skill loads). The rest reach outside the
   # dispatch: phone notifications, cloud routines, scheduled prompts, design
@@ -139,7 +139,7 @@
 
   # The Orchestrator's writing variant is the one Claude Code profile that
   # dispatches and stops children. It sends no messages (see its directive).
-  orchestratorProfile = gambitModelsFull.roles.orchestrator.entry;
+  orchestratorProfile = "opus-high";
   orchestratorAgentDenylist = "disallowedTools: SendMessage, ListAgents";
 
   # The Director spawns the Orchestrator as a named teammate, so its final
@@ -150,10 +150,10 @@
   # Claude Code routes a resumed child's reply to the session lead, not to the
   # teammate that resumed it: a probe on 2026-09-29 sent a finished luna-low
   # child a continuation from a sol-high teammate, and the reply arrived only
-  # at the Director. So Gambit's same-thread continuation is performed here as
+  # at the Director. So the same-thread continuation is performed here as
   # a fresh dispatch into the same workspace, and SendMessage is never used.
   orchestratorDirective = [
-    "You are a Gambit Orchestrator. Follow the contract and effort brief given in your prompt exactly."
+    "You are an Orchestrator. Follow the contract and effort brief given in your prompt exactly."
     ""
     "Your final message is your report, and it reaches the Director when you finish."
     "Each child you dispatch with the Agent tool returns its result to you. A"
@@ -168,7 +168,7 @@
   # and reviewers) are useless without git and search, so the bound on it has
   # to be stated in the body — a prompt-level rule, not a sandbox.
   readonlyDirective = [
-    "You are a Gambit model-profile agent in its READ-ONLY advisory variant. Follow the"
+    "You are a model-profile agent in its READ-ONLY advisory variant. Follow the"
     "contract and brief given in your prompt exactly."
     ""
     "You inspect and report; you never change the workspace. The editing tools"
@@ -188,7 +188,7 @@
   # The description is quoted because it contains a colon; an unquoted YAML
   # plain scalar cannot carry ": ".
   mkProfileAgent = profile: readonly: let
-    spec = gambitProfiles.${profile};
+    spec = roleProfiles.${profile};
     inherit (spec) effort;
     agentName = profileAgentName profile readonly;
     # The model id the Claude Code agent sends. It carries [1m] for the reason
@@ -200,11 +200,11 @@
     description = spec.claudeModel;
     orchestrator = !readonly && profile == orchestratorProfile;
   in
-    pkgs.writeText "gambit-profile-${agentName}.md" (lib.concatStringsSep "\n" (
+    pkgs.writeText "role-agent-${agentName}.md" (lib.concatStringsSep "\n" (
       [
         "---"
         "name: ${agentName}"
-        ''description: "Gambit model profile: ${description} at ${effort} effort via patchbay${lib.optionalString readonly ", read-only advisory variant"}"''
+        ''description: "Model profile: ${description} at ${effort} effort via patchbay${lib.optionalString readonly ", read-only advisory variant"}"''
         "model: ${model}"
         "effort: ${effort}"
       ]
@@ -224,7 +224,7 @@
         then readonlyDirective
         else if orchestrator
         then orchestratorDirective
-        else ["You are a Gambit model-profile agent. Follow the contract and brief given in your prompt exactly."]
+        else ["You are a model-profile agent. Follow the contract and brief given in your prompt exactly."]
       )
       ++ [""]
     ));
@@ -236,20 +236,23 @@
         name = "${profileAgentName profile readonly}.md";
         path = mkProfileAgent profile readonly;
       }) [false true]
-  ) (lib.attrNames gambitProfiles);
+  ) (lib.attrNames roleProfiles);
 
-  # Nested dispatch is opt-in independently of extension loading. Permit the
-  # Orchestrator to reach exactly the non-Orchestrator role targets and advisory
-  # variants, not arbitrary agents or itself.
-  piOrchestratorChildren = lib.sort builtins.lessThan (lib.unique (lib.concatMap (
-    role:
-      map (profile: let
-        target = gambitModelsFull.profiles.${profile};
-      in
-        if role.readonly or false
-        then target.readonly_agent
-        else target.agent) (role.ladder or [role.entry])
-  ) (lib.attrValues (lib.removeAttrs gambitModelsFull.roles ["orchestrator"]))));
+  # ── Pi twins of the Orchestrator's children ────────────────────────────────
+  # The non-Orchestrator agents a Pi Orchestrator may dispatch: each role's
+  # profile, as its writing agent and, where the role is read-only, its
+  # advisory agent. Nested dispatch is opt-in independently of extension
+  # loading, and it reaches exactly these targets, not arbitrary agents or the
+  # Orchestrator itself.
+  piOrchestratorChildren = [
+    "fable-high-ro"
+    "haiku-high-ro"
+    "haiku-medium"
+    "opus-high"
+    "opus-high-ro"
+    "sonnet-high-ro"
+    "sonnet-low"
+  ];
 
   # pi-subagents uses Pi frontmatter rather than Claude's patchbay fields.
   # Leaf agents keep extensions off except the fast-tier hook. Orchestrators
@@ -257,17 +260,17 @@
   # do not expose pi-tasks' separate RPC dispatch/control tools. Skills remain
   # explicit contract-path loads. Read-only variants stay isolated leaves.
   mkPiProfileAgent = profile: readonly: let
-    inherit (gambitProfiles.${profile}) route effort;
+    inherit (roleProfiles.${profile}) route effort;
     agentName = profileAgentName profile readonly;
     model = "openai-codex/${routeModel route}";
     fast = routeFast route && !readonly;
-    orchestrator = !readonly && profile == gambitModelsFull.roles.orchestrator.entry;
+    orchestrator = !readonly && profile == orchestratorProfile;
   in
-    pkgs.writeText "gambit-pi-profile-${agentName}.md" (lib.concatStringsSep "\n" (
+    pkgs.writeText "pi-role-agent-${agentName}.md" (lib.concatStringsSep "\n" (
       [
         "---"
         "name: ${agentName}"
-        ''description: "Gambit model profile: ${model} at ${effort} thinking${lib.optionalString fast ", fast tier"}${lib.optionalString readonly ", read-only advisory variant"}"''
+        ''description: "Model profile: ${model} at ${effort} thinking${lib.optionalString fast ", fast tier"}${lib.optionalString readonly ", read-only advisory variant"}"''
         "model: ${model}"
         "thinking: ${effort}"
         ''tools: "${
@@ -297,7 +300,7 @@
         then readonlyDirective
         else if orchestrator
         then [
-          "You are a Gambit Orchestrator. Follow the contract and phase brief exactly."
+          "You are an Orchestrator. Follow the contract and phase brief exactly."
           "Dispatch children with run_in_background: true and record the returned IDs."
           "Join them with get_subagent_result(wait: true) before returning your report."
           "Nested children do not notify you; completing your run stops them."
@@ -309,7 +312,7 @@
           "when finished, join nested children, then return your final report."
           "Use the scoped Agent tools, never shell-launched models or a parent proxy."
         ]
-        else ["You are a Gambit model-profile agent. Follow the contract and brief given in your prompt exactly."]
+        else ["You are a model-profile agent. Follow the contract and brief given in your prompt exactly."]
       )
       ++ [""]
     ));
@@ -318,8 +321,9 @@
   # provider). No Claude Code twin: patchbay publishes no omakase route, and
   # the gateway pins reasoning effort per alias, so `thinking` here records
   # the alias's fixed effort rather than choosing one. These are for @deep /
-  # @everyday mentions and Agent dispatch while work migrates off Codex; the
-  # gambit role map below still resolves to the Codex profiles.
+  # @everyday mentions and Agent dispatch while work migrates off Codex; no
+  # role above is assigned to them, so the Codex profiles stay the roles'
+  # targets.
   omakasePiProfiles = {
     everyday = {
       model = "omakase/everyday";
@@ -335,11 +339,11 @@
     inherit (omakasePiProfiles.${profile}) model thinking;
     agentName = profileAgentName profile readonly;
   in
-    pkgs.writeText "gambit-pi-profile-${agentName}.md" (lib.concatStringsSep "\n" (
+    pkgs.writeText "pi-role-agent-${agentName}.md" (lib.concatStringsSep "\n" (
       [
         "---"
         "name: ${agentName}"
-        ''description: "Gambit model profile: ${model} (omakase gateway, effort pinned ${thinking})${lib.optionalString readonly ", read-only advisory variant"}"''
+        ''description: "Model profile: ${model} (omakase gateway, effort pinned ${thinking})${lib.optionalString readonly ", read-only advisory variant"}"''
         "model: ${model}"
         "thinking: ${thinking}"
         ''tools: "${
@@ -358,7 +362,7 @@
       ++ (
         if readonly
         then readonlyDirective
-        else ["You are a Gambit model-profile agent. Follow the contract and brief given in your prompt exactly."]
+        else ["You are a model-profile agent. Follow the contract and brief given in your prompt exactly."]
       )
       ++ [""]
     ));
@@ -370,7 +374,7 @@
           name = "${profileAgentName profile readonly}.md";
           path = mkPiProfileAgent profile readonly;
         }) [false true]
-    ) (lib.attrNames gambitProfiles)
+    ) (lib.attrNames roleProfiles)
     ++ lib.concatMap (
       profile:
         map (readonly: {
@@ -378,132 +382,4 @@
           path = mkOmakasePiProfileAgent profile readonly;
         }) [false true]
     ) (lib.attrNames omakasePiProfiles);
-
-  # ── Gambit profile/role map ────────────────────────────────────────────────
-  # <profile>/gambit/models.json: what gambit reads to turn a role into a
-  # dispatch. Two kinds of profile entry:
-  #   - {agent, readonly_agent} — dispatch subagent_type=<agent> and NO model
-  #     parameter; a readonly role takes readonly_agent instead. This is the
-  #     only way a foreign model id reaches the wire (see mkProfileAgent above).
-  #   - {model} — dispatch general-purpose/Explore with that enum model.
-  # A role names its entry model profile; `readonly = true` marks an advisory
-  # role that must not write.
-  #
-  # These role defaults are provisional policy selected by the user, not the
-  # measured lowest-passing profiles from a completed evaluation campaign.
-  # Keep deployment deferred until Gambit's consumers and this registry can
-  # switch together. The intended flow places task-reviewer and
-  # finding-verifier at task gates, runs conformance-reviewer,
-  # integration-reviewer and test-parsimony-reviewer as the final passes, and sends every final finding to
-  # finding-verifier.
-  gambitModelsFull = {
-    profiles =
-      lib.mapAttrs (profile: _: {
-        agent = profileAgentName profile false;
-        readonly_agent = profileAgentName profile true;
-      })
-      gambitProfiles
-      // {
-        sonnet.model = "sonnet";
-        opus.model = "opus";
-        fable.model = "fable";
-      };
-    # Every role runs a Claude model on Claude Code, following the tier table
-    # in tiltyard ops/claude-tiers/README.md: Opus orchestrates, Fable
-    # steelmans, Haiku 5.5 implements and scouts (ops/haiku55-screen), and
-    # Sonnet takes every other role. Task review moved from Opus to Sonnet on
-    # 2026-10-23: in playroom the Opus task reviewer cost more than every Haiku
-    # implementer combined and confirmed a finding in roughly 6-10 of 184 gate
-    # records, and Opus subagents now write one-hour cache markers (patchbay
-    # anthropic-opus-1h) that a reviewer's short run does not repay.
-    roles = {
-      implementer.entry = "haiku-medium";
-      scout = {
-        entry = "haiku-high";
-        readonly = true;
-      };
-      steelman = {
-        entry = "fable-high";
-        readonly = true;
-      };
-      "task-reviewer" = {
-        entry = "sonnet-high";
-        readonly = true;
-      };
-      "finding-verifier" = {
-        entry = "sonnet-high";
-        readonly = true;
-      };
-      "conformance-reviewer" = {
-        entry = "sonnet-high";
-        readonly = true;
-      };
-      "integration-reviewer" = {
-        entry = "sonnet-high";
-        readonly = true;
-      };
-      "test-parsimony-reviewer" = {
-        entry = "sonnet-high";
-        readonly = true;
-      };
-      "test-runner".entry = "sonnet-low";
-      orchestrator.entry = "opus-high";
-      # Epic-scoped roles: Common Frame's asset pipeline dispatches its bpy
-      # modelling tasks and its visual critic through these, so 3D work runs
-      # on Opus without moving every epic's implementer off Haiku.
-      "asset-implementer".entry = "opus-high";
-      "asset-critic" = {
-        entry = "opus-high";
-        readonly = true;
-      };
-    };
-  };
-
-  # Claude-only map: the same provisional role policy with the current Claude
-  # model choices and no GPT fallback. Used on hosts without the Codex upstream,
-  # where patchbay publishes no chatgpt/* route for a profile to reach.
-  gambitModelsClaudeOnly = {
-    profiles = {
-      sonnet.model = "sonnet";
-      opus.model = "opus";
-      fable.model = "fable";
-    };
-    roles = {
-      implementer.entry = "opus";
-      scout = {
-        entry = "sonnet";
-        readonly = true;
-      };
-      steelman = {
-        entry = "fable";
-        readonly = true;
-      };
-      "task-reviewer" = {
-        entry = "fable";
-        readonly = true;
-      };
-      "finding-verifier" = {
-        entry = "fable";
-        readonly = true;
-      };
-      "conformance-reviewer" = {
-        entry = "fable";
-        readonly = true;
-      };
-      "integration-reviewer" = {
-        entry = "fable";
-        readonly = true;
-      };
-      "test-parsimony-reviewer" = {
-        entry = "fable";
-        readonly = true;
-      };
-      "test-runner".entry = "sonnet";
-      "asset-implementer".entry = "opus";
-      "asset-critic" = {
-        entry = "opus";
-        readonly = true;
-      };
-    };
-  };
 }

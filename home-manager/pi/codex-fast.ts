@@ -1,7 +1,7 @@
-// The Codex fast tier for gambit's fast rungs on Pi.
+// The Codex fast tier for the fast role agents on Pi.
 //
 // Loaded only by the Pi rung agents whose patchbay twin Seat carries
-// speed = "fast" (home-manager/claude-code/gambit-rungs.nix lists the
+// speed = "fast" (home-manager/claude-code/role-agents.nix lists the
 // extension in their frontmatter): every request such a session sends to the
 // openai-codex provider asks for the priority service tier, which the Codex
 // catalogue calls Fast — 1.5x speed at roughly 2.5x quota. Pi's Codex provider

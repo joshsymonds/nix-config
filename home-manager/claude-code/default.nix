@@ -1,20 +1,14 @@
 {
   config,
   hostname,
-  inputs,
   lib,
   pkgs,
   ...
 }: let
   cfg = config.programs.claudeCode;
 
-  # Gambit skills marketplace as a directory-source. Pinned via flake.lock;
-  # updates with `nix flake update gambit`.
-  gambitSrc = inputs.gambit.packages.${pkgs.stdenv.hostPlatform.system}.default;
-  gambitRev = inputs.gambit.rev or "unknown";
-
   # nixd for Claude Code's LSP tool, packaged as a one-plugin directory
-  # marketplace like gambit. Claude Code answers nixd's
+  # marketplace. Claude Code answers nixd's
   # workspace/configuration requests from the server's `settings`, so the
   # shared nixd settings go there.
   nixdLspPlugin = let
@@ -55,11 +49,6 @@
   # plugin state written by activation.claudePluginInstall both come from
   # this list; enablement stays in settings.json's enabledPlugins.
   localMarketplaces = [
-    {
-      name = "gambit";
-      src = gambitSrc;
-      rev = gambitRev;
-    }
     {
       name = "nixd-lsp";
       src = nixdLspPlugin;
@@ -185,17 +174,9 @@
   };
 
   settingsJson = mkSettingsJson "base" (
-    # One env attrset: the overlays below are joined with `//`, which is a
-    # shallow merge, so two overlays each carrying an `env` key would keep
-    # only the last one and leave the __GAMBIT_VALIDATE_DISPATCH__
-    # placeholder unsubstituted (observed 2026-09-15 on vermissian: the
-    # dispatch guard denied every Implementer launch).
     {
       env =
-        {
-          GAMBIT_VALIDATE_DISPATCH = "${gambitSrc}/skills/executing-plans/scripts/validate_dispatch.py";
-        }
-        // lib.optionalAttrs (patchbayBaseUrl != null) {
+        lib.optionalAttrs (patchbayBaseUrl != null) {
           ANTHROPIC_BASE_URL = patchbayBaseUrl;
           # Report each subagent's agent type in x-claude-code-agent-type,
           # which patchbay's subagents.agent_types policy routes on: the
@@ -833,14 +814,6 @@ in {
             source = ./hooks/private-store-guard.py;
             executable = true;
           };
-          ".claude/hooks/gambit-dispatch-guard.py" = {
-            source = ./hooks/gambit-dispatch-guard.py;
-            executable = true;
-          };
-          ".claude/hooks/gambit-record-context.sh" = {
-            source = ./hooks/gambit-record-context.sh;
-            executable = true;
-          };
           ".claude/hooks/usage-summary-refresh.sh" = {
             source = ./hooks/usage-summary-refresh.sh;
             executable = true;
@@ -1253,6 +1226,26 @@ in {
         INSTALLED="$HOME/.claude/plugins/installed_plugins.json"
         [ -f "$KM" ] || echo '{}' > "$KM"
         [ -f "$INSTALLED" ] || echo '{"version":2,"plugins":{}}' > "$INSTALLED"
+
+        # Prune marketplaces this flake no longer declares. A directory source
+        # in the Nix store whose name is not in localMarketplaces came from an
+        # earlier generation: drop its known_marketplaces entry, its
+        # <name>@<name> installed record, and its plugin cache. Only plain
+        # names (no slash, no leading dot) qualify, so the rm below cannot
+        # reach outside cache/.
+        DECLARED=${lib.escapeShellArg (builtins.toJSON (map (m: m.name) localMarketplaces))}
+        STALE=$(${pkgs.jq}/bin/jq -r --argjson declared "$DECLARED" '
+          to_entries[]
+          | select(.value.source.source == "directory")
+          | select((.value.source.path // "") | startswith("/nix/store/"))
+          | select(.key | test("^[A-Za-z0-9][A-Za-z0-9._-]*$"))
+          | select(.key as $k | any($declared[]; . == $k) | not)
+          | .key' "$KM")
+        for STALE_NAME in $STALE; do
+          ${pkgs.jq}/bin/jq --arg name "$STALE_NAME" 'del(.[$name])' "$KM" > "$KM.tmp" && mv "$KM.tmp" "$KM"
+          ${pkgs.jq}/bin/jq --arg id "$STALE_NAME@$STALE_NAME" 'del(.plugins[$id])' "$INSTALLED" > "$INSTALLED.tmp" && mv "$INSTALLED.tmp" "$INSTALLED"
+          rm -rf "$HOME/.claude/plugins/cache/$STALE_NAME"
+        done
       ''
       + lib.concatMapStrings (m: ''
 

@@ -224,10 +224,6 @@
       flake = false;
     };
 
-    # Gambit — Claude Code skills marketplace (consumed as a directory
-    # source; deployed into ~/.claude).
-    gambit.url = "github:joshsymonds/gambit";
-
     # sound-stage — karaoke downloader + delyric vocal separation worker.
     sound-stage = {
       url = "github:joshsymonds/sound-stage";
@@ -722,9 +718,6 @@
             chatgptDesktopUnwrapped = checkPkgs.chatgpt-desktop-unwrapped;
           };
           gemini-web = import ./tests/gemini-web.nix {pkgs = checkPkgs;};
-          claude-session-start-hook = import ./tests/claude-session-start-hook.nix {
-            pkgs = checkPkgs;
-          };
           transcript-sync = import ./tests/transcript-sync.nix {pkgs = checkPkgs;};
           orrery-store-backup = import ./tests/orrery-store-backup.nix {pkgs = checkPkgs;};
           orrery-alerts = import ./tests/orrery-alerts.nix {
@@ -735,10 +728,6 @@
           claude-trust-roots = import ./tests/claude-trust-roots.nix {
             pkgs = checkPkgs;
             vermissian = self.nixosConfigurations.vermissian.config;
-          };
-          claude-dispatch-guard-hook = import ./tests/claude-dispatch-guard-hook.nix {
-            pkgs = checkPkgs;
-            renderedSettings = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home.file.".claude/settings.base.json".source;
           };
           private-store-vm = import ./tests/private-store-vm.nix {
             pkgs = checkPkgs;

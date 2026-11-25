@@ -19,6 +19,11 @@
 # of the scope running; tmux's scopes default to `stop`, which would end the
 # whole pane. MemorySwapMax keeps a runaway from grinding through swap before
 # the kill.
+#
+# Orrery's scopes also take CPUWeight=20 against the default 100 of the tmux
+# and kitty scopes, so the builds and gates orrery runs use the cores a
+# terminal leaves idle and give them back when the terminal works: on
+# 2026-11-24 several Gradle builds at once held vermissian at load 100-300.
 {
   lib,
   pkgs,
@@ -34,8 +39,15 @@
     name = "systemd/user/${prefix}-.scope.d/memory-cap.conf";
     value.text = cap;
   };
+  orreryWeight = {
+    name = "systemd/user/orrery-hold-.scope.d/cpu-weight.conf";
+    value.text = ''
+      [Scope]
+      CPUWeight=20
+    '';
+  };
 in {
   xdg.configFile = lib.mkIf pkgs.stdenv.hostPlatform.isLinux (
-    builtins.listToAttrs (map dropIn ["tmux-spawn" "kitty" "orrery-hold"])
+    builtins.listToAttrs (map dropIn ["tmux-spawn" "kitty" "orrery-hold"] ++ [orreryWeight])
   );
 }

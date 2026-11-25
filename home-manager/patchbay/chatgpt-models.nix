@@ -3,8 +3,8 @@
 # (the Codex model id) plus the optional `speed` tier the Seat asks for.
 #
 # Split out of home-manager/patchbay/default.nix so the route keys have one
-# home. The gambit rung agents in home-manager/claude-code point at these keys
-# by name, and tests/gambit-rung-agents.nix imports this file to prove no rung
+# home. The role agents in home-manager/claude-code point at these keys
+# by name, and tests/role-agents.nix imports this file to prove no rung
 # names a route patchbay does not publish, and that the Pi twin of a fast
 # route asks Codex for the same tier.
 #
@@ -31,7 +31,7 @@
   # registry knows them from 7.3.x. Terra has no GPT-6 generation yet. Sol
   # runs GPT-6.1 Sol since 2026-10-03, confirmed in /v1/models that day.
   "chatgpt/sol" = {model = "gpt-6.1-sol";};
-  # The same model on the fast tier. Published for direct use; no gambit rung
+  # The same model on the fast tier. Published for direct use; no role agent
   # points at it since the worker ladder's second rung returned to standard
   # speed to spare Codex quota.
   "chatgpt/sol-fast" = {

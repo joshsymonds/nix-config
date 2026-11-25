@@ -15,7 +15,7 @@
 +  const goalEndTool = defineTool({
 +    name: "goal_end",
 +    label: "Goal End",
-+    description: "End an active /goal with a terminal Gambit outcome without claiming the goal complete. Use ended_with_gaps when the run finished with known gaps, or stopped_on_catastrophe when a catastrophe prevented a valid release.",
++    description: "End an active /goal with a terminal outcome without claiming the goal complete. Use ended_with_gaps when the run finished with known gaps, or stopped_on_catastrophe when a catastrophe prevented a valid release.",
 +    parameters: Type.Object({
 +      goal_id: Type.String({
 +        minLength: 1,
@@ -26,7 +26,7 @@
 +      report: Type.String({
 +        minLength: 1,
 +        maxLength: MAX_GOAL_END_REPORT_LENGTH,
-+        description: "The final Gambit report for this terminal outcome."
++        description: "The final report for this terminal outcome."
 +      })
 +    }),
 +    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {

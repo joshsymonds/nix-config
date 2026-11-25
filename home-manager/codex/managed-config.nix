@@ -3,7 +3,7 @@
   # namespace. Keep its complete role-specific semantics while pointing the
   # tool example at the non-reserved namespace configured below.
   multiAgentSharedUsageHint = ''
-    Note that collaboration tools cannot be called from inside `functions.exec`. Call `spawn_agent`, `send_message`, `followup_task`, `wait_agent`, `interrupt_agent`, and `list_agents` only as direct tool calls using the recipient shown in their tool definitions, such as `to=functions.gambit_agents.spawn_agent`, since they are intentionally absent from the `functions.exec` `tools.*` namespace. Available tools in `functions.exec` are explicitly described with a `tools` namespace in the developer message.
+    Note that collaboration tools cannot be called from inside `functions.exec`. Call `spawn_agent`, `send_message`, `followup_task`, `wait_agent`, `interrupt_agent`, and `list_agents` only as direct tool calls using the recipient shown in their tool definitions, such as `to=functions.role_agents.spawn_agent`, since they are intentionally absent from the `functions.exec` `tools.*` namespace. Available tools in `functions.exec` are explicitly described with a `tools` namespace in the developer message.
 
     All agents share the same directory. In detail:
     - All agents have access to the same container and filesystem as you.
@@ -75,13 +75,13 @@ in
     [projects."/home/joshsymonds/nix-config"]
     trust_level = "trusted"
 
-    # Exposing metadata lets Gambit select the named roles materialized below,
+    # Exposing metadata lets callers select the named roles materialized below,
     # but changes spawn_agent's schema. The API reserves the default
     # collaboration.spawn_agent schema, so profile-aware spawning must use a
     # non-reserved namespace with matching usage hints.
     [features.multi_agent_v2]
     enabled = true
-    tool_namespace = "gambit_agents"
+    tool_namespace = "role_agents"
     hide_spawn_agent_metadata = false
     root_agent_usage_hint_text = ${builtins.toJSON multiAgentRootUsageHint}
     subagent_usage_hint_text = ${builtins.toJSON multiAgentSubagentUsageHint}

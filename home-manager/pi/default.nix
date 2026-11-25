@@ -43,14 +43,14 @@
   '';
 
   inherit
-    (import ../claude-code/gambit-rungs.nix {
+    (import ../claude-code/role-agents.nix {
       inherit lib pkgs;
       orchestratorProcessExtension = "${workflowTools}/orchestrator-processes/index.ts";
     })
     piProfileAgentEntries
     ;
 
-  piProfileAgents = pkgs.linkFarm "pi-gambit-profile-agents" piProfileAgentEntries;
+  piProfileAgents = pkgs.linkFarm "pi-role-agents" piProfileAgentEntries;
   workflowTools = import ./tool-packages {inherit lib pkgs;};
   browser = import ./agent-browser.nix {inherit lib pkgs;};
 in {
@@ -74,7 +74,7 @@ in {
     package = stewardPackage;
 
     # Merge GPT-6 Sol and Luna into the built-in openai-codex provider: the
-    # pinned pi predates them, and the gambit rungs' Pi twins name the model
+    # pinned pi predates them, and the role agents' Pi twins name the model
     # id their patchbay route carries (chatgpt-models.nix). Cloned from pi's
     # own gpt-5.6-sol/luna entries; pricing from openrouter.ai/api/v1/models
     # 2026-09-22 (2x input / 1.5x output above 272K input). Drop these once
@@ -159,7 +159,6 @@ in {
       defaultModel = "gpt-6-astra";
       defaultThinkingLevel = "high";
       enableSkillCommands = true;
-      skills = ["~/Personal/gambit/skills"];
       packages = [
         "${piTasks}"
         "${stewardRuntime.extensionRoot}"
@@ -222,7 +221,7 @@ in {
     };
     # Reuse language servers already installed by home-manager/helix. This
     # explicit map replaces upstream defaults (which use ty/biome instead).
-    # Gambit leaf agents keep extensions off except the writing fast-tier hook.
+    # Leaf agents keep extensions off except the writing fast-tier hook.
     # Orchestrators explicitly load task/process tools; LSP stays available to
     # the parent, not silently injected into read-only/isolated workers.
     ".pi/agent/pi-lsp.json".text = builtins.toJSON {
@@ -258,7 +257,7 @@ in {
     };
     ".pi/agent/pi-goal.json".text = builtins.toJSON {
       rpc.enabled = false;
-      # Finite limits are gambit's documented Pi safety exception: the pause
+      # Finite limits are the documented Pi safety exception: the pause
       # asks only for /goal continuation of the same run and is not a terminal.
       continuationLimits = {
         automaticTurns = 25;

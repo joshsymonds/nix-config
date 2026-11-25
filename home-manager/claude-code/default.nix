@@ -1,20 +1,14 @@
 {
   config,
   hostname,
-  inputs,
   lib,
   pkgs,
   ...
 }: let
   cfg = config.programs.claudeCode;
 
-  # Gambit skills marketplace as a directory-source. Pinned via flake.lock;
-  # updates with `nix flake update gambit`.
-  gambitSrc = inputs.gambit.packages.${pkgs.stdenv.hostPlatform.system}.default;
-  gambitRev = inputs.gambit.rev or "unknown";
-
   # nixd for Claude Code's LSP tool, packaged as a one-plugin directory
-  # marketplace like gambit. Claude Code answers nixd's
+  # marketplace. Claude Code answers nixd's
   # workspace/configuration requests from the server's `settings`, so the
   # shared nixd settings go there.
   nixdLspPlugin = let
@@ -56,11 +50,6 @@
   # this list; enablement stays in settings.json's enabledPlugins.
   localMarketplaces = [
     {
-      name = "gambit";
-      src = gambitSrc;
-      rev = gambitRev;
-    }
-    {
       name = "nixd-lsp";
       src = nixdLspPlugin;
       rev = null;
@@ -68,11 +57,10 @@
   ];
 
   # Whether this host runs the ChatGPT/Codex upstream, and therefore whether
-  # patchbay publishes the chatgpt/* routes Gambit model-profile agents use.
+  # patchbay publishes the chatgpt/* routes model-profile agents use.
   # `or false` keeps hosts that never import home-manager/patchbay — darwin
   # (ninuan), echelon — evaluating.
   codexUpstream = config.services.patchbay.codexUpstream.enable or false;
-  codexExhausted = config.services.patchbay.codexUpstream.exhausted or false;
 
   # Generate settings.json with the local marketplaces' entries injected at
   # build time, pointing at their Nix store paths. Keeps a single source of
@@ -189,17 +177,9 @@
   };
 
   settingsJson = mkSettingsJson "base" (
-    # One env attrset: the overlays below are joined with `//`, which is a
-    # shallow merge, so two overlays each carrying an `env` key would keep
-    # only the last one and leave the __GAMBIT_VALIDATE_DISPATCH__
-    # placeholder unsubstituted (observed 2026-09-15 on vermissian: the
-    # dispatch guard denied every Implementer launch).
     {
       env =
-        {
-          GAMBIT_VALIDATE_DISPATCH = "${gambitSrc}/skills/executing-plans/scripts/validate_dispatch.py";
-        }
-        // lib.optionalAttrs (claudeBaseUrl != null) {
+        lib.optionalAttrs (claudeBaseUrl != null) {
           ANTHROPIC_BASE_URL = claudeBaseUrl;
           # Report each subagent's agent type in x-claude-code-agent-type,
           # which patchbay's subagents.agent_types policy routes on: the
@@ -604,10 +584,9 @@
     '';
   };
 
-  # ── Gambit model profiles ───────────────────────────────────────────────
-  # The model-profile definitions, subagent renderer, and both profile/role
-  # maps live in the compatibility-named ./gambit-rungs.nix so the stable
-  # gambit-rung-agents check can import the same data this module installs.
+  # ── Model profiles ─────────────────────────────────────────────────────────
+  # The model-profile definitions and subagent renderer live in ./role-agents.nix
+  # so the role-agents check can import the same data this module installs.
   #
   # On the -ro variants: "read-only" here is a denylist plus a prompt-level
   # directive, and that is strictly weaker than the OS-level
@@ -619,10 +598,8 @@
   # still talk Bash into writing; the destructive-guard hook is what backstops
   # the worst of that.
   inherit
-    (import ./gambit-rungs.nix {inherit lib pkgs;})
+    (import ./role-agents.nix {inherit lib pkgs;})
     profileAgentEntries
-    gambitModelsFull
-    gambitModelsClaudeOnly
     ;
 
   # Agents dir as a linkFarm, mirroring skillsDir: the checked-in ./agents
@@ -644,12 +621,6 @@
         staticAgents)
       ++ lib.optionals codexUpstream profileAgentEntries
     );
-
-  gambitModelsJson = builtins.toJSON (
-    if codexUpstream && !codexExhausted
-    then gambitModelsFull
-    else gambitModelsClaudeOnly
-  );
 
   # Skills dir as a linkFarm derivation: nix-managed skills + the
   # team-status skill at an out-of-store writable path so iteration
@@ -838,14 +809,6 @@ in {
             source = ./hooks/private-store-guard.py;
             executable = true;
           };
-          ".claude/hooks/gambit-dispatch-guard.py" = {
-            source = ./hooks/gambit-dispatch-guard.py;
-            executable = true;
-          };
-          ".claude/hooks/gambit-record-context.sh" = {
-            source = ./hooks/gambit-record-context.sh;
-            executable = true;
-          };
           ".claude/hooks/usage-summary-refresh.sh" = {
             source = ./hooks/usage-summary-refresh.sh;
             executable = true;
@@ -853,10 +816,6 @@ in {
           ".claude/.keep".text = "";
           ".claude/statsig/.keep".text = "";
           ".claude/commands/.keep".text = "";
-          # The profile/role map Gambit dispatches from: GPT profiles wherever
-          # the Codex upstream runs with allowance left, Claude-only elsewhere.
-          # See gambitModelsFull above.
-          ".claude/gambit/models.json".text = gambitModelsJson;
         }
       ];
 
@@ -1132,8 +1091,8 @@ in {
       fi
     '');
 
-    # Retire the Codex MCP server from the runtime prefs. Gambit's
-    # non-Claude model profiles are subagent definitions now (see the profile
+    # Retire the Codex MCP server from the runtime prefs. The non-Claude
+    # model profiles are subagent definitions now (see the profile
     # agent block above), so nothing dispatches through mcp__codex__* any more.
     # But the activation that used to live here MERGED the server into
     # ~/.claude.json — runtime-mutable user prefs Nix never regenerates.
@@ -1258,6 +1217,26 @@ in {
         INSTALLED="$HOME/.claude/plugins/installed_plugins.json"
         [ -f "$KM" ] || echo '{}' > "$KM"
         [ -f "$INSTALLED" ] || echo '{"version":2,"plugins":{}}' > "$INSTALLED"
+
+        # Prune marketplaces this flake no longer declares. A directory source
+        # in the Nix store whose name is not in localMarketplaces came from an
+        # earlier generation: drop its known_marketplaces entry, its
+        # <name>@<name> installed record, and its plugin cache. Only plain
+        # names (no slash, no leading dot) qualify, so the rm below cannot
+        # reach outside cache/.
+        DECLARED=${lib.escapeShellArg (builtins.toJSON (map (m: m.name) localMarketplaces))}
+        STALE=$(${pkgs.jq}/bin/jq -r --argjson declared "$DECLARED" '
+          to_entries[]
+          | select(.value.source.source == "directory")
+          | select((.value.source.path // "") | startswith("/nix/store/"))
+          | select(.key | test("^[A-Za-z0-9][A-Za-z0-9._-]*$"))
+          | select(.key as $k | any($declared[]; . == $k) | not)
+          | .key' "$KM")
+        for STALE_NAME in $STALE; do
+          ${pkgs.jq}/bin/jq --arg name "$STALE_NAME" 'del(.[$name])' "$KM" > "$KM.tmp" && mv "$KM.tmp" "$KM"
+          ${pkgs.jq}/bin/jq --arg id "$STALE_NAME@$STALE_NAME" 'del(.plugins[$id])' "$INSTALLED" > "$INSTALLED.tmp" && mv "$INSTALLED.tmp" "$INSTALLED"
+          rm -rf "$HOME/.claude/plugins/cache/$STALE_NAME"
+        done
       ''
       + lib.concatMapStrings (m: ''
 

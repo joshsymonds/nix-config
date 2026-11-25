@@ -124,14 +124,12 @@ in {
           # The NAS ignores the umask, so each copy sets its own mode.
           private=("--chmod=Du=rwx,Dgo=,Fu=rw,Fgo=")
 
-          # Records that exist only on this machine: the gambit epics, every
-          # parlor branch, and nix-config's parlor branches, some of which
-          # stay off the public remote. Each bundle replaces the last only
-          # once it is complete.
+          # Records that exist only on this machine: every parlor branch, and
+          # nix-config's parlor branches, some of which stay off the public
+          # remote. Each bundle replaces the last only once it is complete.
           dest=/mnt/backup/vermissian/parlor
           mkdir -p "$dest"
           chmod 700 "$dest"
-          rsync -rlt "''${private[@]}" ${home}/.gambit/parlor-b80ba08/ "$dest/gambit/"
           git -C ${home}/Personal/parlor bundle create -q "$dest/parlor.bundle.tmp" --all
           chmod 600 "$dest/parlor.bundle.tmp"
           mv "$dest/parlor.bundle.tmp" "$dest/parlor.bundle"

@@ -67,9 +67,8 @@
     }
   ];
 
-  # The agent each orreryd epic role runs under, mirroring the gambit registry
-  # (~/.claude/gambit/models.json): haiku-medium implements, sonnet-high-ro
-  # verifies and judges, opus plans and releases.
+  # The agent each orreryd epic role runs under: haiku-medium implements,
+  # sonnet-high-ro verifies and judges, opus plans and releases.
   programs.orrery.roles = {
     planner = "opus-high-ro";
     implementer = "haiku-medium";
@@ -78,6 +77,10 @@
     release = "opus-high";
     integrator = "opus-high";
     orchestrator = "opus-high-ro";
+    attempt = "opus-high";
+    test_runner = "sonnet-low";
+    scout = "haiku-high-ro";
+    steelman = "fable-high-ro";
   };
 
   programs.claudeCode.trustRoots = [
@@ -92,9 +95,6 @@
   ];
 
   programs.git.settings.user.signingkey = "0x7DD8F05131AEEC3A";
-
-  # Codex quota is available; use the full Gambit role registry.
-  services.patchbay.codexUpstream.exhausted = false;
 
   # The flag shapes patchbay's routes.json and the attain stamp's
   # CLAUDE_CODE_TETHER_LIVE. While the orrery gateway serves Claude

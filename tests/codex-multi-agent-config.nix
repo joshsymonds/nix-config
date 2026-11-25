@@ -3,7 +3,7 @@
   codexConfig,
 }: let
   expectedSharedUsageHint = ''
-    Note that collaboration tools cannot be called from inside `functions.exec`. Call `spawn_agent`, `send_message`, `followup_task`, `wait_agent`, `interrupt_agent`, and `list_agents` only as direct tool calls using the recipient shown in their tool definitions, such as `to=functions.gambit_agents.spawn_agent`, since they are intentionally absent from the `functions.exec` `tools.*` namespace. Available tools in `functions.exec` are explicitly described with a `tools` namespace in the developer message.
+    Note that collaboration tools cannot be called from inside `functions.exec`. Call `spawn_agent`, `send_message`, `followup_task`, `wait_agent`, `interrupt_agent`, and `list_agents` only as direct tool calls using the recipient shown in their tool definitions, such as `to=functions.role_agents.spawn_agent`, since they are intentionally absent from the `functions.exec` `tools.*` namespace. Available tools in `functions.exec` are explicitly described with a `tools` namespace in the developer message.
 
     All agents share the same directory. In detail:
     - All agents have access to the same container and filesystem as you.
@@ -73,9 +73,8 @@ in
       --rawfile expectedSubagent ${expectedSubagentUsageHintFile} \
       '
         .suppress_unstable_features_warning == true
-        and .plugins."gambit@personal" == null
         and .features.multi_agent_v2.enabled == true
-        and .features.multi_agent_v2.tool_namespace == "gambit_agents"
+        and .features.multi_agent_v2.tool_namespace == "role_agents"
         and .features.multi_agent_v2.hide_spawn_agent_metadata == false
         and .features.multi_agent_v2.root_agent_usage_hint_text == $expectedRoot
         and .features.multi_agent_v2.subagent_usage_hint_text == $expectedSubagent

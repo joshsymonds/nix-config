@@ -5,6 +5,8 @@
   pkgs,
   ...
 }: let
+  fleet = config.services.orreryFleet;
+  isController = hostname == fleet.controller;
   sessions = config.services.orreryd.sessions;
   pushHost = config.services.orreryd.pushHost;
   pushArgs = lib.optionalString (pushHost != null) " --push-host ${pushHost}";
@@ -15,10 +17,29 @@
   # evaluating as they do today.
   gatewayArgs = lib.optionalString (config.services.orreryGateway.serveClaude or false) " --gateway http://127.0.0.1:${toString config.services.orreryGateway.port}";
 
+  # The controller's relay admits the hosts.toml agents. It binds the
+  # controller's tailnet address, so only the controller passes these flags.
+  relayArgs = lib.optionalString isController " --relay-listen ${fleet.addresses.${fleet.controller}}:${toString fleet.relayPort} --fleet-secret ${fleet.secretFile}";
+
   orreryd-start = pkgs.writeShellScript "orreryd-start" ''
     set -eu
-    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}${metricsArgs}${gatewayArgs}
+    exec ${config.programs.orrery.package}/bin/orreryd${lib.optionalString sessions " --sessions --holder-scope /run/current-system/sw/bin/systemd-run"}${pushArgs}${metricsArgs}${gatewayArgs}${relayArgs}
   '';
+
+  # The controller's hosts.toml: the agents it dials, in fleet order. Only the
+  # controller reads it, so only the controller gets the file.
+  hostsToml =
+    ''
+      name = "${fleet.controller}"
+      default = "${fleet.defaultHost}"
+    ''
+    + lib.concatMapStrings (agent: ''
+
+      [[hosts]]
+      name = "${agent}"
+      address = "${fleet.addresses.${agent}}:${toString fleet.agentPort}"
+    '')
+    fleet.agents;
 
   # The gate pool never bounds gate runs: hardware does. Remote gates queue on
   # the orrery-gate box for its own slots (nproc/20 full checks, nproc/8 light).
@@ -75,9 +96,14 @@ in {
   };
 
   config.xdg.configFile."orrery/pools.toml".text = poolsFile;
+  config.xdg.configFile."orrery/hosts.toml" = lib.mkIf isController {text = hostsToml;};
 
   config.systemd.user.services.orreryd = {
     Unit.Description = "orrery daemon";
+    # The controller's relay binds a tailnet IP that tailscaled may not have
+    # assigned when the user manager starts. Unlimited restarts at 5 s outlast
+    # that wait.
+    Unit.StartLimitIntervalSec = lib.mkIf isController 0;
     Service = {
       ExecStart = "${orreryd-start}";
       # orreryd sends READY=1 once sessions.sock listens (or once its store
@@ -88,6 +114,7 @@ in {
       Type = "notify";
       TimeoutStartSec = 900;
       Restart = "always";
+      RestartSec = lib.mkIf isController 5;
       # Each session's holder, with its agents and gates, runs in its own
       # orrery-hold-<session>.scope under app.slice, so orreryd's unit holds
       # orreryd alone and needs no memory cap of its own. OOMPolicy=continue

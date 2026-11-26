@@ -54,6 +54,13 @@
     if sessions
     then sessionPath
     else toolPath;
+
+  # An agent runs `orrery node` in place of orreryd: both bind the daemon
+  # socket and notices.sock, so a host runs one or the other.
+  fleet = config.services.orreryFleet;
+  node = config.services.orreryNode.enable;
+  nodeRoots = lib.concatMapStringsSep " " (root: "--root ${config.home.homeDirectory}/${root}") fleet.agentRoots;
+  nodeExecStart = "${config.programs.orrery.package}/bin/orrery node --controller ${fleet.controller} --relay ${fleet.addresses.${fleet.controller}}:${toString fleet.relayPort} --listen ${fleet.addresses.${hostname}}:${toString fleet.agentPort} ${nodeRoots} --holder-scope /run/current-system/sw/bin/systemd-run --secret-file ${fleet.secretFile}";
 in {
   imports = [./fleet.nix];
 
@@ -78,7 +85,32 @@ in {
     "orrery/pools.toml".text = poolsFile;
   };
 
-  config.systemd.user.services.orreryd = {
+  config.assertions = [
+    {
+      assertion = !(node && hostname == fleet.controller);
+      message = "services.orreryNode.enable refuses the controller host ${fleet.controller}: the controller runs orreryd, which binds the sockets orrery node binds.";
+    }
+  ];
+
+  config.systemd.user.services.orrery-node = lib.mkIf node {
+    Unit = {
+      Description = "orrery node: agent of the fleet controller";
+      StartLimitIntervalSec = 0;
+    };
+    Service = {
+      ExecStart = nodeExecStart;
+      Restart = "always";
+      RestartSec = 5;
+      OOMPolicy = "continue";
+      Environment = [
+        "TMUX_TMPDIR=%t"
+        "PATH=${sessionPath}"
+      ];
+    };
+    Install.WantedBy = ["default.target"];
+  };
+
+  config.systemd.user.services.orreryd = lib.mkIf (!node) {
     Unit.Description = "orrery daemon";
     Service = {
       ExecStart = "${orreryd-start}";

@@ -41,9 +41,13 @@
 
   toolPath = lib.makeBinPath [pkgs.tmux pkgs.claudeCodeCli];
   # Session steps run the user's and the system's tools, not just tmux and claude.
+  # /run/wrappers/bin comes before the system profile so `sudo` resolves to the
+  # setuid wrapper, as in a login shell: a release step that runs `update` under
+  # orreryd's PATH otherwise finds the store's non-setuid sudo and fails.
   sessionPath = lib.concatStringsSep ":" [
     toolPath
     "/etc/profiles/per-user/${config.home.username}/bin"
+    "/run/wrappers/bin"
     "/run/current-system/sw/bin"
   ];
   path =

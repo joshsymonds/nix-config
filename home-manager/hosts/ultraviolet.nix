@@ -4,6 +4,8 @@
     ../claude-code/transcripts.nix
     ../claude-code/transcript-sync.nix
     ../orrery
+    ../orrery/serve.nix
+    ../orrery/backup.nix
     ../patchbay
   ];
 

@@ -1,24 +1,24 @@
-# Behavioural check for orrery's metrics listeners and alerting stack on
-# vermissian. The check reads the orreryd-start script that orreryd's ExecStart
+# Behavioural check for orrery's metrics listeners and alerting stack on the
+# controller. The check reads the orreryd-start script that orreryd's ExecStart
 # names, and orrery serve's ExecStart as text. Each must pass --metrics-listen
 # with a loopback address. Prometheus's and Alertmanager's ExecStart and
-# ExecStartPre come from vermissian's evaluated units; the config files they
-# name are checked with promtool and amtool, then read with yq and jq.
+# ExecStartPre come from the controller's evaluated units; the config files
+# they name are checked with promtool and amtool, then read with yq and jq.
 # Nothing here runs orreryd, orrery serve, Prometheus, Alertmanager or systemd.
 {
   pkgs,
-  vermissian,
+  controller,
 }: let
-  services = vermissian.home-manager.users.joshsymonds.systemd.user.services;
-  promService = vermissian.systemd.services.prometheus.serviceConfig;
-  amService = vermissian.systemd.services.alertmanager.serviceConfig;
+  services = controller.home-manager.users.joshsymonds.systemd.user.services;
+  promService = controller.systemd.services.prometheus.serviceConfig;
+  amService = controller.systemd.services.alertmanager.serviceConfig;
 in
   pkgs.runCommand "orrery-alerts-check" {
     nativeBuildInputs = with pkgs;
       [bash coreutils gnugrep jq yq-go]
       ++ [
-        vermissian.services.prometheus.package.cli
-        vermissian.services.prometheus.alertmanager.package
+        controller.services.prometheus.package.cli
+        controller.services.prometheus.alertmanager.package
       ];
     # ExecStart is a list of words. orreryd's words are its start script path,
     # which keeps its context so the script is built into the sandbox. Serve's

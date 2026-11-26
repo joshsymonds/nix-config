@@ -59,6 +59,10 @@ in
       ./services/playroom.nix
       ./services/savecraft-egress.nix
       ./services/valheim.nix
+      ./services/orrery-serve.nix
+      ./services/orrery-alerts.nix
+      ./services/orrery-cheatsheet.nix
+      ./services/orrery-ntfy.nix
 
       # Import your generated (nixos-generate-config) hardware configuration
       ./hardware-configuration.nix

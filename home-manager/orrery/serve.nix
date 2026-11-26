@@ -10,8 +10,9 @@
     exec ${config.programs.tmux-status.package}/bin/tmux-status --json
   '';
 
-  # The one push host for orreryd and orrery serve on this machine.
-  pushHost = "vermissian.tail82223.ts.net";
+  # The one push host for orreryd and orrery serve on this machine: the
+  # controller's tailnet name, where its ntfy relay runs.
+  pushHost = "${config.services.orreryFleet.controller}.${config.services.orreryFleet.domain}";
 in {
   # serve drives the headless sessions, so the host that runs it runs them.
   services.orreryd.sessions = true;
@@ -22,7 +23,7 @@ in {
   systemd.user.services.orrery-serve = {
     Unit.Description = "orrery serve";
     Service = {
-      ExecStart = "${config.programs.orrery.package}/bin/orrery serve --listen 127.0.0.1:8489 --allow-login josh@joshsymonds.com --push-host ${pushHost} --host-status-cmd ${hostStatusCmd} --metrics-listen 127.0.0.1:9465";
+      ExecStart = "${config.programs.orrery.package}/bin/orrery serve --listen 127.0.0.1:8492 --allow-login josh@joshsymonds.com --push-host ${pushHost} --host-status-cmd ${hostStatusCmd} --metrics-listen 127.0.0.1:9465";
       Restart = "always";
       Environment = [
         "TMUX_TMPDIR=%t"

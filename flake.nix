@@ -722,7 +722,7 @@
           orrery-store-backup = import ./tests/orrery-store-backup.nix {pkgs = checkPkgs;};
           orrery-alerts = import ./tests/orrery-alerts.nix {
             pkgs = checkPkgs;
-            vermissian = self.nixosConfigurations.vermissian.config;
+            controller = self.nixosConfigurations.ultraviolet.config;
           };
           tmux-status = import ./tests/tmux-status.nix {pkgs = checkPkgs;};
           claude-trust-roots = import ./tests/claude-trust-roots.nix {

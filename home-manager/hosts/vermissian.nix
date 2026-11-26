@@ -89,6 +89,9 @@
   # patchbay keeps running on 4100 behind it.
   services.orreryGateway.serveClaude = true;
 
+  # An agent of the fleet's controller: runs `orrery node` in place of orreryd.
+  services.orreryNode.enable = true;
+
   programs.claudeCode.hostContext = ''
     # Host: vermissian (Linux NixOS, x86_64)
 

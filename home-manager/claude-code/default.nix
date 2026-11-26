@@ -7,6 +7,10 @@
 }: let
   cfg = config.programs.claudeCode;
 
+  # Hosts that serve orrery's MCP tools: the orreryd --sessions host, and each
+  # agent running `orrery node`.
+  orreryMcp = (config.services.orreryd.sessions or false) || (config.services.orreryNode.enable or false);
+
   # nixd for Claude Code's LSP tool, packaged as a one-plugin directory
   # marketplace. Claude Code answers nixd's
   # workspace/configuration requests from the server's `settings`, so the
@@ -194,8 +198,8 @@
           # anthropic forward Seat relays the body and header unchanged.
           CLAUDE_CODE_TETHER_LIVE = "1";
         }
-        // lib.optionalAttrs (config.services.orreryd.sessions or false) {
-          # On hosts running orreryd --sessions, Claude Code calls orrery's
+        // lib.optionalAttrs orreryMcp {
+          # On hosts running orreryd --sessions or orrery node, Claude Code calls orrery's
           # step tools over MCP. An interactive session moves an MCP call
           # still running after 120 seconds to the background unless this is
           # 0, and a step caller must wait in the foreground for its step.
@@ -735,17 +739,23 @@ in {
     ];
 
     # Set npm prefix to user directory.
-    sessionVariables = {
-      NPM_CONFIG_PREFIX = "$HOME/.npm-global";
-      CLAUDE_CODE_ENABLE_TASKS = "true";
-      CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
-      CLAUDE_CODE_NO_FLICKER = "1";
-      CLAUDE_CODE_TMUX_TRUECOLOR = "1";
-      # The only reliable way to disable auto-updates for native installs.
-      # settings.json autoUpdater.disabled is cosmetic; ~/.claude.json autoUpdates
-      # is bypassed by autoUpdatesProtectedForNative for native installMethod.
-      DISABLE_AUTOUPDATER = "1";
-    };
+    sessionVariables =
+      {
+        NPM_CONFIG_PREFIX = "$HOME/.npm-global";
+        CLAUDE_CODE_ENABLE_TASKS = "true";
+        CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1";
+        CLAUDE_CODE_NO_FLICKER = "1";
+        CLAUDE_CODE_TMUX_TRUECOLOR = "1";
+        # The only reliable way to disable auto-updates for native installs.
+        # settings.json autoUpdater.disabled is cosmetic; ~/.claude.json autoUpdates
+        # is bypassed by autoUpdatesProtectedForNative for native installMethod.
+        DISABLE_AUTOUPDATER = "1";
+      }
+      // lib.optionalAttrs orreryMcp {
+        # The same value as the settings env below, where it reaches Claude
+        # Code on hosts with orrery MCP tools.
+        CLAUDE_CODE_MCP_AUTO_BACKGROUND_MS = "0";
+      };
 
     # Create and manage the ~/.claude config directory. Runtime state
     # (.credentials.json, ~/.claude.json, projects/, todos/, history.jsonl,
@@ -1064,7 +1074,7 @@ in {
     # .claude.json is created inside the umask-077 subshell so it is 0600 from
     # its first byte (the file carries OAuth state), and the rewrite uses the
     # codex cleanup's careful temp-file pattern (below).
-    activation.claudeOrreryMcp = lib.mkIf (config.services.orreryd.sessions or false) (lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
+    activation.claudeOrreryMcp = lib.mkIf orreryMcp (lib.hm.dag.entryAfter ["claudeDirectoryPermissions"] ''
       set -euo pipefail
       ORRERY_MCP='{"type":"stdio","command":"${config.programs.orrery.package}/bin/orrery","args":["mcp"]}'
       prefs="$HOME/.claude.json"

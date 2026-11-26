@@ -64,6 +64,9 @@
   programs.joshify.enable = true;
   programs.orrery.remoteHost = "vermissian";
 
+  # An agent of the fleet's controller: runs `orrery node` in place of orreryd.
+  services.orreryNode.enable = true;
+
   home.packages = with pkgs; [
     # Gaming auxiliaries (Steam itself is system-level via programs.steam)
     mangohud # in-game FPS/perf overlay

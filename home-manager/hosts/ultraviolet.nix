@@ -26,6 +26,22 @@
     inetutils
   ];
 
+  # The agent each orreryd epic role runs under: haiku-medium implements,
+  # sonnet-high-ro verifies and judges, opus plans and releases.
+  programs.orrery.roles = {
+    planner = "opus-high-ro";
+    implementer = "haiku-medium";
+    verifier = "sonnet-high-ro";
+    judge = "sonnet-high-ro";
+    release = "opus-high";
+    integrator = "opus-high";
+    orchestrator = "opus-high-ro";
+    attempt = "opus-high";
+    test_runner = "sonnet-low";
+    scout = "haiku-high-ro";
+    steelman = "fable-high-ro";
+  };
+
   programs.git.settings.user.signingkey = "0x374165B74CF6A70C";
 
   programs.zsh.shellAliases.update-bluedesert = "cd ~/nix-config && sudo env NIX_SSHOPTS='-i /home/joshsymonds/.ssh/github' nixos-rebuild switch --flake '.#bluedesert' --target-host joshsymonds@172.31.0.201 --sudo --option warn-dirty false";

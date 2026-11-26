@@ -74,9 +74,7 @@ in {
     description = "Loopback address orreryd serves /metrics on, passed as --metrics-listen. Null keeps orreryd's default, which serves no metrics.";
   };
 
-  config.xdg.configFile = lib.optionalAttrs sessions {
-    "orrery/pools.toml".text = poolsFile;
-  };
+  config.xdg.configFile."orrery/pools.toml".text = poolsFile;
 
   config.systemd.user.services.orreryd = {
     Unit.Description = "orrery daemon";

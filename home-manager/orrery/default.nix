@@ -78,7 +78,6 @@
 
   # An agent runs `orrery node` in place of orreryd: both bind the daemon
   # socket and notices.sock, so a host runs one or the other.
-  fleet = config.services.orreryFleet;
   node = config.services.orreryNode.enable;
   nodeRoots = lib.concatMapStringsSep " " (root: "--root ${config.home.homeDirectory}/${root}") fleet.agentRoots;
   nodeExecStart = "${config.programs.orrery.package}/bin/orrery node --controller ${fleet.controller} --relay ${fleet.addresses.${fleet.controller}}:${toString fleet.relayPort} --listen ${fleet.addresses.${hostname}}:${toString fleet.agentPort} ${nodeRoots} --holder-scope /run/current-system/sw/bin/systemd-run --secret-file ${fleet.secretFile}";

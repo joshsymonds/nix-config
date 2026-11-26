@@ -67,22 +67,6 @@
     }
   ];
 
-  # The agent each orreryd epic role runs under: haiku-medium implements,
-  # sonnet-high-ro verifies and judges, opus plans and releases.
-  programs.orrery.roles = {
-    planner = "opus-high-ro";
-    implementer = "haiku-medium";
-    verifier = "sonnet-high-ro";
-    judge = "sonnet-high-ro";
-    release = "opus-high";
-    integrator = "opus-high";
-    orchestrator = "opus-high-ro";
-    attempt = "opus-high";
-    test_runner = "sonnet-low";
-    scout = "haiku-high-ro";
-    steelman = "fable-high-ro";
-  };
-
   programs.claudeCode.trustRoots = [
     {
       path = "Work";

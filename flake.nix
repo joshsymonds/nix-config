@@ -770,7 +770,7 @@
           };
           orrery-role-agents = import ./tests/orrery-role-agents.nix {
             pkgs = checkPkgs;
-            homeFiles = self.nixosConfigurations.vermissian.config.home-manager.users.joshsymonds.home-files;
+            homeFiles = self.nixosConfigurations.ultraviolet.config.home-manager.users.joshsymonds.home-files;
           };
           installer-kit-fixture = import ./tests/installer-kit-fixture.nix {
             inherit pkgs;

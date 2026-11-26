@@ -102,6 +102,11 @@
   # this flag alone does not move attain's billing.
   services.patchbay.attainBedrock.enable = true;
 
+  # Claude Code's settings base URL, the attain /ctx/attain stamp and
+  # orreryd's --gateway all point at the orrery gateway (port 4110);
+  # patchbay keeps running on 4100 behind it.
+  services.orreryGateway.serveClaude = true;
+
   programs.claudeCode.hostContext = ''
     # Host: vermissian (Linux NixOS, x86_64)
 

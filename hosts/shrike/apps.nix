@@ -81,8 +81,8 @@
   ];
 
   play = [
-    # UnifiedPush distributor for the orrery app, which pushes via
-    # vermissian's ntfy relay, https://vermissian.tail82223.ts.net:8491.
+    # UnifiedPush distributor for the orrery app, which pushes via the
+    # controller's ntfy relay (the controller's tailnet name, port 8491).
     # Not subscribed to orrery's ntfy topic: a subscription here would
     # deliver every push a second time.
     {

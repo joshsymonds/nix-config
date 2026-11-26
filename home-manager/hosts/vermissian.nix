@@ -8,8 +8,6 @@
     ../ec2-fleet
     ../go
     ../orrery
-    ../orrery/serve.nix
-    ../orrery/backup.nix
     ../orrery/gateway.nix
     ../parlor
     ../patchbay

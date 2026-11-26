@@ -18,7 +18,7 @@ in {
       PartOf = ["graphical-session.target"];
     };
     Service = {
-      ExecStart = "${orrery}/bin/orrery desk --sound ${sounds}/tick.wav --host vermissian --host ultraviolet";
+      ExecStart = "${orrery}/bin/orrery desk --sound ${sounds}/tick.wav --host ${config.services.orreryFleet.controller}";
       Restart = "always";
       RestartSec = 5;
       Environment = [

@@ -15,6 +15,7 @@ in {
   "secrets/shared/atticd-push-token.age".publicKeys = keys.publisherHosts;
   "secrets/shared/patchbay-openrouter-key.age".publicKeys = keys.patchbayHosts;
   "secrets/shared/patchbay-caller-key.age".publicKeys = keys.patchbayHosts;
+  "secrets/shared/orrery-fleet-secret.age".publicKeys = keys.orreryFleetHosts;
 
   # User secrets (home-manager agenix, all machines)
   "secrets/user/ntfy-url.age".publicKeys = keys.joshsymonds;

@@ -55,6 +55,8 @@
     then sessionPath
     else toolPath;
 in {
+  imports = [./fleet.nix];
+
   options.services.orreryd.sessions = lib.mkEnableOption "orreryd's headless engine session service";
 
   # Passed to orreryd as --push-host. Null leaves orreryd's default, ntfy.sh.

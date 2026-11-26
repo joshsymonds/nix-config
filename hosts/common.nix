@@ -222,6 +222,18 @@ in {
         mode = "0400";
       };
     })
+    # Orrery fleet secret: the shared secret orreryd's relay and each
+    # `orrery node` present to each other. Owned by joshsymonds because the
+    # orrery node runs as that user and reads it with node.ReadSecret, which
+    # refuses any file granting group or other bits — hence mode 0400.
+    (lib.mkIf (builtins.elem config.networking.hostName keys.orreryFleetHostNames) {
+      "orrery-fleet-secret" = {
+        file = ../secrets/shared/orrery-fleet-secret.age;
+        owner = "joshsymonds";
+        group = "users";
+        mode = "0400";
+      };
+    })
   ];
 
   services.atticd-cache = {

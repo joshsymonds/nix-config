@@ -68,6 +68,15 @@ let
   # (do not bulk re-key — see CLAUDE.md).
   patchbayHostNames = ["gnomon" "ultraviolet" "vermissian" "stygianlibrary"];
   patchbayHosts = (map (n: hosts.${n}) patchbayHostNames) ++ allUserKeys;
+
+  # Hosts that share the orrery fleet secret: orreryd's relay (ultraviolet)
+  # and each `orrery node` (vermissian, gnomon). Single source of truth:
+  # hosts/common.nix imports orreryFleetHostNames for its age.secrets guard,
+  # and orreryFleetHosts is derived from the same list.
+  # When adding a host here, re-key secrets/shared/orrery-fleet-secret.age
+  # (do not bulk re-key — see CLAUDE.md).
+  orreryFleetHostNames = ["ultraviolet" "vermissian" "gnomon"];
+  orreryFleetHosts = (map (n: hosts.${n}) orreryFleetHostNames) ++ allUserKeys;
 in {
   # Per-host: host key (for boot-time agenix decryption) + EVERY user key
   # (so any of josh's machines can edit any host's secrets). When a new
@@ -91,4 +100,9 @@ in {
   # patchbayHosts (recipient keys) is used by secrets/shared/patchbay-openrouter-key.age;
   # patchbayHostNames (bare hostnames) is used by hosts/common.nix's age.secrets guard.
   inherit patchbayHosts patchbayHostNames;
+
+  # Hosts that share the orrery fleet secret.
+  # orreryFleetHosts (recipient keys) is used by secrets/shared/orrery-fleet-secret.age;
+  # orreryFleetHostNames (bare hostnames) is used by hosts/common.nix's age.secrets guard.
+  inherit orreryFleetHosts orreryFleetHostNames;
 }

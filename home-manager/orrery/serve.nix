@@ -23,7 +23,7 @@ in {
   systemd.user.services.orrery-serve = {
     Unit.Description = "orrery serve";
     Service = {
-      ExecStart = "${config.programs.orrery.package}/bin/orrery serve --listen 127.0.0.1:8492 --allow-login josh@joshsymonds.com --push-host ${pushHost} --host-status-cmd ${hostStatusCmd} --metrics-listen 127.0.0.1:9465";
+      ExecStart = "${config.programs.orrery.package}/bin/orrery serve --listen 127.0.0.1:8492 --allow-login josh@joshsymonds.com --push-host ${pushHost} --host-status-cmd ${hostStatusCmd} --metrics-listen 127.0.0.1:9465 --fleet-secret ${config.services.orreryFleet.secretFile}";
       Restart = "always";
       Environment = [
         "TMUX_TMPDIR=%t"
